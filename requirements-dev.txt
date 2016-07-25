@@ -1,3 +1,6 @@
 -r requirements.txt
 pytest
 pytest-pep8
+pytest-cov
+scipy
+matplotlib

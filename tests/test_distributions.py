@@ -6,6 +6,7 @@ from __future__ import absolute_import
 import tensorflow as tf
 from scipy import stats
 import numpy as np
+import pytest
 
 from .context import zhusuan
 from zhusuan.distributions import *
@@ -27,9 +28,39 @@ class TestNormal:
 
             mu = [[-5., 8.], [2., 12.]]
             std = [[0.5, 3.], [4., 10.]]
-            test_values = sess.run(norm.logpdf(x, mu, std))
+            test_values = sess.run(norm.logpdf(x, tf.constant(mu), std))
             true_values = stats.norm.logpdf(x, mu, std)
             assert(np.abs(test_values - true_values).max() < 1e-6)
 
-    def test_pdf(self):
-        pass
+            mu = [0.1, 0.2, 0.3]
+            std = np.ones(3)
+            with pytest.raises(ValueError):
+                sess.run(norm.logpdf(x, mu, std))
+
+
+class TestBernoulli:
+    def test_rvs(self):
+        with tf.Session() as sess:
+            with pytest.raises(NotImplementedError):
+                sess.run(bernoulli.rvs(0.1, size=(1.)))
+
+    def test_logpdf(self):
+        with tf.Session() as sess:
+            x = [[1, 0], [1, 1]]
+            p = 0.3
+            test_values = sess.run(bernoulli.logpdf(tf.constant(x), p))
+            true_values = stats.bernoulli.logpmf(x, p)
+            assert(np.abs(test_values - true_values).max() < 1e-6)
+
+            x = [0, 1]
+            p = [0, 1]
+            test_values = sess.run(bernoulli.logpdf(x, p))
+            print(test_values)
+            true_values = stats.bernoulli.logpmf(x, p)
+            print(true_values)
+            assert(np.abs(test_values - true_values).max() < 1e-5)
+
+            x = [[1, 1], [0, 1]]
+            p = [0.1, 0.2, 0.3]
+            with pytest.raises(ValueError):
+                sess.run(bernoulli.logpdf(x, p))
