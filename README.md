@@ -4,14 +4,14 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
 
 ## Examples
 
-##### Examples of ADVI (Automatic Differentiation Variational Inference)
+### Examples of ADVI (Automatic Differentiation Variational Inference)
 * Toy intractable posterior: `python examples/toy.py`
 * Variational autoencoder: `python examples/vae.py`
 
 
 ## Developments
 
-#### Tests
+### Tests
 This command will run automatic tests in the tests/ directory.
 `py.test`
 ##### Test Coverage
