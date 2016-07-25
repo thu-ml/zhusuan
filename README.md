@@ -13,10 +13,15 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
 
 ### Tests
 This command will run automatic tests in the tests/ directory.
+
 `py.test`
+
 ##### Test Coverage
 To ensure test coverage keeping 100% over the developments, run
+
 `py.test --cov zhusuan`
+
 ##### PEP8 Code Style Check
 We follow PEP8 python code style. To check, run
+
 `py.test --pep8`
