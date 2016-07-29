@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
+from __future__ import division
 
 import tensorflow as tf
 from scipy import stats
@@ -42,7 +43,7 @@ class TestBernoulli:
     def test_rvs(self):
         with tf.Session() as sess:
             with pytest.raises(NotImplementedError):
-                sess.run(bernoulli.rvs(0.1, size=(1.)))
+                sess.run(bernoulli.rvs(0.1, size=1.))
 
     def test_logpdf(self):
         with tf.Session() as sess:

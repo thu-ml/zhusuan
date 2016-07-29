@@ -8,13 +8,15 @@ import sys
 import os
 
 import tensorflow as tf
-import tflearn
+import prettytensor as pt
 from six.moves import range
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from zhusuan.distributions import norm, bernoulli
+    from zhusuan.utils import log_mean_exp
+    from zhusuan.variational import ReparameterizedNormal, advi
 except:
     raise ImportError()
 
@@ -28,9 +30,20 @@ except:
 class M1:
     """
     The deep generative model used in variational autoencoder (VAE).
+
+    :param n_z: Int. The dimension of latent variables (z).
+    :param n_x: Int. The dimension of observed variables (x).
     """
-    def __init__(self):
-        pass
+    def __init__(self, n_z, n_x):
+        with pt.defaults_scope(activation_fn=tf.nn.relu,
+                               scale_after_normalization=True):
+            self.l_x_z = (pt.template('z').
+                          reshape((-1, n_z)).
+                          fully_connected(500).
+                          batch_normalize().
+                          fully_connected(500).
+                          batch_normalize().
+                          fully_connected(n_x, activation_fn=tf.nn.sigmoid))
 
     def log_prob(self, z, x):
         """
@@ -44,17 +57,10 @@ class M1:
         :return: A Tensor of shape (batch_size, samples). The joint log
             likelihoods.
         """
-        l_x_z = tf.reshape(z, (-1, int(z.get_shape()[2])))
-        l_x_z = tflearn.fully_connected(l_x_z, 500, activation='relu')
-        l_x_z = tflearn.batch_normalization(l_x_z)
-        l_x_z = tflearn.fully_connected(l_x_z, 500, activation='relu')
-        l_x_z = tflearn.batch_normalization(l_x_z)
-        l_x_z = tflearn.fully_connected(l_x_z, int(x.get_shape()[1]),
-                                        activation='sigmoid')
-        l_x_z = tf.reshape(l_x_z, (-1, int(z.get_shape()[1]),
-                                   int(x.get_shape()[1])))
-        l_x_z = bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6)
-        log_px_z = tf.reduce_sum(l_x_z, 2)
+        l_x_z = self.l_x_z.construct(z=z).reshape((-1, int(z.get_shape()[1]),
+                                                   int(x.get_shape()[1])))
+        log_px_z = tf.reduce_sum(
+            bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6), 2)
         log_pz = tf.reduce_sum(norm.logpdf(z), 2)
         return log_px_z + log_pz
 
@@ -71,55 +77,41 @@ def q_net(x, n_z):
     :return: A Tensor of shape (batch_size, n_z). Variational log standard
         deviation of latent variables.
     """
-    l_z_x = tflearn.fully_connected(x, 500, activation='relu')
-    l_z_x = tflearn.batch_normalization(l_z_x)
-    l_z_x = tflearn.fully_connected(l_z_x, 500, activation='relu')
-    l_z_x = tflearn.batch_normalization(l_z_x)
-    l_z_x_mean = tflearn.fully_connected(l_z_x, n_z, activation='linear')
-    l_z_x_logstd = tflearn.fully_connected(l_z_x, n_z, activation='linear')
+    with pt.defaults_scope(activation_fn=tf.nn.relu,
+                           scale_after_normalization=True):
+        l_z_x = (pt.wrap(x).
+                 fully_connected(500).
+                 batch_normalize().
+                 fully_connected(500).
+                 batch_normalize())
+        l_z_x_mean = l_z_x.fully_connected(n_z, activation_fn=None)
+        l_z_x_logstd = l_z_x.fully_connected(n_z, activation_fn=None)
     return l_z_x_mean, l_z_x_logstd
 
 
-def advi(model, x, vz_mean, vz_logstd, n_samples=1,
-         optimizer=tf.train.AdamOptimizer()):
+def is_loglikelihood(model, x, z_proposal, n_samples=1000):
     """
-    Implements the automatic differentiation variational inference (ADVI)
-    algorithm. For now we assume all latent variables have been transformed in
-    the model definition to have support on R^n.
+    Data log likelihood (:math:`\log p(x)`) estimates using self-normalized
+    importance sampling.
 
-    :param model: An model object that has a method logprob(z, x) to compute
-        the log joint likelihood of the model.
-    :param x: 2-D Tensor of shape (batch_size, n_x). Observed data.
-    :param vz_mean: A Tensorflow node that has shape (batch_size, n_z), which
-        denotes the mean of the variational posterior to be optimized during
-        the inference.
-        For traditional mean-field variational inference, the batch_size can
-        be set to 1.
-        For amortized variational inference, vz_mean depends on x and should
-        have the same batch_size as x.
-    :param vz_logstd: A Tensorflow node that has shape (batch_size, n_z), which
-        denotes the log standard deviation of the variational posterior to be
-        optimized during the inference. See vz_mean for proper usage.
-    :param n_samples: Int. Number of posterior samples used to
-        estimate the gradients. Default to be 1.
-    :param optimizer: Tensorflow optimizer object. Default to be
-        AdamOptimizer.
+    :param model: A model object that has a method logprob(z, x) to compute the
+        log joint likelihood of the model.
+    :param x: A Tensor of shape (batch_size, n_x). The observed variables (
+        data).
+    :param z_proposal: A :class:`Variational` object used as the proposal
+        in importance sampling.
+    :param n_samples: Int. Number of samples used in this estimate.
 
-    :return: A Tensorflow computation graph of the inference procedure.
-    :return: A 0-D Tensor. The variational lower bound
+    :return: A Tensor of shape (batch_size,). The log likelihood of data (x).
     """
-    samples = norm.rvs(
-        size=(tf.shape(vz_mean)[0], n_samples, tf.shape(vz_mean)[1])) * \
-        tf.exp(tf.expand_dims(vz_logstd, 1)) + tf.expand_dims(vz_mean, 1)
-    samples.set_shape((None, n_samples, None))
-    lower_bound = model.log_prob(samples, x) - tf.reduce_sum(
-        norm.logpdf(samples, tf.expand_dims(vz_mean, 1),
-                    tf.expand_dims(tf.exp(vz_logstd), 1)), 2)
-    lower_bound = tf.reduce_mean(lower_bound)
-    return optimizer.minimize(-lower_bound), lower_bound
+    samples = z_proposal.sample(n_samples)
+    log_w = model.log_prob(samples, x) - z_proposal.logpdf(samples)
+    return log_mean_exp(log_w, 1)
 
 
 if __name__ == "__main__":
+    tf.set_random_seed(1234)
+
     # Load MNIST
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              'data', 'mnist.pkl.gz')
@@ -129,26 +121,50 @@ if __name__ == "__main__":
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
 
-    # Run the inference
-    model = M1()
-    x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
+    # Define hyper-parameters
     n_z = 40
-    vz_mean, vz_logstd = q_net(x, n_z)
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
-    infer, lower_bound = advi(model, x, vz_mean, vz_logstd, 1, optimizer)
-    init = tf.initialize_all_variables()
 
-    epoches = 500
+    # Define training/evaluation parameters
+    lb_samples = 1
+    ll_samples = 5000
+    epoches = 3000
     batch_size = 100
-    test_batch_size = 200
+    test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
+
+    # Build the training computation graph
+    x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
+    with tf.variable_scope("model") as scope:
+        with pt.defaults_scope(phase=pt.Phase.train):
+            train_model = M1(n_z, x_train.shape[1])
+            train_vz_mean, train_vz_logstd = q_net(x, n_z)
+            train_variational = ReparameterizedNormal(
+                train_vz_mean, train_vz_logstd)
+            infer, lower_bound = advi(
+                train_model, x, train_variational, lb_samples, optimizer)
+
+    # Build the evaluation computation graph
+    with tf.variable_scope("model", reuse=True) as scope:
+        with pt.defaults_scope(phase=pt.Phase.test):
+            eval_model = M1(n_z, x_train.shape[1])
+            eval_vz_mean, eval_vz_logstd = q_net(x, n_z)
+            eval_variational = ReparameterizedNormal(
+                eval_vz_mean, eval_vz_logstd)
+            eval_lower_bound = is_loglikelihood(
+                eval_model, x, eval_variational, lb_samples)
+            eval_log_likelihood = is_loglikelihood(
+                eval_model, x, eval_variational, ll_samples)
+
+    init = tf.initialize_all_variables()
+
+    # Run the inference
     with tf.Session() as sess:
         sess.run(init)
-        for epoch in range(epoches):
+        for epoch in range(1, epoches + 1):
             np.random.shuffle(x_train)
-            tflearn.is_training(True)
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
@@ -158,12 +174,16 @@ if __name__ == "__main__":
                 lbs.append(lb)
             print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
             if epoch % test_freq == 0:
-                tflearn.is_training(False)
                 test_lbs = []
+                test_lls = []
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
-                    test_lb = sess.run(lower_bound,
-                                       feed_dict={x: test_x_batch})
+                    test_lb, test_ll = sess.run(
+                        [eval_lower_bound, eval_log_likelihood],
+                        feed_dict={x: test_x_batch}
+                    )
                     test_lbs.append(test_lb)
+                    test_lls.append(test_ll)
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
+                print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
