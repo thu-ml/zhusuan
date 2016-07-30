@@ -68,7 +68,7 @@ class ReparameterizedNormal(Variational):
         tf.assert_rank(vz_logstd, 2)
         self.vz_mean = vz_mean
         self.vz_logstd = vz_logstd
-        super(Variational, self).__init__()
+        super(ReparameterizedNormal, self).__init__()
 
     def sample(self, n_samples=1, **kwargs):
         samples = norm.rvs(

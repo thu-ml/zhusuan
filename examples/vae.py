@@ -59,8 +59,8 @@ class M1:
             likelihoods.
         """
         l_x_z = self.l_x_z.construct(
-            z=tf.reshape(z, ((-1, self.n_z)))).reshape((
-            -1, int(z.get_shape()[1]), self.n_x)).tensor
+            z=tf.reshape(z, ((-1, self.n_z)))).reshape(
+            (-1, int(z.get_shape()[1]), self.n_x)).tensor
         log_px_z = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6), 2)
         log_pz = tf.reduce_sum(norm.logpdf(z), 2)
