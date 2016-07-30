@@ -35,10 +35,11 @@ class M1:
     :param n_x: Int. The dimension of observed variables (x).
     """
     def __init__(self, n_z, n_x):
+        self.n_z = n_z
+        self.n_x = n_x
         with pt.defaults_scope(activation_fn=tf.nn.relu,
                                scale_after_normalization=True):
             self.l_x_z = (pt.template('z').
-                          reshape((-1, n_z)).
                           fully_connected(500).
                           batch_normalize().
                           fully_connected(500).
@@ -57,8 +58,9 @@ class M1:
         :return: A Tensor of shape (batch_size, samples). The joint log
             likelihoods.
         """
-        l_x_z = self.l_x_z.construct(z=z).reshape((-1, int(z.get_shape()[1]),
-                                                   int(x.get_shape()[1])))
+        l_x_z = self.l_x_z.construct(
+            z=tf.reshape(z, ((-1, self.n_z)))).reshape((
+            -1, int(z.get_shape()[1]), self.n_x)).tensor
         log_px_z = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6), 2)
         log_pz = tf.reduce_sum(norm.logpdf(z), 2)
@@ -143,8 +145,9 @@ if __name__ == "__main__":
             train_vz_mean, train_vz_logstd = q_net(x, n_z)
             train_variational = ReparameterizedNormal(
                 train_vz_mean, train_vz_logstd)
-            infer, lower_bound = advi(
+            grads, lower_bound = advi(
                 train_model, x, train_variational, lb_samples, optimizer)
+            infer = optimizer.apply_gradients(grads)
 
     # Build the evaluation computation graph
     with tf.variable_scope("model", reuse=True) as scope:

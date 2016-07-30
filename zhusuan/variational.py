@@ -50,18 +50,22 @@ class ReparameterizedNormal(Variational):
     reparametrization trick from (Kingma, 2013), which is contrary to the
     behavior in `zhusuan.distributions`.
 
-    :param vz_mean: A Tensorflow node that has shape (batch_size, n_z), which
+    :param vz_mean: A 2-D Tensor that has shape (batch_size, n_z), which
         denotes the mean of the variational posterior to be optimized during
         the inference.
         For traditional mean-field variational inference, the batch_size can
         be set to 1.
         For amortized variational inference, vz_mean depends on x and should
         have the same batch_size as x.
-    :param vz_logstd: A Tensorflow node that has shape (batch_size, n_z), which
+    :param vz_logstd: A 2-D Tensor that has shape (batch_size, n_z), which
         denotes the log standard deviation of the variational posterior to be
         optimized during the inference. See `vz_mean` for proper usage.
     """
     def __init__(self, vz_mean, vz_logstd):
+        vz_mean = tf.cast(vz_mean, dtype=tf.float32)
+        vz_logstd = tf.cast(vz_logstd, dtype=tf.float32)
+        tf.assert_rank(vz_mean, 2)
+        tf.assert_rank(vz_logstd, 2)
         self.vz_mean = vz_mean
         self.vz_logstd = vz_logstd
         super(Variational, self).__init__()
@@ -97,10 +101,11 @@ def advi(model, x, variational, n_samples=1,
     :param optimizer: Tensorflow optimizer object. Default to be
         AdamOptimizer.
 
-    :return: A Tensorflow computation graph of the inference procedure.
+    :return: Tensorflow gradients that can be applied using
+        `tf.train.Optimizer.apply_gradients`
     :return: A 0-D Tensor. The variational lower bound.
     """
     samples = variational.sample(n_samples)
     lower_bound = model.log_prob(samples, x) - variational.logpdf(samples)
     lower_bound = tf.reduce_mean(lower_bound)
-    return optimizer.minimize(-lower_bound), lower_bound
+    return optimizer.compute_gradients(-lower_bound), lower_bound

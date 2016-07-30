@@ -89,7 +89,8 @@ if __name__ == "__main__":
     vz_mean = tf.Variable(np.array([[-2, -2]], dtype='float32'))
     vz_logstd = tf.Variable(np.array([[-5, -5]], dtype='float32'))
     variational = ReparameterizedNormal(vz_mean, vz_logstd)
-    infer, lower_bound = advi(model, None, variational, 200, optimizer)
+    grads, lower_bound = advi(model, None, variational, 200, optimizer)
+    infer = optimizer.apply_gradients(grads)
     init = tf.initialize_all_variables()
 
     # Run the inference
