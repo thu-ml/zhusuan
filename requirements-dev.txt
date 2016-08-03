@@ -1,4 +1,5 @@
 -r requirements.txt
+prettytensor
 pytest
 pytest-pep8
 pytest-cov

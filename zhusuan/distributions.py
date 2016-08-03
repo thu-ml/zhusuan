@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
+from __future__ import division
+
 import tensorflow as tf
 import numpy as np
 
@@ -48,7 +51,7 @@ class Normal:
         :param scale: A Tensor or numpy array. The standard deviation of
             the Normal.
 
-        :return: A Tensor of the same shape as x with function values.
+        :return: A Tensor of the same shape as `x` with function values.
         """
         x = tf.cast(x, dtype=tf.float32)
         loc = tf.cast(loc, dtype=tf.float32)
@@ -57,7 +60,7 @@ class Normal:
         return c - tf.log(scale) - (x - loc)**2 / (2 * scale**2)
 
 
-class Bernoulli():
+class Bernoulli:
     """
     Class of Bernoulli distribution.
     """
@@ -85,11 +88,12 @@ class Bernoulli():
         :param x: A Tensor. The value at which to evaluate the log density
             function.
         :param p: A Tensor or numpy array. The probability of 1. Can be
-            broadcast to the size of x.
+            broadcast to the size of `x`.
         :param eps: Float. Small value used to avoid NaNs by clipping p in
             range (eps, 1 - eps). Should be larger than 1e-6. Default to be
             1e-6.
-        :return:
+
+        :return: A Tensor of the same shape as `x` with function values.
         """
         x = tf.cast(x, dtype=tf.float32)
         p = tf.cast(p, dtype=tf.float32)
