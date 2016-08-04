@@ -11,6 +11,7 @@ import tensorflow as tf
 import prettytensor as pt
 from six.moves import range
 import numpy as np
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
@@ -65,7 +66,6 @@ def average_gradients(tower_grads):
     grad_and_var = (grad, v)
     average_grads.append(grad_and_var)
   return average_grads
-
 
 class M1:
     """
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
 
-    with tf.Graph().as_default(), tf.device('/cpu:0'):
+    with tf.device('/gpu:0'):
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
         tower_grads = []
         tower_lower_bound = []
@@ -184,73 +184,84 @@ if __name__ == "__main__":
         for i in xrange(FLAGS.num_gpus):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('%s_%d' % ('multigpu', i)) as scope:
+                    #optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
                     # Build the training computation graph
                     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
                     feed_x.append(x)
-                    #optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
                     reuse = None
                     if i > 0 : reuse = True
-                    with tf.variable_scope("one_model", reuse=reuse) as scope:
+                    with tf.variable_scope("model", reuse=reuse) as scope:
                         with pt.defaults_scope(phase=pt.Phase.train):
                             train_model = M1(n_z, x_train.shape[1])
+                    with tf.variable_scope("variational", reuse=reuse) as scope:
+                        with pt.defaults_scope(phase=pt.Phase.train):
                             train_vz_mean, train_vz_logstd = q_net(x, n_z)
                             train_variational = ReparameterizedNormal(
                                 train_vz_mean, train_vz_logstd)
-                            grads, lower_bound = advi(
-                                train_model, x, train_variational, lb_samples, optimizer)
-                            #infer = optimizer.apply_gradients(grads)
-                            tower_grads.append(grads)
-                            tower_lower_bound.append(lower_bound)
+                    grads, lower_bound = advi(
+                        train_model, x, train_variational, lb_samples, optimizer)
+                    #infer = optimizer.apply_gradients(grads)
+                    tower_grads.append(grads)
+                    tower_lower_bound.append(lower_bound)
 
                     # Build the evaluation computation graph
-                    with tf.variable_scope("one_model", reuse=True) as scope:
+                    with tf.variable_scope("model", reuse=True) as scope:
                         with pt.defaults_scope(phase=pt.Phase.test):
                             eval_model = M1(n_z, x_train.shape[1])
+                    with tf.variable_scope("variational", reuse=True) as scope:
+                        with pt.defaults_scope(phase=pt.Phase.test):
                             eval_vz_mean, eval_vz_logstd = q_net(x, n_z)
                             eval_variational = ReparameterizedNormal(
                                 eval_vz_mean, eval_vz_logstd)
-                            eval_lower_bound = is_loglikelihood(
-                                eval_model, x, eval_variational, lb_samples)
-                            eval_log_likelihood = is_loglikelihood(
-                                eval_model, x, eval_variational, ll_samples)
+                    eval_lower_bound = is_loglikelihood(
+                        eval_model, x, eval_variational, lb_samples)
+                    eval_log_likelihood = is_loglikelihood(
+                        eval_model, x, eval_variational, ll_samples)
 
+        #infer = optimizer.apply_gradients(tower_grads[0])
+        #grads_multigpu = tower_grads[0]
         grads_multigpu = average_gradients(tower_grads)
         apply_gradients_op = optimizer.apply_gradients(grads_multigpu)
 
+        params = tf.trainable_variables()
+        for i in params:
+            print(i.name, i.get_shape())
+
         init = tf.initialize_all_variables()
-        # Run the inference
-        config = tf.ConfigProto(allow_soft_placement=True)
-        with tf.Session(config=config) as sess:
-        #with tf.Session() as sess:
-            sess.run(init)
-            writer = tf.train.SummaryWriter("/tmp/test", sess.graph)
-            print ("graph outputed")
-            for epoch in range(1, epoches + 1):
-                np.random.shuffle(x_train)
-                lbs = []
-                for t in range(iters):
-                    x_batch = x_train[t * batch_size : (t + 1) * batch_size]
-                    x_batch = np.random.binomial(
-                        n=1, p=x_batch, size=x_batch.shape).astype('float32')
-                    replica_batch = batch_size // FLAGS.num_gpus
-                    feed_dict = {}
-                    for x_idx, x_data in enumerate(feed_x):
-                        feed_dict[x_data] = x_batch[x_idx * replica_batch: (x_idx + 1) * replica_batch]
-                    #_, lb = sess.run([infer, lower_bound], feed_dict={x: x_batch})
-                    _, lb  = sess.run([apply_gradients_op, tower_lower_bound[0]], feed_dict=feed_dict)
-                    lbs.append(lb)
-                print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
-                if epoch % test_freq == 0:
-                    test_lbs = []
-                    test_lls = []
-                    for t in range(test_iters):
-                        test_x_batch = x_test[
-                            t * test_batch_size: (t + 1) * test_batch_size]
-                        test_lb, test_ll = sess.run(
-                            [eval_lower_bound, eval_log_likelihood],
-                            feed_dict={x: test_x_batch}
-                        )
-                        test_lbs.append(test_lb)
-                        test_lls.append(test_ll)
-                    print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                    print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
+
+    # Run the inference
+    config = tf.ConfigProto(allow_soft_placement=True)
+    with tf.Session(config=config) as sess:
+        sess.run(init)
+        writer = tf.train.SummaryWriter("/tmp/test", sess.graph)
+        print ("graph outputed")
+        for epoch in range(1, epoches + 1):
+            np.random.shuffle(x_train)
+            lbs = []
+            for t in range(iters):
+                x_batch = x_train[t * batch_size:(t + 1) * batch_size]
+                x_batch = np.random.binomial(
+                    n=1, p=x_batch, size=x_batch.shape).astype('float32')
+                replica_batch = batch_size // FLAGS.num_gpus
+                feed_dict = {}
+                for x_idx, x_data in enumerate(feed_x):
+                    feed_dict[x_data] = x_batch[x_idx * replica_batch: (x_idx + 1) * replica_batch]
+                #_, lb = sess.run([infer, lower_bound], feed_dict={x: x_batch})
+                _, lb = sess.run([apply_gradients_op, tower_lower_bound[0]], feed_dict=feed_dict)
+                lbs.append(lb)
+            print (datetime.today())
+            print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
+            if epoch % test_freq == 0:
+                test_lbs = []
+                test_lls = []
+                for t in range(test_iters):
+                    test_x_batch = x_test[
+                        t * test_batch_size: (t + 1) * test_batch_size]
+                    test_lb, test_ll = sess.run(
+                        [eval_lower_bound, eval_log_likelihood],
+                        feed_dict={x: test_x_batch}
+                    )
+                    test_lbs.append(test_lb)
+                    test_lls.append(test_ll)
+                print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
+                print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
