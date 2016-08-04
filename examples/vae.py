@@ -46,18 +46,13 @@ def average_gradients(tower_grads):
   for grad_and_vars in zip(*tower_grads):
     # Note that each grad_and_vars looks like the following:
     #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-    print (grad_and_vars)
     grads = []
     for g, _ in grad_and_vars:
-      if g == None: #for no-gradient variable(added by xsz)
-        continue
       # Add 0 dimension to the gradients to represent the tower.
       expanded_g = tf.expand_dims(g, 0)
 
       # Append on a 'tower' dimension which we will average over below.
       grads.append(expanded_g)
-    if len(grads) == 0:
-      continue
 
     # Average over the 'tower' dimension.
     grad = tf.concat(0, grads)
@@ -183,11 +178,9 @@ if __name__ == "__main__":
 
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
-        
         tower_grads = []
         tower_lower_bound = []
         feed_x = []
-
         for i in xrange(FLAGS.num_gpus):
             with tf.device('/gpu:%d' % i):
                 with tf.name_scope('%s_%d' % ('multigpu', i)) as scope:
@@ -195,8 +188,9 @@ if __name__ == "__main__":
                     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
                     feed_x.append(x)
                     #optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
-                    with tf.variable_scope("model_%d" %i) as scope:
-                        #tf.get_variable_scope().reuse_variables() 
+                    reuse = None
+                    if i > 0 : reuse = True
+                    with tf.variable_scope("one_model", reuse=reuse) as scope:
                         with pt.defaults_scope(phase=pt.Phase.train):
                             train_model = M1(n_z, x_train.shape[1])
                             train_vz_mean, train_vz_logstd = q_net(x, n_z)
@@ -205,13 +199,11 @@ if __name__ == "__main__":
                             grads, lower_bound = advi(
                                 train_model, x, train_variational, lb_samples, optimizer)
                             #infer = optimizer.apply_gradients(grads)
-
                             tower_grads.append(grads)
                             tower_lower_bound.append(lower_bound)
 
                     # Build the evaluation computation graph
-                    with tf.variable_scope("model_%d" % i, reuse=True) as scope:
-                        #tf.get_variable_scope().reuse_variables() 
+                    with tf.variable_scope("one_model", reuse=True) as scope:
                         with pt.defaults_scope(phase=pt.Phase.test):
                             eval_model = M1(n_z, x_train.shape[1])
                             eval_vz_mean, eval_vz_logstd = q_net(x, n_z)
@@ -231,31 +223,34 @@ if __name__ == "__main__":
         with tf.Session(config=config) as sess:
         #with tf.Session() as sess:
             sess.run(init)
+            writer = tf.train.SummaryWriter("/tmp/test", sess.graph)
+            print ("graph outputed")
             for epoch in range(1, epoches + 1):
                 np.random.shuffle(x_train)
                 lbs = []
                 for t in range(iters):
-                    x_batch = x_train[t * batch_size:(t + 1) * batch_size]
+                    x_batch = x_train[t * batch_size : (t + 1) * batch_size]
                     x_batch = np.random.binomial(
                         n=1, p=x_batch, size=x_batch.shape).astype('float32')
+                    replica_batch = batch_size // FLAGS.num_gpus
                     feed_dict = {}
                     for x_idx, x_data in enumerate(feed_x):
-                        feed_dict[x_data] = x_batch[x_idx * batch_size : (x_idx + 1) * batch_size]
+                        feed_dict[x_data] = x_batch[x_idx * replica_batch: (x_idx + 1) * replica_batch]
                     #_, lb = sess.run([infer, lower_bound], feed_dict={x: x_batch})
                     _, lb  = sess.run([apply_gradients_op, tower_lower_bound[0]], feed_dict=feed_dict)
                     lbs.append(lb)
                 print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
-                #if epoch % test_freq == 0:
-                    #test_lbs = []
-                    #test_lls = []
-                    #for t in range(test_iters):
-                        #test_x_batch = x_test[
-                            #t * test_batch_size: (t + 1) * test_batch_size]
-                        #test_lb, test_ll = sess.run(
-                            #[eval_lower_bound, eval_log_likelihood],
-                            #feed_dict={x: test_x_batch}
-                        #)
-                        #test_lbs.append(test_lb)
-                        #test_lls.append(test_ll)
-                    #print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                    #print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
+                if epoch % test_freq == 0:
+                    test_lbs = []
+                    test_lls = []
+                    for t in range(test_iters):
+                        test_x_batch = x_test[
+                            t * test_batch_size: (t + 1) * test_batch_size]
+                        test_lb, test_ll = sess.run(
+                            [eval_lower_bound, eval_log_likelihood],
+                            feed_dict={x: test_x_batch}
+                        )
+                        test_lbs.append(test_lb)
+                        test_lls.append(test_ll)
+                    print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
+                    print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
