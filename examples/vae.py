@@ -27,7 +27,7 @@ try:
 except:
     raise ImportError()
 
-tf.app.flags.DEFINE_integer('num_gpus', 2, """How many GPUs to use""")
+tf.app.flags.DEFINE_integer('num_gpus', 3, """How many GPUs to use""")
 FLAGS = tf.app.flags.FLAGS
 
 def average_gradients(tower_grads):
@@ -170,20 +170,22 @@ if __name__ == "__main__":
     lb_samples = 1
     ll_samples = 5000
     epoches = 3000
-    batch_size = 100
-    test_batch_size = 100
+    batch_size = 1600
+    test_batch_size = 200
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 10
+    test_freq = 1
 
-    with tf.device('/gpu:0'):
+    with tf.device('/gpu:1'):
         optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
         tower_grads = []
         tower_lower_bound = []
         feed_x = []
+        tower_eval_lower_bound = []
+        tower_eval_log_likelihood = []
         for i in xrange(FLAGS.num_gpus):
-            with tf.device('/gpu:%d' % i):
-                with tf.name_scope('%s_%d' % ('multigpu', i)) as scope:
+            with tf.device('/gpu:%d' % (i+1)):
+                with tf.name_scope('%s_%d' % ('multigpu', (i+1))) as scope:
                     #optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
                     # Build the training computation graph
                     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
@@ -217,11 +219,15 @@ if __name__ == "__main__":
                         eval_model, x, eval_variational, lb_samples)
                     eval_log_likelihood = is_loglikelihood(
                         eval_model, x, eval_variational, ll_samples)
+                    tower_eval_lower_bound.append(eval_lower_bound)
+                    tower_eval_log_likelihood.append(eval_log_likelihood)
 
         #infer = optimizer.apply_gradients(tower_grads[0])
         #grads_multigpu = tower_grads[0]
         grads_multigpu = average_gradients(tower_grads)
         apply_gradients_op = optimizer.apply_gradients(grads_multigpu)
+        concat_eval_lower_bound = tf.concat(0, tower_eval_lower_bound)
+        concat_eval_log_likelihood = tf.concat(0, tower_eval_log_likelihood)
 
         params = tf.trainable_variables()
         for i in params:
@@ -242,10 +248,10 @@ if __name__ == "__main__":
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch = np.random.binomial(
                     n=1, p=x_batch, size=x_batch.shape).astype('float32')
-                replica_batch = batch_size // FLAGS.num_gpus
+                replica_batch_size = batch_size // FLAGS.num_gpus
                 feed_dict = {}
                 for x_idx, x_data in enumerate(feed_x):
-                    feed_dict[x_data] = x_batch[x_idx * replica_batch: (x_idx + 1) * replica_batch]
+                    feed_dict[x_data] = x_batch[x_idx * replica_batch_size: (x_idx + 1) * replica_batch_size]
                 #_, lb = sess.run([infer, lower_bound], feed_dict={x: x_batch})
                 _, lb = sess.run([apply_gradients_op, tower_lower_bound[0]], feed_dict=feed_dict)
                 lbs.append(lb)
@@ -257,11 +263,20 @@ if __name__ == "__main__":
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
+                    #test_lb, test_ll = sess.run(
+                        #[eval_lower_bound, eval_log_likelihood],
+                        #feed_dict={x: test_x_batch}
+                    #)
+                    replica_test_batch_size = test_batch_size // FLAGS.num_gpus
+                    feed_dict = {}
+                    for x_idx, x_data in enumerate(feed_x):
+                        feed_dict[x_data] = test_x_batch[x_idx * replica_test_batch_size: (x_idx + 1) * replica_test_batch_size]
                     test_lb, test_ll = sess.run(
-                        [eval_lower_bound, eval_log_likelihood],
-                        feed_dict={x: test_x_batch}
+                        [concat_eval_lower_bound, concat_eval_log_likelihood],
+                        feed_dict=feed_dict
                     )
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
+                print (datetime.today())
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
