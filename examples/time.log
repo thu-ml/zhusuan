@@ -1,0 +1,54 @@
+batch_size      : 100
+test_batch_size : 100
+                1Epoch    1Test
+One   Card      10.9s     43.5s
+Two   Cards     15.5s     22.2s
+Three Cards     21.3s     15.7s
+
+=====================================================
+
+batch_size      : 200
+test_batch_size : 100
+                1Epoch    1Test
+One   Card      7.6s      44.3s
+Two   Cards     9.6s      22.0s 
+Three Cards     12.5s     15.4s
+
+=====================================================
+
+batch_size      : 400
+test_batch_size : 100
+                1Epoch    1Test
+One   Card      5.3s      44.4s
+Two   Cards     5.9s      22.0s
+Three Cards     7.2s      15.7s
+
+=====================================================
+
+batch_size      : 800
+test_batch_size : 100
+                1Epoch    1Test
+One   Card      3.8s      45.2s
+Two   Cards     4.0s      21.9s
+Three Cards     5.9s      15.7s
+
+=====================================================
+
+batch_size      : 1600
+test_batch_size : 100
+                1Epoch    1Test
+One   Card      3.0s      45.6s
+Two   Cards     3.2s      22.5s
+Three Cards     3.4s      15.4s 
+
+=====================================================
+
+batch_size      : 1600
+test_batch_size : 200
+                1Epoch    1Test
+One   Card      
+Two   Cards     3.1s      21.7s
+Three Cards     3.4s      14.8s
+
+=====================================================
+
