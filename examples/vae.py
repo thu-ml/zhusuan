@@ -59,7 +59,7 @@ class M1:
             likelihoods.
         """
         l_x_z = self.l_x_z.construct(
-            z=tf.reshape(z, ((-1, self.n_z)))).reshape(
+            z=tf.reshape(z, (-1, self.n_z))).reshape(
             (-1, int(z.get_shape()[1]), self.n_x)).tensor
         log_px_z = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6), 2)
@@ -139,27 +139,33 @@ if __name__ == "__main__":
     # Build the training computation graph
     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
     optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
-    with tf.variable_scope("model") as scope:
-        with pt.defaults_scope(phase=pt.Phase.train):
+    with pt.defaults_scope(phase=pt.Phase.train):
+        with tf.variable_scope("model") as scope:
             train_model = M1(n_z, x_train.shape[1])
+        with tf.variable_scope("variational") as scope:
             train_vz_mean, train_vz_logstd = q_net(x, n_z)
             train_variational = ReparameterizedNormal(
                 train_vz_mean, train_vz_logstd)
-            grads, lower_bound = advi(
-                train_model, x, train_variational, lb_samples, optimizer)
-            infer = optimizer.apply_gradients(grads)
+    grads, lower_bound = advi(
+        train_model, x, train_variational, lb_samples, optimizer)
+    infer = optimizer.apply_gradients(grads)
 
     # Build the evaluation computation graph
-    with tf.variable_scope("model", reuse=True) as scope:
-        with pt.defaults_scope(phase=pt.Phase.test):
+    with pt.defaults_scope(phase=pt.Phase.test):
+        with tf.variable_scope("model", reuse=True) as scope:
             eval_model = M1(n_z, x_train.shape[1])
+        with tf.variable_scope("variational", reuse=True) as scope:
             eval_vz_mean, eval_vz_logstd = q_net(x, n_z)
             eval_variational = ReparameterizedNormal(
                 eval_vz_mean, eval_vz_logstd)
-            eval_lower_bound = is_loglikelihood(
-                eval_model, x, eval_variational, lb_samples)
-            eval_log_likelihood = is_loglikelihood(
-                eval_model, x, eval_variational, ll_samples)
+    eval_lower_bound = is_loglikelihood(
+        eval_model, x, eval_variational, lb_samples)
+    eval_log_likelihood = is_loglikelihood(
+        eval_model, x, eval_variational, ll_samples)
+
+    params = tf.trainable_variables()
+    for i in params:
+        print(i.name, i.get_shape())
 
     init = tf.initialize_all_variables()
 
