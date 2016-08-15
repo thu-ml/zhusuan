@@ -107,7 +107,6 @@ class deconv2d(prettytensor.VarStoreMethod):
                                                       filter_width, row_stride, col_stride, edges)
 
         output_shape = [input_layer.shape[0], out_rows, out_cols, depth]
-        print "!!!output_shape", output_shape
         y = tf.nn.conv2d_transpose(input_layer, params, output_shape, stride, edges)
         layers.add_l2loss(books, params, l2loss)
         if bias:
