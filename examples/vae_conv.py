@@ -23,6 +23,7 @@ except:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import dataset
+    from deconv import deconv2d
 except:
     raise ImportError()
 
@@ -37,14 +38,6 @@ class M1:
     def __init__(self, n_z, n_x):
         self.n_z = n_z
         self.n_x = n_x
-        with pt.defaults_scope(activation_fn=tf.nn.relu,
-                               scale_after_normalization=True):
-            self.l_x_z = (pt.template('z').
-                          fully_connected(500).
-                          batch_normalize().
-                          fully_connected(500).
-                          batch_normalize().
-                          fully_connected(n_x, activation_fn=tf.nn.sigmoid))
 
     def log_prob(self, z, x):
         """
@@ -58,22 +51,31 @@ class M1:
         :return: A Tensor of shape (batch_size, samples). The joint log
             likelihoods.
         """
-        l_x_z = self.l_x_z.construct(
-            z=tf.reshape(z, (-1, self.n_z))).reshape(
-            (-1, int(z.get_shape()[1]), self.n_x)).tensor
+        with pt.defaults_scope(activation_fn=tf.nn.relu,
+                               scale_after_normalization=True):
+            l_x_z = (pt.wrap(z).
+                     reshape([-1, 1, 1, self.n_z]).
+                     deconv2d(3, 128, edges='VALID').
+                     batch_normalize().
+                     deconv2d(5, 64, edges='VALID').
+                     batch_normalize().
+                     deconv2d(5, 32, stride=2).
+                     batch_normalize().
+                     deconv2d(5, 1, stride=2, activation_fn=tf.nn.sigmoid).
+                     reshape((-1, int(z.get_shape()[1]), self.n_x))).tensor
         log_px_z = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6), 2)
         log_pz = tf.reduce_sum(norm.logpdf(z), 2)
         return log_px_z + log_pz
 
 
-def q_net(x, n_z):
+def q_net(x, n_z, n_x=28):
     """
     Build the recognition network (Q-net) used as variational posterior.
 
     :param x: Tensor of shape (batch_size, n_x).
     :param n_z: Int. The dimension of latent variables (z).
-
+    :param n_x: Int. The dimension of input image height or length
     :return: A Tensor of shape (batch_size, n_z). Variational mean of latent
         variables.
     :return: A Tensor of shape (batch_size, n_z). Variational log standard
@@ -82,10 +84,14 @@ def q_net(x, n_z):
     with pt.defaults_scope(activation_fn=tf.nn.relu,
                            scale_after_normalization=True):
         l_z_x = (pt.wrap(x).
-                 fully_connected(500).
+                 reshape([-1, n_x, n_x, 1]).
+                 conv2d(5, 32, stride=2).
+                 conv2d(5, 64, stride=2).
                  batch_normalize().
-                 fully_connected(500).
-                 batch_normalize())
+                 conv2d(5, 128, edges='VALID').
+                 batch_normalize().
+                 dropout(0.9).
+                 flatten())
         l_z_x_mean = l_z_x.fully_connected(n_z, activation_fn=None)
         l_z_x_logstd = l_z_x.fully_connected(n_z, activation_fn=None)
     return l_z_x_mean, l_z_x_logstd
@@ -128,42 +134,44 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 5000
+    ll_samples = 100
     epoches = 3000
     batch_size = 100
     test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 10
+    test_freq = 1
 
     # Build the training computation graph
-    x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
+    x = tf.placeholder(tf.float32, shape=(batch_size, x_train.shape[1]))
     optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
-    with tf.variable_scope("model") as scope:
-        with pt.defaults_scope(phase=pt.Phase.train):
-            train_model = M1(n_z, x_train.shape[1])
-    with tf.variable_scope("variational") as scope:
-        with pt.defaults_scope(phase=pt.Phase.train):
+    with pt.defaults_scope(phase=pt.Phase.train):
+        with tf.variable_scope("variational") as scope:
             train_vz_mean, train_vz_logstd = q_net(x, n_z)
             train_variational = ReparameterizedNormal(
                 train_vz_mean, train_vz_logstd)
-    grads, lower_bound = advi(
-        train_model, x, train_variational, lb_samples, optimizer)
+        with tf.variable_scope("model") as scope:
+            train_model = M1(n_z, x_train.shape[1])
+            grads, lower_bound = advi(
+                train_model, x, train_variational, lb_samples, optimizer)
     infer = optimizer.apply_gradients(grads)
-
+    print('After train phase...')
+    params = tf.trainable_variables()
+    for i in params:
+        print(i.name, i.get_shape())
     # Build the evaluation computation graph
-    with tf.variable_scope("model", reuse=True) as scope:
-        with pt.defaults_scope(phase=pt.Phase.test):
-            eval_model = M1(n_z, x_train.shape[1])
-    with tf.variable_scope("variational", reuse=True) as scope:
-        with pt.defaults_scope(phase=pt.Phase.test):
+    with pt.defaults_scope(phase=pt.Phase.test):
+        with tf.variable_scope("variational", reuse=True) as scope:
             eval_vz_mean, eval_vz_logstd = q_net(x, n_z)
             eval_variational = ReparameterizedNormal(
                 eval_vz_mean, eval_vz_logstd)
-    eval_lower_bound = is_loglikelihood(
-        eval_model, x, eval_variational, lb_samples)
-    eval_log_likelihood = is_loglikelihood(
-        eval_model, x, eval_variational, ll_samples)
+        with tf.variable_scope("model", reuse=True) as scope:
+            eval_model = M1(n_z, x_train.shape[1])
+            eval_lower_bound = is_loglikelihood(
+                eval_model, x, eval_variational, lb_samples)
+        with tf.variable_scope("model", reuse=True) as scope:
+            eval_log_likelihood = is_loglikelihood(
+                eval_model, x, eval_variational, ll_samples)
 
     params = tf.trainable_variables()
     for i in params:
