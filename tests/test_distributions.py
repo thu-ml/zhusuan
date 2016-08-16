@@ -35,8 +35,9 @@ class TestNormal:
 
             mu = [0.1, 0.2, 0.3]
             std = np.ones(3)
-            with pytest.raises(ValueError):
-                sess.run(norm.logpdf(x, mu, std))
+
+        with pytest.raises(ValueError):
+            _ = norm.logpdf(x, mu, std)
 
 
 class TestBernoulli:
@@ -56,12 +57,37 @@ class TestBernoulli:
             x = [0, 1]
             p = [0, 1]
             test_values = sess.run(bernoulli.logpdf(x, p))
-            print(test_values)
             true_values = stats.bernoulli.logpmf(x, p)
-            print(true_values)
             assert(np.abs(test_values - true_values).max() < 1e-5)
 
             x = [[1, 1], [0, 1]]
             p = [0.1, 0.2, 0.3]
-            with pytest.raises(ValueError):
-                sess.run(bernoulli.logpdf(x, p))
+
+        with pytest.raises(ValueError):
+            _ = bernoulli.logpdf(x, p)
+
+
+class TestDiscrete:
+    def test_rvs(self):
+        with tf.Session() as sess:
+            p = np.array([[0.5, 7., 1.]])
+            test_values = sess.run(discrete.rvs(p))
+            print(test_values)
+            assert(test_values.shape == p.shape)
+            p = tf.ones((3, 5))
+            test_values = sess.run(discrete.rvs(p))
+            assert(test_values.shape == (3, 5))
+
+        with pytest.raises(ValueError):
+            _ = discrete.rvs(np.ones(3))
+
+    def test_logpdf(self):
+        with tf.Session() as sess:
+            p = np.array([[0.5, 7., 1.]])
+            x = np.array([[0, 1, 0]])
+            test_values = sess.run(discrete.logpdf(x, p))[0]
+            true_values = x.squeeze().dot((p / p.sum(axis=1)).squeeze())
+            assert(np.abs(test_values - true_values) < 1e-6)
+
+        with pytest.raises(ValueError):
+            _ = discrete.logpdf([0, 1, 0], np.ones(3))

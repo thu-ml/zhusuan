@@ -63,7 +63,6 @@ class M1:
         :return: A Tensor of shape (batch_size, samples). The joint log
             likelihoods.
         """
-
         l_x_z = self.l_x_z.construct(
             z=tf.reshape(z, (-1, self.n_z))).reshape(
             (-1, int(z.get_shape()[1]), self.n_x)).tensor
