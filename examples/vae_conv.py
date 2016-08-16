@@ -25,11 +25,12 @@ except:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import dataset
+    from deconv import deconv2d
 except:
     raise ImportError()
 
 tf.app.flags.DEFINE_integer('num_gpus', 1, """How many GPUs to use""")
-tf.app.flags.DEFINE_integer('batch_size', 400, """batch size of train and test""")
+tf.app.flags.DEFINE_integer('batch_size', 100, """batch size of train and test""")
 tf.app.flags.DEFINE_integer('lb_samples', 1, """number of samples""")
 tf.app.flags.DEFINE_string('master_device', "/gpu:0", """Using which gpu to merge gradients""")
 FLAGS = tf.app.flags.FLAGS
@@ -84,11 +85,14 @@ class M1:
         with pt.defaults_scope(activation_fn=tf.nn.relu,
                                scale_after_normalization=True):
             self.l_x_z = (pt.template('z').
-                          fully_connected(500).
+                          reshape([-1, 1, 1, self.n_z]).
+                          deconv2d(3, 128, edges='VALID').
                           batch_normalize().
-                          fully_connected(500).
+                          deconv2d(5, 64, edges='VALID').
                           batch_normalize().
-                          fully_connected(n_x, activation_fn=tf.nn.sigmoid))
+                          deconv2d(5, 32, stride=2).
+                          batch_normalize().
+                          deconv2d(5, 1, stride=2, activation_fn=tf.nn.sigmoid))
 
     def log_prob(self, z, x):
         """
@@ -102,8 +106,9 @@ class M1:
         :return: A Tensor of shape (batch_size, samples). The joint log
             likelihoods.
         """
+
         l_x_z = self.l_x_z.construct(
-            z=tf.reshape(z, ((-1, self.n_z)))).reshape(
+            z=tf.reshape(z, (-1, self.n_z))).reshape(
             (-1, int(z.get_shape()[1]), self.n_x)).tensor
         log_px_z = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_z, eps=1e-6), 2)
@@ -111,13 +116,13 @@ class M1:
         return log_px_z + log_pz
 
 
-def q_net(x, n_z):
+def q_net(x, n_z, n_x=28):
     """
     Build the recognition network (Q-net) used as variational posterior.
 
     :param x: Tensor of shape (batch_size, n_x).
     :param n_z: Int. The dimension of latent variables (z).
-
+    :param n_x: Int. The dimension of input image height or length
     :return: A Tensor of shape (batch_size, n_z). Variational mean of latent
         variables.
     :return: A Tensor of shape (batch_size, n_z). Variational log standard
@@ -126,10 +131,14 @@ def q_net(x, n_z):
     with pt.defaults_scope(activation_fn=tf.nn.relu,
                            scale_after_normalization=True):
         l_z_x = (pt.wrap(x).
-                 fully_connected(500).
+                 reshape([-1, n_x, n_x, 1]).
+                 conv2d(5, 32, stride=2).
+                 conv2d(5, 64, stride=2).
                  batch_normalize().
-                 fully_connected(500).
-                 batch_normalize())
+                 conv2d(5, 128, edges='VALID').
+                 batch_normalize().
+                 dropout(0.9).
+                 flatten())
         l_z_x_mean = l_z_x.fully_connected(n_z, activation_fn=None)
         l_z_x_logstd = l_z_x.fully_connected(n_z, activation_fn=None)
     return l_z_x_mean, l_z_x_logstd
@@ -156,6 +165,8 @@ def is_loglikelihood(model, x, z_proposal, n_samples=1000):
 
 
 if __name__ == "__main__":
+    #sys.exit(0)
+
     tf.set_random_seed(1234)
 
     # Load MNIST
@@ -175,7 +186,10 @@ if __name__ == "__main__":
     ll_samples = 1000
     epoches = 30
     batch_size = FLAGS.batch_size
-    test_batch_size = 100
+    replica_batch_size = batch_size // FLAGS.num_gpus
+    # note that if placeholder x shape is fixed then test_batch_size must equal to batch_size
+    test_batch_size = FLAGS.batch_size
+    replica_test_batch_size = test_batch_size // FLAGS.num_gpus
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
@@ -192,7 +206,7 @@ if __name__ == "__main__":
                 with tf.name_scope('%s_%d' % ('multigpu', i)) as scope:
                     #optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
                     # Build the training computation graph
-                    x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
+                    x = tf.placeholder(tf.float32, shape=(replica_batch_size, x_train.shape[1]))
                     feed_x.append(x)
                     reuse = None
                     if i > 0 : reuse = True
@@ -253,7 +267,6 @@ if __name__ == "__main__":
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch = np.random.binomial(
                     n=1, p=x_batch, size=x_batch.shape).astype('float32')
-                replica_batch_size = batch_size // FLAGS.num_gpus
                 feed_dict = {}
                 for x_idx, x_data in enumerate(feed_x):
                     feed_dict[x_data] = x_batch[x_idx * replica_batch_size: (x_idx + 1) * replica_batch_size]
@@ -261,6 +274,7 @@ if __name__ == "__main__":
                 _, lb = sess.run([apply_gradients_op, tower_lower_bound[0]], feed_dict=feed_dict)
                 lbs.append(lb)
             tail = time()
+            #print (datetime.today())
             print('Epoch {}: lower bound = {}, {}'.format(epoch, np.mean(lbs), tail - head))
             if epoch % test_freq == 0:
                 head = time()
@@ -273,7 +287,6 @@ if __name__ == "__main__":
                         #[eval_lower_bound, eval_log_likelihood],
                         #feed_dict={x: test_x_batch}
                     #)
-                    replica_test_batch_size = test_batch_size // FLAGS.num_gpus
                     feed_dict = {}
                     for x_idx, x_data in enumerate(feed_x):
                         feed_dict[x_data] = test_x_batch[x_idx * replica_test_batch_size: (x_idx + 1) * replica_test_batch_size]
@@ -284,4 +297,5 @@ if __name__ == "__main__":
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 tail = time()
+                #print (datetime.today())
                 print('Test lower bound = {}, log likelihood = {}, {}'.format(np.mean(test_lbs), np.mean(test_lls), tail - head))
