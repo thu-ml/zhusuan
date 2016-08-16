@@ -46,24 +46,25 @@ class deconv2d(prettytensor.VarStoreMethod):
 
         Args:
           input_layer: The chainable object, supplied.
-          kernel: The size of the patch for the pool, either an int or a length 1 or
-            2 sequence (if length 1 or int, it is expanded).
+          kernel: The size of the patch for the pool, either an int or a length
+            1 or 2 sequence (if length 1 or int, it is expanded).
           depth: The depth of the new Tensor.
           name: The name for this operation is also used to create/find the
             parameter variables.
-          stride: The strides as a length 1, 2 or 4 sequence or an integer. If an
-            int, length 1 or 2, the stride in the first and last dimensions are 1.
-          activation_fn: A tuple of (activation_function, extra_parameters). Any
-            function that takes a tensor as its first argument can be used. More
-            common functions will have summaries added (e.g. relu).
-          l2loss: Set to a value greater than 0 to use L2 regularization to decay
-            the weights.
+          stride: The strides as a length 1, 2 or 4 sequence or an integer. If
+            an int, length 1 or 2, the stride in the first and last dimensions
+            are 1.
+          activation_fn: A tuple of (activation_function, extra_parameters).
+            Any function that takes a tensor as its first argument can be used.
+            More common functions will have summaries added (e.g. relu).
+          l2loss: Set to a value greater than 0 to use L2 regularization to
+            decay the weights.
           init: An optional initialization. If not specified, uses Xavier
             initialization.
           stddev: A standard deviation to use in parameter initialization.
           bias: Set to False to not have a bias.
-          edges: Either SAME to use 0s for the out of bounds area or VALID to shrink
-            the output size and only uses valid input pixels.
+          edges: Either SAME to use 0s for the out of bounds area or VALID to
+            shrink the output size and only uses valid input pixels.
           batch_normalize: Set to True to batch_normalize this layer.
         Returns:
           Handle to the generated layer.
@@ -72,8 +73,9 @@ class deconv2d(prettytensor.VarStoreMethod):
             (4th dim) is not known.
         """
         if input_layer.get_shape().ndims != 4:
-            raise ValueError('conv2d requires a rank 4 Tensor with a known depth %s' %
-                             input_layer.get_shape())
+            raise ValueError(
+                'conv2d requires a rank 4 Tensor with a known depth %s' %
+                input_layer.get_shape())
         if input_layer.shape[3] is None:
             raise ValueError('Input depth must be known')
         kernel = _kernel(kernel)
@@ -84,7 +86,8 @@ class deconv2d(prettytensor.VarStoreMethod):
         if init is None:
             if stddev is None:
                 patch_size = size[0] * size[1]
-                init = layers.xavier_init(size[2] * patch_size, size[3] * patch_size)
+                init = layers.xavier_init(size[2] * patch_size,
+                                          size[3] * patch_size)
             elif stddev:
                 init = tf.truncated_normal_initializer(stddev=stddev)
             else:
@@ -103,11 +106,13 @@ class deconv2d(prettytensor.VarStoreMethod):
         row_stride = stride[1]
         col_stride = stride[2]
 
-        out_rows, out_cols = get2d_deconv_output_size(input_height, input_width, filter_height,
-                                                      filter_width, row_stride, col_stride, edges)
+        out_rows, out_cols = get2d_deconv_output_size(
+            input_height, input_width, filter_height, filter_width,
+            row_stride, col_stride, edges)
 
         output_shape = [input_layer.shape[0], out_rows, out_cols, depth]
-        y = tf.nn.conv2d_transpose(input_layer, params, output_shape, stride, edges)
+        y = tf.nn.conv2d_transpose(
+            input_layer, params, output_shape, stride, edges)
         layers.add_l2loss(books, params, l2loss)
         if bias:
             y += self.variable(
@@ -137,8 +142,11 @@ class deconv2d(prettytensor.VarStoreMethod):
 # Helper methods
 
 def get2d_deconv_output_size(input_height, input_width, filter_height,
-                             filter_width, row_stride, col_stride, padding_type):
-    """Returns the number of rows and columns in a convolution/pooling output."""
+                             filter_width, row_stride, col_stride,
+                             padding_type):
+    """Returns the number of rows and columns in a convolution/pooling
+    output.
+    """
     input_height = tensor_shape.as_dimension(input_height)
     input_width = tensor_shape.as_dimension(input_width)
     filter_height = tensor_shape.as_dimension(filter_height)

@@ -48,7 +48,8 @@ class M1:
                           batch_normalize().
                           deconv2d(5, 32, stride=2).
                           batch_normalize().
-                          deconv2d(5, 1, stride=2, activation_fn=tf.nn.sigmoid))
+                          deconv2d(5, 1, stride=2,
+                                   activation_fn=tf.nn.sigmoid))
 
     def log_prob(self, z, x):
         """
