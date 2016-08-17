@@ -1,3 +1,4 @@
 tensorflow
+prettytensor
 numpy
 six

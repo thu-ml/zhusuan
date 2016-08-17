@@ -19,7 +19,7 @@ This command will run automatic tests in the tests/ directory.
 ##### Test Coverage
 To ensure test coverage keeping 100% over the developments, run
 
-`py.test --cov zhusuan`
+`py.test --cov zhusuan/ --cov-report term-missing`
 
 ##### PEP8 Code Style Check
 We follow PEP8 python code style. To check, run

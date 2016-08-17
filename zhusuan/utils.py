@@ -51,3 +51,20 @@ def log_mean_exp(x, reduction_indices=None, keep_dims=False):
     if not keep_dims:
         ret = tf.reduce_mean(ret, reduction_indices)
     return ret
+
+
+def as_tensor(input):
+    """
+    Wrap an input (python scalar or numpy array) into Tensors.
+
+    :param input: A number, numpy array or Tensor.
+    :return: A Tensor.
+    """
+    if isinstance(input, tf.Tensor) or isinstance(input, tf.Variable):
+        return input
+    else:
+        try:
+            return tf.constant(input)
+        except Exception as e:
+            raise TypeError("Input of type %s cannot be wrapped as Tensors. "
+                            "(Error message: %s)" % (type(input), e))
