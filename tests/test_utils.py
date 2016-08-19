@@ -53,3 +53,19 @@ def test_as_tensor():
     with pytest.raises(TypeError):
         as_tensor(tf.SparseTensor(indices=[[0, 0], [1, 2]],
                                   values=[1, 2], shape=[3, 4]))
+
+
+def test_ensure_dim_match():
+    a, b = ensure_dim_match([tf.placeholder(tf.float32, (None, 1, 3)),
+                             tf.placeholder(tf.float32, (None, 5, 3))], 1)
+    assert(a.get_shape().as_list() == [None, 5, 3])
+    assert(b.get_shape().as_list() == [None, 5, 3])
+
+    with tf.Session() as sess:
+        test_values, _ = sess.run(
+            ensure_dim_match([tf.ones((1, 3)), tf.ones((5, 3))], 0))
+        assert(test_values.shape == (5, 3))
+
+    with tf.Session() as sess:
+        with pytest.raises(tf.errors.InvalidArgumentError):
+            sess.run(ensure_dim_match([tf.ones((2, 3)), tf.ones((5, 3))], 0))
