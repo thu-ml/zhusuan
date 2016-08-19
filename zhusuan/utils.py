@@ -82,9 +82,11 @@ def ensure_dim_match(inputs, dim):
     :param dim: Int. The dimension along which to ensure matches.
     :return: A list of Tensors that have been tiled to match.
     """
+    if len(inputs) == 1:
+        return inputs
     max_value = reduce(tf.maximum, [tf.shape(i)[dim] for i in inputs])
     static_max_value = None
-    static_values = [i.get_shape()[dim] for i in inputs]
+    static_values = [i.get_shape().as_list()[dim] for i in inputs]
     if None not in static_values:
         static_max_value = max(static_values)
     ret = []

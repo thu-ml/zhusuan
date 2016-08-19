@@ -61,10 +61,23 @@ def test_ensure_dim_match():
     assert(a.get_shape().as_list() == [None, 5, 3])
     assert(b.get_shape().as_list() == [None, 5, 3])
 
+    c, d = ensure_dim_match([tf.placeholder(tf.float32, (1, 3)),
+                             tf.placeholder(tf.float32, (None, 3))], 0)
+    assert(c.get_shape().as_list() == [None, 3])
+    assert(d.get_shape().as_list() == [None, 3])
+
     with tf.Session() as sess:
+        test_values = sess.run(
+            ensure_dim_match([tf.ones(1)], 0))[0]
+        assert(test_values.shape == (1,))
+
         test_values, _ = sess.run(
-            ensure_dim_match([tf.ones((1, 3)), tf.ones((5, 3))], 0))
-        assert(test_values.shape == (5, 3))
+            ensure_dim_match([tf.ones(1), tf.ones(5)], 0))
+        assert(test_values.shape == (5,))
+
+        test_values, _ = sess.run(
+            ensure_dim_match([tf.ones((3, 1)), tf.ones((3, 5))], 1))
+        assert(test_values.shape == (3, 5))
 
     with tf.Session() as sess:
         with pytest.raises(tf.errors.InvalidArgumentError):
