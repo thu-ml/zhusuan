@@ -86,7 +86,8 @@ class TestDiscrete:
             p = np.array([[0.5, 7., 1.]])
             x = np.array([[0, 1, 0]])
             test_values = sess.run(discrete.logpdf(x, p))[0]
-            true_values = x.squeeze().dot((p / p.sum(axis=1)).squeeze())
+            true_values = x.squeeze().dot(
+                (np.log(p / p.sum(axis=1))).squeeze())
             assert(np.abs(test_values - true_values) < 1e-6)
 
         with pytest.raises(ValueError):

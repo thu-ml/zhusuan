@@ -102,16 +102,17 @@ class TestReparameterizedNormal:
                 logpdf, feed_dict={mean_: np.random.random((2, 1, 20)),
                                    logstd: np.random.random((2, 1, 20)),
                                    x: np.random.random((2, 10, 20)) * 2})
+            # TODO: test values
             assert(test_values.shape == (2, 10))
 
 
 class TestDiscrete:
     def test_init(self):
-        Discrete(Mock(), n_samples=5)
+        Discrete(Mock(), 2, n_samples=5)
 
     def test_get_output_for(self):
         p = tf.placeholder(tf.float32, shape=(None, 1, 20))
-        layer = Discrete(Mock(), n_samples=10)
+        layer = Discrete(Mock(), 20, n_samples=10)
         output = layer.get_output_for(p)
         assert(output.get_shape().as_list() == [None, 10, 20])
         with tf.Session() as sess:
@@ -120,7 +121,7 @@ class TestDiscrete:
             assert(test_values.shape == (2, 10, 20))
 
         p = tf.placeholder(tf.float32, shape=(None, 5, 20))
-        layer = Discrete(Mock())
+        layer = Discrete(Mock(), 20)
         output = layer.get_output_for(p)
         assert(output.get_shape().as_list() == [None, 5, 20])
         with tf.Session() as sess:
@@ -128,10 +129,15 @@ class TestDiscrete:
                 output, feed_dict={p: np.random.random((2, 5, 20))})
             assert(test_values.shape == (2, 5, 20))
 
+        p = tf.placeholder(tf.float32, shape=(None, 5, 20))
+        layer = Discrete(Mock(), 10)
+        with pytest.raises(ValueError):
+            _ = layer.get_output_for(p)
+
     def test_get_logpdf_for(self):
         p = tf.placeholder(tf.float32, shape=(None, 1, 10))
         x = tf.placeholder(tf.float32, shape=(None, 5, 10))
-        layer = Discrete(Mock(), n_samples=5)
+        layer = Discrete(Mock(), 10, n_samples=5)
         logpdf = layer.get_logpdf_for(x, p)
         assert(logpdf.get_shape().as_list() == [None, 5])
         x_values = np.zeros((10, 10))
@@ -139,9 +145,17 @@ class TestDiscrete:
         x_values = x_values.reshape((2, 5, 10))
         with tf.Session() as sess:
             test_values = sess.run(
-                logpdf, feed_dict={p: np.random.random((2, 1, 10)),
+                logpdf, feed_dict={p: np.tile(np.random.random((1, 1, 10)),
+                                              (2, 1, 1)),
                                    x: x_values})
             assert(test_values.shape == (2, 5))
+            assert(np.abs(np.sum(np.exp(test_values)) - 1.) < 1e-6)
+
+        p = tf.placeholder(tf.float32, shape=(None, 1, 20))
+        x = tf.placeholder(tf.float32, shape=(None, 5, 20))
+        layer = Discrete(Mock(), 10)
+        with pytest.raises(ValueError):
+            _ = layer.get_logpdf_for(x, p)
 
 
 class TestPrettyTensor:
@@ -156,12 +170,10 @@ class TestPrettyTensor:
         layer = PrettyTensor({'input': Mock()},
                              pt.template('x').fully_connected(500))
         with pytest.raises(ValueError):
-            layer.get_output_for([tf.placeholder(tf.float32)])
+            layer.get_output_for([tf.placeholder(tf.float32, (None, 100))])
 
         layer = PrettyTensor({'input': Mock()},
                              pt.template('input').fully_connected(500))
-        print(layer.get_output_for(
-            [tf.placeholder(tf.float32, shape=(None, 100))]))
         assert(isinstance(
             layer.get_output_for([tf.placeholder(
                 tf.float32, shape=(None, 100))]), tf.Tensor))
@@ -271,7 +283,7 @@ def test_get_output():
         get_output(layer, mean_feed)
 
     p = InputLayer((None, 1, 5))
-    layer = Discrete(p, n_samples=3, name='discrete')
+    layer = Discrete(p, 5, n_samples=3, name='discrete')
     p_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
     output = get_output(layer, p_feed)
     assert(output[0].get_shape().as_list() == [None, 3, 5])

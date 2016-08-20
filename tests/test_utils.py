@@ -82,3 +82,14 @@ def test_ensure_dim_match():
     with tf.Session() as sess:
         with pytest.raises(tf.errors.InvalidArgumentError):
             sess.run(ensure_dim_match([tf.ones((2, 3)), tf.ones((5, 3))], 0))
+
+
+def test_add_name_scope():
+    class A:
+        @add_name_scope
+        def f(self):
+            return tf.ones(1)
+
+    a = A()
+    node = a.f()
+    assert(node.name == 'A/f/ones:0')

@@ -119,11 +119,11 @@ if __name__ == "__main__":
                              'data', 'mnist.pkl.gz')
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         dataset.load_mnist_realval(data_path)
-    x_train = np.vstack([x_train, x_valid])
+    x_train = np.vstack([x_train, x_valid]).astype('float32')
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
 
-    # Define hyper-parameters
+    # Define model parameters
     n_z = 40
 
     # Define training/evaluation parameters

@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-from functools import reduce
+from functools import reduce, wraps
 
 
 def log_sum_exp(x, reduction_indices=None, keep_dims=False):
@@ -107,3 +107,12 @@ def ensure_dim_match(inputs, dim):
         output.set_shape(static_shape)
         ret.append(output)
     return ret
+
+
+def add_name_scope(f):
+    @wraps(f)
+    def _func(*args, **kwargs):
+        with tf.name_scope(args[0].__class__.__name__):
+            with tf.name_scope(f.__name__):
+                return f(*args, **kwargs)
+    return _func

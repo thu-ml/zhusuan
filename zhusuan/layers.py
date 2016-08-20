@@ -14,7 +14,7 @@ import prettytensor as pt
 import six
 
 from .distributions import norm, discrete
-from .utils import as_tensor
+from .utils import as_tensor, add_name_scope
 
 
 class Layer(object):
@@ -131,7 +131,7 @@ class ReparameterizedNormal(MergeLayer):
     Note that gradients on samples from this Normal distribution are allowed
     to propagate into inputs in this function, using the reparametrization
     trick from (Kingma, 2013), which is contrary to the behavior in
-    `zhusuan.distributions`.
+    :meth:`zhusuan.distributions`.
 
     :param incomings: A list of 2 :class:`Layer` instances. The first
         representing the mean, and the second representing the log standard
@@ -146,10 +146,9 @@ class ReparameterizedNormal(MergeLayer):
             raise ValueError("ReparameterizedNormal layer only accepts input "
                              "layers of length 2 (the mean and the log "
                              "standard deviation).")
-        self.l_mean = incomings[0]
-        self.l_logstd = incomings[1]
         self.n_samples = n_samples
 
+    @add_name_scope
     def get_output_for(self, inputs, **kwargs):
         mean_, logstd = inputs
         if self.n_samples == 1:
@@ -157,13 +156,14 @@ class ReparameterizedNormal(MergeLayer):
         else:
             samples = norm.rvs(
                 size=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
-            ) * logstd + mean_
+            ) * tf.exp(logstd) + mean_
             samples.set_shape((None, self.n_samples, None))
         return samples
 
+    @add_name_scope
     def get_logpdf_for(self, output, inputs, **kwargs):
         mean_, logstd = inputs
-        return tf.reduce_sum(norm.logpdf(output, mean_, logstd), 2)
+        return tf.reduce_sum(norm.logpdf(output, mean_, tf.exp(logstd)), 2)
 
 
 class Discrete(Layer):
@@ -176,14 +176,26 @@ class Discrete(Layer):
         like (batch_size, n_samples, n_dims).
     :param n_samples: Int. Number of samples drawn for distribution layers.
         Default to be 1.
+    :param n_classes: Int. Number of classes for this discrete distribution.
+        Should be the same as the 3rd dimension of the incoming.
     :param name: a string or None. An optional name to attach to this layer.
     """
-    def __init__(self, incoming, n_samples=1, name=None):
+    def __init__(self, incoming, n_classes, n_samples=1, name=None):
         super(Discrete, self).__init__(incoming, name)
         self.n_samples = n_samples
+        self.n_classes = n_classes
 
+    def _static_shape_check(self, input):
+        static_n_dim = input.get_shape().as_list()[2]
+        if (static_n_dim is not None) and (static_n_dim != self.n_classes):
+            raise (ValueError("Input fed into Discrete layer %r has different "
+                              "number of classes with the argument n_classes "
+                              "passed on construction of this layer." % self))
+
+    @add_name_scope
     def get_output_for(self, input, **kwargs):
         n_dim = tf.shape(input)[2]
+        self._static_shape_check(input)
         if self.n_samples == 1:
             samples_2d = discrete.rvs(
                 tf.reshape(input, (-1, n_dim)))
@@ -198,7 +210,9 @@ class Discrete(Layer):
                                input.get_shape()[2]))
         return samples
 
+    @add_name_scope
     def get_logpdf_for(self, output, input, **kwargs):
+        self._static_shape_check(input)
         output_2d = tf.reshape(output, (-1, tf.shape(output)[2]))
         input_2d = tf.reshape(tf.tile(input, (1, self.n_samples, 1)),
                               (-1, tf.shape(input)[2]))
@@ -230,15 +244,17 @@ class PrettyTensor(MergeLayer):
                             "prettytensor template type.")
         self.pt_expr = pt_expr
 
+    @add_name_scope
     def get_output_for(self, inputs, **kwargs):
         template_mapping = dict(zip(self.template_names, inputs))
         try:
             return self.pt_expr.construct(**template_mapping).tensor
         except ValueError as e:
-            raise ValueError("PrettyTensor Layer only accepts prettytensor "
-                             "expression that takes names of incomings as "
-                             "templates. Check the pt_expr passed on "
-                             "construction. Error message: %s" % e)
+            raise ValueError("PrettyTensor construction error. Error message: "
+                             "%s.\n(Note that PrettyTensor Layer only accepts "
+                             "prettytensor expression that takes names of "
+                             "incomings as templates. Check the pt_expr "
+                             "passed on construction)" % e)
 
 
 def get_all_layers(layer_or_layers, treat_as_inputs=None):
@@ -382,7 +398,6 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
                              "an input expression." % layer)
 
     def _get_layer_inputs(layer):
-        print(layer.name)
         try:
             if isinstance(layer, MergeLayer):
                 ret = [all_outputs[i][0] for i in layer.input_layers]
