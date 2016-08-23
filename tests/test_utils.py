@@ -93,3 +93,19 @@ def test_add_name_scope():
     a = A()
     node = a.f()
     assert(node.name == 'A/f/ones:0')
+
+
+def test_copy():
+    def list_diff(a, b):
+        for i in range(2):
+            if (a[i] != b[i]).any():
+                return False
+        return True
+
+    a = [np.array([1, 2]), np.array([[3, 4], [5, 6]])]
+    c = [np.array([1, 2]), np.array([[3, 4], [5, 6]])]
+    b = copy(a)
+    assert(list_diff(a, b))
+
+    b[0][0] = 10
+    assert(list_diff(a, c))

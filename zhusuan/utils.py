@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
+import numpy as np
 from functools import reduce, wraps
 
 
@@ -115,4 +116,107 @@ def add_name_scope(f):
         with tf.name_scope(args[0].__class__.__name__):
             with tf.name_scope(f.__name__):
                 return f(*args, **kwargs)
+
     return _func
+
+
+def copy(x):
+    """
+    Create a copy of a list of numpy arrays.
+
+    :param x: A list of numpy arrays.
+    :return: A copy of x.
+    """
+    return map(lambda x: np.copy(x), x)
+
+
+class MeanStatistics:
+    """
+    The :class:`MeanStatistics` class supports estimating the mean of a
+    series of numpy array in a online fashion.
+
+    :param shape: The shape of the statistics.
+    """
+
+    def __init__(self, shape=None):
+        self.shape = shape
+        self.reset()
+
+    def reset(self):
+        """
+        Reset the statistics.
+        """
+        if self.shape is None:
+            self.x = 0
+        else:
+            self.x = np.zeros(self.shape)
+
+        self.count = 0
+
+    def add(self, y):
+        """
+        Add a new item.
+
+        :param y: The item.
+        """
+        self.x += y
+        self.count += 1
+
+    def mean(self):
+        """
+        Give the mean of all currently added items.
+
+        :return: The mean.
+        """
+        if self.count == 0:
+            return self.x
+        else:
+            return self.x / self.count
+
+
+class VarianceEstimator:
+    """
+    The :class:`VarianceEstimator` class implements the Welford estimator for
+    online variance estimation.
+
+    The estimator takes a series of items, where each item is a list of numpy
+    arrays, and the estimator calculates the unbiased variance per dimension.
+
+    :param shape: The shape of each item, which is a list of shapes for each
+    numpy array.
+    """
+
+    def __init__(self, shape):
+        self.shape = shape
+        self.num_vars = len(shape)
+        self.reset()
+
+    def reset(self):
+        """
+        Reset the estimator.
+        """
+        self.count = 0
+        self.mean = map(lambda shape: np.zeros(shape), self.shape)
+        self.s = map(lambda shape: np.zeros(shape), self.shape)
+
+    def add(self, x):
+        """
+        Add an item to the estimator.
+        :param x: The item, which is a list of numpy arrays.
+        """
+        self.count += 1
+        for i in range(self.num_vars):
+            delta = x[i] - self.mean[i]
+            self.mean[i] += delta / self.count
+            self.s[i] += delta * (x[i] - self.mean[i])
+
+    def variance(self):
+        """
+        Report the unbiased variance of all added items so far.
+
+        :return: The unbiased variance per dimension.
+        """
+        if self.count <= 1:
+            return map(lambda shape: np.zeros(shape), self.shape)
+        else:
+            return map(lambda x: x / (self.count - 1), self.s)
