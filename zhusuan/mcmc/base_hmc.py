@@ -86,7 +86,7 @@ class BaseHMC:
         grad_per_sample = self.num_leapfrog / e
         grad_per_second = self.num_leapfrog / self.elapsed_time
         second_per_sample = self.elapsed_time / e
-        print("Effectiveness = {}\%, "
+        print("Effectiveness = {}%, "
               "{} leapfrog steps per sample ({} grads / s), "
               "{} seconds per sample"
               .format(effectiveness*100, grad_per_sample, grad_per_second,

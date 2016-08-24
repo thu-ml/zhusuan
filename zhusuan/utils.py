@@ -225,9 +225,9 @@ class VarianceEstimator:
 def if_raise(cond, exception):
     """
     If `cond` is true, raise `exception`. We can directly write if... raise
-    in the code, but the problem is sometimes the raise so difficult to
+    in the code, but the problem is sometimes the raise is so difficult to
     trigger that we cannot come up with a test case. We use this statement to
-    keep the coverage 100% in this case.
+    bypass coverage test in this case.
 
     :param cond: The condition.
     :param exception: The exception to trigger.
