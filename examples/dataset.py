@@ -56,6 +56,40 @@ def load_mnist_realval(path):
         x_test, one_hot(t_test, n_y)
 
 
+def load_binary_mnist_realval(path):
+    """
+    Loads the binary real valued MNIST dataset.
+
+    :param path: path to dataset file.
+    :return: The MNIST dataset.
+    """
+    def _download_mnist_realval(path):
+        """
+        Download the MNIST dataset if it is not present.
+        """
+        url = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
+        print('Downloading data from %s' % url)
+        urllib.request.urlretrieve(url, path)
+
+    if not os.path.isfile(path):
+        data_dir = os.path.dirname(path)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(data_dir)
+        _download_mnist_realval(path)
+
+    f = gzip.open(path, 'rb')
+    train_set, valid_set, test_set = pickle.load(f)
+    f.close()
+    x_train, t_train = train_set[0], train_set[1]
+    x_valid, t_valid = valid_set[0], valid_set[1]
+    x_test, t_test = test_set[0], test_set[1]
+    t_train = (t_train == 1).astype(np.float32)
+    t_valid = (t_valid == 1).astype(np.float32)
+    t_test = (t_test == 1).astype(np.float32)
+    n_y = t_train.max() + 1
+    return x_train, t_train, x_valid, t_valid, x_test, t_test
+
+
 def load_german_credits(n_train):
     n = n_train
     mu = 0

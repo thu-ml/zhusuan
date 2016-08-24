@@ -1,10 +1,11 @@
-#!/usr/bin/env python
+
 # -*- coding: utf-8 -*-
 
 import tensorflow as tf
 import numpy as np
 import math
-from dataset import load_german_credits
+import os
+from dataset import load_german_credits, load_binary_mnist_realval
 from zhusuan.optimization.gradient_descent_optimizer import \
     GradientDescentOptimizer
 from zhusuan.distributions import norm, bernoulli
@@ -13,21 +14,24 @@ from zhusuan.mcmc.nuts import NUTS
 float_eps = 1e-30
 
 # Load MNIST dataset
-# n = 600
-# n_dims = 784
-# mu = 0
-# sigma = 1./math.sqrt(n)
-#
-# X_train, y_train, X_test, y_test, beta_map, _, beta_n,
-#  _ = lr_datasets.binary_mnist_600(n, sigma, intercept=False)
-
-# Load German credits dataset
-n = 900
-n_dims = 24
+n = 600
+n_dims = 784
 mu = 0
 sigma = 1./math.sqrt(n)
 
-X_train, y_train, X_test, y_test = load_german_credits(n)
+data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             'data', 'mnist.pkl.gz')
+X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
+X_train = X_train[:n] * 256
+y_train = y_train[:n]
+
+# Load German credits dataset
+# n = 900
+# n_dims = 24
+# mu = 0
+# sigma = 1./math.sqrt(n)
+#
+# X_train, y_train, X_test, y_test = load_german_credits(n)
 
 # Define graph
 # Data
