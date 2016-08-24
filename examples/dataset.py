@@ -24,6 +24,11 @@ def one_hot(x, depth):
     return ret
 
 
+def download_dataset(url, path):
+    print('Downloading data from %s' % url)
+    urllib.request.urlretrieve(url, path)
+
+
 def load_mnist_realval(path):
     """
     Loads the real valued MNIST dataset.
@@ -31,19 +36,12 @@ def load_mnist_realval(path):
     :param path: path to dataset file.
     :return: The MNIST dataset.
     """
-    def _download_mnist_realval(path):
-        """
-        Download the MNIST dataset if it is not present.
-        """
-        url = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
-        print('Downloading data from %s' % url)
-        urllib.request.urlretrieve(url, path)
-
     if not os.path.isfile(path):
         data_dir = os.path.dirname(path)
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(data_dir)
-        _download_mnist_realval(path)
+        download_dataset('http://www.iro.umontreal.ca/~lisa/deep/data/mnist'
+                         '/mnist.pkl.gz', path)
 
     f = gzip.open(path, 'rb')
     train_set, valid_set, test_set = pickle.load(f)
@@ -63,44 +61,36 @@ def load_binary_mnist_realval(path):
     :param path: path to dataset file.
     :return: The MNIST dataset.
     """
-    def _download_mnist_realval(path):
-        """
-        Download the MNIST dataset if it is not present.
-        """
-        url = 'http://www.iro.umontreal.ca/~lisa/deep/data/mnist/mnist.pkl.gz'
-        print('Downloading data from %s' % url)
-        urllib.request.urlretrieve(url, path)
+    x_train, t_train, x_valid, t_valid, x_test, t_test = \
+        load_mnist_realval(path)
 
+    t_train = np.argmax(t_train)
+    t_valid = np.argmax(t_valid)
+    t_test = np.argmax(t_test)
+
+    t_train = (t_train == 1).astype(np.float32)
+    t_valid = (t_valid == 1).astype(np.float32)
+    t_test = (t_test == 1).astype(np.float32)
+
+    return x_train, t_train, x_valid, t_valid, x_test, t_test
+
+
+def load_german_credits(path, n_train):
     if not os.path.isfile(path):
         data_dir = os.path.dirname(path)
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(data_dir)
-        _download_mnist_realval(path)
-
-    f = gzip.open(path, 'rb')
-    train_set, valid_set, test_set = pickle.load(f)
-    f.close()
-    x_train, t_train = train_set[0], train_set[1]
-    x_valid, t_valid = valid_set[0], valid_set[1]
-    x_test, t_test = test_set[0], test_set[1]
-    t_train = (t_train == 1).astype(np.float32)
-    t_valid = (t_valid == 1).astype(np.float32)
-    t_test = (t_test == 1).astype(np.float32)
-    n_y = t_train.max() + 1
-    return x_train, t_train, x_valid, t_valid, x_test, t_test
-
-
-def load_german_credits(n_train):
-    n = n_train
-    mu = 0
+        download_dataset('https://archive.ics.uci.edu/ml/'
+                         'machine-learning-databases/statlog/'
+                         'german/german.data-numeric', path)
 
     n_dims = 24
-    data = np.loadtxt('german.data-numeric')
+    data = np.loadtxt(path)
 
-    X_train = data[:n, :n_dims]
-    y_train = data[:n, n_dims] - 1
-    X_test = data[n:, :n_dims]
-    y_test = data[n:, n_dims] - 1
+    X_train = data[:n_train, :n_dims]
+    y_train = data[:n_train, n_dims] - 1
+    X_test = data[n_train:, :n_dims]
+    y_test = data[n_train:, n_dims] - 1
     print('Finished reading data')
 
     return X_train, y_train, X_test, y_test
