@@ -3,10 +3,11 @@
 
 from __future__ import absolute_import
 from __future__ import division
+from functools import reduce, wraps
 
 import tensorflow as tf
 import numpy as np
-from functools import reduce, wraps
+from six.moves import range
 
 
 def log_sum_exp(x, reduction_indices=None, keep_dims=False):

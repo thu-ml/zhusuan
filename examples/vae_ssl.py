@@ -6,7 +6,6 @@ from __future__ import print_function
 from __future__ import division
 import sys
 import os
-import itertools
 
 import tensorflow as tf
 import prettytensor as pt
@@ -269,7 +268,6 @@ if __name__ == "__main__":
         print(i.name, i.get_shape())
 
     init = tf.initialize_all_variables()
-    check_op = tf.add_check_numerics_ops()
 
     # Run the inference
     with tf.Session() as sess:

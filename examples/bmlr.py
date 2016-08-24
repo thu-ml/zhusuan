@@ -35,7 +35,7 @@ mu = 0
 sigma = 1./math.sqrt(n)
 
 data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'german.data-numeric')
+                         'data', 'german.data-numeric')
 X_train, y_train, X_test, y_test = load_german_credits(data_path, n)
 y_train = one_hot(y_train.astype(np.int32), 2)
 y_test = one_hot(y_test.astype(np.int32), 2)
@@ -48,7 +48,8 @@ y = tf.placeholder(tf.float32, [None, n_classes], name='y')
 update_data = tf.assign(x, x_input, validate_shape=False, name='update_data')
 
 # Model
-beta = tf.Variable(np.zeros((n_dims, n_classes)), dtype=tf.float32, name='beta')
+beta = tf.Variable(np.zeros((n_dims, n_classes)),
+                   dtype=tf.float32, name='beta')
 scores = tf.matmul(x, beta)
 logits = tf.nn.softmax(scores)
 correct = tf.nn.in_top_k(scores, tf.argmax(y, dimension=1), 1)

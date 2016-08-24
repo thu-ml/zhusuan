@@ -6,7 +6,6 @@ from __future__ import print_function
 from __future__ import division
 import sys
 import os
-import itertools
 
 import tensorflow as tf
 import prettytensor as pt

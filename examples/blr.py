@@ -33,7 +33,7 @@ mu = 0
 sigma = 1./math.sqrt(n)
 
 data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'german.data-numeric')
+                         'data', 'german.data-numeric')
 X_train, y_train, X_test, y_test = load_german_credits(data_path, n)
 
 # Define graph
@@ -44,11 +44,11 @@ y = tf.placeholder(tf.float32, [None], name='y')
 update_data = tf.assign(x, x_input, validate_shape=False, name='update_data')
 
 # Model
-beta = tf.Variable(np.zeros((n_dims)), dtype=tf.float32, name='beta')
-scores = tf.reduce_sum(x*beta, reduction_indices=(1))
+beta = tf.Variable(np.zeros(n_dims), dtype=tf.float32, name='beta')
+scores = tf.reduce_sum(x * beta, reduction_indices=(1,))
 logits = tf.nn.sigmoid(scores, name='logits')
 predictions = tf.cast(logits > 0.5, tf.float32)
-n_correct = tf.reduce_sum(predictions * y + (1-predictions) * (1-y))
+n_correct = tf.reduce_sum(predictions * y + (1 - predictions) * (1 - y))
 
 log_likelihood = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                  tf.reduce_sum(bernoulli.logpdf(y, logits))
