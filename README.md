@@ -4,10 +4,14 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
 
 ## Examples
 
-### Examples of ADVI (Automatic Differentiation Variational Inference)
+### Examples of Variational Inference (ADVI, etc.)
 * Toy intractable posterior: `python examples/toy.py`
-* Variational autoencoder: `python examples/vae.py`
+* Variational autoencoder (VAE): `python examples/vae.py`
+* Convolutional VAE: `python examples/vae_conv.py`
+* Semi-supervised VAE: `python examples/vae_ssl.py`
 
+### Examples of MCMC (NUTS, etc.)
+* Bayesian logistic regression: `python examples/blr.py`
 
 ## Developments
 
