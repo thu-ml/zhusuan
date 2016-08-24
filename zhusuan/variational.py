@@ -4,100 +4,27 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+import itertools
 
 import tensorflow as tf
+import six
 
-from .distributions import norm
-
-
-class Variational(object):
-    """
-    The :class:`Variational` class represents a variational posterior. It
-    should be subclassed when implementing new types of variational posterior.
-    """
-    def __init__(self):
-        pass
-
-    def sample(self, n_samples=1, **kwargs):
-        """
-        Generate samples from the variational posterior.
-
-        :param n_samples: Int. Number of samples.
-
-        :return: A Tensor of shape (batch_size, n_samples, n_z). Samples from
-            the variational posterior.
-        """
-        raise NotImplementedError()
-
-    def logpdf(self, z, **kwargs):
-        """
-        The log density function of the variational posterior.
-
-        :param z: A Tensor of shape (batch_size, n_samples, n_z). The value at
-            which to evaluate the log density function.
-
-        :return: A Tensor of the same shape as `z` with function values.
-        """
-        raise NotImplementedError()
+from .utils import ensure_dim_match
+from .layers import Discrete, get_output
 
 
-class ReparameterizedNormal(Variational):
-    """
-    The class of variational posterior used in Automatic Differentiation
-    Variational Inference (ADVI).
-    Note that gradients on samples from this variational posterior are allowed
-    to propagate through `vz_mean` and `vz_logstd` in this function, using the
-    reparametrization trick from (Kingma, 2013), which is contrary to the
-    behavior in `zhusuan.distributions`.
-
-    :param vz_mean: A 2-D Tensor that has shape (batch_size, n_z), which
-        denotes the mean of the variational posterior to be optimized during
-        the inference.
-        For traditional mean-field variational inference, the batch_size can
-        be set to 1.
-        For amortized variational inference, vz_mean depends on x and should
-        have the same batch_size as x.
-    :param vz_logstd: A 2-D Tensor that has shape (batch_size, n_z), which
-        denotes the log standard deviation of the variational posterior to be
-        optimized during the inference. See `vz_mean` for proper usage.
-    """
-    def __init__(self, vz_mean, vz_logstd):
-        vz_mean = tf.cast(vz_mean, dtype=tf.float32)
-        vz_logstd = tf.cast(vz_logstd, dtype=tf.float32)
-        tf.assert_rank(vz_mean, 2)
-        tf.assert_rank(vz_logstd, 2)
-        self.vz_mean = vz_mean
-        self.vz_logstd = vz_logstd
-        super(ReparameterizedNormal, self).__init__()
-
-    def sample(self, n_samples=1, **kwargs):
-        samples = norm.rvs(
-            size=(tf.shape(self.vz_mean)[0], n_samples,
-                  tf.shape(self.vz_mean)[1])
-        ) * tf.exp(tf.expand_dims(self.vz_logstd, 1)) + tf.expand_dims(
-            self.vz_mean, 1)
-        samples.set_shape((None, n_samples, None))
-        return samples
-
-    def logpdf(self, z, **kwargs):
-        return tf.reduce_sum(
-            norm.logpdf(z, tf.expand_dims(self.vz_mean, 1),
-                        tf.expand_dims(tf.exp(self.vz_logstd), 1)), 2)
-
-
-def advi(model, x, variational, n_samples=1,
+def advi(model, observed_inputs, observed_layers, latent_layers,
          optimizer=tf.train.AdamOptimizer()):
     """
     Implements the automatic differentiation variational inference (ADVI)
     algorithm. For now we assume all latent variables have been transformed in
-    the model definition to have support on R^n.
+    the model definition to have their support on R^n.
 
-    :param model: An model object that has a method logprob(z, x) to compute
-        the log joint likelihood of the model.
-    :param x: 2-D Tensor of shape (batch_size, n_x). Observed data.
-    :param variational: A :class:`Variational` object.
-    :param n_samples: Int. Number of posterior samples used to
-        estimate the gradients. Default to be 1.
+    :param model: A model object that has a method logprob(latent, observed)
+        to compute the log joint likelihood of the model.
+    :param observed_inputs: A dictionary. Given inputs to the observed layers.
+    :param observed_layers: A dictionary. The observed layers.
+    :param latent_layers: A dictionary. The latent layers.
     :param optimizer: Tensorflow optimizer object. Default to be
         AdamOptimizer.
 
@@ -105,7 +32,72 @@ def advi(model, x, variational, n_samples=1,
         `tf.train.Optimizer.apply_gradients`
     :return: A 0-D Tensor. The variational lower bound.
     """
-    samples = variational.sample(n_samples)
-    lower_bound = model.log_prob(samples, x) - variational.logpdf(samples)
+    if list(six.iterkeys(observed_inputs)) != list(
+            six.iterkeys(observed_layers)):
+        raise ValueError("Observed layers and inputs don't match.")
+
+    # add all observed (variable, input) pairs into inputs
+    inputs = {}
+    for name, layer in six.iteritems(observed_layers):
+        inputs[layer] = observed_inputs[name]
+
+    # get discrete latent layers
+    latent_k, latent_v = map(list, zip(*six.iteritems(latent_layers)))
+    discrete_latent_layers = dict(filter(lambda x: isinstance(x[1], Discrete),
+                                         six.iteritems(latent_layers)))
+
+    if discrete_latent_layers:
+        # Discrete latent layers exists
+        discrete_latent_k, discrete_latent_v = map(list, zip(
+            *six.iteritems(discrete_latent_layers)))
+
+        # get all configurations of discrete latent variables
+        all_disc_latent_configs = []
+        for layer in discrete_latent_v:
+            tmp = []
+            for i in range(layer.n_classes):
+                layer_input = tf.expand_dims(tf.expand_dims(tf.one_hot(
+                    i, depth=layer.n_classes, dtype=tf.float32), 0), 0)
+                tmp.append(layer_input)
+            all_disc_latent_configs.append(tmp)
+        # cartesian products
+        all_disc_latent_configs = itertools.product(*all_disc_latent_configs)
+
+        # feed all configurations of inputs
+        weighted_lbs = []
+        for discrete_latent_inputs in all_disc_latent_configs:
+            _inputs = inputs.copy()
+            discrete_latent_inputs = dict(zip(discrete_latent_v,
+                                              discrete_latent_inputs))
+            _inputs.update(discrete_latent_inputs)
+            # TODO: assert n_samples == 1 for discrete layers (run time)
+            # ensure the batch_size dimension matches
+            _inputs_k, _inputs_v = zip(*six.iteritems(_inputs))
+            _inputs_v = ensure_dim_match(_inputs_v, 0)
+            _inputs = dict(zip(_inputs_k, _inputs_v))
+            # size: continuous layers (batch_size, n_samples, n_dim)
+            #       discrete layers (batch_size, 1, n_dim)
+            outputs = get_output(latent_v, _inputs)
+            latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs)))
+            # size: continuous layer (batch_size, n_samples)
+            #       discrete layers (batch_size, 1)
+            latent_logpdfs = dict(zip(latent_k, map(lambda x: x[1], outputs)))
+            # size: (batch_size, n_samples)
+            lower_bound = model.log_prob(latent_outputs, observed_inputs) - \
+                sum(six.itervalues(latent_logpdfs))
+            discrete_latent_logpdfs = [latent_logpdfs[i]
+                                       for i in discrete_latent_k]
+            w = tf.exp(sum(discrete_latent_logpdfs))
+            weighted_lbs.append(lower_bound * w)
+        # size: (batch_size, n_samples)
+        lower_bound = sum(weighted_lbs)
+    else:
+        # no Discrete latent layers
+        outputs = get_output(latent_v, inputs)
+        latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs)))
+        latent_logpdfs = map(lambda x: x[1], outputs)
+        lower_bound = model.log_prob(latent_outputs, observed_inputs) - \
+            sum(latent_logpdfs)
+
     lower_bound = tf.reduce_mean(lower_bound)
     return optimizer.compute_gradients(-lower_bound), lower_bound

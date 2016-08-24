@@ -90,6 +90,20 @@ class TestReparameterizedNormal:
                                    logstd: np.random.random((2, 5, 20))})
             assert(test_values.shape == (2, 5, 20))
 
+    def test_get_output_for_n_samples_dynamic(self):
+        mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
+        logstd = tf.placeholder(tf.float32, shape=(None, 1, 20))
+        n_samples = tf.placeholder(tf.float32, shape=())
+        layer = ReparameterizedNormal([Mock(), Mock()], n_samples)
+        output = layer.get_output_for([mean_, logstd])
+        assert(output.get_shape().as_list() == [None, None, 20])
+        with tf.Session() as sess:
+            test_values = sess.run(
+                output, feed_dict={mean_: np.random.random((2, 1, 20)),
+                                   logstd: np.random.random((2, 1, 20)),
+                                   n_samples: 10})
+            assert(test_values.shape == (2, 10, 20))
+
     def test_get_logpdf_for(self):
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
         logstd = tf.placeholder(tf.float32, shape=(None, 1, 20))
@@ -134,6 +148,18 @@ class TestDiscrete:
         with pytest.raises(ValueError):
             _ = layer.get_output_for(p)
 
+    def test_get_output_for_n_samples_dynamic(self):
+        p = tf.placeholder(tf.float32, shape=(None, 1, 20))
+        n_samples = tf.placeholder(tf.float32, shape=())
+        layer = Discrete(Mock(), 20, n_samples)
+        output = layer.get_output_for(p)
+        assert(output.get_shape().as_list() == [None, None, 20])
+        with tf.Session() as sess:
+            test_values = sess.run(
+                output, feed_dict={p: np.random.random((2, 1, 20)),
+                                   n_samples: 10})
+            assert(test_values.shape == (2, 10, 20))
+
     def test_get_logpdf_for(self):
         p = tf.placeholder(tf.float32, shape=(None, 1, 10))
         x = tf.placeholder(tf.float32, shape=(None, 5, 10))
@@ -151,6 +177,7 @@ class TestDiscrete:
             assert(test_values.shape == (2, 5))
             assert(np.abs(np.sum(np.exp(test_values)) - 1.) < 1e-6)
 
+    def test_get_logpdf_for_n_classes_mismatch(self):
         p = tf.placeholder(tf.float32, shape=(None, 1, 20))
         x = tf.placeholder(tf.float32, shape=(None, 5, 20))
         layer = Discrete(Mock(), 10)
@@ -204,8 +231,8 @@ def test_get_all_layers():
            ['in2', 'l2', 'l1', 'l3', 'l4'])
 
 
-def test_get_output():
-    n_samples = 3
+@pytest.fixture
+def _build_test_net(n_samples):
     associated_input = tf.placeholder(tf.float32, (None, 4),
                                       name='associated_input')
     l_in = InputLayer((None, 4), associated_input, name='in1')
@@ -232,56 +259,101 @@ def test_get_output():
                       name='l4')
     l5 = ReparameterizedNormal([l3, l4], name='l5')
     output_layers = [l1, l1_mean, l1_logstd, l2, l3, l4, l5]
+
+    return output_layers
+
+
+@pytest.fixture
+def _assert_outputs(outputs, n_samples):
+    o1, o1_mean, o1_logstd, o2, o3, o4, o5 = map(lambda x: x[0], outputs)
+    pd1, pd1_mean, pd1_logstd, pd2, pd3, pd4, pd5 = \
+        map(lambda x: x[1], outputs)
+    assert (o1.get_shape().as_list() == [None, 5])
+    assert (o1_mean.get_shape().as_list() == [None, 1, 5])
+    assert (o1_logstd.get_shape().as_list() == [None, 1, 5])
+    assert (o2.get_shape().as_list() == [None, n_samples, 5])
+    assert (o3.get_shape().as_list() == [None, n_samples, 10])
+    assert (o4.get_shape().as_list() == [None, 1, 10])
+    assert (o5.get_shape().as_list() == [None, n_samples, 10])
+    assert ([pd1, pd1_mean, pd1_logstd, pd3, pd4] == [None] * 5)
+    assert (pd2.get_shape().as_list() == [None, n_samples])
+    assert (pd5.get_shape().as_list() == [None, n_samples])
+
+
+def test_get_output_n_samples_dynamic():
+    n_samples = tf.placeholder(tf.int32, shape=())
+    output_layers = _build_test_net(n_samples)
     outputs = get_output(output_layers)
+    _assert_outputs(outputs, None)
 
-    def assert_outputs(outputs):
-        o1, o1_mean, o1_logstd, o2, o3, o4, o5 = map(lambda x: x[0], outputs)
-        pd1, pd1_mean, pd1_logstd, pd2, pd3, pd4, pd5 = \
-            map(lambda x: x[1], outputs)
-        assert (o1.get_shape().as_list() == [None, 5])
-        assert (o1_mean.get_shape().as_list() == [None, 1, 5])
-        assert (o1_logstd.get_shape().as_list() == [None, 1, 5])
-        assert (o2.get_shape().as_list() == [None, n_samples, 5])
-        assert (o3.get_shape().as_list() == [None, n_samples, 10])
-        assert (o4.get_shape().as_list() == [None, 1, 10])
-        assert (o5.get_shape().as_list() == [None, n_samples, 10])
-        assert ([pd1, pd1_mean, pd1_logstd, pd3, pd4] == [None]*5)
-    assert_outputs(outputs)
 
+def test_get_output_n_samples_int():
+    n_samples = 3
+    output_layers = _build_test_net(n_samples)
+    outputs = get_output(output_layers)
+    _assert_outputs(outputs, 3)
+
+
+def test_get_output_feed_input_layer():
+    n_samples = 3
+    output_layers = _build_test_net(n_samples)
     l_in_feed = tf.placeholder(tf.float32, shape=(None, 4))
     outputs = get_output(output_layers, l_in_feed)
-    assert_outputs(outputs)
+    _assert_outputs(outputs, n_samples)
 
+
+def test_get_output_feed_2_layers():
+    n_samples = 3
+    output_layers = _build_test_net(3)
+    l1, l1_mean, l1_logstd, l2, l3, l4, l5 = output_layers
     l1_feed = tf.placeholder(tf.float32, shape=(None, 5))
     l2_feed = tf.placeholder(tf.float32, shape=(None, n_samples, 5))
     inputs = {l1: l1_feed, l2: l2_feed}
     outputs = get_output(output_layers, inputs)
-    assert_outputs(outputs)
+    _assert_outputs(outputs, n_samples)
     assert(outputs[0][0] == l1_feed)
     assert(outputs[3][0] == l2_feed)
     assert(outputs[3][1].get_shape().as_list() == [None, n_samples])
-    assert(outputs[6][0].get_shape().as_list() == [None, n_samples, 10])
     assert(outputs[6][1].get_shape().as_list() == [None, n_samples])
 
-    l5_feed = tf.placeholder(tf.float32, shape=(None, n_samples, 10))
+
+def test_get_output_single_output():
+    n_samples = tf.placeholder(tf.int32, shape=())
+    output_layers = _build_test_net(n_samples)
+    l1, l1_mean, l1_logstd, l2, l3, l4, l5 = output_layers
+    l2_feed = tf.placeholder(tf.float32, shape=(None, None, 5))
+    l5_feed = tf.placeholder(tf.float32, shape=(None, None, 10))
     inputs = {l2: l2_feed, l5: l5_feed}
     output = get_output(l5, inputs)
     assert(output[0] == l5_feed)
-    assert(output[1].get_shape().as_list() == [None, n_samples])
+    assert(output[1].get_shape().as_list() == [None, None])
 
+
+def test_get_output_raise():
     mean = InputLayer((None, 1, 5))
     logstd = InputLayer((None, 1, 5))
     layer = ReparameterizedNormal([mean, logstd], 3)
     mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as e:
         get_output(layer, {mean: mean_feed})
-    with pytest.raises(ValueError):
+    assert(e.value.message.find("get_output() was called without giving an "
+                                "input expression for the InputLayer") >= 0)
+
+    with pytest.raises(ValueError) as e:
         get_output(layer, mean_feed)
+    assert(e.value.message == "get_output() was called with a single input "
+                              "expression on a network with multiple input "
+                              "layers. Please call it with a dictionary of "
+                              "input expressions instead.")
 
     layer = ReparameterizedNormal([mean, None], 3)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError) as e:
         get_output(layer, mean_feed)
+    assert(e.value.message.find("get_output() was called with free-floating "
+                                "layer") >= 0)
 
+
+def test_get_output_discrete_layer():
     p = InputLayer((None, 1, 5))
     layer = Discrete(p, 5, n_samples=3, name='discrete')
     p_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))

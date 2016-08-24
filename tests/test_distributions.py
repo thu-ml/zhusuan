@@ -16,9 +16,9 @@ from zhusuan.distributions import *
 class TestNormal:
     def test_rvs(self):
         with tf.Session() as sess:
-            for size in [(1,), (3, 5), (1, 10, 2)]:
-                samples = sess.run(norm.rvs(size=size))
-                assert(samples.shape == size)
+            for shape in [(1,), (3, 5), (1, 10, 2)]:
+                samples = sess.run(norm.rvs(shape=shape))
+                assert(samples.shape == shape)
 
     def test_logpdf(self):
         with tf.Session() as sess:
@@ -69,10 +69,15 @@ class TestBernoulli:
 
 class TestDiscrete:
     def test_rvs(self):
+        p = tf.placeholder(tf.float32, shape=(None, 5))
+        output = discrete.rvs(p)
+        assert(output.get_shape().as_list() == [None, 5])
+
+        p = np.array([[0.5, 7., 1.]])
+        output = discrete.rvs(p)
+        assert(output.get_shape().as_list() == [1, 3])
         with tf.Session() as sess:
-            p = np.array([[0.5, 7., 1.]])
-            test_values = sess.run(discrete.rvs(p))
-            print(test_values)
+            test_values = sess.run(output)
             assert(test_values.shape == p.shape)
             p = tf.ones((3, 5))
             test_values = sess.run(discrete.rvs(p))

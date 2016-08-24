@@ -14,7 +14,7 @@ import prettytensor as pt
 import six
 
 from .distributions import norm, discrete
-from .utils import as_tensor, add_name_scope
+from .utils import as_tensor, add_name_scope, ensure_dim_match
 
 
 class Layer(object):
@@ -136,9 +136,9 @@ class ReparameterizedNormal(MergeLayer):
     :param incomings: A list of 2 :class:`Layer` instances. The first
         representing the mean, and the second representing the log standard
         deviation. Must be of shape 3-D like (batch_size, n_samples, n_dims).
-    :param n_samples: Int. Number of samples drawn for distribution layers.
-        Default to be 1.
-    :param name: a string or None. An optional name to attach to this layer.
+    :param n_samples: Int or a scalar Tensor of type int. Number of samples
+        drawn for distribution layers. Default to be 1.
+    :param name: A string or None. An optional name to attach to this layer.
     """
     def __init__(self, incomings, n_samples=1, name=None):
         super(ReparameterizedNormal, self).__init__(incomings, name)
@@ -146,19 +146,29 @@ class ReparameterizedNormal(MergeLayer):
             raise ValueError("ReparameterizedNormal layer only accepts input "
                              "layers of length 2 (the mean and the log "
                              "standard deviation).")
-        self.n_samples = n_samples
+        if isinstance(n_samples, int):
+            self.n_samples = n_samples
+        else:
+            self.n_samples = n_samples
+            with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
+                self.n_samples = tf.cast(n_samples, tf.int32)
 
     @add_name_scope
     def get_output_for(self, inputs, **kwargs):
         mean_, logstd = inputs
-        if self.n_samples == 1:
-            samples = norm.rvs(size=tf.shape(mean_)) * tf.exp(logstd) + mean_
+        samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(logstd) + mean_
+        samples_n = norm.rvs(
+            shape=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
+        ) * tf.exp(logstd) + mean_
+        if isinstance(self.n_samples, int):
+            if self.n_samples == 1:
+                return samples_1
+            else:
+                samples_n.set_shape([None, self.n_samples, None])
+                return samples_n
         else:
-            samples = norm.rvs(
-                size=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
-            ) * tf.exp(logstd) + mean_
-            samples.set_shape((None, self.n_samples, None))
-        return samples
+            return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
+                           lambda: samples_n)
 
     @add_name_scope
     def get_logpdf_for(self, output, inputs, **kwargs):
@@ -174,15 +184,19 @@ class Discrete(Layer):
     :param incoming: A :class:`Layer` instance. The layer feeding into this
         layer which gives output as class probabilities. Must be of shape 3-D
         like (batch_size, n_samples, n_dims).
-    :param n_samples: Int. Number of samples drawn for distribution layers.
-        Default to be 1.
+    :param n_samples: Int or a Tensor of type int. Number of samples drawn for
+        distribution layers. Default to be 1.
     :param n_classes: Int. Number of classes for this discrete distribution.
         Should be the same as the 3rd dimension of the incoming.
-    :param name: a string or None. An optional name to attach to this layer.
+    :param name: A string or None. An optional name to attach to this layer.
     """
     def __init__(self, incoming, n_classes, n_samples=1, name=None):
         super(Discrete, self).__init__(incoming, name)
-        self.n_samples = n_samples
+        if isinstance(n_samples, int):
+            self.n_samples = n_samples
+        else:
+            with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
+                self.n_samples = tf.cast(n_samples, tf.int32)
         self.n_classes = n_classes
 
     def _static_shape_check(self, input):
@@ -194,31 +208,38 @@ class Discrete(Layer):
 
     @add_name_scope
     def get_output_for(self, input, **kwargs):
-        n_dim = tf.shape(input)[2]
         self._static_shape_check(input)
-        if self.n_samples == 1:
-            samples_2d = discrete.rvs(
-                tf.reshape(input, (-1, n_dim)))
-            samples = tf.reshape(samples_2d, (-1, tf.shape(input)[1], n_dim))
-            samples.set_shape(input.get_shape())
+
+        n_dim = tf.shape(input)[2]
+        samples_1_2d = discrete.rvs(tf.reshape(input, (-1, n_dim)))
+        samples_1 = tf.reshape(samples_1_2d, tf.shape(input))
+        samples_1.set_shape(input.get_shape())
+
+        samples_n_2d = discrete.rvs(
+            tf.reshape(tf.tile(input, (1, self.n_samples, 1)), (-1, n_dim)))
+        samples_n = tf.reshape(samples_n_2d, (-1, self.n_samples,
+                                              tf.shape(samples_n_2d)[1]))
+        samples_n.set_shape([None, None, self.n_classes])
+
+        if isinstance(self.n_samples, int):
+            if self.n_samples == 1:
+                return samples_1
+            else:
+                return samples_n
         else:
-            samples_2d = discrete.rvs(
-                tf.reshape(tf.tile(input, (1, self.n_samples, 1)),
-                           (-1, n_dim)))
-            samples = tf.reshape(samples_2d, (-1, self.n_samples, n_dim))
-            samples.set_shape((input.get_shape()[0], self.n_samples,
-                               input.get_shape()[2]))
-        return samples
+            return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
+                           lambda: samples_n)
 
     @add_name_scope
     def get_logpdf_for(self, output, input, **kwargs):
         self._static_shape_check(input)
-        output_2d = tf.reshape(output, (-1, tf.shape(output)[2]))
-        input_2d = tf.reshape(tf.tile(input, (1, self.n_samples, 1)),
-                              (-1, tf.shape(input)[2]))
+        output_, input_ = ensure_dim_match([output, input], 0)
+        output_, input_ = ensure_dim_match([output_, input_], 1)
+        output_2d = tf.reshape(output_, (-1, tf.shape(output_)[2]))
+        input_2d = tf.reshape(input_, (-1, tf.shape(input_)[2]))
         ret = tf.reshape(discrete.logpdf(output_2d, input_2d),
-                         (-1, output.get_shape().as_list()[1]))
-        ret.set_shape(output.get_shape()[:2])
+                         (-1, tf.shape(output_)[1]))
+        ret.set_shape(output_.get_shape().as_list()[:2])
         return ret
 
 
@@ -232,7 +253,7 @@ class PrettyTensor(MergeLayer):
     :param pt_expr: A prettytensor expression that takes given names
         of the `incomings` as templates. It will be fed by the output of the
         corresponding incoming layer when calling get_output_for.
-    :param name: a string or None. An optional name to attach to this layer.
+    :param name: A string or None. An optional name to attach to this layer.
     """
     def __init__(self, incomings, pt_expr, name=None):
         ks = incomings.keys()

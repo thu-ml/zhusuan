@@ -17,8 +17,9 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from zhusuan.distributions import norm, bernoulli
-    from zhusuan.utils import log_mean_exp, ensure_dim_match
+    from zhusuan.utils import log_mean_exp
     from zhusuan.layers import *
+    from zhusuan.variational import advi
 except:
     raise ImportError()
 
@@ -84,21 +85,16 @@ class M2Unlabeled(M2):
         # x: (batch_size, n_x)
         x = observed['x']
 
-        # shape: (batch_size * n_samples, n_x)
         l_x_zy = (self.l_x_zy.construct(
             z=tf.reshape(z, (-1, self.n_z)),
             y=tf.reshape(
                 tf.tile(y, tf.pack([1, tf.shape(z)[1], 1])),
                 (-1, self.n_y)
             ))).tensor
-        # shape: (batch_size, n_samples, n_x)
         l_x_zy = tf.reshape(l_x_zy, tf.pack([-1, tf.shape(z)[1], self.n_x]))
-        # shape: (batch_size, n_samples)
         log_px_zy = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_zy, eps=1e-6), 2)
-        # shape: (batch_size, n_samples)
         log_pz = tf.reduce_sum(norm.logpdf(z), 2)
-        # shape: (1,)
         log_py = tf.log(tf.constant(1., tf.float32) / self.n_y)
         return log_px_zy + log_pz + log_py
 
@@ -116,21 +112,15 @@ class M2Labeled(M2):
         # y: (batch_size, n_y), x: (batch_size, n_x)
         y, x = observed['y'], observed['x']
 
-        # shape: (batch_size * n_samples, n_y)
         y_in = tf.reshape(
             tf.tile(tf.expand_dims(y, 1), tf.pack([1, tf.shape(z)[1], 1])),
             (-1, self.n_y))
-        # shape: (batch_size * n_samples, n_x)
         l_x_zy = (self.l_x_zy.construct(z=tf.reshape(z, (-1, self.n_z)),
                                         y=y_in)).tensor
-        # shape: (batch_size, n_samples, n_x)
         l_x_zy = tf.reshape(l_x_zy, tf.pack([-1, tf.shape(z)[1], self.n_x]))
-        # shape: (batch_size, n_samples)
         log_px_zy = tf.reduce_sum(
             bernoulli.logpdf(tf.expand_dims(x, 1), l_x_zy, eps=1e-6), 2)
-        # shape: (batch_size, n_samples)
         log_pz = tf.reduce_sum(norm.logpdf(z), 2)
-        # shape: (1,)
         log_py = tf.log(tf.constant(1., tf.float32) / self.n_y)
         return log_px_zy + log_pz + log_py
 
@@ -216,99 +206,6 @@ def q_net(n_x, n_y, n_z, n_samples):
         unlabeled_latent
 
 
-def advi(model, observed_inputs, observed_layers, latent_layers,
-         optimizer=tf.train.AdamOptimizer()):
-    """
-    Implements the automatic differentiation variational inference (ADVI)
-    algorithm. For now we assume all latent variables have been transformed in
-    the model definition to have their support on R^n.
-
-    :param model: A model object that has a method logprob(latent, observed)
-        to compute the log joint likelihood of the model.
-    :param observed_inputs: A dictionary. Given inputs to the observed layers.
-    :param observed_layers: A dictionary. The observed layers.
-    :param latent_layers: A dictionary. The latent layers.
-    :param optimizer: Tensorflow optimizer object. Default to be
-        AdamOptimizer.
-
-    :return: Tensorflow gradients that can be applied using
-        `tf.train.Optimizer.apply_gradients`
-    :return: A 0-D Tensor. The variational lower bound.
-    """
-    if list(six.iterkeys(observed_inputs)) != list(
-            six.iterkeys(observed_layers)):
-        raise ValueError("Observed layers and inputs don't match.")
-
-    # add all observed (variable, input) pairs into inputs
-    inputs = {}
-    for name, layer in six.iteritems(observed_layers):
-        inputs[layer] = observed_inputs[name]
-
-    # get discrete latent layers
-    latent_k, latent_v = map(list, zip(*six.iteritems(latent_layers)))
-    discrete_latent_layers = dict(filter(lambda x: isinstance(x[1], Discrete),
-                                         six.iteritems(latent_layers)))
-
-    if discrete_latent_layers:
-        # Discrete latent layers exists
-        discrete_latent_k, discrete_latent_v = map(list, zip(
-            *six.iteritems(discrete_latent_layers)))
-
-        # get all configurations of discrete latent variables
-        all_disc_latent_configs = []
-        for layer in discrete_latent_v:
-            if layer.n_samples > 1:
-                raise ValueError("advi() doesn't support Discrete latent "
-                                 "layers with n_samples (=%d) > 1" %
-                                 layer.n_samples)
-            tmp = []
-            for i in range(layer.n_classes):
-                layer_input = tf.expand_dims(tf.expand_dims(tf.one_hot(
-                    i, depth=layer.n_classes, dtype=tf.float32), 0), 0)
-                tmp.append(layer_input)
-            all_disc_latent_configs.append(tmp)
-        # cartesian products
-        all_disc_latent_configs = itertools.product(*all_disc_latent_configs)
-
-        # feed all configurations of inputs
-        weighted_lbs = []
-        for discrete_latent_inputs in all_disc_latent_configs:
-            _inputs = inputs.copy()
-            discrete_latent_inputs = dict(zip(discrete_latent_v,
-                                              discrete_latent_inputs))
-            _inputs.update(discrete_latent_inputs)
-            # ensure the batch_size dimension matches
-            _inputs_k, _inputs_v = zip(*six.iteritems(_inputs))
-            _inputs_v = ensure_dim_match(_inputs_v, 0)
-            _inputs = dict(zip(_inputs_k, _inputs_v))
-            # size: continuous layers (batch_size, n_samples, n_dim)
-            #       discrete layers (batch_size, 1, n_dim)
-            outputs = get_output(latent_v, _inputs)
-            latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs)))
-            # size: continuous layer (batch_size, n_samples)
-            #       discrete layers (batch_size, 1)
-            latent_logpdfs = dict(zip(latent_k, map(lambda x: x[1], outputs)))
-            # size: (batch_size, n_samples)
-            lower_bound = model.log_prob(latent_outputs, observed_inputs) - \
-                sum(six.itervalues(latent_logpdfs))
-            discrete_latent_logpdfs = [latent_logpdfs[i]
-                                       for i in discrete_latent_k]
-            w = tf.exp(sum(discrete_latent_logpdfs))
-            weighted_lbs.append(lower_bound * w)
-        # size: (batch_size, n_samples)
-        lower_bound = sum(weighted_lbs)
-    else:
-        # no Discrete latent layers
-        outputs = get_output(latent_v, inputs)
-        latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs)))
-        latent_logpdfs = map(lambda x: x[1], outputs)
-        lower_bound = model.log_prob(latent_outputs, observed_inputs) - \
-            sum(latent_logpdfs)
-
-    lower_bound = tf.reduce_mean(lower_bound)
-    return optimizer.compute_gradients(-lower_bound), lower_bound
-
-
 if __name__ == "__main__":
     tf.set_random_seed(1234)
 
@@ -328,7 +225,7 @@ if __name__ == "__main__":
     n_y = t_train.shape[1]
 
     # Define model parameters
-    n_z = 40
+    n_z = 100
 
     # Define training/evaluation parameters
     lb_samples = 1
@@ -338,9 +235,13 @@ if __name__ == "__main__":
     batch_size = 100
     test_batch_size = 100
     iters = x_unlabeled.shape[0] // batch_size
+    learning_rate = 0.0003
+    anneal_lr_freq = 200
+    anneal_lr_rate = 0.75
 
     # Build the training computation graph
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     with tf.variable_scope("model") as scope:
         m2_labeled = M2Labeled(n_x, n_y, n_z)
     with tf.variable_scope("model", reuse=True) as scope:
@@ -374,6 +275,8 @@ if __name__ == "__main__":
     with tf.Session() as sess:
         sess.run(init)
         for epoch in range(1, epoches + 1):
+            if epoch % anneal_lr_freq == 0:
+                learning_rate *= anneal_lr_rate
             np.random.shuffle(x_unlabeled)
             lbs_labeled = []
             lbs_unlabeled = [0]
@@ -389,13 +292,12 @@ if __name__ == "__main__":
                 _, lb_labeled = sess.run(
                     [labeled_infer, labeled_lower_bound],
                     feed_dict={x_labeled_ph: x_labeled_batch,
-                               y_labeled_ph: y_labeled_batch})
+                               y_labeled_ph: y_labeled_batch,
+                               learning_rate_ph: learning_rate})
                 _, lb_unlabeled = sess.run(
                     [unlabeled_infer, unlabeled_lower_bound],
-                    feed_dict={x_unlabeled_ph: x_unlabeled_batch})
-                # print('Epoch {}, Iter {}, Lower bound: labeled = {}, '
-                #       'unlabeled = {}'.format(epoch, t, lb_labeled,
-                #                               lb_unlabeled))
+                    feed_dict={x_unlabeled_ph: x_unlabeled_batch,
+                               learning_rate_ph: learning_rate})
                 lbs_labeled.append(lb_labeled)
                 lbs_unlabeled.append(lb_unlabeled)
             print('Epoch {}, Lower bound: labeled = {}, unlabeled = {}'.format(

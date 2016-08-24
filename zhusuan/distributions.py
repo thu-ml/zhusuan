@@ -25,7 +25,7 @@ class Normal:
         pass
 
     @add_name_scope
-    def rvs(self, loc=0., scale=1., size=None):
+    def rvs(self, loc=0., scale=1., shape=None):
         """
         Generate random independent normal samples which form a tensor of
         shape=size. We don't support array-like loc and scale due to
@@ -36,7 +36,7 @@ class Normal:
         :param loc: A 0-D Tensor or python value. The mean of the Normal.
         :param scale: A 0-D Tensor or python value. The standard deviation
             of the Normal.
-        :param size: A 1-D Tensor or numpy array. The shape of the output
+        :param shape: A 1-D Tensor or numpy array. The shape of the output
             tensor.
 
         :return: A Tensor of specified shape filled with random i.i.d. normal
@@ -44,7 +44,7 @@ class Normal:
         """
         loc = tf.cast(as_tensor(loc), dtype=tf.float32)
         scale = tf.cast(as_tensor(scale), dtype=tf.float32)
-        return tf.random_normal(size, tf.stop_gradient(loc),
+        return tf.random_normal(shape, tf.stop_gradient(loc),
                                 tf.stop_gradient(scale))
 
     @add_name_scope
@@ -64,8 +64,7 @@ class Normal:
         loc = tf.cast(as_tensor(loc), dtype=tf.float32)
         scale = tf.cast(as_tensor(scale), dtype=tf.float32)
         c = -0.5 * np.log(2 * np.pi)
-        # diff = tf.Print(x - loc, [tf.reduce_min(tf.abs(x - loc))])
-        return c - tf.log(scale) - (x - loc)**2 / (2 * scale**2)
+        return c - tf.log(scale) - tf.square(x - loc) / (2 * tf.square(scale))
 
 
 class Bernoulli:
@@ -132,9 +131,11 @@ class Discrete:
         """
         p = tf.cast(as_tensor(p), dtype=tf.float32)
         tf.assert_rank(p, 2)
-        return tf.one_hot(
+        ret = tf.one_hot(
             tf.squeeze(tf.multinomial(tf.stop_gradient(p), 1), [1]),
             tf.shape(p)[1])
+        ret.set_shape(p.get_shape())
+        return ret
 
     @add_name_scope
     def logpdf(self, x, p, eps=1e-8):

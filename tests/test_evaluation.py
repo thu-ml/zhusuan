@@ -12,6 +12,6 @@ from .context import zhusuan
 from zhusuan.variational import *
 
 
-def test_advi():
-    # TODO: advi test
+def test_is_loglikelihood():
+    # TODO: is_loglikelihood test
     pass

@@ -6,15 +6,16 @@ from __future__ import print_function
 from __future__ import division
 import sys
 import os
+import itertools
 
 from six.moves import range
-import tensorflow as tf
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from zhusuan.distributions import norm
-    from zhusuan.variational import ReparameterizedNormal, advi
+    from zhusuan.layers import *
+    from zhusuan.variational import advi
 except:
     raise ImportError()
 
@@ -26,18 +27,20 @@ class ToyIntractablePosterior:
     def __init__(self):
         pass
 
-    def log_prob(self, z, x):
+    def log_prob(self, latent, observed):
         """
-        The joint likelihood.
+        The log joint probability function.
 
-        :param z: Tensor of shape (batch_size, samples, n_z). n_z is the
-            dimension of latent variables.
-        :param x: Tensor of shape (batch_size, n_x). n_x is the dimension of
-            observed variables (data).
+        :param latent: A dictionary of pairs: (string, Tensor). Each of the
+            Tensor has shape (batch_size, n_samples, n_latent).
+        :param observed: A dictionary of pairs: (string, Tensor). Each of the
+            Tensor has shape (batch_size, n_observed).
 
-        :return: A Tensor of shape (batch_size, samples). The joint log
+        :return: A Tensor of shape (batch_size, n_samples). The joint log
             likelihoods.
         """
+        z = latent['z']
+
         mu, log_sigma = z[:, :, 0], z[:, :, 1]
         return norm.logpdf(log_sigma, 0, 1.35) + norm.logpdf(
             mu, 0, tf.exp(log_sigma))
@@ -85,11 +88,15 @@ if __name__ == "__main__":
 
     # Build the computation graph
     model = ToyIntractablePosterior()
+    n_samples = tf.placeholder(tf.int32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
-    vz_mean = tf.Variable(np.array([[-2, -2]], dtype='float32'))
-    vz_logstd = tf.Variable(np.array([[-5, -5]], dtype='float32'))
-    variational = ReparameterizedNormal(vz_mean, vz_logstd)
-    grads, lower_bound = advi(model, None, variational, 200, optimizer)
+    z_mean = tf.Variable(np.array([[[-2, -2]]], dtype='float32'))
+    z_logstd = tf.Variable(np.array([[[-5, -5]]], dtype='float32'))
+    lz_mean = InputLayer((None, 1, 2), input=z_mean)
+    lz_logstd = InputLayer((None, 1, 2), input=z_logstd)
+    lz = ReparameterizedNormal([lz_mean, lz_logstd], n_samples)
+    latent_layers = {'z': lz}
+    grads, lower_bound = advi(model, {}, {}, latent_layers, optimizer)
     infer = optimizer.apply_gradients(grads)
     init = tf.initialize_all_variables()
 
@@ -98,7 +105,8 @@ if __name__ == "__main__":
     with tf.Session() as sess:
         sess.run(init)
         for t in range(iters):
-            _, lb, vmean, vlogstd = sess.run([infer, lower_bound, vz_mean,
-                                              vz_logstd])
+            _, lb, vmean, vlogstd = sess.run(
+                [infer, lower_bound, z_mean, z_logstd],
+                feed_dict={n_samples: 200})
             print('Iteration {}: lower bound = {}'.format(t, lb))
-            draw(vmean, vlogstd)
+            draw(vmean[0], vlogstd[0])
