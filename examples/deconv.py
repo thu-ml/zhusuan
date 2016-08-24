@@ -40,7 +40,7 @@ class deconv2d(prettytensor.VarStoreMethod):
                  edges=PAD_SAME,
                  batch_normalize=False,
                  name=PROVIDED, ):
-        """Adds a convolution to the stack of operations.
+        """Adds a deconvolution to the stack of operations.
 
         The current head must be a rank 4 Tensor.
 
@@ -74,7 +74,7 @@ class deconv2d(prettytensor.VarStoreMethod):
         """
         if input_layer.get_shape().ndims != 4:
             raise ValueError(
-                'conv2d requires a rank 4 Tensor with a known depth %s' %
+                'deconv2d requires a rank 4 Tensor with a known depth %s' %
                 input_layer.get_shape())
         if input_layer.shape[3] is None:
             raise ValueError('Input depth must be known')
@@ -110,9 +110,11 @@ class deconv2d(prettytensor.VarStoreMethod):
             input_height, input_width, filter_height, filter_width,
             row_stride, col_stride, edges)
 
-        output_shape = [input_layer.shape[0], out_rows, out_cols, depth]
+        output_shape = [tf.shape(input_layer.tensor)[0], out_rows, out_cols,
+                        depth]
         y = tf.nn.conv2d_transpose(
             input_layer, params, output_shape, stride, edges)
+        y.set_shape([input_layer.shape[0], out_rows, out_cols, depth])
         layers.add_l2loss(books, params, l2loss)
         if bias:
             y += self.variable(
