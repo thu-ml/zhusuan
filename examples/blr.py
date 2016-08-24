@@ -24,6 +24,7 @@ data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
 X_train = X_train[:n] * 256
 y_train = y_train[:n]
+X_test = X_test * 256
 
 # Load German credits dataset
 # n = 900
@@ -65,12 +66,11 @@ optimizer.optimize()
 
 chain_length = 100
 burnin = 50
-# sampler = NUTS(sess, {y: y_train}, log_likelihood, 1e-2, mass=mass,
-# m_adapt=burnin, mass_adaptation=True, burnin=burnin)
-# sampler = NUTS(sess, {y: y_train}, log_likelihood, 1e-2,
-# mass_adaptation=True, m_adapt=burnin, burnin=burnin)
 sampler = NUTS(sess, {y: y_train}, [beta], log_likelihood, 1e-2,
                m_adapt=burnin)
+# sampler = NUTS(sess, {y: y_train}, [beta], log_likelihood, 1e-2,
+#                mass_adaptation=True, m_adapt=burnin)
+
 sample_sum = []
 num_samples = chain_length - burnin
 train_scores = np.zeros((X_train.shape[0]))
