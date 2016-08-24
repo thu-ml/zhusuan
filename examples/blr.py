@@ -7,6 +7,7 @@ import math
 from dataset import load_german_credits
 from zhusuan.optimization.gradient_descent_optimizer import \
     GradientDescentOptimizer
+from zhusuan.distributions import norm, bernoulli
 from zhusuan.mcmc.nuts import NUTS
 
 float_eps = 1e-30
@@ -41,10 +42,10 @@ scores = tf.reduce_sum(x*beta, reduction_indices=(1))
 logits = tf.nn.sigmoid(scores, name='logits')
 predictions = tf.cast(logits > 0.5, tf.float32)
 n_correct = tf.reduce_sum(predictions * y + (1-predictions) * (1-y))
-loss = -tf.reduce_sum(y * tf.log(logits + float_eps) +
-                      (1-y) * tf.log(1-logits + float_eps), name='loss')
-log_prior = -tf.reduce_sum(tf.square(beta-mu) / (2*sigma**2))
-log_likelihood = tf.sub(log_prior, loss, name='log_likelihood')
+
+log_likelihood = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
+                 tf.reduce_sum(bernoulli.logpdf(y, logits))
+
 vars = [beta]
 
 sess = tf.Session()
@@ -107,7 +108,7 @@ for j in range(len(vars)):
 sess.run(set_mean)
 
 sess.run(update_data, feed_dict={x_input: X_train})
-r_loss = sess.run(loss, feed_dict={y: y_train})
+r_log_likelihood = sess.run(log_likelihood, feed_dict={y: y_train})
 n_train_c = sess.run(n_correct, feed_dict={y: y_train})
 sess.run(update_data, feed_dict={x_input: X_test})
 n_test_c = sess.run(n_correct, feed_dict={y: y_test})
@@ -120,7 +121,7 @@ test_accuracy = float(np.sum(test_pred == y_test)) / X_test.shape[0]
 
 print('Log likelihood of expected parameters: %f, train set accuracy = %f, '
       'test set accuracy = %f' %
-      (r_loss, (float(n_train_c) / X_train.shape[0]),
+      (r_log_likelihood, (float(n_train_c) / X_train.shape[0]),
        (float(n_test_c) / X_test.shape[0])))
 print('Gibbs classifier: train set accuracy = %f, test set accuracy = %f'
       % (train_accuracy, test_accuracy))
