@@ -13,24 +13,27 @@ class GradientDescentOptimizer:
     """
     A simple batch gradient descent with a line search satisfying the
     Armijo-Goldstein condition.
+
+    :param sess: TensorFlow session.
+    :param data: Data (feed_dict) to feed in.
+    :param objective: Objective.
+    :param vars: Variables to optimize, should be a list of TensorFlow
+    variables.
+    :param init: (optional) Initial value, use zero if it is None (default
+    None).
+    :param stepsize: Initial step size (default 1).
+    :param max_n_iterations: Maximum number of iterations.
+    :param tol: Tolerance of change of objective function, for both relative
+    and absolute (default 1e-3). The optimizer terminates when any of the
+    changes is small enough.
+    :param stepsize_tol: Tolerance of step size (default 1e-7). The line
+    search will terminate if the step size is too small.
+    :param c: Parameter for line search (default 0.5).
+    :param tau: Parameter for line search (default 1.2).
     """
     def __init__(self, sess, data, objective, vars, init=None,
-                 stepsize=1, max_n_iterations=100, tol=1e-3, stepsize_tol=1e-7,
+                 stepsize=1, max_n_iterations=100, tol=1e-3, stepsize_tol=1e-9,
                  c=0.5, tau=1.2):
-        """
-
-        :param sess:
-        :param data:
-        :param objective:
-        :param vars:
-        :param init:
-        :param stepsize:
-        :param max_n_iterations:
-        :param tol:
-        :param stepsize_tol:
-        :param c:
-        :param tau:
-        """
         self.sess = sess
         self.data = data
         self.objective = objective
@@ -78,6 +81,11 @@ class GradientDescentOptimizer:
         return if_stop
 
     def optimize(self):
+        """
+        Perform the optimization.
+
+        :return: The optimal value.
+        """
         for i in range(self.max_n_iterations):
             self.stepsize *= self.tau
 
