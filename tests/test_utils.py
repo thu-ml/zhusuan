@@ -93,3 +93,55 @@ def test_add_name_scope():
     a = A()
     node = a.f()
     assert(node.name == 'A/f/ones:0')
+
+
+def test_copy():
+    def list_diff(a, b):
+        for i in range(2):
+            if (a[i] != b[i]).any():
+                return False
+        return True
+
+    a = [np.array([1, 2]), np.array([[3, 4], [5, 6]])]
+    c = [np.array([1, 2]), np.array([[3, 4], [5, 6]])]
+    b = copy(a)
+    assert(list_diff(a, b))
+
+    b[0][0] = 10
+    assert(list_diff(a, c))
+
+
+def test_mean_statistics():
+    ma = MeanStatistics()
+    assert(ma.mean() == 0)
+    ma.add(1.0)
+    ma.add(2.0)
+    assert(ma.mean() == 1.5)
+
+    mb = MeanStatistics(shape=(2))
+    mb.add(np.array([1, 2]))
+    mb.add(np.array([3, 4]))
+    assert((mb.mean() == np.array([2, 3])).all())
+
+
+def test_variance_estimator():
+    shape = [100]
+    n = np.random.normal(size=(100, 100))
+
+    est = VarianceEstimator([shape])
+    for i in range(100):
+        est.add([n[i, :]])
+
+    npvar = np.var(n, axis=0) * 100 / 99
+    estvar = est.variance()[0]
+    assert((npvar - estvar < 1e-7).all())
+
+    est2 = VarianceEstimator(shape=[(1)])
+    assert(est2.variance()[0] == 0)
+
+
+def test_if_raise():
+    try:
+        if_raise(True, RuntimeError("exception"))
+    except RuntimeError:
+        pass

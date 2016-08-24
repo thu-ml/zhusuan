@@ -54,3 +54,19 @@ def load_mnist_realval(path):
     n_y = t_train.max() + 1
     return x_train, one_hot(t_train, n_y), x_valid, one_hot(t_valid, n_y), \
         x_test, one_hot(t_test, n_y)
+
+
+def load_german_credits(n_train):
+    n = n_train
+    mu = 0
+
+    n_dims = 24
+    data = np.loadtxt('german.data-numeric')
+
+    X_train = data[:n, :n_dims]
+    y_train = data[:n, n_dims] - 1
+    X_test = data[n:, :n_dims]
+    y_test = data[n:, n_dims] - 1
+    print('Finished reading data')
+
+    return X_train, y_train, X_test, y_test
