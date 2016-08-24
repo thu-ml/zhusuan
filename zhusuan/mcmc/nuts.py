@@ -6,7 +6,7 @@ from __future__ import division
 
 import math
 import numpy as np
-from zhusuan.utils import copy, MeanStatistics
+from zhusuan.utils import copy, MeanStatistics, if_raise
 from .integrators import LeapfrogIntegrator
 from .candidate import Candidate
 from .base_hmc import BaseHMC
@@ -66,11 +66,12 @@ class NUTS(BaseHMC):
         """
         log_u = math.log(np.random.random()) - self.old_hamiltonian
 
-        if np.isnan(self.old_hamiltonian):
-            raise RuntimeError(
-                "Hamiltonian is nan, maybe because stepsize is too large"
-                ", the network does not handle numerical extreme cases,"
-                " or the starting point is invalid.")
+        if_raise(np.isnan(self.old_hamiltonian),
+                 RuntimeError(
+                     "Hamiltonian is nan, maybe because stepsize is too large"
+                     ", the network does not handle numerical extreme cases,"
+                     " or the starting point is invalid.")
+                 )
 
         # Initialize integrators
         right_integrator = LeapfrogIntegrator(self.q_start, self.p,
@@ -166,10 +167,12 @@ class NUTS(BaseHMC):
         for i in range(2 ** depth):
             # Integrator
             q, p, log_likelihood, new_hamiltonian = integrator.run()
-            if np.isnan(log_likelihood) or np.isnan(new_hamiltonian):
-                raise RuntimeError(
-                    "Hamiltonian is nan, maybe because stepsize is too large"
-                    " or the network does not handle numerical extreme cases.")
+            if_raise(np.isnan(log_likelihood) or np.isnan(new_hamiltonian),
+                     RuntimeError(
+                         "Hamiltonian is nan, maybe because stepsize is too "
+                         "large or the network does not handle numerical "
+                         "extreme cases.")
+                     )
 
             # Debug
             self.num_leapfrog += 1

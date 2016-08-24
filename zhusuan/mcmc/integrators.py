@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 
 import numpy as np
-from zhusuan.utils import copy
+from zhusuan.utils import copy, if_raise
 
 
 class LeapfrogIntegrator:
@@ -109,8 +109,8 @@ class StepsizeTuner:
                                                 zip(self.q_input, q)})
         ll, self.gradients = self.sess.run(ll_and_grad, feed_dict=self.data)
         self.old_hamiltonian = self.hamiltonian.energy(p, -ll)
-        if np.isnan(self.old_hamiltonian):
-            raise RuntimeError('Hamiltonian is nan')
+        if_raise(np.isnan(self.old_hamiltonian),
+                 RuntimeError('Hamiltonian is nan'))
 
     def tune(self):
         """
@@ -151,8 +151,9 @@ class StepsizeTuner:
                 min(0, -(new_hamiltonian - self.old_hamiltonian)))
             print('Epsilon = {}, acceptance_rate = {}'.format(current_epsilon,
                                                               acceptance_rate))
-            if np.isnan(acceptance_rate):
-                acceptance_rate = 0
+
+            acceptance_rate = 0 if np.isnan(acceptance_rate) \
+                else acceptance_rate
 
             current_is_large = acceptance_rate > self.delta
             if is_large is None:

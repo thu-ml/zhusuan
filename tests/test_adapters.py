@@ -9,6 +9,7 @@ import pytest
 
 from .context import zhusuan
 from zhusuan.mcmc.adapters import *
+from zhusuan.mcmc.hamiltonian import Hamiltonian
 
 
 def test_stepsize_adapter():
@@ -26,3 +27,7 @@ def test_stepsize_adapter():
         current_epsilon = adapter.adapt(acceptance_rate)
 
     assert(abs(acceptance_rate - 0.8) < 0.05)
+
+
+def test_variance_adapter():
+    a = VarianceAdapter([], 10, 10, 10, 10, 0.1, Hamiltonian([1]))

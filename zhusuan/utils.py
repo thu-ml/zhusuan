@@ -220,3 +220,17 @@ class VarianceEstimator:
             return map(lambda shape: np.zeros(shape), self.shape)
         else:
             return map(lambda x: x / (self.count - 1), self.s)
+
+
+def if_raise(cond, exception):
+    """
+    If `cond` is true, raise `exception`. We can directly write if... raise
+    in the code, but the problem is sometimes the raise so difficult to
+    trigger that we cannot come up with a test case. We use this statement to
+    keep the coverage 100% in this case.
+
+    :param cond: The condition.
+    :param exception: The exception to trigger.
+    """
+    if cond:
+        raise exception

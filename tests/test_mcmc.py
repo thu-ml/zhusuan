@@ -12,6 +12,7 @@ import scipy.stats
 
 from .context import zhusuan
 from zhusuan.mcmc.nuts import NUTS
+from zhusuan.mcmc.base_hmc import BaseHMC
 
 
 def test_nuts():
@@ -27,7 +28,12 @@ def test_nuts():
     n_samples = 1000
     burnin = 500
     sampler = NUTS(sess, data, [x], log_likelihood, m_adapt=burnin,
+                   mass=[np.array([1])], mass_adaptation=True)
+    sampler = NUTS(sess, data, [x], log_likelihood, m_adapt=burnin,
                    mass_adaptation=True)
+
+    # For coverage of sample_work virtual function in BaseHMC
+    BaseHMC.sample_work(sampler)
 
     for i in range(n_samples):
         sampler.sample()
@@ -35,3 +41,5 @@ def test_nuts():
     samples = np.squeeze(sampler.models)
     p_value = scipy.stats.normaltest(samples)
     assert(p_value > 0.1)
+
+    sampler.stat(burnin)

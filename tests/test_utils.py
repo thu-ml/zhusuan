@@ -138,3 +138,10 @@ def test_variance_estimator():
 
     est2 = VarianceEstimator(shape=[(1)])
     assert(est2.variance()[0] == 0)
+
+
+def test_if_raise():
+    try:
+        if_raise(True, RuntimeError("exception"))
+    except RuntimeError:
+        pass
