@@ -8,6 +8,7 @@ import itertools
 
 import tensorflow as tf
 import six
+from six.moves import range, zip, map
 
 from .utils import ensure_dim_match
 from .layers import Discrete, get_output

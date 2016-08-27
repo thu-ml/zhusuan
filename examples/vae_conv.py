@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 import sys
 import os
+import time
 
 import tensorflow as tf
 import prettytensor as pt
@@ -110,7 +111,7 @@ def q_net(n_x, n_xl, n_z, n_samples):
 
 
 if __name__ == "__main__":
-    tf.set_random_seed(1234)
+    tf.set_random_seed(1236)
 
     # Load MNIST
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -135,11 +136,15 @@ if __name__ == "__main__":
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
+    learning_rate = 0.0003
+    anneal_lr_freq = 200
+    anneal_lr_rate = 0.75
 
     # Build the training computation graph
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     x = tf.placeholder(tf.float32, shape=(batch_size, x_train.shape[1]))
     n_samples = tf.placeholder(tf.int32, shape=())
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     with pt.defaults_scope(phase=pt.Phase.train):
         with tf.variable_scope("model") as scope:
             train_model = M1(n_z, x_train.shape[1])
@@ -155,6 +160,8 @@ if __name__ == "__main__":
             eval_model = M1(n_z, x_train.shape[1])
         with tf.variable_scope("variational", reuse=True) as scope:
             lx, lz = q_net(n_x, n_xl, n_z, n_samples)
+    _, eval_lower_bound = advi(
+        eval_model, {'x': x}, {'x': lx}, {'z': lz}, optimizer)
     eval_log_likelihood = is_loglikelihood(
         eval_model, {'x': x}, {'x': lx}, {'z': lz})
 
@@ -168,6 +175,9 @@ if __name__ == "__main__":
     with tf.Session() as sess:
         sess.run(init)
         for epoch in range(1, epoches + 1):
+            time_epoch = -time.time()
+            if epoch % anneal_lr_freq == 0:
+                learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
             lbs = []
             for t in range(iters):
@@ -175,16 +185,21 @@ if __name__ == "__main__":
                 x_batch = np.random.binomial(
                     n=1, p=x_batch, size=x_batch.shape).astype('float32')
                 _, lb = sess.run([infer, lower_bound],
-                                 feed_dict={x: x_batch, n_samples: lb_samples})
+                                 feed_dict={x: x_batch,
+                                            learning_rate_ph: learning_rate,
+                                            n_samples: lb_samples})
                 lbs.append(lb)
-            print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
+            time_epoch += time.time()
+            print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
+                epoch, time_epoch, np.mean(lbs)))
             if epoch % test_freq == 0:
+                time_test = -time.time()
                 test_lbs = []
                 test_lls = []
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
-                    test_lb = sess.run(eval_log_likelihood,
+                    test_lb = sess.run(eval_lower_bound,
                                        feed_dict={x: test_x_batch,
                                                   n_samples: lb_samples})
                     test_ll = sess.run(eval_log_likelihood,
@@ -192,5 +207,7 @@ if __name__ == "__main__":
                                                   n_samples: ll_samples})
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
+                time_test += time.time()
+                print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
