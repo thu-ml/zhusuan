@@ -14,7 +14,7 @@ from .utils import ensure_dim_match
 from .layers import Discrete, get_output
 
 
-def advi(model, observed_inputs, observed_layers, latent_layers,
+def advi(model, observed_inputs, observed_layers, latent_layers, given_layers,
          optimizer=tf.train.AdamOptimizer()):
     """
     Implements the automatic differentiation variational inference (ADVI)
@@ -44,6 +44,7 @@ def advi(model, observed_inputs, observed_layers, latent_layers,
 
     # get discrete latent layers
     latent_k, latent_v = map(list, zip(*six.iteritems(latent_layers)))
+    given_k, given_v = map(list, zip(*six.iteritems(given_layers)))
     discrete_latent_layers = dict(filter(lambda x: isinstance(x[1], Discrete),
                                          six.iteritems(latent_layers)))
 
@@ -94,10 +95,11 @@ def advi(model, observed_inputs, observed_layers, latent_layers,
         lower_bound = sum(weighted_lbs)
     else:
         # no Discrete latent layers
-        outputs = get_output(latent_v, inputs)
-        latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs)))
-        latent_logpdfs = map(lambda x: x[1], outputs)
-        lower_bound = model.log_prob(latent_outputs, observed_inputs) - \
+        outputs = get_output(latent_v + given_v, inputs)
+        latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs[:len(latent_v)])))
+        given_outputs = dict(zip(given_k, map(lambda x: x[0], outputs[len(latent_v):])))
+        latent_logpdfs = map(lambda x: x[1], outputs[:len(latent_v)])
+        lower_bound = model.log_prob(latent_outputs, observed_inputs, given_outputs) - \
             sum(latent_logpdfs)
 
     lower_bound = tf.reduce_mean(lower_bound)
