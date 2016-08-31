@@ -72,19 +72,20 @@ def q_net(n_x, n_z, n_samples, n_steps):
     dec_s_t = ListLayer([dec_h_t,
                          InputLayer((None, 256), tf.zeros((100, 256)), name='decst')])
     c_t = InputLayer((None, n_x), tf.zeros((100, n_x)), name='ct')
-    enc_lstm = (pt.template('read').lstm_cell((pt.template('c'), pt.template('h')), 256))
+    enc_lstm = (pt.template('read').join([pt.template('dec_h')]).lstm_cell((pt.template('c'), pt.template('h')), 256))
     dec_lstm = (pt.template('z').lstm_cell((pt.template('c'), pt.template('h')), 256))
     lz_list = []
     read_attn_nets = [pt.template('dec_h').fully_connected(1, activation_fn=None) for j in range(5)]
     write_attn_nets = [pt.template('dec_h').fully_connected(1, activation_fn=None) for j in range(5)]
     mean_net = pt.template('z').fully_connected(n_z, activation_fn=None).reshape((-1, 1, n_z))
     logstd_net = pt.template('z').fully_connected(n_z, activation_fn=None).reshape((-1, 1, n_z))
-    write_patch_net = pt.template('dec_h').fully_connected(5*5)
+    write_patch_net = pt.template('dec_h').fully_connected(5*5, activation_fn=None)
     for i in range(n_steps):
         read_attn = list(map(lambda r: PrettyTensor({'dec_h': dec_h_t}, r), read_attn_nets))
         # shape: (batch_size, 2*read_n*read_n)
         read = ReadAttentionLayer([lx, c_t] + read_attn, width=28, height=28, read_n=5)
-        enc_hs_t = PrettyTensor({'read': read, 'c': ListIndexLayer(enc_s_t, 0, name='c'),
+        enc_hs_t = PrettyTensor({'read': read, 'dec_h': dec_h_t,
+                                 'c': ListIndexLayer(enc_s_t, 0, name='c'),
                                  'h': ListIndexLayer(enc_s_t, 1, name='h')},
                                 enc_lstm)
         # shape: (batch_size, 256)
