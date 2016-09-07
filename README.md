@@ -13,6 +13,7 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
 
 ### Examples of MCMC (NUTS, etc.)
 * Bayesian logistic regression: `python examples/blr.py`
+* Bayesian Multinomial logistic regression: `python examples/bmlr.py`
 
 ## Developments
 
