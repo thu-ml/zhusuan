@@ -73,7 +73,7 @@ def load_binary_mnist_realval(path):
     return x_train, t_train, x_valid, t_valid, x_test, t_test
 
 
-def load_mnist_semi_supervised(path, one_hot=True):
+def load_mnist_semi_supervised(path, one_hot=True, seed=123456):
     """
     Select 10 labeled data for each class and use all the other training data
     as unlabeled.
@@ -81,6 +81,7 @@ def load_mnist_semi_supervised(path, one_hot=True):
     :param path: path to dataset file.
     :return: The MNIST dataset for semi-supervised learning.
     """
+    rng = np.random.RandomState(seed=seed)
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         load_mnist_realval(path, one_hot=False)
     x_train = np.vstack([x_train, x_valid]).astype('float32')
@@ -91,15 +92,17 @@ def load_mnist_semi_supervised(path, one_hot=True):
         indices = np.nonzero(t_train == i)[0]
         x_train_by_class.append(x_train[indices])
         t_train_by_class.append(t_train[indices])
-    x_labeled = np.vstack([x[:10] for x in x_train_by_class])
-    t_labeled = np.hstack([t[:10] for t in t_train_by_class])
-    labeled_indices = np.arange(t_labeled.shape[0])
-    np.random.shuffle(labeled_indices)
-    x_labeled = x_labeled[labeled_indices]
-    t_labeled = t_labeled[labeled_indices]
-    x_unlabeled = np.vstack([x[10:] for x in x_train_by_class])
+    x_labeled = []
+    t_labeled = []
+    for i in range(10):
+        indices = np.arange(x_train_by_class[i].shape[0])
+        rng.shuffle(indices)
+        x_labeled.append(x_train_by_class[i][indices[:10]])
+        t_labeled.append(t_train_by_class[i][indices[:10]])
+    x_labeled = np.vstack(x_labeled)
+    t_labeled = np.hstack(t_labeled)
+    x_unlabeled = x_train
     np.random.shuffle(x_unlabeled)
-    print(x_labeled.shape, t_labeled.shape, x_unlabeled.shape)
     return x_labeled, to_one_hot(t_labeled, 10), x_unlabeled, x_test, \
         to_one_hot(t_test, 10)
 

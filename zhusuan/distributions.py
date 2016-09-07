@@ -156,9 +156,10 @@ class Discrete:
         p = tf.cast(as_tensor(p), dtype=tf.float32)
         tf.assert_rank(x, 2)
         tf.assert_rank(p, 2)
+        p += eps
         p = p / tf.reduce_sum(p, 1, keep_dims=True)
-        p = tf.clip_by_value(p, eps, 1.)
-        return tf.reduce_sum(x * tf.log(p), 1) / tf.reduce_sum(p, 1)
+        # p = tf.clip_by_value(p, eps, 1.)
+        return tf.reduce_sum(x * tf.log(p), 1)
 
 
 norm = Normal()

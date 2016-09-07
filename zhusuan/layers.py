@@ -122,9 +122,9 @@ class InputLayer(Layer):
         self.input = input
 
 
-class ReparameterizedNormal(MergeLayer):
+class ReparameterizedNormalOld(MergeLayer):
     """
-    The :class:`ReparameterizedNormal` class represents a Normal distribution
+    The :class:`ReparameterizedNormalOld` class represents a Normal distribution
     layer that accepts the mean and the log standard deviation as inputs, which
     is used in Automatic Differentiation Variational Inference (ADVI).
 
@@ -141,15 +141,14 @@ class ReparameterizedNormal(MergeLayer):
     :param name: A string or None. An optional name to attach to this layer.
     """
     def __init__(self, incomings, n_samples=1, name=None):
-        super(ReparameterizedNormal, self).__init__(incomings, name)
+        super(ReparameterizedNormalOld, self).__init__(incomings, name)
         if len(incomings) != 2:
-            raise ValueError("ReparameterizedNormal layer only accepts input "
+            raise ValueError("ReparameterizedNormalOld layer only accepts input "
                              "layers of length 2 (the mean and the log "
                              "standard deviation).")
         if isinstance(n_samples, int):
             self.n_samples = n_samples
         else:
-            self.n_samples = n_samples
             with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
                 self.n_samples = tf.cast(n_samples, tf.int32)
 
@@ -174,6 +173,61 @@ class ReparameterizedNormal(MergeLayer):
     def get_logpdf_for(self, output, inputs, **kwargs):
         mean_, logstd = inputs
         return tf.reduce_sum(norm.logpdf(output, mean_, tf.exp(logstd)), 2)
+
+
+class ReparameterizedNormal(MergeLayer):
+    """
+    The :class:`ReparameterizedNormalOld` class represents a Normal distribution
+    layer that accepts the mean and the log standard deviation as inputs, which
+    is used in Automatic Differentiation Variational Inference (ADVI).
+
+    Note that gradients on samples from this Normal distribution are allowed
+    to propagate into inputs in this function, using the reparametrization
+    trick from (Kingma, 2013), which is contrary to the behavior in
+    :meth:`zhusuan.distributions`.
+
+    :param incomings: A list of 2 :class:`Layer` instances. The first
+        representing the mean, and the second representing the log variance.
+        Must be of shape 3-D like (batch_size, n_samples, n_dims).
+    :param n_samples: Int or a scalar Tensor of type int. Number of samples
+        drawn for distribution layers. Default to be 1.
+    :param name: A string or None. An optional name to attach to this layer.
+    """
+    def __init__(self, incomings, n_samples=1, name=None):
+        super(ReparameterizedNormal, self).__init__(incomings, name)
+        if len(incomings) != 2:
+            raise ValueError("ReparameterizedNormalOld layer only accepts input "
+                             "layers of length 2 (the mean and the log "
+                             "standard deviation).")
+        if isinstance(n_samples, int):
+            self.n_samples = n_samples
+        else:
+            with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
+                self.n_samples = tf.cast(n_samples, tf.int32)
+
+    @add_name_scope
+    def get_output_for(self, inputs, **kwargs):
+        mean_, logvar = inputs
+        samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
+            mean_
+        samples_n = norm.rvs(
+            shape=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
+        ) * tf.exp(0.5 * logvar) + mean_
+        if isinstance(self.n_samples, int):
+            if self.n_samples == 1:
+                return samples_1
+            else:
+                samples_n.set_shape([None, self.n_samples, None])
+                return samples_n
+        else:
+            return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
+                           lambda: samples_n)
+
+    @add_name_scope
+    def get_logpdf_for(self, output, inputs, **kwargs):
+        mean_, logvar = inputs
+        return tf.reduce_sum(
+            norm.logpdf(output, mean_, tf.exp(0.5 * logvar)), 2)
 
 
 class Discrete(Layer):
@@ -272,7 +326,7 @@ class PrettyTensor(MergeLayer):
             return self.pt_expr.construct(**template_mapping).tensor
         except ValueError as e:
             raise ValueError("PrettyTensor construction error. Error message: "
-                             "%s.\n(Note that PrettyTensor Layer only accepts "
+                             "%s\n(Note that PrettyTensor Layer only accepts "
                              "prettytensor expression that takes names of "
                              "incomings as templates. Check the pt_expr "
                              "passed on construction)" % e)
@@ -352,7 +406,7 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
         If not, the returned tuple is (samples_of_r, logpdf_at_samples_of_r)
     """
     requested_layers = layer_or_layers
-    if not isinstance(layer_or_layers, list):
+    if not isinstance(layer_or_layers, (tuple, list)):
         requested_layers = [layer_or_layers]
 
     # # track accepted kwargs used by get_output_for
@@ -464,7 +518,7 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
     #          % "\n\t".join(suggestions))
 
     # return the output(s) of the requested layer(s) only
-    if isinstance(layer_or_layers, list):
+    if isinstance(layer_or_layers, (tuple, list)):
         return [all_outputs[layer] for layer in layer_or_layers]
     else:
         return all_outputs[layer_or_layers]
