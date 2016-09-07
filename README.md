@@ -8,7 +8,7 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
 * Toy intractable posterior: `python examples/toy.py`
 * Variational autoencoder (VAE): `python examples/vae.py`
 * Convolutional VAE: `python examples/vae_conv.py`
-* Semi-Supervised VAE (Kingma, 2014): `python examples/vae_ssl.py`
+* Semi-supervised VAE (Kingma, 2014): `python examples/vae_ssl.py`
 * DRAW (Gregor, 2015): `python examples/draw.py` 
 
 ### Examples of MCMC (NUTS, etc.)
