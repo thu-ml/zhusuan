@@ -52,7 +52,7 @@ class M2(object):
                       fully_connected(self.n_x, activation_fn=tf.nn.sigmoid))
         return l_x_zy
 
-    def log_prob(self, latent, observed):
+    def log_prob(self, latent, observed, given):
         """
         The log joint probability function.
 

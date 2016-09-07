@@ -26,7 +26,7 @@ class ToyIntractablePosterior:
     def __init__(self):
         pass
 
-    def log_prob(self, latent, observed):
+    def log_prob(self, latent, observed, given):
         """
         The log joint probability function.
 

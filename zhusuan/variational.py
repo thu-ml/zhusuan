@@ -11,7 +11,7 @@ import six
 from six.moves import zip, map
 
 
-def advi(model, observed, latent, reduction_indices=1):
+def advi(model, observed, latent, reduction_indices=1, given=None):
     """
     Implements the automatic differentiation variational inference (ADVI)
     algorithm. For now we assume all latent variables have been transformed in
@@ -26,13 +26,18 @@ def advi(model, observed, latent, reduction_indices=1):
         `zhusuan.layers.get_output` function for distribution layers.
     :param reduction_indices: The sample dimension(s) to reduce when
         computing the variational lower bound.
+    :param given: A dictionary of (string, Tensor) pairs. This is used when
+        some deterministic transformations have been computed in variational
+        posterior and can be reused when evaluating model joint log likelihood.
+        This dictionary will be directly passed to the model object.
 
     :return: A Tensor. The variational lower bound.
     """
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
-    lower_bound = model.log_prob(latent_outputs, observed) - \
+    given = given if given is not None else {}
+    lower_bound = model.log_prob(latent_outputs, observed, given) - \
         sum(latent_logpdfs)
     lower_bound = tf.reduce_mean(lower_bound, reduction_indices)
     return lower_bound

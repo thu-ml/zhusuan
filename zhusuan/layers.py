@@ -310,10 +310,9 @@ class PrettyTensor(MergeLayer):
         corresponding incoming layer when calling get_output_for.
     :param name: A string or None. An optional name to attach to this layer.
     """
-    def __init__(self, incomings, pt_expr, name=None, return_index=0):
+    def __init__(self, incomings, pt_expr, name=None):
         ks = incomings.keys()
         vs = [incomings[k] for k in incomings]
-        self.return_index = return_index
         super(PrettyTensor, self).__init__(vs, name)
         self.template_names = ks
         if not hasattr(pt_expr, 'construct'):
@@ -325,10 +324,12 @@ class PrettyTensor(MergeLayer):
     def get_output_for(self, inputs, **kwargs):
         template_mapping = dict(zip(self.template_names, inputs))
         output = self.pt_expr.construct(**template_mapping)
-        if isinstance(output, (tuple, list)):
-            return output[0].tensor, tuple(map(lambda x: x.tensor, output[1]))
         try:
-            return output.tensor
+            if isinstance(output, (tuple, list)):
+                return output[0].tensor, tuple(
+                    map(lambda x: x.tensor, output[1]))
+            else:
+                return output.tensor
         except ValueError as e:
             raise ValueError("PrettyTensor construction error. Error message: "
                              "%s\n(Note that PrettyTensor Layer only accepts "
@@ -339,7 +340,7 @@ class PrettyTensor(MergeLayer):
 
 class ReadAttentionLayer(MergeLayer):
     """
-    Read attention for DRAW
+    Read attention of DRAW
     """
     def __init__(self, incomings, width=28, height=28, read_n=5, name=None):
         super(ReadAttentionLayer, self).__init__(incomings, name)
@@ -356,9 +357,11 @@ class ReadAttentionLayer(MergeLayer):
         gx = (self.width + 1) / 2. * (gx_ + 1)
         gy = (self.height + 1) / 2. * (gy_ + 1)
         sigma2 = tf.exp(log_sigma2)
-        delta = (max(self.width, self.height) - 1) / (self.read_n - 1) * tf.exp(log_delta)
+        delta = (max(self.width, self.height) - 1) / (self.read_n - 1) * \
+            tf.exp(log_delta)
         gamma = tf.exp(log_gamma)
-        grid_i = tf.reshape(tf.cast(tf.range(1, self.read_n + 1), tf.float32), [1, -1])
+        grid_i = tf.reshape(tf.cast(tf.range(1, self.read_n + 1), tf.float32),
+                            [1, -1])
         mu_x = gx + (grid_i - self.read_n / 2 - 0.5) * delta
         mu_y = gy + (grid_i - self.read_n / 2 - 0.5) * delta
         a = tf.reshape(tf.cast(tf.range(self.width), tf.float32), [1, 1, -1])
@@ -367,20 +370,25 @@ class ReadAttentionLayer(MergeLayer):
         mu_y = tf.reshape(mu_y, [-1, self.read_n, 1])
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
         fx = tf.exp(-tf.square((a - mu_x) / (2 * sigma2)))
-        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))  # batch x N x self.height
+        # batch x N x self.height
+        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))
         fx /= tf.maximum(tf.reduce_sum(fx, 2, keep_dims=True), 1e-8)
         fy /= tf.maximum(tf.reduce_sum(fy, 2, keep_dims=True), 1e-8)
         fxt = tf.transpose(fx, perm=[0, 2, 1])
         x_hat = tf.reshape(x - tf.sigmoid(c_t), [-1, self.height, self.width])
         x = tf.reshape(x, [-1, self.height, self.width])
-        read_x = gamma * tf.reshape(tf.batch_matmul(fy, tf.batch_matmul(x, fxt)), [-1, self.read_n*self.read_n])
-        read_x_hat = gamma * tf.reshape(tf.batch_matmul(fy, tf.batch_matmul(x_hat, fxt)), [-1, self.read_n*self.read_n])
+        read_x = gamma * tf.reshape(
+            tf.batch_matmul(fy, tf.batch_matmul(x, fxt)),
+            [-1, self.read_n*self.read_n])
+        read_x_hat = gamma * tf.reshape(
+            tf.batch_matmul(fy, tf.batch_matmul(x_hat, fxt)),
+            [-1, self.read_n*self.read_n])
         return tf.concat(1, [read_x, read_x_hat])
 
 
 class WriteAttentionLayer(MergeLayer):
     """
-    Write attention for DRAW.
+    Write attention of DRAW.
     """
     def __init__(self, incomings, width=28, height=28, write_n=5, name=None):
         super(WriteAttentionLayer, self).__init__(incomings, name)
@@ -395,9 +403,11 @@ class WriteAttentionLayer(MergeLayer):
         gx = (self.width + 1) / 2. * (gx_ + 1)
         gy = (self.height + 1) / 2. * (gy_ + 1)
         sigma2 = tf.exp(log_sigma2)
-        delta = (max(self.width, self.height) - 1) / (self.write_n - 1) * tf.exp(log_delta)
+        delta = (max(self.width, self.height) - 1) / (self.write_n - 1) * \
+            tf.exp(log_delta)
         gamma = tf.exp(log_gamma)
-        grid_i = tf.reshape(tf.cast(tf.range(1, self.write_n + 1), tf.float32), [1, -1])
+        grid_i = tf.reshape(
+            tf.cast(tf.range(1, self.write_n + 1), tf.float32), [1, -1])
         mu_x = gx + (grid_i - self.write_n / 2 - 0.5) * delta
         mu_y = gy + (grid_i - self.write_n / 2 - 0.5) * delta
         a = tf.reshape(tf.cast(tf.range(self.width), tf.float32), [1, 1, -1])
@@ -406,7 +416,8 @@ class WriteAttentionLayer(MergeLayer):
         mu_y = tf.reshape(mu_y, [-1, self.write_n, 1])
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
         fx = tf.exp(-tf.square((a - mu_x) / (2 * sigma2)))
-        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))  # batch x N x self.height
+        # batch x N x self.height
+        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))
         fx /= tf.maximum(tf.reduce_sum(fx, 2, keep_dims=True), 1e-8)
         fy /= tf.maximum(tf.reduce_sum(fy, 2, keep_dims=True), 1e-8)
         fyt = tf.transpose(fy, perm=[0, 2, 1])
@@ -417,7 +428,10 @@ class WriteAttentionLayer(MergeLayer):
 
 class ListLayer(MergeLayer):
     """
-    ListLayer accepts multiple input layers and return a list of them.
+    The :class:`ListLayer` get outputs from multiple input layers and return
+    a list of them.
+
+    :param incomings: A list of :class:`Layer` objects feeding into this layer.
     """
     def __init__(self, incomings, **kwargs):
         super(ListLayer, self).__init__(incomings, **kwargs)
@@ -429,18 +443,11 @@ class ListLayer(MergeLayer):
 
 class ListIndexLayer(Layer):
     """
-    If a layer outputs a list we use this layer to fetch a specific index
-    in the list.
-    In general you should not expect this to work because it violates some
-    of the assumptions Lasagne currently makes.
+    If the parent layer outputs a list, this layer is used to fetch a specific
+    index in the list.
 
-    Parameters
-    ----------
-    incoming : a :class:`Layer` instance or a tuple
-        The layer feeding into this layer, or the expected input shape.
-
-    index : int
-        The list index to be selected.
+    :param incoming: A :class:`Layer` instance.
+    :param index: The index to fetch.
     """
     def __init__(self, incoming, index, **kwargs):
         super(ListIndexLayer, self).__init__(incoming, **kwargs)
@@ -587,9 +594,10 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
     for layer, v in six.iteritems(all_outputs):
         if (isinstance(layer, InputLayer)) and (v[0] is None):
             raise ValueError("get_output() was called without giving an "
-                             "input expression for the InputLayer %r (name is %r). Please "
-                             "call it with a dictionary mapping this layer to "
-                             "an input expression." % (layer, layer.name))
+                             "input expression for the InputLayer %r (name is "
+                             "%r). Please call it with a dictionary mapping "
+                             "this layer to an input expression." %
+                             (layer, layer.name))
 
     def _get_layer_inputs(layer):
         try:

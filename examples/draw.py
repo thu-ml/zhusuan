@@ -18,7 +18,6 @@ try:
     from zhusuan.distributions import norm, bernoulli
     from zhusuan.layers import *
     from zhusuan.variational import advi
-    from zhusuan.evaluation import is_loglikelihood
 except:
     raise ImportError()
 
@@ -29,16 +28,12 @@ except:
     raise ImportError()
 
 
-class M1:
+class DRAW:
     """
-    The deep generative model used in variational autoencoder (VAE).
-
-    :param n_z: Int. The dimension of latent variables (z).
-    :param n_x: Int. The dimension of observed variables (x).
+    The deep generative model used in DRAW (Gregor, 2015).
     """
-    def __init__(self, n_z, n_x):
-        self.n_z = n_z
-        self.n_x = n_x
+    def __init__(self):
+        pass
 
     def log_prob(self, latent, observed, given):
         """
@@ -48,7 +43,8 @@ class M1:
             Tensor has shape (batch_size, n_samples, n_latent).
         :param observed: A dictionary of pairs: (string, Tensor). Each of the
             Tensor has shape (batch_size, n_observed).
-        :param given:
+        :param given: A dictionary of pairs: (string, Tensor). Each of the
+            Tensor has shape (batch_size, n_samples, n_given).
 
         :return: A Tensor of shape (batch_size, n_samples). The joint log
             likelihoods.
@@ -65,49 +61,66 @@ class M1:
 
 def q_net(n_x, n_z, n_samples, n_steps):
     lx = InputLayer((None, n_x), name='lx')
-    dec_h_t = InputLayer((None, 256), tf.zeros((100, 256)), name='decht')
-    enc_h_t = InputLayer((None, 256), tf.zeros((100, 256)), name='encht')
+    dec_h_t = InputLayer((None, 256), tf.zeros((100, 256)))
+    enc_h_t = InputLayer((None, 256), tf.zeros((100, 256)))
     enc_s_t = ListLayer([enc_h_t,
-                         InputLayer((None, 256), tf.zeros((100, 256)), name='encst')])
+                         InputLayer((None, 256), tf.zeros((100, 256)))])
     dec_s_t = ListLayer([dec_h_t,
-                         InputLayer((None, 256), tf.zeros((100, 256)), name='decst')])
-    c_t = InputLayer((None, n_x), tf.zeros((100, n_x)), name='ct')
-    enc_lstm = (pt.template('read').join([pt.template('dec_h')]).lstm_cell((pt.template('c'), pt.template('h')), 256))
-    dec_lstm = (pt.template('z').lstm_cell((pt.template('c'), pt.template('h')), 256))
+                         InputLayer((None, 256), tf.zeros((100, 256)))])
+    lc_t = InputLayer((None, n_x), tf.zeros((100, n_x)), name='ct')
+    enc_lstm = (pt.template('read').join([pt.template('dec_h')]).
+                lstm_cell((pt.template('c'), pt.template('h')), 256))
+    dec_lstm = (pt.template('z').
+                lstm_cell((pt.template('c'), pt.template('h')), 256))
     lz_list = []
-    read_attn_nets = [pt.template('dec_h').fully_connected(1, activation_fn=None) for j in range(5)]
-    write_attn_nets = [pt.template('dec_h').fully_connected(1, activation_fn=None) for j in range(5)]
-    mean_net = pt.template('z').fully_connected(n_z, activation_fn=None).reshape((-1, 1, n_z))
-    logstd_net = pt.template('z').fully_connected(n_z, activation_fn=None).reshape((-1, 1, n_z))
-    write_patch_net = pt.template('dec_h').fully_connected(5*5, activation_fn=None)
-    for i in range(n_steps):
-        read_attn = list(map(lambda r: PrettyTensor({'dec_h': dec_h_t}, r), read_attn_nets))
+    read_attn_nets = [pt.template('dec_h').
+                      fully_connected(1, activation_fn=None) for _ in range(5)]
+    write_attn_nets = [pt.template('dec_h').
+                       fully_connected(1, activation_fn=None)
+                       for _ in range(5)]
+    mean_net = (pt.template('z').
+                fully_connected(n_z, activation_fn=None).
+                reshape((-1, 1, n_z)))
+    logstd_net = (pt.template('z').
+                  fully_connected(n_z, activation_fn=None).
+                  reshape((-1, 1, n_z)))
+    write_patch_net = (pt.template('dec_h').
+                       fully_connected(5*5, activation_fn=None))
+    for _ in range(n_steps):
+        read_attn = list(map(lambda r: PrettyTensor({'dec_h': dec_h_t}, r),
+                             read_attn_nets))
         # shape: (batch_size, 2*read_n*read_n)
-        read = ReadAttentionLayer([lx, c_t] + read_attn, width=28, height=28, read_n=5)
-        enc_hs_t = PrettyTensor({'read': read, 'dec_h': dec_h_t,
-                                 'c': ListIndexLayer(enc_s_t, 0, name='c'),
-                                 'h': ListIndexLayer(enc_s_t, 1, name='h')},
+        read = ReadAttentionLayer([lx, lc_t] + read_attn,
+                                  width=28, height=28, read_n=5)
+        enc_hs_t = PrettyTensor({'read': read,
+                                 'dec_h': dec_h_t,
+                                 'c': ListIndexLayer(enc_s_t, 0),
+                                 'h': ListIndexLayer(enc_s_t, 1)},
                                 enc_lstm)
         # shape: (batch_size, 256)
-        enc_h_t = ListIndexLayer(enc_hs_t, 0, name='ht')
+        enc_h_t = ListIndexLayer(enc_hs_t, 0)
         # type: tuple, (c, h)
-        enc_s_t = ListIndexLayer(enc_hs_t, 1, name='st')
+        enc_s_t = ListIndexLayer(enc_hs_t, 1)
         lz_mean = PrettyTensor({'z': enc_h_t}, mean_net)
         lz_logstd = PrettyTensor({'z': enc_h_t}, logstd_net)
-        lz = ReparameterizedNormal([lz_mean, lz_logstd], n_samples)
+        lz = ReparameterizedNormalOld([lz_mean, lz_logstd], n_samples)
         lz_2d = PrettyTensor({'lz': lz}, pt.template('lz').reshape([-1, n_z]))
         lz_list.append(lz)
-        dec_hs_t = PrettyTensor({'z': lz_2d, 'c': ListIndexLayer(dec_s_t, 0, name='dec_c'),
-                                 'h': ListIndexLayer(dec_s_t, 1, name='dec_h')},
+        dec_hs_t = PrettyTensor({'z': lz_2d,
+                                 'c': ListIndexLayer(dec_s_t, 0),
+                                 'h': ListIndexLayer(dec_s_t, 1)},
                                 dec_lstm)
-        dec_h_t = ListIndexLayer(dec_hs_t, 0, name='dec_ht')
-        dec_s_t = ListIndexLayer(dec_hs_t, 1, name='dec_st')
+        dec_h_t = ListIndexLayer(dec_hs_t, 0)
+        dec_s_t = ListIndexLayer(dec_hs_t, 1)
         # shape: (batch_size, write_n*write_n)
         write_patch = PrettyTensor({'dec_h': dec_h_t}, write_patch_net)
-        write_attn = list(map(lambda r: PrettyTensor({'dec_h': dec_h_t}, r), write_attn_nets))
-        c_t = WriteAttentionLayer([c_t, write_patch] + write_attn, width=28, height=28, write_n=5)
-    c_t = PrettyTensor({'c_t': c_t}, pt.template('c_t').reshape((-1, n_samples, n_x)))
-    return lx, lz_list, c_t
+        write_attn = list(map(lambda r: PrettyTensor({'dec_h': dec_h_t}, r),
+                              write_attn_nets))
+        lc_t = WriteAttentionLayer([lc_t, write_patch] + write_attn,
+                                   width=28, height=28, write_n=5)
+    lc_t = PrettyTensor({'c_t': lc_t},
+                        pt.template('c_t').reshape((-1, n_samples, n_x)))
+    return lx, lz_list, lc_t
 
 
 if __name__ == "__main__":
@@ -129,7 +142,6 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 5000
     epoches = 3000
     batch_size = 100
     test_batch_size = 100
@@ -145,25 +157,16 @@ if __name__ == "__main__":
     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
     n_samples = tf.placeholder(tf.int32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    with pt.defaults_scope(phase=pt.Phase.train):
-        with tf.variable_scope("model") as scope:
-            train_model = M1(n_z, x_train.shape[1])
-        with tf.variable_scope("variational") as scope:
-            lx, lz_list, c_t = q_net(n_x, n_z, n_samples, n_steps)
-    lz_dic = dict(('z_' + str(i), lz_list[i]) for i in range(len(lz_list)))
-    grads, lower_bound = advi(
-        train_model, {'x': x}, {'x': lx}, lz_dic, {'c': c_t}, optimizer)
+    model = DRAW()
+    lx, lz_list, lc_t = q_net(n_x, n_z, n_samples, n_steps)
+    outputs = get_output(lz_list + [lc_t], {lx: x})
+    z_outputs = outputs[:-1]
+    c_t, _ = outputs[-1]
+    z_dic = dict(('z_' + str(i), z_outputs[i]) for i in range(len(z_outputs)))
+    lower_bound = tf.reduce_mean(advi(model, {'x': x}, z_dic,
+                                 reduction_indices=1, given={'c': c_t}))
+    grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
-
-    # Build the evaluation computation graph
-    with pt.defaults_scope(phase=pt.Phase.test):
-        with tf.variable_scope("model", reuse=True) as scope:
-            eval_model = M1(n_z, x_train.shape[1])
-        with tf.variable_scope("variational", reuse=True) as scope:
-            lx, lz_list, c_t = q_net(n_x, n_z, n_samples, n_steps)
-    lz_dic = dict(('z_' + str(i), lz_list[i]) for i in range(len(lz_list)))
-    _, eval_lower_bound = advi(
-        eval_model, {'x': x}, {'x': lx}, lz_dic, {'c': c_t}, optimizer)
 
     params = tf.trainable_variables()
     for i in params:
@@ -198,12 +201,10 @@ if __name__ == "__main__":
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
-                    test_lb = sess.run(eval_lower_bound,
+                    test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
                                                   n_samples: lb_samples})
-
                     test_lbs.append(test_lb)
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-

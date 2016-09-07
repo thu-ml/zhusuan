@@ -47,7 +47,7 @@ class M1:
                           batch_normalize(scale_after_normalization=True).
                           fully_connected(n_x, activation_fn=tf.nn.sigmoid))
 
-    def log_prob(self, latent, observed):
+    def log_prob(self, latent, observed, given):
         """
         The log joint probability function.
 

@@ -8,7 +8,7 @@ import tensorflow as tf
 import numpy as np
 import pytest
 from mock import Mock
-from six.moves import range
+from six.moves import range, map
 import prettytensor as pt
 
 from .context import zhusuan
@@ -276,20 +276,20 @@ def test_get_all_layers():
     l3 = MergeLayer([l1, l2], name='l3')
     l4 = MergeLayer([l3, l2], name='l4')
     layers = get_all_layers(l4)
-    assert(map(lambda x: x.name, layers) ==
+    assert(list(map(lambda x: x.name, layers)) ==
            ['in1', 'l1', 'in2', 'l2', 'l3', 'l4'])
     layers = get_all_layers([l2, l4])
-    assert(map(lambda x: x.name, layers) ==
+    assert(list(map(lambda x: x.name, layers)) ==
            ['in2', 'l2', 'in1', 'l1', 'l3', 'l4'])
 
     layers = get_all_layers(l4, treat_as_inputs=[l1])
-    assert(map(lambda x: x.name, layers) ==
+    assert(list(map(lambda x: x.name, layers)) ==
            ['l1', 'in2', 'l2', 'l3', 'l4'])
     layers = get_all_layers(l4, treat_as_inputs=[l2, l3])
-    assert(map(lambda x: x.name, layers) ==
+    assert(list(map(lambda x: x.name, layers)) ==
            ['l3', 'l2', 'l4'])
     layers = get_all_layers([l2, l4], treat_as_inputs=[l1])
-    assert(map(lambda x: x.name, layers) ==
+    assert(list(map(lambda x: x.name, layers)) ==
            ['in2', 'l2', 'l1', 'l3', 'l4'])
 
 
@@ -327,9 +327,9 @@ def _build_test_net(n_samples):
 
 @pytest.fixture
 def _assert_outputs(outputs, n_samples):
-    o1, o1_mean, o1_logvar, o2, o3, o4, o5 = map(lambda x: x[0], outputs)
+    o1, o1_mean, o1_logvar, o2, o3, o4, o5 = list(map(lambda x: x[0], outputs))
     pd1, pd1_mean, pd1_logvar, pd2, pd3, pd4, pd5 = \
-        map(lambda x: x[1], outputs)
+        list(map(lambda x: x[1], outputs))
     assert (o1.get_shape().as_list() == [None, 5])
     assert (o1_mean.get_shape().as_list() == [None, 1, 5])
     assert (o1_logvar.get_shape().as_list() == [None, 1, 5])

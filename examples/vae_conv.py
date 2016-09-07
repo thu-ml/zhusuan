@@ -52,7 +52,7 @@ class M1:
                           deconv2d(5, 1, stride=2,
                                    activation_fn=tf.nn.sigmoid))
 
-    def log_prob(self, latent, observed):
+    def log_prob(self, latent, observed, given):
         """
         The log joint probability function.
 
