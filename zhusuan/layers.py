@@ -13,6 +13,7 @@ import tensorflow as tf
 import prettytensor as pt
 import six
 from six.moves import map
+import pdb
 
 from .distributions import norm, discrete
 from .utils import as_tensor, add_name_scope, ensure_dim_match
@@ -37,6 +38,7 @@ class Layer(object):
         self.name = name
         self.variables = OrderedDict()
         self.get_output_kwargs = []
+        self.params = []
 
     def get_output_for(self, input, **kwargs):
         """
@@ -337,6 +339,71 @@ class PrettyTensor(MergeLayer):
                              "incomings as templates. Check the pt_expr "
                              "passed on construction)" % e)
 
+class BayesianNNLayer(Layer):
+    """
+    The :class BayesianNNLayer denotes a fully connected layer with probabilistic parameters
+
+    :incoming: A :class 'Layer' instance.
+    :n: int, Number of neurons in this layer
+    :sample_num: number of sampling for parameter
+    :activation_fn: activation_function of neuron in this layer
+    """
+    def __init__(self, incoming, n, sample_num = 5, activation_fn = tf.nn.relu, **kwargs):
+        if not isinstance(incoming, Layer):
+            raise TypeError('incoming to the BayesianNNLayer should be a Layer instance')
+        super(BayesianNNLayer, self).__init__(incoming)
+        if isinstance(incoming, InputLayer):
+            self.shape = [n, incoming.shape[1] + 1]
+        else:
+            self.shape = [n, incoming.shape[0] + 1]
+        self.loc = tf.Variable(tf.zeros(self.shape), trainable = True, name = 'loc')
+        self.scale = tf.Variable(tf.ones(self.shape), trainable = True, name = 'scale')
+
+        self.sample_num = sample_num
+        self.activation_fn = activation_fn
+
+    @add_name_scope
+    def get_output_for(self, input):
+        """
+        get layer output given input
+
+        :param input: if input is not from InputLayer, then it should be a matrix
+        with shape (batch_size, sample_num, n_int)
+
+        :return: matrix with shape (batch_size, sample_num, n_out)
+        """
+        #repeat the input to given format
+        if isinstance(self.input_layer, InputLayer):
+            #def func1():
+            #    raise ValueError("dimension of InputLayer input exceeds 2")
+            #def func2():
+            #    return
+            #tf.cond(tf.greater(tf.rank(input), tf.constant(2)), func1, func2)
+
+            batch_size = tf.shape(input)[0]
+            input1 = tf.reshape(input, [batch_size, 1, tf.size(input[0,:]), 1])
+            input = tf.tile(input1, [1, self.sample_num, 1, 1])
+        input = tf.concat(2, [input, tf.ones((tf.shape(input)[0], self.sample_num, 1, 1))])
+
+        #def func1():
+        #    raise ValueError("dimension of input is not 3")
+        #def func2():
+        #    return
+        #tf.cond(tf.not_equal(tf.rank(input), tf.constant(3), func1, func2)
+   
+        w = norm.rvs(shape = [self.sample_num] + self.shape)
+        W = w * tf.stop_gradient(self.scale) + tf.stop_gradient(self.loc)
+        W = W / tf.sqrt(tf.cast(self.shape[1] + 1, dtype=tf.float32))#normalizing
+
+        W1 = tf.expand_dims(W, 0)
+        W2 = tf.tile(W1, [tf.shape(input)[0],1,1,1])
+        
+        #pdb.set_trace()
+        if W2.get_shape().as_list()[:-1] != input.get_shape().as_list()[:-1]:
+            raise ValueError('dimension mismatch of W2 and input')
+       
+        z = tf.batch_matmul(W2, input)
+        return self.activation_fn(z)
 
 class ReadAttentionLayer(MergeLayer):
     """
