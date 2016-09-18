@@ -124,9 +124,10 @@ class InputLayer(Layer):
 
 class ReparameterizedNormalOld(MergeLayer):
     """
-    The :class:`ReparameterizedNormalOld` class represents a Normal distribution
-    layer that accepts the mean and the log standard deviation as inputs, which
-    is used in Automatic Differentiation Variational Inference (ADVI).
+    The :class:`ReparameterizedNormalOld` class represents a Normal
+    distribution layer that accepts the mean and the log standard deviation as
+    inputs, which is used in Automatic Differentiation Variational Inference (
+    ADVI).
 
     Note that gradients on samples from this Normal distribution are allowed
     to propagate into inputs in this function, using the reparametrization
@@ -143,8 +144,8 @@ class ReparameterizedNormalOld(MergeLayer):
     def __init__(self, incomings, n_samples=1, name=None):
         super(ReparameterizedNormalOld, self).__init__(incomings, name)
         if len(incomings) != 2:
-            raise ValueError("ReparameterizedNormalOld layer only accepts input "
-                             "layers of length 2 (the mean and the log "
+            raise ValueError("ReparameterizedNormalOld layer only accepts "
+                             "input layers of length 2 (the mean and the log "
                              "standard deviation).")
         if isinstance(n_samples, int):
             self.n_samples = n_samples
@@ -177,7 +178,7 @@ class ReparameterizedNormalOld(MergeLayer):
 
 class ReparameterizedNormal(MergeLayer):
     """
-    The :class:`ReparameterizedNormalOld` class represents a Normal distribution
+    The :class:`ReparameterizedNormal` class represents a Normal distribution
     layer that accepts the mean and the log standard deviation as inputs, which
     is used in Automatic Differentiation Variational Inference (ADVI).
 
@@ -196,7 +197,7 @@ class ReparameterizedNormal(MergeLayer):
     def __init__(self, incomings, n_samples=1, name=None):
         super(ReparameterizedNormal, self).__init__(incomings, name)
         if len(incomings) != 2:
-            raise ValueError("ReparameterizedNormalOld layer only accepts input "
+            raise ValueError("ReparameterizedNormal layer only accepts input "
                              "layers of length 2 (the mean and the log "
                              "standard deviation).")
         if isinstance(n_samples, int):

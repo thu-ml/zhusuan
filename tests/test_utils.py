@@ -84,6 +84,15 @@ def test_ensure_dim_match():
             sess.run(ensure_dim_match([tf.ones((2, 3)), tf.ones((5, 3))], 0))
 
 
+# def test_ensure_dim_match_gradients():
+#     a = tf.ones((2, 1, 2))
+#     b = tf.ones((2, 5, 2))
+#     a_, b_ = ensure_dim_match([a, b], 1)
+#     grad = tf.gradients(a_, a)[0]
+#     with tf.Session() as sess:
+#         assert(sess.run(tf.shape(grad)).tolist() == [2, 1, 2])
+
+
 def test_add_name_scope():
     class A:
         @add_name_scope
