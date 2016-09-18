@@ -118,21 +118,23 @@ class Discrete:
         pass
 
     @add_name_scope
-    def rvs(self, p):
+    def rvs(self, p, eps=1e-8):
         """
         Generate discrete variables.
 
         :param p: A 2-D Tensor or numpy array of shape (n_samples, n_classes).
             Each line is the probability of all classes. (Not required to be
             normalized).
+        :param eps: Float. Small value used to avoid NaNs.
 
         :return: A 2-D Tensor of shape (n_samples, n_classes). Each line is
             a one-hot vector of the sample.
         """
         p = tf.cast(as_tensor(p), dtype=tf.float32)
         tf.assert_rank(p, 2)
+        p += eps
         ret = tf.one_hot(
-            tf.squeeze(tf.multinomial(tf.stop_gradient(p), 1), [1]),
+            tf.squeeze(tf.multinomial(tf.stop_gradient(tf.log(p)), 1), [1]),
             tf.shape(p)[1])
         ret.set_shape(p.get_shape())
         return ret
