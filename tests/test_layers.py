@@ -140,6 +140,8 @@ class TestReparameterizedNormal:
                 output, feed_dict={mean_: np.random.random((2, 1, 20)),
                                    logvar: np.random.random((2, 1, 20))})
             assert(test_values.shape == (2, 10, 20))
+        output_d = layer.get_output_for([mean_, logvar], deterministic=True)
+        assert(output_d == mean_)
 
         mean_ = tf.placeholder(tf.float32, shape=(None, 5, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 5, 20))
@@ -195,6 +197,8 @@ class TestDiscrete:
             test_values = sess.run(
                 output, feed_dict={p: np.random.random((2, 1, 20))})
             assert(test_values.shape == (2, 10, 20))
+        output_d = layer.get_output_for(p, deterministic=True)
+        assert(output_d == p)
 
         p = tf.placeholder(tf.float32, shape=(None, 5, 20))
         layer = Discrete(Mock(), 20)
@@ -394,7 +398,7 @@ def test_get_output_single_output():
 def test_get_output_raise():
     mean = InputLayer((None, 1, 5))
     logvar = InputLayer((None, 1, 5))
-    layer = ReparameterizedNormalOld([mean, logvar], 3)
+    layer = ReparameterizedNormal([mean, logvar], 3)
     mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
     with pytest.raises(ValueError) as e:
         get_output(layer, {mean: mean_feed})
@@ -408,7 +412,7 @@ def test_get_output_raise():
                               "layers. Please call it with a dictionary of "
                               "input expressions instead.")
 
-    layer = ReparameterizedNormalOld([mean, None], 3)
+    layer = ReparameterizedNormal([mean, None], 3)
     with pytest.raises(ValueError) as e:
         get_output(layer, mean_feed)
     assert(e.value.message.find("get_output() was called with free-floating "
@@ -421,3 +425,26 @@ def test_get_output_discrete_layer():
     p_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
     output = get_output(layer, p_feed)
     assert(output[0].get_shape().as_list() == [None, 3, 5])
+
+
+def test_get_output_deterministic():
+    mean = InputLayer((None, 1, 5))
+    logvar = InputLayer((None, 1, 5),
+                        tf.placeholder(tf.float32, (None, 1, 5)))
+    layer = ReparameterizedNormal([mean, logvar])
+    mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
+    output = get_output(layer, {mean: mean_feed}, deterministic=True)
+    assert(output == mean_feed)
+
+
+def test_get_output_nonexist_args():
+    mean = InputLayer((None, 1, 5))
+    logvar = InputLayer((None, 1, 5),
+                        tf.placeholder(tf.float32, (None, 1, 5)))
+    layer = ReparameterizedNormal([mean, logvar])
+    mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
+    with pytest.warns(RuntimeWarning) as e:
+        get_output(layer, {mean: mean_feed}, determinstic=True)
+    assert(e.pop().message.message.find('deterministic') >= 0)
+    with pytest.warns(RuntimeWarning):
+        get_output(layer, {mean: mean_feed}, non_exist_arg=None)

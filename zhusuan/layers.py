@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import OrderedDict, deque
-from inspect import getargspec
 from difflib import get_close_matches
 from warnings import warn
 
@@ -207,8 +206,11 @@ class ReparameterizedNormal(MergeLayer):
                 self.n_samples = tf.cast(n_samples, tf.int32)
 
     @add_name_scope
-    def get_output_for(self, inputs, **kwargs):
+    def get_output_for(self, inputs, deterministic=False, **kwargs):
         mean_, logvar = inputs
+        if deterministic:
+            return mean_
+
         samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
             mean_
         samples_n = norm.rvs(
@@ -262,8 +264,10 @@ class Discrete(Layer):
                               "passed on construction of this layer." % self))
 
     @add_name_scope
-    def get_output_for(self, input, **kwargs):
+    def get_output_for(self, input, deterministic=False, **kwargs):
         self._static_shape_check(input)
+        if deterministic:
+            return input
 
         n_dim = tf.shape(input)[2]
         samples_1_2d = discrete.rvs(tf.reshape(input, (-1, n_dim)))
@@ -288,8 +292,7 @@ class Discrete(Layer):
     @add_name_scope
     def get_logpdf_for(self, output, input, **kwargs):
         self._static_shape_check(input)
-        output_, input_ = ensure_dim_match([output, input], 0)
-        output_, input_ = ensure_dim_match([output_, input_], 1)
+        output_, input_ = ensure_dim_match([output, input], 1)
         output_2d = tf.reshape(output_, (-1, tf.shape(output_)[2]))
         input_2d = tf.reshape(input_, (-1, tf.shape(input_)[2]))
         ret = tf.reshape(discrete.logpdf(output_2d, input_2d),
@@ -323,19 +326,20 @@ class PrettyTensor(MergeLayer):
     @add_name_scope
     def get_output_for(self, inputs, **kwargs):
         template_mapping = dict(zip(self.template_names, inputs))
-        output = self.pt_expr.construct(**template_mapping)
         try:
-            if isinstance(output, (tuple, list)):
-                return output[0].tensor, tuple(
-                    map(lambda x: x.tensor, output[1]))
-            else:
-                return output.tensor
+            output = self.pt_expr.construct(**template_mapping)
         except ValueError as e:
             raise ValueError("PrettyTensor construction error. Error message: "
                              "%s\n(Note that PrettyTensor Layer only accepts "
                              "prettytensor expression that takes names of "
                              "incomings as templates. Check the pt_expr "
                              "passed on construction)" % e)
+        else:
+            if isinstance(output, (tuple, list)):
+                return output[0].tensor, tuple(
+                    map(lambda x: x.tensor, output[1]))
+            else:
+                return output.tensor
 
 
 class ReadAttentionLayer(MergeLayer):
@@ -535,21 +539,8 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
     if not isinstance(layer_or_layers, (tuple, list)):
         requested_layers = [layer_or_layers]
 
-    # # track accepted kwargs used by get_output_for
-    # accepted_kwargs = set()
-    #
-    # def _collect_arg_suggestions(layer):
-    #     ret = set()
-    #     try:
-    #         names, _, _, defaults = getargspec(layer.get_output_for)
-    #     except TypeError:
-    #         # if introspection is not possible, skip it
-    #         pass
-    #     else:
-    #         if defaults is not None:
-    #             ret |= set(names[-len(defaults):])
-    #     ret |= set(layer.get_output_kwargs)
-    #     return ret
+    # track accepted kwargs used by get_output_for
+    accepted_kwargs = {'deterministic'}
 
     # obtain topological ordering of all layers the output layer(s) depend on
     treat_as_input = inputs.keys() if isinstance(inputs, dict) else []
@@ -621,28 +612,33 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
             all_outputs[layer] = [None, None]
             all_outputs[layer][0] = layer.get_output_for(layer_inputs,
                                                          **kwargs)
-            # accepted_kwargs |= _collect_arg_suggestions(layer)
+            accepted_kwargs |= set(layer.get_output_kwargs)
 
-    # generate logpdfs for requested distribution layers
-    for layer in all_outputs:
-        if hasattr(layer, 'get_logpdf_for') and (layer in requested_layers):
-            layer_inputs = _get_layer_inputs(layer)
-            all_outputs[layer][1] = layer.get_logpdf_for(
-                all_outputs[layer][0], layer_inputs, **kwargs)
+    deterministic = kwargs.get('deterministic', False)
+    if not deterministic:
+        # generate logpdfs for requested distribution layers
+        for layer in all_outputs:
+            if hasattr(layer, 'get_logpdf_for') and (
+                        layer in requested_layers):
+                layer_inputs = _get_layer_inputs(layer)
+                all_outputs[layer][1] = layer.get_logpdf_for(
+                    all_outputs[layer][0], layer_inputs, **kwargs)
+    else:
+        all_outputs = dict((k, v[0]) for k, v in six.iteritems(all_outputs))
 
-    # # show argument suggestions
-    # non_existent_kwargs = set(kwargs.keys()) - accepted_kwargs
-    # if non_existent_kwargs:
-    #     suggestions = []
-    #     for kwarg in non_existent_kwargs:
-    #         suggestion = get_close_matches(kwarg, accepted_kwargs)
-    #         if suggestion:
-    #             suggestions.append('%s (perhaps you meant %s)'
-    #                                % (kwarg, suggestion[0]))
-    #         else:
-    #             suggestions.append(kwarg)
-    #     warn("get_output() was called with unused kwargs:\n\t%s"
-    #          % "\n\t".join(suggestions))
+    # show argument suggestions
+    non_existent_kwargs = set(kwargs.keys()) - accepted_kwargs
+    if non_existent_kwargs:
+        suggestions = []
+        for kwarg in non_existent_kwargs:
+            suggestion = get_close_matches(kwarg, accepted_kwargs)
+            if suggestion:
+                suggestions.append('%s (perhaps you meant %s)'
+                                   % (kwarg, suggestion[0]))
+            else:
+                suggestions.append(kwarg)
+        warn("get_output() was called with unused kwargs:\n\t%s"
+             % "\n\t".join(suggestions), RuntimeWarning)
 
     # return the output(s) of the requested layer(s) only
     if isinstance(layer_or_layers, (tuple, list)):
