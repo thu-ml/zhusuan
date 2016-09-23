@@ -193,14 +193,14 @@ if __name__ == "__main__":
                                             learning_rate_ph: learning_rate,
                                             n_samples: lb_samples})
                 lbs.append(lb)
-                if t == 1:
-                    imgs = sess.run(tf.sigmoid(samples[0]), feed_dict={x: x_batch, n_samples: lb_samples})
-                    imgs = imgs.reshape((10, 10, 28, 28)).transpose(
-                        1, 2, 0, 3).reshape((10 * 28, 10 * 28))
-                    imsave('reconst_%d.png' % epoch, imgs)
-                    imgs = sess.run(tf.sigmoid(samples_gen[0]), feed_dict={n_samples: lb_samples})
-                    imgs = imgs.reshape((10, 10, 28, 28)).transpose(1, 2, 0, 3).reshape((10 * 28, 10 * 28))
-                    imsave('samples_%d.png' % epoch, imgs)
+                # if t == 1:
+                #     imgs = sess.run(tf.sigmoid(samples[0]), feed_dict={x: x_batch, n_samples: lb_samples})
+                #     imgs = imgs.reshape((10, 10, 28, 28)).transpose(
+                #         1, 2, 0, 3).reshape((10 * 28, 10 * 28))
+                #     imsave('reconst_%d.png' % epoch, imgs)
+                #     imgs = sess.run(tf.sigmoid(samples_gen[0]), feed_dict={n_samples: lb_samples})
+                #     imgs = imgs.reshape((10, 10, 28, 28)).transpose(1, 2, 0, 3).reshape((10 * 28, 10 * 28))
+                #     imsave('samples_%d.png' % epoch, imgs)
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
                 epoch, time_epoch, np.mean(lbs)))
