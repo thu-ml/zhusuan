@@ -47,7 +47,7 @@ class M1:
                           batch_normalize(scale_after_normalization=True).
                           fully_connected(n_x, activation_fn=tf.nn.sigmoid))
 
-    def log_prob(self, latent, observed):
+    def log_prob(self, latent, observed, given):
         """
         The log joint probability function.
 
@@ -92,10 +92,10 @@ def q_net(n_x, n_z, n_samples):
         lz_mean = PrettyTensor({'z': lz_x}, pt.template('z').
                                fully_connected(n_z, activation_fn=None).
                                reshape((-1, 1, n_z)))
-        lz_logstd = PrettyTensor({'z': lz_x}, pt.template('z').
+        lz_logvar = PrettyTensor({'z': lz_x}, pt.template('z').
                                  fully_connected(n_z, activation_fn=None).
                                  reshape((-1, 1, n_z)))
-        lz = ReparameterizedNormal([lz_mean, lz_logstd], n_samples)
+        lz = ReparameterizedNormal([lz_mean, lz_logvar], n_samples)
     return lx, lz
 
 
@@ -128,30 +128,33 @@ if __name__ == "__main__":
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
 
+    def build_model(phase, reuse=False):
+        with pt.defaults_scope(phase=phase):
+            with tf.variable_scope("model", reuse=reuse) as scope:
+                model = M1(n_z, x_train.shape[1])
+            with tf.variable_scope("variational", reuse=reuse) as scope:
+                lx, lz = q_net(n_x, n_z, n_samples)
+        return model, lx, lz
+
     # Build the training computation graph
     learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
     n_samples = tf.placeholder(tf.int32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    with pt.defaults_scope(phase=pt.Phase.train):
-        with tf.variable_scope("model") as scope:
-            train_model = M1(n_z, x_train.shape[1])
-        with tf.variable_scope("variational") as scope:
-            lx, lz = q_net(n_x, n_z, n_samples)
-    grads, lower_bound = advi(
-        train_model, {'x': x}, {'x': lx}, {'z': lz}, optimizer)
+    model, lx, lz = build_model(pt.Phase.train)
+    z_outputs = get_output(lz, x)
+    lower_bound = tf.reduce_mean(advi(
+        model, {'x': x}, {'z': z_outputs}, reduction_indices=1))
+    grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 
     # Build the evaluation computation graph
-    with pt.defaults_scope(phase=pt.Phase.test):
-        with tf.variable_scope("model", reuse=True) as scope:
-            eval_model = M1(n_z, x_train.shape[1])
-        with tf.variable_scope("variational", reuse=True) as scope:
-            lx, lz = q_net(n_x, n_z, n_samples)
-    _, eval_lower_bound = advi(
-        eval_model, {'x': x}, {'x': lx}, {'z': lz}, optimizer)
-    eval_log_likelihood = is_loglikelihood(
-        eval_model, {'x': x}, {'x': lx}, {'z': lz})
+    eval_model, eval_lx, eval_lz = build_model(pt.Phase.test, reuse=True)
+    z_outputs = get_output(eval_lz, x)
+    eval_lower_bound = tf.reduce_mean(advi(
+        eval_model, {'x': x}, {'z': z_outputs}, reduction_indices=1))
+    eval_log_likelihood = tf.reduce_mean(is_loglikelihood(
+        eval_model, {'x': x}, {'z': z_outputs}, reduction_indices=1))
 
     params = tf.trainable_variables()
     for i in params:

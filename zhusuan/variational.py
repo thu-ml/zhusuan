@@ -4,18 +4,16 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import itertools
 
 import tensorflow as tf
 import six
-from six.moves import range, zip, map
+from six.moves import zip, map
 
-from .utils import ensure_dim_match
-from .layers import Discrete, get_output
+from .utils import log_mean_exp
+from .evaluation import is_loglikelihood
 
 
-def advi(model, observed_inputs, observed_layers, latent_layers, given_layers,
-         optimizer=tf.train.AdamOptimizer()):
+def advi(model, observed, latent, reduction_indices=1, given=None):
     """
     Implements the automatic differentiation variational inference (ADVI)
     algorithm. For now we assume all latent variables have been transformed in
@@ -23,84 +21,87 @@ def advi(model, observed_inputs, observed_layers, latent_layers, given_layers,
 
     :param model: A model object that has a method logprob(latent, observed)
         to compute the log joint likelihood of the model.
-    :param observed_inputs: A dictionary. Given inputs to the observed layers.
-    :param observed_layers: A dictionary. The observed layers.
-    :param latent_layers: A dictionary. The latent layers.
-    :param optimizer: Tensorflow optimizer object. Default to be
-        AdamOptimizer.
+    :param observed: A dictionary of (string, Tensor) pairs. Given inputs to
+        the observed variables.
+    :param latent: A dictionary of (string, (Tensor, Tensor)) pairs. The
+        value of two Tensors represents (output, logpdf) given by the
+        `zhusuan.layers.get_output` function for distribution layers.
+    :param reduction_indices: The sample dimension(s) to reduce when
+        computing the variational lower bound.
+    :param given: A dictionary of (string, Tensor) pairs. This is used when
+        some deterministic transformations have been computed in variational
+        posterior and can be reused when evaluating model joint log likelihood.
+        This dictionary will be directly passed to the model object.
 
-    :return: Tensorflow gradients that can be applied using
-        `tf.train.Optimizer.apply_gradients`
-    :return: A 0-D Tensor. The variational lower bound.
+    :return: A Tensor. The variational lower bound.
     """
-    if list(six.iterkeys(observed_inputs)) != list(
-            six.iterkeys(observed_layers)):
-        raise ValueError("Observed layers and inputs don't match.")
+    latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
+    latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
+    latent_logpdfs = map(lambda x: x[1], latent_v)
+    given = given if given is not None else {}
+    lower_bound = model.log_prob(latent_outputs, observed, given) - \
+        sum(latent_logpdfs)
+    lower_bound = tf.reduce_mean(lower_bound, reduction_indices)
+    return lower_bound
 
-    # add all observed (variable, input) pairs into inputs
-    inputs = {}
-    for name, layer in six.iteritems(observed_layers):
-        inputs[layer] = observed_inputs[name]
 
-    # get discrete latent layers
-    latent_k, latent_v = map(list, zip(*six.iteritems(latent_layers)))
-    given_k, given_v = map(list, zip(*six.iteritems(given_layers)))
-    discrete_latent_layers = dict(filter(lambda x: isinstance(x[1], Discrete),
-                                         six.iteritems(latent_layers)))
+def iwae(model, observed, latent, reduction_indices=1, given=None):
+    """
+    Implements the importance weighted lower bound from (Burda, 2015).
 
-    if discrete_latent_layers:
-        # Discrete latent layers exists
-        discrete_latent_k, discrete_latent_v = map(list, zip(
-            *six.iteritems(discrete_latent_layers)))
+    :param model: A model object that has a method logprob(latent, observed)
+        to compute the log joint likelihood of the model.
+    :param observed: A dictionary of (string, Tensor) pairs. Given inputs to
+        the observed variables.
+    :param latent: A dictionary of (string, (Tensor, Tensor)) pairs. The
+        value of two Tensors represents (output, logpdf) given by the
+        `zhusuan.layers.get_output` function for distribution layers.
+    :param reduction_indices: The sample dimension(s) to reduce when
+        computing the variational lower bound.
+    :param given: A dictionary of (string, Tensor) pairs. This is used when
+        some deterministic transformations have been computed in variational
+        posterior and can be reused when evaluating model joint log likelihood.
+        This dictionary will be directly passed to the model object.
 
-        # get all configurations of discrete latent variables
-        all_disc_latent_configs = []
-        for layer in discrete_latent_v:
-            tmp = []
-            for i in range(layer.n_classes):
-                layer_input = tf.expand_dims(tf.expand_dims(tf.one_hot(
-                    i, depth=layer.n_classes, dtype=tf.float32), 0), 0)
-                tmp.append(layer_input)
-            all_disc_latent_configs.append(tmp)
-        # cartesian products
-        all_disc_latent_configs = itertools.product(*all_disc_latent_configs)
+    :return: A Tensor. The importance weighted lower bound.
+    """
+    return is_loglikelihood(model, observed, latent, reduction_indices, given)
 
-        # feed all configurations of inputs
-        weighted_lbs = []
-        for discrete_latent_inputs in all_disc_latent_configs:
-            _inputs = inputs.copy()
-            discrete_latent_inputs = dict(zip(discrete_latent_v,
-                                              discrete_latent_inputs))
-            _inputs.update(discrete_latent_inputs)
-            # TODO: assert n_samples == 1 for discrete layers (run time)
-            # ensure the batch_size dimension matches
-            _inputs_k, _inputs_v = zip(*six.iteritems(_inputs))
-            _inputs_v = ensure_dim_match(_inputs_v, 0)
-            _inputs = dict(zip(_inputs_k, _inputs_v))
-            # size: continuous layers (batch_size, n_samples, n_dim)
-            #       discrete layers (batch_size, 1, n_dim)
-            outputs = get_output(latent_v, _inputs)
-            latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs)))
-            # size: continuous layer (batch_size, n_samples)
-            #       discrete layers (batch_size, 1)
-            latent_logpdfs = dict(zip(latent_k, map(lambda x: x[1], outputs)))
-            # size: (batch_size, n_samples)
-            lower_bound = model.log_prob(latent_outputs, observed_inputs) - \
-                sum(six.itervalues(latent_logpdfs))
-            discrete_latent_logpdfs = [latent_logpdfs[i]
-                                       for i in discrete_latent_k]
-            w = tf.exp(sum(discrete_latent_logpdfs))
-            weighted_lbs.append(lower_bound * w)
-        # size: (batch_size, n_samples)
-        lower_bound = sum(weighted_lbs)
-    else:
-        # no Discrete latent layers
-        outputs = get_output(latent_v + given_v, inputs)
-        latent_outputs = dict(zip(latent_k, map(lambda x: x[0], outputs[:len(latent_v)])))
-        given_outputs = dict(zip(given_k, map(lambda x: x[0], outputs[len(latent_v):])))
-        latent_logpdfs = map(lambda x: x[1], outputs[:len(latent_v)])
-        lower_bound = model.log_prob(latent_outputs, observed_inputs, given_outputs) - \
-            sum(latent_logpdfs)
 
-    lower_bound = tf.reduce_mean(lower_bound)
-    return optimizer.compute_gradients(-lower_bound), lower_bound
+def rws(model, observed, latent, reduction_indices=1, given=None):
+    """
+    Implements Reweighted Wake-sleep from (Bornschein, 2015).
+
+    :param model: A model object that has a method logprob(latent, observed)
+        to compute the log joint likelihood of the model.
+    :param observed: A dictionary of (string, Tensor) pairs. Given inputs to
+        the observed variables.
+    :param latent: A dictionary of (string, (Tensor, Tensor)) pairs. The
+        value of two Tensors represents (output, logpdf) given by the
+        `zhusuan.layers.get_output` function for distribution layers.
+    :param reduction_indices: The sample dimension(s) to reduce when
+        computing the log likelihood.
+    :param given: A dictionary of (string, Tensor) pairs. This is used when
+        some deterministic transformations have been computed in the proposal
+        and can be reused when evaluating model joint log likelihood.
+        This dictionary will be directly passed to the model object.
+
+    :return: A 1-D Tensor. The cost to minimize given by Reweighted Wake-sleep.
+    :return: A 1-D Tensor of shape (batch_size,). Estimated log likelihoods.
+    """
+    latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
+    latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
+    latent_logpdfs = map(lambda x: x[1], latent_v)
+    given = given if given is not None else {}
+    log_joint = model.log_prob(latent_outputs, observed, given)
+    entropy = -sum(latent_logpdfs)
+    log_w = log_joint + entropy
+    log_w_max = tf.reduce_max(log_w, reduction_indices, keep_dims=True)
+    w_u = tf.exp(log_w - log_w_max)
+    w_tilde = tf.stop_gradient(w_u / tf.reduce_sum(w_u, reduction_indices,
+                                                   keep_dims=True))
+    log_likelihood = log_mean_exp(log_w, reduction_indices)
+    fake_log_joint_cost = -tf.reduce_sum(w_tilde*log_joint, reduction_indices)
+    fake_proposal_cost = tf.reduce_sum(w_tilde*entropy, reduction_indices)
+    cost = fake_log_joint_cost + fake_proposal_cost
+    return cost, log_likelihood

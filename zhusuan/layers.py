@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import OrderedDict, deque
-from inspect import getargspec
 from difflib import get_close_matches
 from warnings import warn
 
@@ -123,11 +122,12 @@ class InputLayer(Layer):
         self.input = input
 
 
-class ReparameterizedNormal(MergeLayer):
+class ReparameterizedNormalOld(MergeLayer):
     """
-    The :class:`ReparameterizedNormal` class represents a Normal distribution
-    layer that accepts the mean and the log standard deviation as inputs, which
-    is used in Automatic Differentiation Variational Inference (ADVI).
+    The :class:`ReparameterizedNormalOld` class represents a Normal
+    distribution layer that accepts the mean and the log standard deviation as
+    inputs, which is used in Automatic Differentiation Variational Inference (
+    ADVI).
 
     Note that gradients on samples from this Normal distribution are allowed
     to propagate into inputs in this function, using the reparametrization
@@ -142,15 +142,14 @@ class ReparameterizedNormal(MergeLayer):
     :param name: A string or None. An optional name to attach to this layer.
     """
     def __init__(self, incomings, n_samples=1, name=None):
-        super(ReparameterizedNormal, self).__init__(incomings, name)
+        super(ReparameterizedNormalOld, self).__init__(incomings, name)
         if len(incomings) != 2:
-            raise ValueError("ReparameterizedNormal layer only accepts input "
-                             "layers of length 2 (the mean and the log "
+            raise ValueError("ReparameterizedNormalOld layer only accepts "
+                             "input layers of length 2 (the mean and the log "
                              "standard deviation).")
         if isinstance(n_samples, int):
             self.n_samples = n_samples
         else:
-            self.n_samples = n_samples
             with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
                 self.n_samples = tf.cast(n_samples, tf.int32)
 
@@ -175,6 +174,64 @@ class ReparameterizedNormal(MergeLayer):
     def get_logpdf_for(self, output, inputs, **kwargs):
         mean_, logstd = inputs
         return tf.reduce_sum(norm.logpdf(output, mean_, tf.exp(logstd)), 2)
+
+
+class ReparameterizedNormal(MergeLayer):
+    """
+    The :class:`ReparameterizedNormal` class represents a Normal distribution
+    layer that accepts the mean and the log standard deviation as inputs, which
+    is used in Automatic Differentiation Variational Inference (ADVI).
+
+    Note that gradients on samples from this Normal distribution are allowed
+    to propagate into inputs in this function, using the reparametrization
+    trick from (Kingma, 2013), which is contrary to the behavior in
+    :meth:`zhusuan.distributions`.
+
+    :param incomings: A list of 2 :class:`Layer` instances. The first
+        representing the mean, and the second representing the log variance.
+        Must be of shape 3-D like (batch_size, n_samples, n_dims).
+    :param n_samples: Int or a scalar Tensor of type int. Number of samples
+        drawn for distribution layers. Default to be 1.
+    :param name: A string or None. An optional name to attach to this layer.
+    """
+    def __init__(self, incomings, n_samples=1, name=None):
+        super(ReparameterizedNormal, self).__init__(incomings, name)
+        if len(incomings) != 2:
+            raise ValueError("ReparameterizedNormal layer only accepts input "
+                             "layers of length 2 (the mean and the log "
+                             "standard deviation).")
+        if isinstance(n_samples, int):
+            self.n_samples = n_samples
+        else:
+            with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
+                self.n_samples = tf.cast(n_samples, tf.int32)
+
+    @add_name_scope
+    def get_output_for(self, inputs, deterministic=False, **kwargs):
+        mean_, logvar = inputs
+        if deterministic:
+            return mean_
+
+        samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
+            mean_
+        samples_n = norm.rvs(
+            shape=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
+        ) * tf.exp(0.5 * logvar) + mean_
+        if isinstance(self.n_samples, int):
+            if self.n_samples == 1:
+                return samples_1
+            else:
+                samples_n.set_shape([None, self.n_samples, None])
+                return samples_n
+        else:
+            return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
+                           lambda: samples_n)
+
+    @add_name_scope
+    def get_logpdf_for(self, output, inputs, **kwargs):
+        mean_, logvar = inputs
+        return tf.reduce_sum(
+            norm.logpdf(output, mean_, tf.exp(0.5 * logvar)), 2)
 
 
 class Discrete(Layer):
@@ -208,8 +265,10 @@ class Discrete(Layer):
                               "passed on construction of this layer." % self))
 
     @add_name_scope
-    def get_output_for(self, input, **kwargs):
+    def get_output_for(self, input, deterministic=False, **kwargs):
         self._static_shape_check(input)
+        if deterministic:
+            return input
 
         n_dim = tf.shape(input)[2]
         samples_1_2d = discrete.rvs(tf.reshape(input, (-1, n_dim)))
@@ -234,8 +293,7 @@ class Discrete(Layer):
     @add_name_scope
     def get_logpdf_for(self, output, input, **kwargs):
         self._static_shape_check(input)
-        output_, input_ = ensure_dim_match([output, input], 0)
-        output_, input_ = ensure_dim_match([output_, input_], 1)
+        output_, input_ = ensure_dim_match([output, input], 1)
         output_2d = tf.reshape(output_, (-1, tf.shape(output_)[2]))
         input_2d = tf.reshape(input_, (-1, tf.shape(input_)[2]))
         ret = tf.reshape(discrete.logpdf(output_2d, input_2d),
@@ -256,10 +314,9 @@ class PrettyTensor(MergeLayer):
         corresponding incoming layer when calling get_output_for.
     :param name: A string or None. An optional name to attach to this layer.
     """
-    def __init__(self, incomings, pt_expr, name=None, return_index=0):
+    def __init__(self, incomings, pt_expr, name=None):
         ks = incomings.keys()
         vs = [incomings[k] for k in incomings]
-        self.return_index = return_index
         super(PrettyTensor, self).__init__(vs, name)
         self.template_names = ks
         if not hasattr(pt_expr, 'construct'):
@@ -270,22 +327,25 @@ class PrettyTensor(MergeLayer):
     @add_name_scope
     def get_output_for(self, inputs, **kwargs):
         template_mapping = dict(zip(self.template_names, inputs))
-        output = self.pt_expr.construct(**template_mapping)
-        if isinstance(output, (tuple, list)):
-            return output[0].tensor, tuple(map(lambda x: x.tensor, output[1]))
         try:
-            return output.tensor
+            output = self.pt_expr.construct(**template_mapping)
         except ValueError as e:
             raise ValueError("PrettyTensor construction error. Error message: "
-                             "%s.\n(Note that PrettyTensor Layer only accepts "
+                             "%s\n(Note that PrettyTensor Layer only accepts "
                              "prettytensor expression that takes names of "
                              "incomings as templates. Check the pt_expr "
                              "passed on construction)" % e)
+        else:
+            if isinstance(output, (tuple, list)):
+                return output[0].tensor, tuple(
+                    map(lambda x: x.tensor, output[1]))
+            else:
+                return output.tensor
 
 
 class ReadAttentionLayer(MergeLayer):
     """
-    Read attention for DRAW
+    Read attention of DRAW
     """
     def __init__(self, incomings, width=28, height=28, read_n=5, name=None):
         super(ReadAttentionLayer, self).__init__(incomings, name)
@@ -302,9 +362,11 @@ class ReadAttentionLayer(MergeLayer):
         gx = (self.width + 1) / 2. * (gx_ + 1)
         gy = (self.height + 1) / 2. * (gy_ + 1)
         sigma2 = tf.exp(log_sigma2)
-        delta = (max(self.width, self.height) - 1) / (self.read_n - 1) * tf.exp(log_delta)
+        delta = (max(self.width, self.height) - 1) / (self.read_n - 1) * \
+            tf.exp(log_delta)
         gamma = tf.exp(log_gamma)
-        grid_i = tf.reshape(tf.cast(tf.range(1, self.read_n + 1), tf.float32), [1, -1])
+        grid_i = tf.reshape(tf.cast(tf.range(1, self.read_n + 1), tf.float32),
+                            [1, -1])
         mu_x = gx + (grid_i - self.read_n / 2 - 0.5) * delta
         mu_y = gy + (grid_i - self.read_n / 2 - 0.5) * delta
         a = tf.reshape(tf.cast(tf.range(self.width), tf.float32), [1, 1, -1])
@@ -313,20 +375,25 @@ class ReadAttentionLayer(MergeLayer):
         mu_y = tf.reshape(mu_y, [-1, self.read_n, 1])
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
         fx = tf.exp(-tf.square((a - mu_x) / (2 * sigma2)))
-        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))  # batch x N x self.height
+        # batch x N x self.height
+        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))
         fx /= tf.maximum(tf.reduce_sum(fx, 2, keep_dims=True), 1e-8)
         fy /= tf.maximum(tf.reduce_sum(fy, 2, keep_dims=True), 1e-8)
         fxt = tf.transpose(fx, perm=[0, 2, 1])
         x_hat = tf.reshape(x - tf.sigmoid(c_t), [-1, self.height, self.width])
         x = tf.reshape(x, [-1, self.height, self.width])
-        read_x = gamma * tf.reshape(tf.batch_matmul(fy, tf.batch_matmul(x, fxt)), [-1, self.read_n*self.read_n])
-        read_x_hat = gamma * tf.reshape(tf.batch_matmul(fy, tf.batch_matmul(x_hat, fxt)), [-1, self.read_n*self.read_n])
+        read_x = gamma * tf.reshape(
+            tf.batch_matmul(fy, tf.batch_matmul(x, fxt)),
+            [-1, self.read_n*self.read_n])
+        read_x_hat = gamma * tf.reshape(
+            tf.batch_matmul(fy, tf.batch_matmul(x_hat, fxt)),
+            [-1, self.read_n*self.read_n])
         return tf.concat(1, [read_x, read_x_hat])
 
 
 class WriteAttentionLayer(MergeLayer):
     """
-    Write attention for DRAW.
+    Write attention of DRAW.
     """
     def __init__(self, incomings, width=28, height=28, write_n=5, name=None):
         super(WriteAttentionLayer, self).__init__(incomings, name)
@@ -341,9 +408,11 @@ class WriteAttentionLayer(MergeLayer):
         gx = (self.width + 1) / 2. * (gx_ + 1)
         gy = (self.height + 1) / 2. * (gy_ + 1)
         sigma2 = tf.exp(log_sigma2)
-        delta = (max(self.width, self.height) - 1) / (self.write_n - 1) * tf.exp(log_delta)
+        delta = (max(self.width, self.height) - 1) / (self.write_n - 1) * \
+            tf.exp(log_delta)
         gamma = tf.exp(log_gamma)
-        grid_i = tf.reshape(tf.cast(tf.range(1, self.write_n + 1), tf.float32), [1, -1])
+        grid_i = tf.reshape(
+            tf.cast(tf.range(1, self.write_n + 1), tf.float32), [1, -1])
         mu_x = gx + (grid_i - self.write_n / 2 - 0.5) * delta
         mu_y = gy + (grid_i - self.write_n / 2 - 0.5) * delta
         a = tf.reshape(tf.cast(tf.range(self.width), tf.float32), [1, 1, -1])
@@ -352,7 +421,8 @@ class WriteAttentionLayer(MergeLayer):
         mu_y = tf.reshape(mu_y, [-1, self.write_n, 1])
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
         fx = tf.exp(-tf.square((a - mu_x) / (2 * sigma2)))
-        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))  # batch x N x self.height
+        # batch x N x self.height
+        fy = tf.exp(-tf.square((b - mu_y) / (2 * sigma2)))
         fx /= tf.maximum(tf.reduce_sum(fx, 2, keep_dims=True), 1e-8)
         fy /= tf.maximum(tf.reduce_sum(fy, 2, keep_dims=True), 1e-8)
         fyt = tf.transpose(fy, perm=[0, 2, 1])
@@ -363,7 +433,10 @@ class WriteAttentionLayer(MergeLayer):
 
 class ListLayer(MergeLayer):
     """
-    ListLayer accepts multiple input layers and return a list of them.
+    The :class:`ListLayer` get outputs from multiple input layers and return
+    a list of them.
+
+    :param incomings: A list of :class:`Layer` objects feeding into this layer.
     """
     def __init__(self, incomings, **kwargs):
         super(ListLayer, self).__init__(incomings, **kwargs)
@@ -375,18 +448,11 @@ class ListLayer(MergeLayer):
 
 class ListIndexLayer(Layer):
     """
-    If a layer outputs a list we use this layer to fetch a specific index
-    in the list.
-    In general you should not expect this to work because it violates some
-    of the assumptions Lasagne currently makes.
+    If the parent layer outputs a list, this layer is used to fetch a specific
+    index in the list.
 
-    Parameters
-    ----------
-    incoming : a :class:`Layer` instance or a tuple
-        The layer feeding into this layer, or the expected input shape.
-
-    index : int
-        The list index to be selected.
+    :param incoming: A :class:`Layer` instance.
+    :param index: The index to fetch.
     """
     def __init__(self, incoming, index, **kwargs):
         super(ListIndexLayer, self).__init__(incoming, **kwargs)
@@ -471,24 +537,11 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
         If not, the returned tuple is (samples_of_r, logpdf_at_samples_of_r)
     """
     requested_layers = layer_or_layers
-    if not isinstance(layer_or_layers, list):
+    if not isinstance(layer_or_layers, (tuple, list)):
         requested_layers = [layer_or_layers]
 
-    # # track accepted kwargs used by get_output_for
-    # accepted_kwargs = set()
-    #
-    # def _collect_arg_suggestions(layer):
-    #     ret = set()
-    #     try:
-    #         names, _, _, defaults = getargspec(layer.get_output_for)
-    #     except TypeError:
-    #         # if introspection is not possible, skip it
-    #         pass
-    #     else:
-    #         if defaults is not None:
-    #             ret |= set(names[-len(defaults):])
-    #     ret |= set(layer.get_output_kwargs)
-    #     return ret
+    # track accepted kwargs used by get_output_for
+    accepted_kwargs = {'deterministic'}
 
     # obtain topological ordering of all layers the output layer(s) depend on
     treat_as_input = inputs.keys() if isinstance(inputs, dict) else []
@@ -533,9 +586,10 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
     for layer, v in six.iteritems(all_outputs):
         if (isinstance(layer, InputLayer)) and (v[0] is None):
             raise ValueError("get_output() was called without giving an "
-                             "input expression for the InputLayer %r (name is %r). Please "
-                             "call it with a dictionary mapping this layer to "
-                             "an input expression." % (layer, layer.name))
+                             "input expression for the InputLayer %r (name is "
+                             "%r). Please call it with a dictionary mapping "
+                             "this layer to an input expression." %
+                             (layer, layer.name))
 
     def _get_layer_inputs(layer):
         try:
@@ -559,31 +613,36 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
             all_outputs[layer] = [None, None]
             all_outputs[layer][0] = layer.get_output_for(layer_inputs,
                                                          **kwargs)
-            # accepted_kwargs |= _collect_arg_suggestions(layer)
+            accepted_kwargs |= set(layer.get_output_kwargs)
 
-    # generate logpdfs for requested distribution layers
-    for layer in all_outputs:
-        if hasattr(layer, 'get_logpdf_for') and (layer in requested_layers):
-            layer_inputs = _get_layer_inputs(layer)
-            all_outputs[layer][1] = layer.get_logpdf_for(
-                all_outputs[layer][0], layer_inputs, **kwargs)
+    deterministic = kwargs.get('deterministic', False)
+    if not deterministic:
+        # generate logpdfs for requested distribution layers
+        for layer in all_outputs:
+            if hasattr(layer, 'get_logpdf_for') and (
+                        layer in requested_layers):
+                layer_inputs = _get_layer_inputs(layer)
+                all_outputs[layer][1] = layer.get_logpdf_for(
+                    all_outputs[layer][0], layer_inputs, **kwargs)
+    else:
+        all_outputs = dict((k, v[0]) for k, v in six.iteritems(all_outputs))
 
-    # # show argument suggestions
-    # non_existent_kwargs = set(kwargs.keys()) - accepted_kwargs
-    # if non_existent_kwargs:
-    #     suggestions = []
-    #     for kwarg in non_existent_kwargs:
-    #         suggestion = get_close_matches(kwarg, accepted_kwargs)
-    #         if suggestion:
-    #             suggestions.append('%s (perhaps you meant %s)'
-    #                                % (kwarg, suggestion[0]))
-    #         else:
-    #             suggestions.append(kwarg)
-    #     warn("get_output() was called with unused kwargs:\n\t%s"
-    #          % "\n\t".join(suggestions))
+    # show argument suggestions
+    non_existent_kwargs = set(kwargs.keys()) - accepted_kwargs
+    if non_existent_kwargs:
+        suggestions = []
+        for kwarg in non_existent_kwargs:
+            suggestion = get_close_matches(kwarg, accepted_kwargs)
+            if suggestion:
+                suggestions.append('%s (perhaps you meant %s)'
+                                   % (kwarg, suggestion[0]))
+            else:
+                suggestions.append(kwarg)
+        warn("get_output() was called with unused kwargs:\n\t%s"
+             % "\n\t".join(suggestions), RuntimeWarning)
 
     # return the output(s) of the requested layer(s) only
-    if isinstance(layer_or_layers, list):
+    if isinstance(layer_or_layers, (tuple, list)):
         return [all_outputs[layer] for layer in layer_or_layers]
     else:
         return all_outputs[layer_or_layers]
