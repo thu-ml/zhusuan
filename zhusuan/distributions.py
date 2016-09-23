@@ -12,6 +12,7 @@ from .utils import as_tensor, add_name_scope
 
 __all__ = [
     'norm',
+    'logistic',
     'bernoulli',
     'discrete',
 ]
@@ -48,7 +49,7 @@ class Normal:
                                 tf.stop_gradient(scale))
 
     @add_name_scope
-    def logpdf(self, x, loc=0., scale=1.):
+    def logpdf(self, x, loc=0., scale=1., eps=1e-8):
         """
         Log probability density function of Normal distribution.
 
@@ -58,13 +59,45 @@ class Normal:
         :param scale: A Tensor or numpy array. The standard deviation of
             the Normal.
 
-        :return: A Tensor of the same shape as `x` with function values.
+        :return: A Tensor of the same shape as `x` (after broadcast) with
+            function values.
         """
         x = tf.cast(as_tensor(x), dtype=tf.float32)
         loc = tf.cast(as_tensor(loc), dtype=tf.float32)
         scale = tf.cast(as_tensor(scale), dtype=tf.float32)
         c = -0.5 * np.log(2 * np.pi)
+        scale += eps
         return c - tf.log(scale) - tf.square(x - loc) / (2 * tf.square(scale))
+
+
+class Logistic:
+    """
+    Class of Logistic distribution.
+    """
+    def __init__(self):
+        pass
+
+    @add_name_scope
+    def rvs(self, loc=0., scale=1., size=None):
+        raise NotImplementedError()
+
+    @add_name_scope
+    def cdf(self, x, loc=0., scale=1., eps=1e-8):
+        """
+        Cumulative distribution function of Logistic distribution.
+
+        :param x: A Tensor. The value at which to evaluate the cdf function.
+        :param loc: A Tensor or numpy array. The location of the Logistic
+            distribution.
+        :param scale: A Tensor or numpy array. The scale of the Logistic
+            distribution.
+
+        :return: A Tensor of the same shape as `x` (after broadcast) with
+            function values.
+        """
+        scale += 1e-8
+        x_sd = (x - loc) / scale
+        return tf.nn.sigmoid(x_sd)
 
 
 class Bernoulli:
@@ -102,7 +135,8 @@ class Bernoulli:
             range (eps, 1 - eps). Should be larger than 1e-6. Default to be
             1e-6.
 
-        :return: A Tensor of the same shape as `x` with function values.
+        :return: A Tensor of the same shape as `x` (after broadcast) with
+            function values.
         """
         x = tf.cast(as_tensor(x), dtype=tf.float32)
         p = tf.cast(as_tensor(p), dtype=tf.float32)
@@ -165,5 +199,6 @@ class Discrete:
 
 
 norm = Normal()
+logistic = Logistic()
 bernoulli = Bernoulli()
 discrete = Discrete()

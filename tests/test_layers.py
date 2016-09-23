@@ -272,6 +272,28 @@ class TestPrettyTensor:
                 tf.float32, shape=(None, 100))]), tf.Tensor))
 
 
+class TestListLayer:
+    def test_init(self):
+        _ = ListLayer([Mock(), Mock()])
+
+    def test_get_output_for(self):
+        a, b = Mock(), Mock()
+        layer = ListLayer([Mock()])
+        assert([a, b] == layer.get_output_for([a, b]))
+
+
+class TestListIndexLayer:
+    def test_init(self):
+        index = Mock()
+        layer = ListIndexLayer(Mock(), index)
+        assert(layer.index == index)
+
+    def test_get_output_for(self):
+        layer = ListIndexLayer([Mock()], 1)
+        a, b = Mock(), Mock()
+        assert(layer.get_output_for([a, b]) == b)
+
+
 def test_get_all_layers():
     in1 = InputLayer((None, 500), name='in1')
     l1 = Layer(in1, name='l1')

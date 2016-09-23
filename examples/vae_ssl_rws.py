@@ -200,7 +200,6 @@ if __name__ == "__main__":
     batch_size = 100
     test_batch_size = 100
     iters = x_unlabeled.shape[0] // batch_size
-    # iters = x_train.shape[0] // (2 * batch_size)
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
     learning_rate = 0.0003
@@ -231,6 +230,7 @@ if __name__ == "__main__":
     labeled_cost, labeled_log_likelihood = rws(
         m2_labeled, labeled_observed, labeled_latent, reduction_indices=1)
     labeled_cost = tf.reduce_mean(labeled_cost)
+    labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x))
@@ -246,6 +246,7 @@ if __name__ == "__main__":
         m2_unlabeled, unlabeled_observed, unlabeled_latent,
         reduction_indices=1)
     unlabeled_cost = tf.reduce_mean(unlabeled_cost)
+    unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
 
     # Build classifier
     y = qy_x.construct(x=x_labeled_ph).tensor
