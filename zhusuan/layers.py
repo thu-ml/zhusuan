@@ -12,7 +12,6 @@ import tensorflow as tf
 import prettytensor as pt
 import six
 from six.moves import map
-import pdb
 
 from .distributions import norm, discrete
 from .utils import as_tensor, add_name_scope, ensure_dim_match
@@ -216,14 +215,17 @@ class ReparameterizedNormal(MergeLayer):
 
         samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
             mean_
+        #samples_n = norm.rvs(
+        #    shape=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
+        #) * tf.exp(0.5 * logvar) + mean_
         samples_n = norm.rvs(
-            shape=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
-        ) * tf.exp(0.5 * logvar) + mean_
+             shape = [tf.shape(mean_)[0], self.n_samples] + mean_.get_shape().as_list()[2:]
+             ) * tf.exp(0.5 * logvar) + mean_
         if isinstance(self.n_samples, int):
             if self.n_samples == 1:
                 return samples_1
             else:
-                samples_n.set_shape([None, self.n_samples, None])
+                #samples_n.set_shape([None, self.n_samples, None])
                 return samples_n
         else:
             return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
@@ -233,7 +235,7 @@ class ReparameterizedNormal(MergeLayer):
     def get_logpdf_for(self, output, inputs, **kwargs):
         mean_, logvar = inputs
         return tf.reduce_sum(
-            norm.logpdf(output, mean_, tf.exp(0.5 * logvar)), 2)
+            norm.logpdf(output, mean_, tf.exp(0.5 * logvar)), range(2, len(mean_.get_shape().as_list())))
 
 
 class Discrete(Layer):
@@ -344,59 +346,6 @@ class PrettyTensor(MergeLayer):
             else:
                 return output.tensor
 
-class BayesianNNLayer(Layer):
-    """
-    The :class BayesianNNLayer denotes a fully connected layer with probabilistic parameters
-
-    :incoming: A :class 'Layer' instance.
-    :n: int, Number of neurons in this layer
-    :sample_num: number of sampling for parameter
-    :activation_fn: activation_function of neuron in this layer
-    """
-    def __init__(self, incoming, n, sample_num = 5, activation_fn = None, 
-                 dropout_rate = 0.5, **kwargs):
-        if not isinstance(incoming, Layer):
-            raise TypeError('incoming to the BayesianNNLayer should be a Layer instance')
-        super(BayesianNNLayer, self).__init__(incoming)
-        if isinstance(incoming, InputLayer):
-            self.shape = [n, incoming.shape[1] + 1]
-        else:
-            self.shape = [n, incoming.shape[0] + 1]
-        self.loc = tf.Variable(tf.zeros(self.shape), trainable = True, name = 'loc')
-        self.log_scale = tf.Variable(tf.zeros(self.shape), trainable = True, name = 'log_scale')
-
-        self.sample_num = sample_num
-        self.activation_fn = activation_fn
-        self.dropout_rate = dropout_rate
-
-    @add_name_scope
-    def get_output_for(self, input, **kwargs):
-        """
-        get layer output given input
-
-        :param input: if input is not from InputLayer, then it should be a matrix
-        with shape (batch_size, sample_num, n_int)
-
-        :return: matrix with shape (batch_size, sample_num, n_out)
-        """
-        #repeat the input to given format
-        if isinstance(self.input_layer, InputLayer):
-            batch_size = tf.shape(input)[0]
-            input1 = tf.reshape(input, [batch_size, 1, tf.size(input[0,:]), 1])
-            input = tf.tile(input1, [1, self.sample_num, 1, 1])
-        input = tf.concat(2, [input, tf.ones((tf.shape(input)[0], self.sample_num, 1, 1))])
-   
-        w = norm.rvs(shape = [self.sample_num] + self.shape)
-        W = w * tf.exp(self.log_scale) + self.loc
-        W = W / tf.sqrt(tf.cast(self.shape[1], dtype=tf.float32))#normalizing
-
-        W1 = tf.expand_dims(W, 0)
-        W2 = tf.tile(W1, [tf.shape(input)[0],1,1,1])
-       
-        z = tf.batch_matmul(W2, input)
-        output = z if self.activation_fn is None else self.activation_fn(z)
-        #output1 = output if 'test' in kwargs and kwargs['test'] == 1 else tf.nn.dropout(output, self.dropout_rate)
-        return output
 
 class ReadAttentionLayer(MergeLayer):
     """
