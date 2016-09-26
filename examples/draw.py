@@ -12,6 +12,7 @@ import tensorflow as tf
 import prettytensor as pt
 from six.moves import range, map
 import numpy as np
+from scipy.misc import imsave
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
@@ -167,6 +168,11 @@ if __name__ == "__main__":
                                  reduction_indices=1, given={'c': c_t}))
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
+    # samples = get_output(c_t, inputs={lx: x})
+    # samples_gen = get_output(c_t, inputs=dict(
+    #     (lz_list[i], tf.random_normal((batch_size, lb_samples, n_z),
+    #                                   mean=0, stddev=1))
+    #     for i in range(len(lz_list))))
 
     params = tf.trainable_variables()
     for i in params:
@@ -192,6 +198,18 @@ if __name__ == "__main__":
                                             learning_rate_ph: learning_rate,
                                             n_samples: lb_samples})
                 lbs.append(lb)
+                # if t == 1:
+                #     imgs = sess.run(tf.sigmoid(samples[0]),
+                #                     feed_dict={x: x_batch,
+                #                                n_samples: lb_samples})
+                #     imgs = imgs.reshape((10, 10, 28, 28)).transpose(
+                #         1, 2, 0, 3).reshape((10 * 28, 10 * 28))
+                #     imsave('reconst_%d.png' % epoch, imgs)
+                #     imgs = sess.run(tf.sigmoid(samples_gen[0]),
+                #                     feed_dict={n_samples: lb_samples})
+                #     imgs = imgs.reshape((10, 10, 28, 28)). \
+                #         transpose(1, 2, 0, 3).reshape((10 * 28, 10 * 28))
+                #     imsave('samples_%d.png' % epoch, imgs)
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
                 epoch, time_epoch, np.mean(lbs)))

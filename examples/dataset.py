@@ -6,6 +6,7 @@ from __future__ import division
 from __future__ import print_function
 import os
 import gzip
+import tarfile
 
 import numpy as np
 from six.moves import urllib, range
@@ -33,7 +34,8 @@ def load_mnist_realval(path, one_hot=True):
     """
     Loads the real valued MNIST dataset.
 
-    :param path: path to dataset file.
+    :param path: Path to dataset file.
+    :param one_hot: Use one-hot representation for the labels.
     :return: The MNIST dataset.
     """
     if not os.path.isfile(path):
@@ -79,6 +81,9 @@ def load_mnist_semi_supervised(path, one_hot=True, seed=123456):
     as unlabeled.
 
     :param path: path to dataset file.
+    :param one_hot: Use one-hot representation for the labels.
+    :param seed: Random seed for selecting labeled data.
+
     :return: The MNIST dataset for semi-supervised learning.
     """
     rng = np.random.RandomState(seed=seed)
@@ -103,8 +108,105 @@ def load_mnist_semi_supervised(path, one_hot=True, seed=123456):
     t_labeled = np.hstack(t_labeled)
     x_unlabeled = x_train
     np.random.shuffle(x_unlabeled)
-    return x_labeled, to_one_hot(t_labeled, 10), x_unlabeled, x_test, \
-        to_one_hot(t_test, 10)
+    t_transform = (lambda x: to_one_hot(x, 10)) if one_hot else (lambda x: x)
+    return x_labeled, t_transform(t_labeled), x_unlabeled, x_test, \
+        t_transform(t_test)
+
+
+def load_cifar10(path, normalize=True, dequantify=False, one_hot=True):
+    """
+    Loads the cifar10 dataset.
+
+    :param path: path to dataset file.
+    :param normalize: normalize the x data to the range [0, 1].
+    :param dequantify: Add uniform noise to dequantify the data following (
+        Uria, 2013).
+    :param one_hot: Use one-hot representation for the labels.
+
+    :return: The cifar10 dataset.
+    """
+    if not os.path.isfile(path):
+        data_dir = os.path.dirname(path)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(data_dir)
+        download_dataset(
+            'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz', path)
+
+    data_dir = os.path.dirname(path)
+    batch_dir = os.path.join(data_dir, 'cifar-10-batches-py')
+    if not os.path.isfile(os.path.join(batch_dir, 'data_batch_5')):
+        with tarfile.open(path) as tar:
+            tar.extractall(data_dir)
+
+    train_x, train_y = [], []
+    for i in range(1, 6):
+        batch_file = os.path.join(batch_dir, 'data_batch_' + str(i))
+        with open(batch_file, 'r') as f:
+            data = pickle.load(f)
+            train_x.append(data['data'])
+            train_y.append(data['labels'])
+    train_x = np.vstack(train_x)
+    train_y = np.hstack(train_y)
+
+    test_batch_file = os.path.join(batch_dir, 'test_batch')
+    with open(test_batch_file, 'r') as f:
+        data = pickle.load(f)
+        test_x = data['data']
+        test_y = np.asarray(data['labels'])
+
+    train_x = train_x.astype('float32')
+    test_x = test_x.astype('float32')
+    print(train_x.min(), train_x.max())
+    print(test_x.min(), test_x.max())
+    if dequantify:
+        train_x += np.random.uniform(0, 1,
+                                     size=train_x.shape).astype('float32')
+        test_x += np.random.uniform(0, 1, size=test_x.shape).astype('float32')
+    if normalize:
+        train_x = train_x / 256
+        test_x = test_x / 256
+
+    train_x = train_x.reshape((50000, 3, 32, 32)).transpose(0, 2, 3, 1)
+    test_x = test_x.reshape((10000, 3, 32, 32)).transpose(0, 2, 3, 1)
+    t_transform = (lambda x: to_one_hot(x, 10)) if one_hot else (lambda x: x)
+    return train_x, t_transform(train_y), test_x, t_transform(test_y)
+
+
+def load_cifar10_semi_supervised(path, normalize=True, dequantify=False,
+                                 one_hot=True, seed=123456):
+    """
+    Select 400 labeled data for each class and use all the other training data
+    as unlabeled.
+
+    :param path: path to dataset file.
+    :param one_hot: Use one-hot representation for the labels.
+    :param seed: Random seed for selecting labeled data.
+
+    :return: The cifar10 dataset for semi-supervised learning.
+    """
+    rng = np.random.RandomState(seed=seed)
+    x_train, t_train, x_test, t_test = load_cifar10(
+        path, normalize=normalize, dequantify=dequantify, one_hot=False)
+    x_train_by_class = []
+    t_train_by_class = []
+    for i in range(10):
+        indices = np.nonzero(t_train == i)[0]
+        x_train_by_class.append(x_train[indices])
+        t_train_by_class.append(t_train[indices])
+    x_labeled = []
+    t_labeled = []
+    for i in range(10):
+        indices = np.arange(x_train_by_class[i].shape[0])
+        rng.shuffle(indices)
+        x_labeled.append(x_train_by_class[i][indices[:400]])
+        t_labeled.append(t_train_by_class[i][indices[:400]])
+    x_labeled = np.vstack(x_labeled)
+    t_labeled = np.hstack(t_labeled)
+    x_unlabeled = x_train
+    np.random.shuffle(x_unlabeled)
+    t_transform = (lambda x: to_one_hot(x, 10)) if one_hot else (lambda x: x)
+    return x_labeled, t_transform(t_labeled), x_unlabeled, x_test, \
+        t_transform(t_test)
 
 
 def load_german_credits(path, n_train):
