@@ -108,7 +108,7 @@ def q_net(n_x, n_y, n_z, n_samples):
         lz_logvar = PrettyTensor({'z': lz_xy}, pt.template('z').
                                  fully_connected(n_z, activation_fn=None).
                                  reshape((-1, 1, n_z)))
-        lz = ReparameterizedNormal([lz_mean, lz_logvar], n_samples=n_samples)
+        lz = Normal([lz_mean, lz_logvar], n_samples=n_samples)
     return lx, ly, lz
 
 
