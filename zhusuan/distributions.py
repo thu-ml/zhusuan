@@ -66,7 +66,6 @@ class Normal:
         loc = tf.cast(as_tensor(loc), dtype=tf.float32)
         scale = tf.cast(as_tensor(scale), dtype=tf.float32)
         c = -0.5 * np.log(2 * np.pi)
-        scale += eps
         return c - tf.log(scale) - tf.square(x - loc) / (2 * tf.square(scale))
 
 
