@@ -187,8 +187,8 @@ if __name__ == '__main__':
     w1_logvar = InputLayer((1, 1, 50, x_train.shape[1] + 1), input=w1_logvar)
     w2_mu = InputLayer((1, 1, 1, 50 + 1), input=w2_mu)
     w2_logvar = InputLayer((1, 1, 1, 50 + 1), input=w2_logvar)
-    w1 = ReparameterizedNormal([w1_mu, w1_logvar], n_samples)
-    w2 = ReparameterizedNormal([w2_mu, w2_logvar], n_samples)
+    w1 = Normal([w1_mu, w1_logvar], n_samples)
+    w2 = Normal([w2_mu, w2_logvar], n_samples)
     latent = {'w1': get_output(w1), 'w2': get_output(w2)}
 
     lower_bound = tf.reduce_mean(advi(model,

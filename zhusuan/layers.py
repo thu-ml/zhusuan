@@ -176,28 +176,27 @@ class ReparameterizedNormalOld(MergeLayer):
         return tf.reduce_sum(norm.logpdf(output, mean_, tf.exp(logstd)), 2)
 
 
-class ReparameterizedNormal(MergeLayer):
+class Normal(MergeLayer):
     """
-    The :class:`ReparameterizedNormal` class represents a Normal distribution
+    The :class:`Normal` class represents a Normal distribution
     layer that accepts the mean and the log standard deviation as inputs, which
     is used in Automatic Differentiation Variational Inference (ADVI).
-
-    Note that gradients on samples from this Normal distribution are allowed
-    to propagate into inputs in this function, using the reparametrization
-    trick from (Kingma, 2013), which is contrary to the behavior in
-    :meth:`zhusuan.distributions`.
 
     :param incomings: A list of 2 :class:`Layer` instances. The first
         representing the mean, and the second representing the log variance.
         Must be of shape 3-D like (batch_size, n_samples, n_dims).
+    :param reparameterized: Bool. If True, gradients on samples from this
+        Normal distribution are allowed to propagate into inputs in this
+        function, using the reparametrization trick from (Kingma, 2013).
     :param n_samples: Int or a scalar Tensor of type int. Number of samples
         drawn for distribution layers. Default to be 1.
     :param name: A string or None. An optional name to attach to this layer.
     """
-    def __init__(self, incomings, n_samples=1, name=None):
-        super(ReparameterizedNormal, self).__init__(incomings, name)
+    def __init__(self, incomings, n_samples=1, reparameterized=True,
+                 name=None):
+        super(Normal, self).__init__(incomings, name)
         if len(incomings) != 2:
-            raise ValueError("ReparameterizedNormal layer only accepts input "
+            raise ValueError("Normal layer only accepts input "
                              "layers of length 2 (the mean and the log "
                              "standard deviation).")
         if isinstance(n_samples, int):
@@ -205,6 +204,7 @@ class ReparameterizedNormal(MergeLayer):
         else:
             with tf.control_dependencies([tf.assert_rank(n_samples, 0)]):
                 self.n_samples = tf.cast(n_samples, tf.int32)
+        self.reparameterized = reparameterized
 
     @add_name_scope
     def get_output_for(self, inputs, deterministic=False, **kwargs):
@@ -219,16 +219,23 @@ class ReparameterizedNormal(MergeLayer):
                             [tf.pack([tf.shape(mean_)[0], self.n_samples]),
                                 tf.shape(mean_)[2:]])
             ) * tf.exp(0.5 * logvar) + mean_
-        if isinstance(self.n_samples, int):
-            if self.n_samples == 1:
-                return samples_1
+
+        def _output():
+            if isinstance(self.n_samples, int):
+                if self.n_samples == 1:
+                    return samples_1
+                else:
+                    samples_n.set_shape([None, self.n_samples]
+                                        + [None] * len(mean_.get_shape()[2:]))
+                    return samples_n
             else:
-                samples_n.set_shape([None, self.n_samples]
-                                    + [None] * len(mean_.get_shape()[2:]))
-                return samples_n
+                return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
+                               lambda: samples_n)
+
+        if self.reparameterized:
+            return _output()
         else:
-            return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
-                           lambda: samples_n)
+            return tf.stop_gradient(_output())
 
     @add_name_scope
     def get_logpdf_for(self, output, inputs, **kwargs):

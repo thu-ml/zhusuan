@@ -93,10 +93,10 @@ if __name__ == "__main__":
     z_logvar = tf.Variable(np.array([[[-10, -10]]], dtype='float32'))
     lz_mean = InputLayer((None, 1, 2), input=z_mean)
     lz_logvar = InputLayer((None, 1, 2), input=z_logvar)
-    lz = ReparameterizedNormal([lz_mean, lz_logvar], n_samples)
+    lz = Normal([lz_mean, lz_logvar], n_samples)
     z_outputs = get_output(lz)
     latent = {'z': z_outputs}
-    lower_bound = advi(model, {}, latent, reduction_indices=1)
+    lower_bound = tf.reduce_mean(advi(model, {}, latent, reduction_indices=1))
     infer = optimizer.minimize(-lower_bound)
     init = tf.initialize_all_variables()
 

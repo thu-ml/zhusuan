@@ -120,19 +120,19 @@ class TestReparameterizedNormalOld:
             assert(test_values.shape == (2, 10))
 
 
-class TestReparameterizedNormal:
+class TestNormal:
     def test_init(self):
         with pytest.raises(TypeError):
-            ReparameterizedNormal(Mock())
+            Normal(Mock())
         with pytest.raises(ValueError):
-            ReparameterizedNormal([Mock(), ])
+            Normal([Mock(), ])
         with pytest.raises(ValueError):
-            ReparameterizedNormal([Mock() for _ in range(3)])
+            Normal([Mock() for _ in range(3)])
 
     def test_get_output_for(self):
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20))
-        layer = ReparameterizedNormal([Mock(), Mock()], n_samples=10)
+        layer = Normal([Mock(), Mock()], n_samples=10)
         output = layer.get_output_for([mean_, logvar])
         assert(output.get_shape().as_list() == [None, 10, 20])
         with tf.Session() as sess:
@@ -145,7 +145,7 @@ class TestReparameterizedNormal:
 
         mean_ = tf.placeholder(tf.float32, shape=(None, 5, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 5, 20))
-        layer = ReparameterizedNormal([Mock(), Mock()])
+        layer = Normal([Mock(), Mock()])
         output = layer.get_output_for([mean_, logvar])
         assert(output.get_shape().as_list() == [None, 5, 20])
         with tf.Session() as sess:
@@ -156,7 +156,7 @@ class TestReparameterizedNormal:
 
         mean_ = tf.placeholder(tf.float32, shape=(None, 5, 20, 15))
         logvar = tf.placeholder(tf.float32, shape=(None, 5, 20, 15))
-        layer = ReparameterizedNormal([Mock(), Mock()])
+        layer = Normal([Mock(), Mock()])
         output = layer.get_output_for([mean_, logvar])
         assert(output.get_shape().as_list() == [None, 5, 20, 15])
         with tf.Session() as sess:
@@ -169,7 +169,7 @@ class TestReparameterizedNormal:
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20))
         n_samples = tf.placeholder(tf.float32, shape=())
-        layer = ReparameterizedNormal([Mock(), Mock()], n_samples)
+        layer = Normal([Mock(), Mock()], n_samples)
         output = layer.get_output_for([mean_, logvar])
         assert(output.get_shape().as_list() == [None, None, 20])
         with tf.Session() as sess:
@@ -182,7 +182,7 @@ class TestReparameterizedNormal:
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
         n_samples = tf.placeholder(tf.float32, shape=())
-        layer = ReparameterizedNormal([Mock(), Mock()], n_samples)
+        layer = Normal([Mock(), Mock()], n_samples)
         output = layer.get_output_for([mean_, logvar])
         assert(output.get_shape().as_list() == [None, None, 20, 15])
         with tf.Session() as sess:
@@ -192,11 +192,26 @@ class TestReparameterizedNormal:
                                    n_samples: 10})
             assert(test_values.shape == (2, 10, 20, 15))
 
+    def test_get_output_for_reparameterized(self):
+        mean_ = tf.placeholder(tf.float32, shape=(None, 1, 2))
+        logvar = tf.placeholder(tf.float32, shape=(None, 1, 2))
+        layer = Normal([Mock(), Mock()], reparameterized=False)
+        output = layer.get_output_for([mean_, logvar])
+        mean_grads, logvar_grads = tf.gradients(output, [mean_, logvar])
+        assert(mean_grads is None)
+        assert(logvar_grads is None)
+
+        layer2 = Normal([Mock(), Mock()], reparameterized=True)
+        output = layer2.get_output_for([mean_, logvar])
+        mean_grads, logvar_grads = tf.gradients(output, [mean_, logvar])
+        assert(mean_grads is not None)
+        assert(logvar_grads is not None)
+
     def test_get_logpdf_for(self):
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20))
         x = tf.placeholder(tf.float32, shape=(None, 10, 20))
-        layer = ReparameterizedNormal([Mock(), Mock()], n_samples=10)
+        layer = Normal([Mock(), Mock()], n_samples=10)
         logpdf = layer.get_logpdf_for(x, [mean_, logvar])
         assert(logpdf.get_shape().as_list() == [None, 10])
         with tf.Session() as sess:
@@ -210,7 +225,7 @@ class TestReparameterizedNormal:
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
         x = tf.placeholder(tf.float32, shape=(None, 10, 20, 15))
-        layer = ReparameterizedNormal([Mock(), Mock()], n_samples=10)
+        layer = Normal([Mock(), Mock()], n_samples=10)
         logpdf = layer.get_logpdf_for(x, [mean_, logvar])
         assert(logpdf.get_shape().as_list() == [None, 10])
         with tf.Session() as sess:
@@ -373,7 +388,7 @@ def _build_test_net(n_samples):
                              pt.template('l1').fully_connected(5).
                              reshape((-1, 1, 5)),
                              name='l1_logvar')
-    l2 = ReparameterizedNormal([l1_mean, l1_logvar], n_samples, name='l2')
+    l2 = Normal([l1_mean, l1_logvar], n_samples, name='l2')
     l3 = PrettyTensor({'l2': l2},
                       pt.template('l2').reshape((-1, 5)).
                       fully_connected(10).
@@ -383,7 +398,7 @@ def _build_test_net(n_samples):
                       pt.template('l_in').fully_connected(10).
                       reshape((-1, 1, 10)),
                       name='l4')
-    l5 = ReparameterizedNormal([l3, l4], name='l5')
+    l5 = Normal([l3, l4], name='l5')
     output_layers = [l1, l1_mean, l1_logvar, l2, l3, l4, l5]
 
     return output_layers
@@ -458,7 +473,7 @@ def test_get_output_single_output():
 def test_get_output_raise():
     mean = InputLayer((None, 1, 5))
     logvar = InputLayer((None, 1, 5))
-    layer = ReparameterizedNormal([mean, logvar], 3)
+    layer = Normal([mean, logvar], 3)
     mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
     with pytest.raises(ValueError) as e:
         get_output(layer, {mean: mean_feed})
@@ -472,7 +487,7 @@ def test_get_output_raise():
                               "layers. Please call it with a dictionary of "
                               "input expressions instead.")
 
-    layer = ReparameterizedNormal([mean, None], 3)
+    layer = Normal([mean, None], 3)
     with pytest.raises(ValueError) as e:
         get_output(layer, mean_feed)
     assert(e.value.message.find("get_output() was called with free-floating "
@@ -491,7 +506,7 @@ def test_get_output_deterministic():
     mean = InputLayer((None, 1, 5))
     logvar = InputLayer((None, 1, 5),
                         tf.placeholder(tf.float32, (None, 1, 5)))
-    layer = ReparameterizedNormal([mean, logvar])
+    layer = Normal([mean, logvar])
     mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
     output = get_output(layer, {mean: mean_feed}, deterministic=True)
     assert(output == mean_feed)
@@ -501,7 +516,7 @@ def test_get_output_nonexist_args():
     mean = InputLayer((None, 1, 5))
     logvar = InputLayer((None, 1, 5),
                         tf.placeholder(tf.float32, (None, 1, 5)))
-    layer = ReparameterizedNormal([mean, logvar])
+    layer = Normal([mean, logvar])
     mean_feed = tf.placeholder(tf.float32, shape=(None, 1, 5))
     with pytest.warns(RuntimeWarning) as e:
         get_output(layer, {mean: mean_feed}, determinstic=True)
