@@ -154,6 +154,17 @@ class TestReparameterizedNormal:
                                    logvar: np.random.random((2, 5, 20))})
             assert(test_values.shape == (2, 5, 20))
 
+        mean_ = tf.placeholder(tf.float32, shape=(None, 5, 20, 15))
+        logvar = tf.placeholder(tf.float32, shape=(None, 5, 20, 15))
+        layer = ReparameterizedNormal([Mock(), Mock()])
+        output = layer.get_output_for([mean_, logvar])
+        assert(output.get_shape().as_list() == [None, 5, 20, 15])
+        with tf.Session() as sess:
+            test_values = sess.run(
+                output, feed_dict={mean_: np.random.random((2, 5, 20, 15)),
+                                   logvar: np.random.random((2, 5, 20, 15))})
+            assert(test_values.shape == (2, 5, 20, 15))
+
     def test_get_output_for_n_samples_dynamic(self):
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20))
@@ -168,6 +179,19 @@ class TestReparameterizedNormal:
                                    n_samples: 10})
             assert(test_values.shape == (2, 10, 20))
 
+        mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
+        logvar = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
+        n_samples = tf.placeholder(tf.float32, shape=())
+        layer = ReparameterizedNormal([Mock(), Mock()], n_samples)
+        output = layer.get_output_for([mean_, logvar])
+        assert(output.get_shape().as_list() == [None, None, 20, 15])
+        with tf.Session() as sess:
+            test_values = sess.run(
+                output, feed_dict={mean_: np.random.random((2, 1, 20, 15)),
+                                   logvar: np.random.random((2, 1, 20, 15)),
+                                   n_samples: 10})
+            assert(test_values.shape == (2, 10, 20, 15))
+
     def test_get_logpdf_for(self):
         mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20))
         logvar = tf.placeholder(tf.float32, shape=(None, 1, 20))
@@ -180,6 +204,20 @@ class TestReparameterizedNormal:
                 logpdf, feed_dict={mean_: np.random.random((2, 1, 20)),
                                    logvar: np.random.random((2, 1, 20)),
                                    x: np.random.random((2, 10, 20)) * 2})
+            # TODO: test values
+            assert(test_values.shape == (2, 10))
+
+        mean_ = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
+        logvar = tf.placeholder(tf.float32, shape=(None, 1, 20, 15))
+        x = tf.placeholder(tf.float32, shape=(None, 10, 20, 15))
+        layer = ReparameterizedNormal([Mock(), Mock()], n_samples=10)
+        logpdf = layer.get_logpdf_for(x, [mean_, logvar])
+        assert(logpdf.get_shape().as_list() == [None, 10])
+        with tf.Session() as sess:
+            test_values = sess.run(
+                logpdf, feed_dict={mean_: np.random.random((2, 1, 20, 15)),
+                                   logvar: np.random.random((2, 1, 20, 15)),
+                                   x: np.random.random((2, 10, 20, 15)) * 2})
             # TODO: test values
             assert(test_values.shape == (2, 10))
 

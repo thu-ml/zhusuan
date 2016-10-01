@@ -12,7 +12,7 @@ import tensorflow as tf
 import prettytensor as pt
 from six.moves import range
 import numpy as np
-from dataset import standardize
+from dataset import standardize, download_dataset
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
@@ -93,18 +93,28 @@ class Model():
             tf.sqrt(tf.cast(tf.shape(l)[2], tf.float32))
         return y
 
-    def rmse(self, latent, observed, std_y_train=1):
+    def rmse_ll(self, latent, observed, std_y_train=1):
         """
         calculate the rmse.
         """
         network_output = self.get_output_for(latent, observed['x'])
-        network_output = tf.squeeze(network_output, [3])
-        network_output = tf.reduce_mean(network_output, 1)
+        network_output = tf.squeeze(network_output, [2, 3])
+        network_output_mean = tf.reduce_mean(network_output, 1)
 
-        rmse = tf.sqrt(
-            tf.reduce_mean((network_output
-                            - observed['y'])**2)) * std_y_train
-        return rmse
+        y = observed['y']
+        y = tf.squeeze(y, [1])
+
+        rmse = tf.sqrt(tf.reduce_mean((network_output_mean - y)**2))\
+            * std_y_train
+
+        mean = tf.tile(tf.expand_dims(network_output_mean, 1),
+                       [1, tf.shape(network_output)[1]])
+        variance = tf.reduce_mean((network_output - mean)**2, 1)
+        variance = variance + self.scale
+        ll = tf.reduce_mean(-0.5 *
+                            tf.log(2 * np.pi * variance * std_y_train**2) -
+                            0.5 * (y - network_output_mean)**2 / variance)
+        return rmse, ll
 
 
 def get_data(name):
@@ -130,8 +140,11 @@ if __name__ == '__main__':
     tf.set_random_seed(1237)
     np.random.seed(1234)
 
-    x_train, y_train, x_valid, y_valid, x_test, y_test \
-        = get_data('data/2concrete.txt')
+    url = 'http://archive.ics.uci.edu/ml/' + \
+        'machine-learning-databases/housing/housing.data'
+    path = 'data/housing.txt'
+    download_dataset(url, path)
+    x_train, y_train, x_valid, y_valid, x_test, y_test = get_data(path)
     x_train = np.vstack([x_train, x_valid]).astype('float32')
     y_train = np.hstack((y_train, y_valid)).astype('float32')
     y_train = y_train.reshape((len(y_train), 1))
@@ -185,7 +198,7 @@ if __name__ == '__main__':
     #infer = optimizer.minimize(-lower_bound)
 
     latent_outputs = {'w1': latent['w1'][0], 'w2': latent['w2'][0]}
-    rmse = model.rmse(latent_outputs, observed, std_y_train)
+    rmse, ll = model.rmse_ll(latent_outputs, observed, std_y_train)
     output = tf.reduce_mean(
         model.get_output_for(latent_outputs, observed_x), 1)
 
@@ -221,8 +234,8 @@ if __name__ == '__main__':
             if epoch % test_freq == 0:
                 time_test = -time.time()
 
-                test_lb, test_rmse = sess.run(
-                    [lower_bound, rmse],
+                test_lb, test_rmse, test_ll = sess.run(
+                    [lower_bound, rmse, ll],
                     feed_dict={n_samples: ll_samples,
                                observed_x: x_test, observed_y: y_test})
                 time_test += time.time()
@@ -233,5 +246,7 @@ if __name__ == '__main__':
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(test_lb))
                 print('>> Test rmse = {}'.format(test_rmse))
+                print('>> Test log_likelihood = {}'.format(test_ll))
                 print(out1.reshape((1, 6)))
                 print(y_test[0:10].transpose())
+                #print(tf.trainable_variables()[0].value().eval())
