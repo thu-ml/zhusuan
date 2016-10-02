@@ -13,6 +13,30 @@ from six.moves import urllib, range
 from six.moves import cPickle as pickle
 
 
+def standardize(data_train, data_test):
+    """
+    Standardize a dataset to have zero mean and unit standard deviation.
+
+    :param data_train: 2-D Numpy array. Training data.
+    :param data_test: 2-D Numpy array. Test data.
+
+    :return: (train_set, test_set, mean, std), The standardized dataset and
+        their mean and standard deviation before processing.
+    """
+    std = np.std(data_train, 0)
+    std[std == 0] = 1
+    mean = np.mean(data_train, 0)
+    data_train_standardized \
+        = (data_train -
+           np.full(data_train.shape, mean, dtype='float32')) / \
+        np.full(data_train.shape, std, dtype='float32')
+    data_test_standardized \
+        = (data_test -
+           np.full(data_test.shape, mean, dtype='float32')) / \
+        np.full(data_test.shape, std, dtype='float32')
+    return data_train_standardized, data_test_standardized, mean, std
+
+
 def to_one_hot(x, depth):
     """
     Get one-hot representation of a 1-D numpy array of integers.
@@ -209,7 +233,7 @@ def load_cifar10_semi_supervised(path, normalize=True, dequantify=False,
         t_transform(t_test)
 
 
-def load_german_credits(path, n_train):
+def load_uci_german_credits(path, n_train):
     if not os.path.isfile(path):
         data_dir = os.path.dirname(path)
         if not os.path.exists(os.path.dirname(path)):
@@ -230,16 +254,26 @@ def load_german_credits(path, n_train):
     return X_train, y_train, X_test, y_test
 
 
-def standardize(data_train, data_test):
-    std = np.std(data_train, 0)
-    std[std == 0] = 1
-    mean = np.mean(data_train, 0)
-    data_train_standardized \
-        = (data_train -
-           np.full(data_train.shape, mean, dtype='float32')) / \
-        np.full(data_train.shape, std, dtype='float32')
-    data_test_standardized \
-        = (data_test -
-           np.full(data_test.shape, mean, dtype='float32')) / \
-        np.full(data_test.shape, std, dtype='float32')
-    return data_train_standardized, data_test_standardized, mean, std
+def load_uci_boston_housing(path):
+    if not os.path.isfile(path):
+        data_dir = os.path.dirname(path)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(data_dir)
+        download_dataset('http://archive.ics.uci.edu/ml/'
+                         'machine-learning-databases/housing/housing.data',
+                         path)
+
+    data = np.loadtxt(path)
+    permutation = np.random.choice(np.arange(data.shape[0]),
+                                   data.shape[0], replace=False)
+    size_train = int(np.round(data.shape[0] * 0.8))
+    size_test = int(np.round(data.shape[0] * 0.9))
+    index_train = permutation[0: size_train]
+    index_test = permutation[size_train:size_test]
+    index_val = permutation[size_test:]
+
+    X_train, y_train = data[index_train, :-1], data[index_train, -1]
+    X_val, y_val = data[index_val, :-1], data[index_val, -1]
+    X_test, y_test = data[index_test, :-1], data[index_test, -1]
+
+    return X_train, y_train, X_val, y_val, X_test, y_test
