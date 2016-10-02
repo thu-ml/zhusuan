@@ -12,7 +12,7 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
   * Automatic Differentiation Variational Inference (__ADVI__)
   * Importance weighted objectives (__IWAE__)
 
-### Particle Belief Propagation
+### Importance Sampling
 * Reweighted Wake-sleep (__RWS__): With user specified adaptive proposal.
 
 ### Markov Chain Monte Carlo (MCMC)
