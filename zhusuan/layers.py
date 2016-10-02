@@ -109,8 +109,8 @@ class InputLayer(Layer):
                              "are allowed." % self.__class__.__name__)
         elif any(d is not None and d <= 0 for d in shape):
             raise ValueError((
-                 "Cannot create InputLayer with a non-positive shape "
-                 "dimension. shape=%r, self.name=%r") % (shape, self.name))
+                "Cannot create InputLayer with a non-positive shape "
+                "dimension. shape=%r, self.name=%r") % (shape, self.name))
         if input is not None:
             input = as_tensor(input)
             if len(input.get_shape()) != len(shape):
@@ -215,15 +215,18 @@ class Normal(MergeLayer):
         samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
             mean_
         samples_n = norm.rvs(
-            shape=(tf.shape(mean_)[0], self.n_samples, tf.shape(mean_)[2])
-        ) * tf.exp(0.5 * logvar) + mean_
+            shape=tf.concat(0,
+                            [tf.pack([tf.shape(mean_)[0], self.n_samples]),
+                                tf.shape(mean_)[2:]])
+            ) * tf.exp(0.5 * logvar) + mean_
 
         def _output():
             if isinstance(self.n_samples, int):
                 if self.n_samples == 1:
                     return samples_1
                 else:
-                    samples_n.set_shape([None, self.n_samples, None])
+                    samples_n.set_shape([None, self.n_samples]
+                                        + [None] * len(mean_.get_shape()[2:]))
                     return samples_n
             else:
                 return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
@@ -238,7 +241,8 @@ class Normal(MergeLayer):
     def get_logpdf_for(self, output, inputs, **kwargs):
         mean_, logvar = inputs
         return tf.reduce_sum(
-            norm.logpdf(output, mean_, tf.exp(0.5 * logvar)), 2)
+            norm.logpdf(output, mean_, tf.exp(0.5 * logvar)),
+            range(2, len(mean_.get_shape())))
 
 
 class Discrete(Layer):
@@ -627,7 +631,7 @@ def get_output(layer_or_layers, inputs=None, **kwargs):
         # generate logpdfs for requested distribution layers
         for layer in all_outputs:
             if hasattr(layer, 'get_logpdf_for') and (
-                        layer in requested_layers):
+                    layer in requested_layers):
                 layer_inputs = _get_layer_inputs(layer)
                 all_outputs[layer][1] = layer.get_logpdf_for(
                     all_outputs[layer][0], layer_inputs, **kwargs)
