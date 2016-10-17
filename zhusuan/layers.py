@@ -11,7 +11,7 @@ from warnings import warn
 import tensorflow as tf
 import prettytensor as pt
 import six
-from six.moves import map
+from six.moves import map, range
 
 from .distributions import norm, discrete
 from .utils import as_tensor, add_name_scope, ensure_dim_match
@@ -184,7 +184,7 @@ class Normal(MergeLayer):
 
     :param incomings: A list of 2 :class:`Layer` instances. The first
         representing the mean, and the second representing the log variance.
-        Must be of shape 3-D like (batch_size, n_samples, n_dims).
+        Must be of shape (>=3)-D like (batch_size, n_samples, ...).
     :param reparameterized: Bool. If True, gradients on samples from this
         Normal distribution are allowed to propagate into inputs in this
         function, using the reparametrization trick from (Kingma, 2013).
@@ -215,8 +215,7 @@ class Normal(MergeLayer):
         samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
             mean_
         samples_n = norm.rvs(
-            shape=tf.concat(0,
-                            [tf.pack([tf.shape(mean_)[0], self.n_samples]),
+            shape=tf.concat(0, [tf.pack([tf.shape(mean_)[0], self.n_samples]),
                                 tf.shape(mean_)[2:]])
             ) * tf.exp(0.5 * logvar) + mean_
 
@@ -225,8 +224,8 @@ class Normal(MergeLayer):
                 if self.n_samples == 1:
                     return samples_1
                 else:
-                    samples_n.set_shape([None, self.n_samples]
-                                        + [None] * len(mean_.get_shape()[2:]))
+                    samples_n.set_shape([None, self.n_samples] +
+                                        [None] * len(mean_.get_shape()[2:]))
                     return samples_n
             else:
                 return tf.cond(tf.equal(self.n_samples, 1), lambda: samples_1,
@@ -242,7 +241,7 @@ class Normal(MergeLayer):
         mean_, logvar = inputs
         return tf.reduce_sum(
             norm.logpdf(output, mean_, tf.exp(0.5 * logvar)),
-            range(2, len(mean_.get_shape())))
+            list(range(2, len(mean_.get_shape()))))
 
 
 class Discrete(Layer):

@@ -2,18 +2,36 @@
 
 A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Models.
 
+## Supported Inference
+### (Stochastic) Variational Inference (VI & SVI)
+* Kinds of variational posteriors we support:
+  * __Mean-field__ posterior: Fully-factorized.
+  * __Structured__ posterior: With user specified dependencies.
+
+* Variational objectives we support:
+  * Automatic Differentiation Variational Inference (__ADVI__)
+  * Importance weighted objectives (__IWAE__)
+
+### Importance Sampling
+* Reweighted Wake-sleep (__RWS__): With user specified adaptive proposal.
+
+### Markov Chain Monte Carlo (MCMC)
+* Hamiltonian Monte Carlo (__HMC__)
+* No-U-Turn Sampler (__NUTS__)
+
 ## Examples
+* Toy intractable posterior: [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/toy.py)
+* Bayesian logistic regression: [NUTS](https://github.com/thu-ml/ZhuSuan/blob/master/examples/blr.py)
+* Bayesian Multinomial logistic regression: [NUTS](https://github.com/thu-ml/ZhuSuan/blob/master/examples/bmlr.py)
+* Beyesian neural networks: [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/bayesian_nn.py), NUTS
 
-### Examples of Variational Inference (ADVI, etc.)
-* Toy intractable posterior: `python examples/toy.py`
-* Variational autoencoder (VAE): `python examples/vae.py`
-* Convolutional VAE: `python examples/vae_conv.py`
-* Semi-supervised VAE (Kingma, 2014): `python examples/vae_ssl.py`
-* DRAW (Gregor, 2015): `python examples/draw.py` 
-
-### Examples of MCMC (NUTS, etc.)
-* Bayesian logistic regression: `python examples/blr.py`
-* Bayesian Multinomial logistic regression: `python examples/bmlr.py`
+### Deep Generative Models
+* Variational autoencoder (VAE): [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae.py)
+* Convolutional VAE: [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae_conv.py)
+* Semi-supervised VAE (Kingma, 2014): 
+  [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae_ssl.py),
+  [RWS](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae_ssl_rws.py)
+* DRAW (Gregor, 2015): [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/draw.py)
 
 ## Developments
 

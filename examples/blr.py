@@ -5,7 +5,7 @@ import tensorflow as tf
 import numpy as np
 import math
 import os
-from dataset import load_german_credits, load_binary_mnist_realval
+from dataset import load_uci_german_credits, load_binary_mnist_realval
 from zhusuan.optimization.gradient_descent_optimizer import \
     GradientDescentOptimizer
 from zhusuan.distributions import norm, bernoulli
@@ -34,7 +34,7 @@ sigma = 1./math.sqrt(n)
 
 data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          'data', 'german.data-numeric')
-X_train, y_train, X_test, y_test = load_german_credits(data_path, n)
+X_train, y_train, X_test, y_test = load_uci_german_credits(data_path, n)
 
 # Define graph
 # Data
