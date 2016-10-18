@@ -357,21 +357,17 @@ def test_get_all_layers():
     layers = get_all_layers(l4)
     assert(list(map(lambda x: x.name, layers)) ==
            ['in1', 'l1', 'in2', 'l2', 'l3', 'l4'])
-    a, b, c, d, e, f
     layers = get_all_layers([l2, l4])
     assert(list(map(lambda x: x.name, layers)) ==
            ['in2', 'l2', 'in1', 'l1', 'l3', 'l4'])
-    c, d, a, b, e, f
 
     layers = get_all_layers(l4, treat_as_inputs=[l1])
     assert(list(map(lambda x: x.name, layers)) ==
            ['l1', 'in2', 'l2', 'l3', 'l4'])
-    b, c, d, e, f
     layers = get_all_layers(l4, treat_as_inputs=[l2, l3])
     assert(list(map(lambda x: x.name, layers)) ==
            ['l3', 'l2', 'l4'])
     layers = get_all_layers([l2, l4], treat_as_inputs=[l1])
-    c, d, b, e, f
     assert(list(map(lambda x: x.name, layers)) ==
            ['in2', 'l2', 'l1', 'l3', 'l4'])
 
