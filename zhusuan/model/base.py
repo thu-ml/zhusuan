@@ -50,6 +50,5 @@ class Model(Context):
                 raise TypeError("Inputs must be a dictionary or None.")
 
             graph = get_unique_graph(requested_tensors)
-            control_dependencies = ge.ControlOutputs(graph)
-            all_tensors = get_backward_tensors(requested_tensors,
-                                               control_dependencies)
+            all_tensors = get_backward_tensors(requested_tensors)
+            # TODO: check whether tensors or ops as graph elements

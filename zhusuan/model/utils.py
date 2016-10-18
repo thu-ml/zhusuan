@@ -54,16 +54,14 @@ def get_unique_graph(tensor_or_tensors):
     return graph
 
 
-def get_backward_tensors(seed_tensors, treat_as_inputs=None,
-                         control_dependencies=None):
+def get_backward_tensors(seed_tensors, treat_as_inputs=None):
     """
     Get backward tensors from inputs to `seed_tensors` by topological order.
 
     :param seed_tensors: A Tensor or list of Tensors, for which to get all
-        preceding layers.
-    :param treat_as_inputs: A Tensor or list of Tensors,
-    :param control_dependencies: A dictionary or None. Used to explicitly add
-        dependencies between Tensors.
+        preceding Tensors.
+    :param treat_as_inputs: None or a list of Tensors that is treated as
+        inputs during the search (where to stop searching the backward graph).
 
     :return: A list of Tensors in topological order.
     """
@@ -73,4 +71,21 @@ def get_backward_tensors(seed_tensors, treat_as_inputs=None,
         q = deque([seed_tensors])
     seen = set()
     done = set()
-    # TODO
+    ret = []
+    if treat_as_inputs is not None:
+        seen.update(treat_as_inputs)
+    while q:
+        tensor = q[0]
+        if tensor not in seen:
+            seen.add(tensor)
+            for parent in reversed(tensor.op.inputs):
+                q.appendleft(parent)
+            for dep in reversed(tensor.op.control_inputs):
+                q.extendleft(reversed(dep.outputs))
+        else:
+            # have seen this tensor before
+            q.popleft()
+            if tensor not in done:
+                done.add(tensor)
+                ret.append(tensor)
+    return ret
