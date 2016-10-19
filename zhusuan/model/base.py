@@ -13,10 +13,11 @@ from .utils import Context, get_unique_graph, get_backward_tensors
 
 
 class StochasticTensor(object):
-    def __init__(self):
+    def __init__(self, inputs):
         model = Model.get_context()
         model.add_stochastic_tensor(self)
         self.value = self.sample()
+        self.inputs = inputs
 
     def sample(self):
         raise NotImplementedError()
@@ -44,8 +45,17 @@ class Model(Context):
                              for t in requested_tensors]
 
         if not inputs:
-            ret = requested_tensors
-            # TODO: logpdf
+            ret = []
+            for tensor in requested_tensors:
+                output = [tensor, None]
+                if tensor in self.stochastic_tensors:
+                    s_tensor = self.stochastic_tensors[tensor]
+                    if tensor in inputs:
+                        output[1] = s_tensor.logpdf(inputs[tensor],
+                                                    s_tensor.inputs)
+                    else:
+                        output[1] = s_tensor.logpdf(output[0], s_tensor.inputs)
+                ret.append(output)
         else:
             # inputs are observed
             if not isinstance(inputs, dict):
@@ -76,23 +86,43 @@ class Model(Context):
             graph = get_unique_graph(requested_tensors)
             all_tensors = get_backward_tensors(requested_tensors,
                                                treat_as_inputs)
-            requested_tensor_set = set(requested_tensors)
-            ordered_requested_tensors = [t for t in all_tensors
-                                         if t in requested_tensor_set]
 
-            # copy backward graphs of requested tensor by topological order
-            copied_tensors = dict()
-            for requested_t in ordered_requested_tensors:
-                # for each requested tensor, get backward tensors
-                _treat_as_inputs = [t for t in inputs.keys()
-                                    if t is not requested_t]
-                backward_tensors = get_backward_tensors(requested_t,
-                                                        _treat_as_inputs)
-                # copy the backward graph
-                sgv = ge.make_view([t.op for t in backward_tensors])
-                replacement_ts = copied_tensors.copy()
-                replacement_ts.update(inputs)
-                _ = replacement_ts.pop(requested_t, None)
-                copied_sgv, info = ge.copy_with_input_replacements(
-                    sgv, replacement_ts)
+            # copy each op's surrounding subgraph by topological order.
+            copied_tensors = {}
+            copied_ops = set()
+            copy_info = {}
+            for tensor in all_tensors:
+                # TODO: control dependencies, variable reuse
+                if tensor.op not in copied_ops:
+                    op_inputs = tensor.op.inputs[:]
+                    op_outputs = tensor.op.outputs[:]
+                    replacement_ts = {}
+                    for op_input in op_inputs:
+                        if op_input in inputs:
+                            replacement_ts[op_input] = inputs[op_input]
+                        elif op_input in copied_tensors:
+                            replacement_ts[op_input] = copied_tensors[op_input]
+                    sgv = ge.make_view([tensor.op])
+                    copied_sgv, info = ge.copy_with_input_replacements(
+                        sgv, replacement_ts)
+                    copied_ops.add(tensor.op)
+                    for output in op_outputs:
+                        copied_tensors[output] = info.transformed(output)
+                        copy_info[output] = info
 
+            # compute log probability density for each requested tensor
+            ret = []
+            for tensor in requested_tensors:
+                output = [copied_tensors[tensor], None]
+                if tensor in self.stochastic_tensors:
+                    s_tensor = self.stochastic_tensors[tensor]
+                    copied_inputs = [copied_tensors.get(t, t)
+                                     for t in s_tensor.inputs]
+                    if tensor in inputs:
+                        output[1] = s_tensor.logpdf(inputs[tensor],
+                                                    copied_inputs)
+                    else:
+                        output[1] = s_tensor.logpdf(output[0], copied_inputs)
+                ret.append(output)
+
+        return ret
