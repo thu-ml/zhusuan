@@ -124,3 +124,7 @@ def test_get_backward_tensors_control_deps():
     assert get_backward_tensors(f, treat_as_inputs=[b]) == [b, c, d, e, f]
     assert get_backward_tensors(f, treat_as_inputs=[d, e]) == [e, d, f]
     assert get_backward_tensors([d, f], treat_as_inputs=[b]) == [c, d, b, e, f]
+
+
+def test_get_backward_tensors_control_flow():
+    pass
