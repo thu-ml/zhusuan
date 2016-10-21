@@ -26,8 +26,11 @@ class StochasticTensor(object):
     def __init__(self, incomings):
         model = StochasticGraph.get_context()
         model.add_stochastic_tensor(self)
-        self.value = self.sample()
         self.incomings = incomings
+
+    @property
+    def value(self):
+        return self.sample()
 
     def sample(self, **kwargs):
         """
@@ -163,7 +166,8 @@ class StochasticGraph(Context):
                     return ge.keep_t_if_possible_handler(info, t)
 
             for tensor in all_tensors:
-                if tensor.op not in copied_ops:
+                if (tensor not in treat_as_inputs) and (
+                        tensor.op not in copied_ops):
                     sgv = ge.make_view([tensor.op])
                     copier = ge.Transformer()
                     copier.transform_external_input_handler = \
