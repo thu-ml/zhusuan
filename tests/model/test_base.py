@@ -122,12 +122,97 @@ class TestStochasticGraph:
             c = tf.log(b)
             d = tf.neg(c)
 
-
     def test_get_output_merge(self):
-        pass
+        # a -> c -> d
+        # b ->/
+        with StochasticGraph() as model:
+            a = tf.constant(4., name='am')
+            b = tf.constant(0., name='bm')
+            c = tf.add(a, b, name='cm')
+            d = tf.stop_gradient(c, name='dm')
+
+        for n in range(5):
+            for requests in permutations([a, b, c, d], n):
+                assert model.get_output(requests) == \
+                    self._augment_outputs(requests)
+
+        a_new = tf.constant(10., name='am_new')
+        b_new = tf.constant(1., name='bm_new')
+        c_new = tf.constant(-1., name='cm_new')
+
+        # case 1
+        a_out, b_out, c_out, d_out = model.get_output([a, b, c, d],
+                                                      inputs={a: a_new})
+        with tf.Session() as sess:
+            a_out_, b_out_, c_out_, d_out_ = sess.run([a_out[0], b_out[0],
+                                                       c_out[0], d_out[0]])
+            assert np.abs(a_out_ - 10.) < 1e-8
+            assert np.abs(b_out_ - 0.) < 1e-8
+            assert np.abs(c_out_ - 10.) < 1e-8
+            assert np.abs(d_out_ - 10.) < 1e-8
+
+        # case 2
+        a_out, b_out, c_out, d_out = model.get_output([a, b, c, d],
+                                                      inputs={b: b_new})
+        with tf.Session() as sess:
+            a_out_, b_out_, c_out_, d_out_ = sess.run([a_out[0], b_out[0],
+                                                       c_out[0], d_out[0]])
+            assert np.abs(a_out_ - 4.) < 1e-8
+            assert np.abs(b_out_ - 1.) < 1e-8
+            assert np.abs(c_out_ - 5.) < 1e-8
+            assert np.abs(d_out_ - 5.) < 1e-8
+
+        # case 3
+        a_out, b_out, c_out, d_out = model.get_output([a, b, c, d],
+                                                      inputs={c: c_new})
+        with tf.Session() as sess:
+            a_out_, b_out_, c_out_, d_out_ = sess.run([a_out[0], b_out[0],
+                                                       c_out[0], d_out[0]])
+            assert np.abs(a_out_ - 4.) < 1e-8
+            assert np.abs(b_out_ - 0.) < 1e-8
+            assert np.abs(c_out_ - (-1.)) < 1e-8
+            assert np.abs(d_out_ - (-1.)) < 1e-8
 
     def test_get_output_bridge(self):
-        pass
+        # a -> b -> c -> d -> e
+        #       \  ---  /
+        with StochasticGraph() as model:
+            a = tf.constant([2], dtype=tf.int32, name='a_bridge')
+            b = tf.identity(a, name='b_bridge')
+            c = tf.neg(b, name='c_bridge')
+            d = tf.tile(c, b, name='d_bridge')
+            e = tf.square(d, name='e_bridge')
+
+        for n in range(6):
+            for requests in permutations([a, b, c, d, e], n):
+                assert model.get_output(requests) == \
+                    self._augment_outputs(requests)
+
+        a_new = tf.constant([3], dtype=tf.int32, name='a_new_bridge')
+        b_new = tf.constant([4], dtype=tf.int32, name='b_new_bridge')
+        c_new = tf.constant([5], dtype=tf.int32, name='c_new_bridge')
+        d_new = tf.constant([5, 5, 5], name='d_new_bridge')
+
+        # case 1
+        d_out, e_out = model.get_output([d, e], inputs={a: a_new, c: c_new})
+        with tf.Session() as sess:
+            d_out_, e_out_ = \
+                sess.run([d_out[0], e_out[0]])
+            assert (np.abs(d_out_ - np.array([5, 5, 5])).all() < 1e-8)
+            assert (np.abs(e_out_ - np.array([25, 25, 25])).all() < 1e-8)
+
+        # case 2
+        c_out, e_out = model.get_output([c, e], inputs={a: a_new, b: b_new,
+                                                        d: d_new})
+        with tf.Session() as sess:
+            c_out_, e_out_ = sess.run([c_out[0], e_out[0]])
+
+            assert np.abs(c_out_ - (-4)).all() < 1e-8
+            assert (np.abs(e_out_ - np.array([25, 25, 25])).all() < 1e-8)
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_control_deps(self):
         pass
