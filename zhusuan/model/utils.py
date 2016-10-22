@@ -89,3 +89,21 @@ def get_backward_tensors(seed_tensors, treat_as_inputs=None):
                 done.add(tensor)
                 ret.append(tensor)
     return ret
+
+
+def get_parent_tensors(tensor, control_deps=True):
+    """
+    Get parent tensors of input `tensor`.
+
+    :param tensor: A Tensor.
+    :param control_deps: Bool. Whether to treat control dependencies as
+        parents. Default to be True.
+
+    :return: A list of Tensors.
+    """
+    parents = tensor.op.inputs[:]
+    if control_deps:
+        for control_input in tensor.op.control_inputs:
+            parents.extend(control_input.outputs)
+    parents = list(set(parents))
+    return parents

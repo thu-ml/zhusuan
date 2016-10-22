@@ -10,7 +10,7 @@ import six
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
 
-from .utils import Context, get_backward_tensors
+from .utils import Context, get_backward_tensors, get_parent_tensors
 
 
 class StochasticTensor(object):
@@ -165,8 +165,17 @@ class StochasticGraph(Context):
                 else:
                     return ge.keep_t_if_possible_handler(info, t)
 
+            def _whether_to_copy(t):
+                for parent in get_parent_tensors(t, control_deps=True):
+                    print('parent:', parent)
+                    if parent in inputs:
+                        return True
+                    elif parent in copied_tensors:
+                        return True
+                return False
+
             for tensor in all_tensors:
-                if (tensor not in treat_as_inputs) and (
+                if (_whether_to_copy(tensor)) and (
                         tensor.op not in copied_ops):
                     sgv = ge.make_view([tensor.op])
                     copier = ge.Transformer()

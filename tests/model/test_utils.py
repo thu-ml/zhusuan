@@ -127,4 +127,19 @@ def test_get_backward_tensors_control_deps():
 
 
 def test_get_backward_tensors_control_flow():
+    # while_loop, scan, TensorArray
     pass
+
+
+def test_get_parent_tensors():
+    a = tf.placeholder(tf.int32)
+    b = tf.identity(a)
+    c = tf.cast(b, tf.float32)
+    d = tf.tile(c, b)
+    with tf.control_dependencies([a]):
+        e = tf.sigmoid(d)
+    assert set(get_parent_tensors(d)) == {b, c}
+    assert set(get_parent_tensors(c)) == {b}
+    assert set(get_parent_tensors(a)) == set()
+    assert set(get_parent_tensors(e)) == {a, d}
+    assert set(get_parent_tensors(e, control_deps=False)) == {d}
