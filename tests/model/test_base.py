@@ -241,7 +241,70 @@ class TestStochasticGraph:
         pass
 
     def test_get_output_many_to_many_op(self):
-        pass
+        with StochasticGraph() as model:
+            x = tf.constant([1, 2, 3], name='x')
+            y = tf.constant([4, 5, 6], name='y')
+            z = tf.add(x, y, name='z')
+            mat_x, mat_z = tf.meshgrid(x, z)
+            mat_xx = tf.identity(mat_x, name='mat_xx')
+            mat = tf.add(mat_xx, mat_z, name='mat')
+
+        for n in range(7):
+            for requests in permutations([x, y, z, mat_x, mat_xx, mat], n):
+                assert model.get_output(requests) == \
+                    self._augment_outputs(requests)
+
+        x_new = tf.constant([7, 8, 9], name='x_new')
+        y_new = tf.constant([1, -2, -3], name='y_new')
+        z_new = tf.constant([-1, -1, -1], name='z_new')
+        mat_x_new = tf.ones([3, 3], dtype=tf.int32, name='mat_x_new')
+        mat_z_new = tf.zeros([3, 3], dtype=tf.int32, name='mat_z_new')
+        mat_xx_new = tf.zeros([3, 3], dtype=tf.int32, name='mat_xx_new')
+
+        # case 1
+        mat_out, mat_xx_out = model.get_output([mat, mat_xx], inputs={x: x_new})
+        with tf.Session() as sess:
+            mat_out_, mat_xx_out_ = sess.run([mat_out[0], mat_xx_out[0]])
+            assert np.abs(mat_out_ - np.array([[18, 20, 22],
+                                              [19, 21, 23],
+                                              [20, 22, 24]])).all() < 1e-8
+            assert np.abs(mat_xx_out_ - np.array([[7, 7, 7],
+                                                 [8, 8, 8],
+                                                 [9, 9, 9]])).all() < 1e-8
+        # case 2
+        mat_out = model.get_output(mat, inputs={mat_z: mat_z_new, y: y_new})
+        with tf.Session() as sess:
+            mat_out_ = sess.run(mat_out[0])
+            assert np.abs(mat_out_ - np.array([[3, 1, 1],
+                                              [4, 2, 2],
+                                              [5, 3, 3]])).all() < 1e-8
+        # case 3
+        mat_z_out, mat_out = model.get_output([mat_z, mat],
+                                              inputs={x: x_new, z: z_new,
+                                                      mat_xx: mat_xx_new})
+        with tf.Session() as sess:
+            mat_z_out_, mat_out_ = sess.run([mat_z_out[0], mat_out[0]])
+            assert np.abs(mat_z_out_ - np.array([[-1, -1, -1],
+                                                [-1, -1, -1],
+                                                [-1, -1, -1]])).all() < 1e-8
+            assert np.abs(mat_out_ - np.array([[-1, -1, -1],
+                                               [-1, -1, -1],
+                                               [-1, -1, -1]])).all() < 1e-8
+        # case 4
+        mat_xx_out, mat_out = model.get_output([mat_xx, mat],
+                                               inputs={mat_x: mat_x_new})
+        with tf.Session() as sess:
+            mat_xx_out_, mat_out_ = sess.run([mat_xx_out[0], mat_out[0]])
+            assert np.abs(mat_xx_out_ - np.array([[1, 1, 1],
+                                                 [1, 1, 1],
+                                                 [1, 1, 1]])).all() < 1e-8
+            assert np.abs(mat_out_ - np.array([[6, 8, 10],
+                                               [6, 8, 10],
+                                               [6, 8, 10]])).all() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_control_deps(self):
         pass
