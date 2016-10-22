@@ -80,7 +80,6 @@ class TestStochasticGraph:
 
         a_new = tf.constant(4., name="a_new")
         b_new = tf.constant(2., name="b_new")
-        c_new = tf.constant(4., name="c_new")
 
         # case 1
         c_out = model.get_output(c, inputs={b: b_new})
@@ -117,10 +116,39 @@ class TestStochasticGraph:
         # a -> b -> c
         #       \-> d
         with StochasticGraph() as model:
-            a = tf.constant(1.)
-            b = tf.exp(a)
-            c = tf.log(b)
-            d = tf.neg(c)
+            a = tf.constant(1., name="a")
+            b = tf.exp(a, name="b")
+            c = tf.log(b, name="c")
+            d = tf.neg(b, name="d")
+
+        b_new = tf.constant(np.e ** 2, name="b_new")
+        d_new = tf.constant(-np.e ** 2, name="d_new")
+
+        # case 1
+        d_out = model.get_output(d)
+        assert d_out[0] is d
+
+        # case 2
+        c_out, d_out = model.get_output([c, d])
+        assert c_out[0] is c
+        assert d_out[0] is d
+
+        # case 3
+        c_out, d_out = model.get_output([c, d], inputs={b: b_new})
+        with tf.Session() as sess:
+            c_out_, d_out_ = sess.run([c_out[0], d_out[0]])
+            assert np.abs(c_out_ - 2.) < 1e-8
+            assert np.abs(d_out_ + np.e ** 2) < 1e-6
+
+        # case 4
+        c_out = model.get_output(c, inputs={d: d_new})
+        with tf.Session() as sess:
+            c_out_ = sess.run(c_out[0])
+            assert np.abs(c_out_ - 1.) < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_merge(self):
         # a -> c -> d
@@ -213,6 +241,13 @@ class TestStochasticGraph:
         # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
         #                                       tf.get_default_graph())
         # train_writer.close()
+
+    def test_get_output_one_to_many_op(self):
+        # tf.split
+        pass
+
+    def test_get_output_many_to_many_op(self):
+        pass
 
     def test_get_output_control_deps(self):
         pass
