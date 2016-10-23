@@ -155,46 +155,54 @@ class Discrete:
         """
         Generate discrete variables.
 
-        :param p: A 2-D Tensor or numpy array of shape (n_samples, n_classes).
-            Each line is the probability of all classes. (Not required to be
-            normalized).
+        :param p: A N-D (N >=2) Tensor or numpy array of shape
+            (n_samples_0, n_samples_1,..., n_classes).
+            Each slice `[i, j,..., k, :]`
+            represents the un-normalized log probabilities for all classes.
+
         :param eps: Float. Small value used to avoid NaNs.
 
-        :return: A 2-D Tensor of shape (n_samples, n_classes). Each line is
+        :return: A N-D Tensor of shape
+            (n_samples_0, n_samples_1,..., n_classes). Each slice is
             a one-hot vector of the sample.
         """
         p = tf.cast(as_tensor(p), dtype=tf.float32)
-        tf.assert_rank(p, 2)
-        p += eps
-        ret = tf.one_hot(
-            tf.squeeze(tf.multinomial(tf.stop_gradient(tf.log(p)), 1), [1]),
-            tf.shape(p)[1])
-        ret.set_shape(p.get_shape())
-        return ret
+        tf.assert_rank_at_least(p, 2)
+        with tf.control_dependencies([tf.assert_rank_at_least(p, 2)]):
+            p += eps
+            p_flat = tf.reshape(p, [-1, tf.shape(p)[-1]])
+            ret_flat = tf.one_hot(
+                tf.squeeze(tf.multinomial(tf.stop_gradient(tf.log(p_flat)), 1),
+                           [1]), tf.shape(p)[-1])
+            ret = tf.reshape(ret_flat, tf.shape(p))
+            ret.set_shape(p.get_shape())
+            return ret
 
     @add_name_scope
     def logpdf(self, x, p, eps=1e-8):
         """
-        Log probability density function of Bernoulli distribution.
+        Log probability density function of Discrete distribution.
 
-        :param x: A 2-D Tensor or numpy array of shape (n_samples, n_classes).
+        :param x: A N-D (N >=2) Tensor or numpy array of shape
+            (n_samples_0, n_samples_1,..., n_classes).
             The value at which to evaluate the log density function (one-hot).
-        :param p: A 2-D Tensor or numpy array of shape (n_samples, n_classes).
-            Each line is the probability of all classes. (Not required to be
-            normalized).
+        :param p: A N-D (N >=2) Tensor or numpy array of shape
+            (n_samples_0, n_samples_1,..., n_classes).
+            Each slice `[i, j,..., k, :]`
+            represents the un-normalized log probabilities for all classes.
         :param eps: Float. Small value used to avoid NaNs by clipping p in
             range (eps, 1).
 
-        :return: A 1-D Tensor of shape (n_samples,).
+        :return: A (N-1)-D Tensor of shape (n_samples_0, n_samples_1,..., ).
         """
         x = tf.cast(as_tensor(x), dtype=tf.float32)
         p = tf.cast(as_tensor(p), dtype=tf.float32)
-        tf.assert_rank(x, 2)
-        tf.assert_rank(p, 2)
-        p += eps
-        p = p / tf.reduce_sum(p, 1, keep_dims=True)
-        # p = tf.clip_by_value(p, eps, 1.)
-        return tf.reduce_sum(x * tf.log(p), 1)
+        with tf.control_dependencies([tf.assert_rank_at_least(x, 2),
+                                      tf.assert_rank_at_least(p, 2)]):
+            p += eps
+            p = p / tf.reduce_sum(p, -1, keep_dims=True)
+            # p = tf.clip_by_value(p, eps, 1.)
+            return tf.reduce_sum(x * tf.log(p), -1)
 
 
 norm = Normal()
