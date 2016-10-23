@@ -204,24 +204,24 @@ class TestStochasticGraph:
         # a -> b -> c -> d -> e
         #       \  ---  /
         with StochasticGraph() as model:
-            a = tf.constant([2], dtype=tf.int32, name='a_bridge')
-            b = tf.identity(a, name='b_bridge')
-            c = tf.neg(b, name='c_bridge')
-            d = tf.tile(c, b, name='d_bridge')
-            e = tf.square(d, name='e_bridge')
+            a = tf.constant([2], dtype=tf.int32, name='ag')
+            b = tf.identity(a, name='bg')
+            c = tf.neg(b, name='cg')
+            d = tf.tile(c, b, name='dg')
+            e = tf.square(d, name='eg')
 
-        a_new = tf.constant([3], dtype=tf.int32, name='a_new_bridge')
-        b_new = tf.constant([4], dtype=tf.int32, name='b_new_bridge')
-        c_new = tf.constant([5], dtype=tf.int32, name='c_new_bridge')
-        d_new = tf.constant([5, 5, 5], name='d_new_bridge')
+        a_new = tf.constant([3], dtype=tf.int32, name='ag_new')
+        b_new = tf.constant([4], dtype=tf.int32, name='bg_new')
+        c_new = tf.constant([5], dtype=tf.int32, name='cg_new')
+        d_new = tf.constant([5, 5, 5], name='dg_new')
 
-        # # case 1
-        # d_out, e_out = model.get_output([d, e], inputs={a: a_new, c: c_new})
-        # with tf.Session() as sess:
-        #     d_out_, e_out_ = \
-        #         sess.run([d_out[0], e_out[0]])
-        #     assert (np.abs(d_out_ - np.array([5, 5, 5])).all() < 1e-8)
-        #     assert (np.abs(e_out_ - np.array([25, 25, 25])).all() < 1e-8)
+        # case 1
+        d_out, e_out = model.get_output([d, e], inputs={a: a_new, c: c_new})
+        with tf.Session() as sess:
+            d_out_, e_out_ = \
+                sess.run([d_out[0], e_out[0]])
+            assert (np.abs(d_out_ - np.array([5, 5, 5])).all() < 1e-8)
+            assert (np.abs(e_out_ - np.array([25, 25, 25])).all() < 1e-8)
 
         # case 2
         c_out, e_out = model.get_output([c, e], inputs={a: a_new, b: b_new,
@@ -232,9 +232,9 @@ class TestStochasticGraph:
             assert np.abs(c_out_ - (-4)).all() < 1e-8
             assert (np.abs(e_out_ - np.array([25, 25, 25])).all() < 1e-8)
 
-        train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-                                              tf.get_default_graph())
-        train_writer.close()
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_one_to_many_op(self):
         # tf.split
