@@ -147,7 +147,7 @@ class TestStochasticGraph:
         assert c_out[0] is c
         with tf.Session() as sess:
             c_out_ = sess.run(c_out[0])
-            assert np.abs(c_out_ - 1.) < 1e-8
+            assert np.abs(c_out_ - 1.) < 1e-6
 
         # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
         #                                       tf.get_default_graph())

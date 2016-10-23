@@ -44,13 +44,13 @@ class TestBernoulli:
     def test_rvs(self):
         with tf.Session() as sess:
             with pytest.raises(NotImplementedError):
-                sess.run(bernoulli.rvs(0.1, size=1.))
+                sess.run(bernoulli.rvs(0.1, shape=1.))
 
     def test_logpdf(self):
         with tf.Session() as sess:
             x = [[1, 0], [1, 1]]
             p = 0.3
-            test_values = sess.run(bernoulli.logpdf(tf.constant(x), p))
+            test_values = sess.run(bernoulli.logpdf(x, p))
             true_values = stats.bernoulli.logpmf(x, p)
             assert(np.abs(test_values - true_values).max() < 1e-6)
 

@@ -7,7 +7,7 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 
-from .utils import as_tensor, add_name_scope
+from .utils import add_name_scope
 
 
 __all__ = [
@@ -43,8 +43,8 @@ class Normal:
         :return: A Tensor of specified shape filled with random i.i.d. normal
             samples.
         """
-        loc = tf.cast(as_tensor(loc), dtype=tf.float32)
-        scale = tf.cast(as_tensor(scale), dtype=tf.float32)
+        loc = tf.convert_to_tensor(loc, dtype=tf.float32)
+        scale = tf.convert_to_tensor(scale, dtype=tf.float32)
         return tf.random_normal(shape, tf.stop_gradient(loc),
                                 tf.stop_gradient(scale))
 
@@ -62,9 +62,10 @@ class Normal:
         :return: A Tensor of the same shape as `x` (after broadcast) with
             function values.
         """
-        x = tf.cast(as_tensor(x), dtype=tf.float32)
-        loc = tf.cast(as_tensor(loc), dtype=tf.float32)
-        scale = tf.cast(as_tensor(scale), dtype=tf.float32)
+        x = tf.convert_to_tensor(x, dtype=tf.float32)
+        loc = tf.convert_to_tensor(loc, dtype=tf.float32)
+        scale = tf.convert_to_tensor(scale, dtype=tf.float32)
+        scale = tf.clip_by_value(scale, eps, np.inf)
         c = -0.5 * np.log(2 * np.pi)
         return c - tf.log(scale) - tf.square(x - loc) / (2 * tf.square(scale))
 
@@ -94,7 +95,7 @@ class Logistic:
         :return: A Tensor of the same shape as `x` (after broadcast) with
             function values.
         """
-        scale += 1e-8
+        scale = tf.clip_by_value(scale, eps, np.inf)
         x_sd = (x - loc) / scale
         return tf.nn.sigmoid(x_sd)
 
@@ -107,13 +108,13 @@ class Bernoulli:
         pass
 
     @add_name_scope
-    def rvs(self, p, size=None):
+    def rvs(self, p, shape=None):
         """
         Not implemented for now due to absence of Bernoulli in Tensorflow.
 
         :param p: A Tensor or numpy array. The probability of 1. Can be
             broadcast to size given.
-        :param size: A 1-D Tensor or numpy array. The shape of the output
+        :param shape: A 1-D Tensor or numpy array. The shape of the output
             tensor.
 
         :return: A Tensor of specified shape filled with random independent
@@ -137,8 +138,8 @@ class Bernoulli:
         :return: A Tensor of the same shape as `x` (after broadcast) with
             function values.
         """
-        x = tf.cast(as_tensor(x), dtype=tf.float32)
-        p = tf.cast(as_tensor(p), dtype=tf.float32)
+        x = tf.convert_to_tensor(x, dtype=tf.float32)
+        p = tf.convert_to_tensor(p, dtype=tf.float32)
         p = tf.clip_by_value(p, eps, 1. - eps)
         return x * tf.log(p) + (1. - x) * tf.log(1. - p)
 
@@ -166,17 +167,16 @@ class Discrete:
             (n_samples_0, n_samples_1,..., n_classes). Each slice is
             a one-hot vector of the sample.
         """
-        p = tf.cast(as_tensor(p), dtype=tf.float32)
-        tf.assert_rank_at_least(p, 2)
+        p = tf.convert_to_tensor(p, dtype=tf.float32)
         with tf.control_dependencies([tf.assert_rank_at_least(p, 2)]):
-            p += eps
-            p_flat = tf.reshape(p, [-1, tf.shape(p)[-1]])
-            ret_flat = tf.one_hot(
-                tf.squeeze(tf.multinomial(tf.stop_gradient(tf.log(p_flat)), 1),
-                           [1]), tf.shape(p)[-1])
-            ret = tf.reshape(ret_flat, tf.shape(p))
-            ret.set_shape(p.get_shape())
-            return ret
+            p = tf.clip_by_value(p, eps, np.inf)
+        p_flat = tf.reshape(p, [-1, tf.shape(p)[-1]])
+        ret_flat = tf.one_hot(
+            tf.squeeze(tf.multinomial(tf.stop_gradient(tf.log(p_flat)), 1),
+                       [1]), tf.shape(p)[-1])
+        ret = tf.reshape(ret_flat, tf.shape(p))
+        ret.set_shape(p.get_shape())
+        return ret
 
     @add_name_scope
     def logpdf(self, x, p, eps=1e-8):
@@ -189,17 +189,18 @@ class Discrete:
         :param p: A N-D (N >=2) Tensor or numpy array of shape
             (n_samples_0, n_samples_1,..., n_classes).
             Each slice `[i, j,..., k, :]`
-            represents the un-normalized log probabilities for all classes.
+            represents the un-normalized probabilities for all classes.
         :param eps: Float. Small value used to avoid NaNs by clipping p in
             range (eps, 1).
 
         :return: A (N-1)-D Tensor of shape (n_samples_0, n_samples_1,..., ).
         """
-        x = tf.cast(as_tensor(x), dtype=tf.float32)
-        p = tf.cast(as_tensor(p), dtype=tf.float32)
+        x = tf.convert_to_tensor(x, dtype=tf.float32)
+        p = tf.convert_to_tensor(p, dtype=tf.float32)
         with tf.control_dependencies([tf.assert_rank_at_least(x, 2),
                                       tf.assert_rank_at_least(p, 2)]):
             p += eps
+            # TODO: this division can be moved to be under log.
             p = p / tf.reduce_sum(p, -1, keep_dims=True)
             # p = tf.clip_by_value(p, eps, 1.)
             return tf.reduce_sum(x * tf.log(p), -1)
