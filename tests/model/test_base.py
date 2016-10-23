@@ -238,8 +238,40 @@ class TestStochasticGraph:
         # train_writer.close()
 
     def test_get_output_one_to_many_op(self):
-        # tf.split
-        pass
+        # tf.unpack
+        # a -.---- a0
+        #     \ -- a1
+        #      \ - a2 -> c
+        # b ----------- /
+        with StochasticGraph() as model:
+            a = tf.zeros([3, 2, 1, 4], name="ao")
+            a0, a1, a2 = tf.unpack(a, axis=0)
+            b = tf.ones([2, 4, 1], name="bo")
+            c = tf.batch_matmul(a2, b, name="co")
+
+        a1_new = tf.ones([2, 1, 4], name="a1_new")
+        a_new = tf.ones([3, 2, 1, 4], name="ao_new")
+        a2_new = tf.ones([2, 1, 4], name="a2_new") * 2
+
+        # case 1
+        a2_out, c_out = model.get_output([a2, c], inputs={a1: a1_new})
+        assert a2_out[0] is a2
+        assert c_out[0] is c
+
+        # case 2
+        a0_out, a2_out, c_out = model.get_output([a0, a2, c],
+                                                 inputs={a: a_new, a2: a2_new})
+        with tf.Session() as sess:
+            a0_out_, a2_out_, c_out_ = sess.run(
+                [a0_out[0], a2_out[0], c_out[0]])
+            assert np.abs(a0_out_ - np.ones([2, 1, 4])).max() < 1e-8
+            assert np.abs(a2_out_ - np.ones([2, 1, 4]) * 2).max() < 1e-8
+            assert np.abs(c_out_ - np.array([[8, 8]]).T).max() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
+
 
     def test_get_output_many_to_many_op(self):
         # tf.meshgrid
@@ -297,14 +329,22 @@ class TestStochasticGraph:
                                               [7, 7, 7],
                                               [9, 9, 9]])).max() < 1e-8
 
-        train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-                                              tf.get_default_graph())
-        train_writer.close()
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_placeholder_feed(self):
-        pass
+        # tf.placeholder
+        # tf.matmul
+        # tf.expand_dims
+        # tf.split
+        with StochasticGraph() as model:
+            a = tf.placeholder(tf.float32, name="ap")
 
     def test_get_output_control_deps(self):
+        pass
+
+    def test_get_output_control_flow(self):
         pass
 
     def test_get_output_variable(self):
