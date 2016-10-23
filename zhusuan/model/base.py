@@ -153,7 +153,7 @@ class StochasticGraph(Context):
             treat_as_inputs = filter(_whether_treat_as_inputs, inputs.keys())
             all_tensors = get_backward_tensors(requested_tensors,
                                                treat_as_inputs)
-            print(all_tensors)
+            # print(all_tensors)
 
             # copy each op by topological order.
             copied_tensors = {}
