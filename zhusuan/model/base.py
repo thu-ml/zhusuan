@@ -171,7 +171,6 @@ class StochasticGraph(Context):
                 if t in treat_as_inputs:
                     return False
                 for parent in get_parent_tensors(t, control_deps=True):
-                    print('parent:', parent)
                     if parent in inputs:
                         return True
                     elif parent in copied_tensors:
@@ -179,7 +178,7 @@ class StochasticGraph(Context):
                 return False
 
             for tensor in all_tensors:
-                print(tensor.name, _whether_to_copy(tensor))
+                # print(tensor.name, _whether_to_copy(tensor))
                 if (_whether_to_copy(tensor)) and (
                         tensor.op not in copied_ops):
                     sgv = ge.make_view([tensor.op])

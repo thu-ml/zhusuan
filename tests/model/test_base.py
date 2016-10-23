@@ -116,13 +116,13 @@ class TestStochasticGraph:
         # a -> b -> c
         #       \-> d
         with StochasticGraph() as model:
-            a = tf.constant(1., name="a")
-            b = tf.exp(a, name="b")
-            c = tf.log(b, name="c")
-            d = tf.neg(b, name="d")
+            a = tf.constant(1., name="as")
+            b = tf.exp(a, name="bs")
+            c = tf.log(b, name="cs")
+            d = tf.neg(b, name="ds")
 
-        b_new = tf.constant(np.e ** 2, name="b_new")
-        d_new = tf.constant(-np.e ** 2, name="d_new")
+        b_new = tf.constant(np.e ** 2, name="bs_new")
+        d_new = tf.constant(-np.e ** 2, name="ds_new")
 
         # case 1
         d_out = model.get_output(d)
@@ -142,6 +142,7 @@ class TestStochasticGraph:
 
         # case 4
         c_out = model.get_output(c, inputs={d: d_new})
+        assert c_out[0] is c
         with tf.Session() as sess:
             c_out_ = sess.run(c_out[0])
             assert np.abs(c_out_ - 1.) < 1e-8
