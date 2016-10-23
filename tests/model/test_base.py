@@ -9,6 +9,8 @@ from itertools import permutations
 import pytest
 from mock import Mock
 import numpy as np
+import tensorflow as tf
+from tensorflow.contrib import layers
 
 from .context import zhusuan
 from zhusuan.model.base import *
@@ -272,7 +274,6 @@ class TestStochasticGraph:
         #                                       tf.get_default_graph())
         # train_writer.close()
 
-
     def test_get_output_many_to_many_op(self):
         # tf.meshgrid
         # / ---- \
@@ -334,21 +335,43 @@ class TestStochasticGraph:
         # train_writer.close()
 
     def test_get_output_placeholder_feed(self):
-        # tf.placeholder
-        # tf.matmul
-        # tf.expand_dims
-        # tf.split
+        # a -> c -> c0
+        # b - /    /
+        #  \ ---- /
         with StochasticGraph() as model:
-            a = tf.placeholder(tf.float32, name="ap")
+            a = tf.placeholder(tf.float32, name='ap')
+            b = tf.placeholder(tf.int32, name='bp')
+            c = tf.expand_dims(a, b, name='cp')
+            c0 = tf.split(b, 1, c)[0]
+
+        b_new = tf.placeholder(tf.int32, name='bp_new')
+        c0_out = model.get_output(c0, inputs={b: b_new})
+        with tf.Session() as sess:
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(c0_out[0], feed_dict={a: np.ones([2, 3]), b: 0})
+            c0_out_ = sess.run(c0_out[0], feed_dict={a: np.ones([2, 3]),
+                                                     b_new: 0})
+            assert np.abs(c0_out_ - np.ones([2, 3])).max() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_control_deps(self):
         pass
 
     def test_get_output_control_flow(self):
+        # while_loop, scan, TensorArray
         pass
 
     def test_get_output_variable(self):
-        pass
+        # w -> y
+        # x - /
+        with StochasticGraph() as model:
+            with tf.variable_scope("weights"):
+                w = tf.get_variable("w", shape=[4, 5],
+                                    initializer=tf.random_normal_initializer())
+                x = tf.ones([2, 5])
 
     def test_get_output_neural_networks(self):
         pass
