@@ -364,6 +364,10 @@ class TestStochasticGraph:
         # while_loop, scan, TensorArray
         pass
 
+    def test_get_output_assign(self):
+        # tf.assign
+        pass
+
     def test_get_output_variable(self):
         # w -> y
         # x - /
@@ -371,10 +375,109 @@ class TestStochasticGraph:
             with tf.variable_scope("weights"):
                 w = tf.get_variable("w", shape=[4, 5],
                                     initializer=tf.random_normal_initializer())
-                x = tf.ones([2, 5])
+            x = tf.ones([5, 2], name="x")
+            y = tf.matmul(w, x, name="y")
 
-    def test_get_output_neural_networks(self):
-        pass
+        x_new = tf.zeros([5, 2], name="x_new")
+        with tf.variable_scope("weights_new"):
+            w_new = tf.get_variable("w_new", shape=[4, 5],
+                                    initializer=tf.random_normal_initializer())
+
+        # case 1
+        y_out = model.get_output(y, inputs={x: x_new})
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            y_out_ = sess.run(y_out[0])
+            assert y_out_.shape == (4, 2)
+            assert np.abs(y_out_).max() < 1e-8
+
+        # case 2
+        with pytest.raises(TypeError):
+            model.get_output(y, inputs={w: w_new})
+
+        # case 3
+        with pytest.raises(TypeError):
+            model.get_output(y, inputs={x: np.zeros([5, 2])})
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
+
+    def test_get_output_fully_connected(self):
+        with StochasticGraph() as model:
+            x = tf.ones([3, 4], name='x')
+            y = layers.fully_connected(x, 10)
+
+        x_new = tf.zeros([3, 4], name='x_new')
+        y_out = model.get_output(y, inputs={x: x_new})
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            y_out_ = sess.run(y_out[0])
+            assert y_out_.shape == (3, 10)
+            assert np.abs(y_out_).max() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
+
+    def test_get_output_convolution(self):
+        with StochasticGraph() as model:
+            x = tf.ones([2, 5, 5, 3], name='x')
+            y = layers.conv2d(x, 2, [3, 3])
+
+        x_new = tf.zeros([2, 5, 5, 3], name='x_new')
+        y_out = model.get_output(y, inputs={x: x_new})
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            y_out_ = sess.run(y_out[0])
+            assert y_out_.shape == (2, 5, 5, 2)
+            assert np.abs(y_out_).max() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
+
+    def test_get_output_batch_norm(self):
+        x_value = np.random.random([2, 5, 5, 3])
+        w_value = np.random.random([3, 3, 3, 2])
+        is_training_t = tf.placeholder(tf.bool, name='is_training_t')
+        x_t = tf.constant(x_value, dtype=tf.float32, name='x_t')
+        y_t = layers.conv2d(x_t, 2, [3, 3], normalizer_fn=layers.batch_norm,
+                            normalizer_params={'is_training': is_training_t,
+                                               'updates_collections': None},
+                            weights_initializer=tf.constant_initializer(
+                                w_value))
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            y_test_1 = sess.run(y_t, feed_dict={is_training_t: False})
+            sess.run(y_t, feed_dict={is_training_t: True})
+            y_test_2 = sess.run(y_t, feed_dict={is_training_t: False})
+
+        with StochasticGraph() as model:
+            is_training = tf.placeholder(tf.bool, name='is_training')
+            x = tf.constant(x_value, dtype=tf.float32, name='x')
+            y = layers.conv2d(x, 2, [3, 3], normalizer_fn=layers.batch_norm,
+                              normalizer_params={'is_training': is_training,
+                                                 'updates_collections': None},
+                              weights_initializer=tf.constant_initializer(
+                                  w_value))
+        x_new = tf.constant(x_value, dtype=tf.float32, name='x')
+        y_out = model.get_output(y, inputs={x: x_new})
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            y_out_1 = sess.run(y_out[0], feed_dict={is_training: False})
+            y_out_2 = sess.run(y_out[0], feed_dict={is_training: False})
+            sess.run(y_out[0], feed_dict={is_training: True})
+            y_out_3 = sess.run(y_out[0], feed_dict={is_training: False})
+            assert np.abs(y_out_1 - y_out_2).max() < 1e-6
+            assert np.abs(y_out_1 - y_out_3).max() > 1e-6
+
+        assert np.abs(y_test_1 - y_out_1).max() < 1e-6
+        assert np.abs(y_test_2 - y_out_3).max() < 1e-6
+
+        train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+                                              tf.get_default_graph())
+        train_writer.close()
 
     def test_get_output_stochastic_tensor(self):
         pass

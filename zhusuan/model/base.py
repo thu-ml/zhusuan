@@ -133,6 +133,19 @@ class StochasticGraph(Context):
                            if isinstance(k, StochasticTensor) else (k, v)
                            for k, v in six.iteritems(inputs)])
 
+            for k, v in six.iteritems(inputs):
+                if isinstance(k, tf.Variable):
+                    raise TypeError("StochasticGraph.get_output() doesn't "
+                                    "accept replacing Tensorflow variables "
+                                    "with given inputs. Error pair: "
+                                    "({}, {})".format(k, v))
+                elif not isinstance(k, tf.Tensor) or \
+                        not isinstance(v, tf.Tensor):
+                    raise TypeError("The 'inputs' argument of "
+                                    "StochasticGraph.get_output() should "
+                                    "consist of tf.Tensor pairs. Error type: "
+                                    "({}, {})".format(type(k), type(v)))
+
             def _whether_treat_as_inputs(tensor):
                 """
                 Treat all deterministic tensors in given inputs as inputs.
