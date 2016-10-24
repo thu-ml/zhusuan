@@ -204,6 +204,8 @@ class StochasticGraph(Context):
                     copied_sgv, info = copier(sgv, sgv.graph, "", "",
                                               reuse_dst_scope=True)
                     copied_ops.add(tensor.op)
+                    # TODO: avoid redundant copy when using many-to-many op
+                    # TODO: add test
                     op_outputs = tensor.op.outputs[:]
                     for output in op_outputs:
                         copied_tensors[output] = info.transformed(output)

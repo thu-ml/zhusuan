@@ -366,6 +366,7 @@ class TestStochasticGraph:
 
     def test_get_output_assign(self):
         # tf.assign
+        # tf.switch
         pass
 
     def test_get_output_variable(self):
