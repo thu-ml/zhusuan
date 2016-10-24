@@ -199,11 +199,9 @@ class Discrete:
         p = tf.convert_to_tensor(p, dtype=tf.float32)
         with tf.control_dependencies([tf.assert_rank_at_least(x, 2),
                                       tf.assert_rank_at_least(p, 2)]):
-            p += eps
-            # TODO: this division can be moved to be under log.
-            p = p / tf.reduce_sum(p, -1, keep_dims=True)
-            # p = tf.clip_by_value(p, eps, 1.)
-            return tf.reduce_sum(x * tf.log(p), -1)
+            p = tf.clip_by_value(p, eps, np.inf)
+            return tf.reduce_sum(x * (tf.log(p) - tf.log(
+                tf.reduce_sum(p, -1, keep_dims=True))), -1)
 
 
 norm = Normal()
