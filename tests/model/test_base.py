@@ -362,34 +362,36 @@ class TestStochasticGraph:
         # c -> d ----/       \
         #       \ ----------- f
         with StochasticGraph() as model:
-            a = tf.placeholder(tf.float32, name='a')
-            b = tf.identity(a, name='b')
-            c = tf.placeholder(tf.float32, name='c')
-            d = tf.identity(c, name='d')
+            a = tf.placeholder(tf.float32, name='a_deps')
+            b = tf.identity(a, name='b_deps')
+            c = tf.placeholder(tf.float32, name='c_deps')
+            d = tf.identity(c, name='d_deps')
             with tf.control_dependencies([b, d]):
-                e = tf.zeros([2, 2], name='e')
+                e = tf.add(1., tf.zeros([2, 2]), name='e_deps')
             with tf.control_dependencies([e, d]):
-                f = tf.ones([2, 2], name='f')
+                f = tf.add(1., tf.ones([2, 2]), name='f_deps')
 
-        f_out_only_c = model.get_output(f, inputs={d: tf.ones([]), e: tf.ones([2,2])})
-        f_out_only_a = model.get_output(f, inputs={d: tf.ones([])})
+        d_new = tf.add(1., tf.ones([]), name='d_deps_new')
+        e_new = tf.add(1., tf.ones([2, 2]), name='e_deps_new')
+        f_out_only_c = model.get_output(f, inputs={d: d_new, e: e_new})
+        f_out_only_a = model.get_output(f, inputs={d: d_new})
 
         with tf.Session() as sess:
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(f)
+            with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(e, feed_dict={a: 1.})
             f_out_only_c_ = sess.run(f_out_only_c[0], feed_dict={c: 1.})
             f_out_only_a_ = sess.run(f_out_only_a[0], feed_dict={a: 1.})
-            assert np.abs(f_out_only_c_ - np.ones([2, 2])).max() < 1e-8
-            assert np.abs(f_out_only_a_ - np.ones([2, 2])).max() < 1e-8
+            assert np.abs(f_out_only_c_ - np.ones([2, 2]) - 1.).max() < 1e-8
+            assert np.abs(f_out_only_a_ - np.ones([2, 2]) - 1.).max() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_control_flow(self):
         # while_loop, scan, TensorArray
-        pass
-
-    def test_get_output_assign(self):
-        # tf.assign
-        # tf.switch
         pass
 
     def test_get_output_variable(self):
@@ -499,9 +501,9 @@ class TestStochasticGraph:
         assert np.abs(y_test_1 - y_out_1).max() < 1e-6
         assert np.abs(y_test_2 - y_out_3).max() < 1e-6
 
-        train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-                                              tf.get_default_graph())
-        train_writer.close()
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
 
     def test_get_output_stochastic_tensor(self):
         pass
