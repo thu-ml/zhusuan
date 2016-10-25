@@ -358,7 +358,30 @@ class TestStochasticGraph:
         # train_writer.close()
 
     def test_get_output_control_deps(self):
-        pass
+        # a -> b ---> e -----
+        # c -> d ----/       \
+        #       \ ----------- f
+        with StochasticGraph() as model:
+            a = tf.placeholder(tf.float32, name='a')
+            b = tf.identity(a, name='b')
+            c = tf.placeholder(tf.float32, name='c')
+            d = tf.identity(c, name='d')
+            with tf.control_dependencies([b, d]):
+                e = tf.zeros([2, 2], name='e')
+            with tf.control_dependencies([e, d]):
+                f = tf.ones([2, 2], name='f')
+
+        f_out_only_c = model.get_output(f, inputs={d: tf.ones([]), e: tf.ones([2,2])})
+        f_out_only_a = model.get_output(f, inputs={d: tf.ones([])})
+
+        with tf.Session() as sess:
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(f)
+                sess.run(e, feed_dict={a: 1.})
+            f_out_only_c_ = sess.run(f_out_only_c[0], feed_dict={c: 1.})
+            f_out_only_a_ = sess.run(f_out_only_a[0], feed_dict={a: 1.})
+            assert np.abs(f_out_only_c_ - np.ones([2, 2])).max() < 1e-8
+            assert np.abs(f_out_only_a_ - np.ones([2, 2])).max() < 1e-8
 
     def test_get_output_control_flow(self):
         # while_loop, scan, TensorArray
