@@ -8,14 +8,53 @@ from __future__ import division
 import tensorflow as tf
 
 from zhusuan.utils import add_name_scope
-from zhusuan.distributions import norm, discrete
+from zhusuan.distributions import norm, discrete, bernoulli
 from .base import *
 
 
 class Normal(StochasticTensor):
-    """
+    def __init__(self,
+                 mean,
+                 logstd,
+                 sample_index=None,
+                 n_samples=1,
+                 reparameterized=True,
+                 name=None):
+        super(Normal, self).__init__([mean, logstd, sample_index, n_samples])
 
-    """
+    @add_name_scope
+    def sample(self, **kwargs):
+        pass
+
+    @add_name_scope
+    def log_p(self, given, inputs):
+        pass
+
+
+class Discrete(StochasticTensor):
+    def __init__(self, p, sample_index=None, n_samples=1, name=None):
+        super(Discrete, self).__init__([p, sample_index, n_samples])
+
+    @add_name_scope
+    def sample(self, **kwargs):
+        pass
+
+    @add_name_scope
+    def log_p(self, given, inputs):
+        pass
+
+
+class Bernoulli(StochasticTensor):
+    def __init__(self, p, sample_index=None, n_samples=1, name=None):
+        super(Bernoulli, self).__init__([p, sample_index, n_samples])
+
+    @add_name_scope
+    def sample(self, **kwargs):
+        pass
+
+    @add_name_scope
+    def log_p(self, given, inputs):
+        pass
 
 
 # class Normal(Layer):
