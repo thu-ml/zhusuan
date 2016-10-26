@@ -4,7 +4,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import six
 from six.moves import map
@@ -144,8 +144,9 @@ class StochasticGraph(Context):
                                     "StochasticGraph.get_output() should "
                                     "consist of tf.Tensor pairs. Error type: "
                                     "({}, {})".format(type(k), type(v)))
-            input_ops = dict((k.op, v.op)
-                             for k, v in six.iteritems(inputs))
+            input_ops = defaultdict(set)
+            for k, v in six.iteritems(inputs):
+                input_ops[k.op].add(v.op)
 
             def _whether_treat_as_inputs(tensor):
                 """
@@ -167,7 +168,7 @@ class StochasticGraph(Context):
             treat_as_inputs = filter(_whether_treat_as_inputs, inputs.keys())
             all_tensors = get_backward_tensors(requested_tensors,
                                                treat_as_inputs)
-            print(all_tensors)
+            # print(all_tensors)
 
             # copy each op by topological order.
             copied_tensors = {}
@@ -182,9 +183,14 @@ class StochasticGraph(Context):
                     return ge.keep_t_if_possible_handler(info, t)
 
             def _replace_op_with_replacement_handler(info, op):
-
                 if op in input_ops:
-                    return input_ops[op]
+                    if len(input_ops[op]) > 1:
+                        raise ValueError("Trying to replace several Tensors "
+                                         "that share the same op, while the "
+                                         "op serves as control dependencies "
+                                         "for another tensor being copied.")
+                    else:
+                        return list(input_ops[op])[0]
                 elif op in copied_ops:
                     return copied_ops[op]
                 else:
@@ -201,7 +207,7 @@ class StochasticGraph(Context):
                 return False
 
             for tensor in all_tensors:
-                print(tensor.name, _whether_to_copy(tensor))
+                # print(tensor.name, _whether_to_copy(tensor))
                 if (_whether_to_copy(tensor)) and (
                         tensor.op not in copied_ops):
                     sgv = ge.make_view([tensor.op])
@@ -214,8 +220,6 @@ class StochasticGraph(Context):
                     copied_sgv, info = copier(sgv, sgv.graph, "", "",
                                               reuse_dst_scope=True)
                     copied_ops[tensor.op] = info.transformed(tensor.op)
-                    # TODO: avoid redundant copy when using many-to-many op
-                    # TODO: add test
                     op_outputs = tensor.op.outputs[:]
                     for output in op_outputs:
                         copied_tensors[output] = info.transformed(output)

@@ -392,6 +392,7 @@ class TestStochasticGraph:
 
     def test_get_output_control_flow(self):
         # while_loop, scan, TensorArray
+        # TODO: add control flow test for StochasticGraph.get_output
         pass
 
     def test_get_output_variable(self):
@@ -501,6 +502,7 @@ class TestStochasticGraph:
         assert np.abs(y_test_1 - y_out_1).max() < 1e-6
         assert np.abs(y_test_2 - y_out_3).max() < 1e-6
 
+        # TODO: deal with name_scope conflicts when copying batch_norm
         # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
         #                                       tf.get_default_graph())
         # train_writer.close()
