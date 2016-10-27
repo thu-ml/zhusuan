@@ -16,11 +16,11 @@ class Normal(StochasticTensor):
     def __init__(self,
                  mean,
                  logstd,
-                 sample_index=None,
+                 sample_dim=None,
                  n_samples=1,
                  reparameterized=True,
                  name=None):
-        super(Normal, self).__init__([mean, logstd, sample_index, n_samples])
+        super(Normal, self).__init__([mean, logstd, sample_dim, n_samples])
 
     @add_name_scope
     def sample(self, **kwargs):

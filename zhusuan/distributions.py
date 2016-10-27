@@ -26,48 +26,91 @@ class Normal:
         pass
 
     @add_name_scope
-    def rvs(self, loc=0., scale=1., shape=None):
+    def rvs(self,
+            mean=0.,
+            logstd=1.,
+            sample_dim=None,
+            n_samples=1,
+            reparameterized=False):
         """
-        Generate random independent normal samples which form a tensor of
-        shape=size. We don't support array-like loc and scale due to
-        limitations of tensorflow.random_normal, that is, this can only
-        generates i.i.d samples. Also note that we explicitly forbid gradient
-        to propagate through the random number generator here.
+        Generate independent normal samples which forms a Tensor.
 
-        :param loc: A 0-D Tensor or python value. The mean of the Normal.
-        :param scale: A 0-D Tensor or python value. The standard deviation
-            of the Normal.
-        :param shape: A 1-D Tensor or numpy array. The shape of the output
-            tensor.
+        :param mean: A Tensor, python value or numpy array. The mean of the
+            Normal distribution.
+        :param logstd: A Tensor, python value or numpy array. The log
+            standard deviation of the Normal distribution. Should have the same
+            shape with `mean`.
+        :param sample_dim: A Tensor scalar, int or None. The sample dimension.
+            If None, this means no new sample dimension is created. In this
+            case `n_samples` must be set to 1, otherwise an Exception is
+            raised.
+        :param n_samples: A Tensor scalar or int. Number of samples to
+            generate.
+        :param reparameterized: Bool. If True, gradients on samples from this
+            Normal distribution are allowed to propagate into inputs in this
+            function, using the reparametrization trick from (Kingma, 2013).
 
-        :return: A Tensor of specified shape filled with random i.i.d. normal
-            samples.
+        :return: A Tensor. Samples from the Normal distribution.
         """
-        loc = tf.convert_to_tensor(loc, dtype=tf.float32)
-        scale = tf.convert_to_tensor(scale, dtype=tf.float32)
-        return tf.random_normal(shape, tf.stop_gradient(loc),
-                                tf.stop_gradient(scale))
+        # TODO: static shape inference
+        mean = tf.convert_to_tensor(mean, dtype=tf.float32)
+        logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
+        _assert_shape_match = tf.Assert(
+            tf.equal(tf.shape(mean), tf.shape(logstd)),
+            [tf.shape(mean), tf.shape(logstd)])
+        with tf.control_dependencies([_assert_shape_match]):
+            base_shape = tf.shape(mean)
+        std = tf.exp(logstd)
+        with tf.control_dependencies([tf.check_numerics(std, "std")]):
+            std = tf.identity(std)
+        if not reparameterized:
+            mean = tf.stop_gradient(mean)
+            std = tf.stop_gradient(std)
+        if sample_dim is None:
+            shape = base_shape
+        else:
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            n_samples = tf.convert_to_tensor(n_samples, tf.int32)
+            shape = tf.concat(0, [base_shape[:sample_dim],
+                                  tf.pack([n_samples]),
+                                  base_shape[sample_dim:]])
+            mean = tf.expand_dims(mean, sample_dim)
+            std = tf.expand_dims(std, sample_dim)
+        samples = tf.random_normal(shape) * std + mean
+        return samples
 
     @add_name_scope
-    def logpdf(self, x, loc=0., scale=1., eps=1e-8):
+    def logpdf(self, x, mean=0., logstd=1., sample_dim=None):
         """
         Log probability density function of Normal distribution.
 
-        :param x: A Tensor. The value at which to evaluate the log density
-            function.
-        :param loc: A Tensor or numpy array. The mean of the Normal.
-        :param scale: A Tensor or numpy array. The standard deviation of
-            the Normal.
+        :param x: A Tensor, python value or numpy array. The value at which to
+            evaluate the log density function. Can be broadcast to match
+            `mean` and `logstd`.
+        :param mean: A Tensor, python value or numpy array. The mean of the
+            Normal. Can be broadcast to match `x` and `logstd`.
+        :param logstd: A Tensor, python value or numpy array. The log standard
+            deviation of the Normal. Can be broadcast to match `x` and `mean`.
+        :param sample_dim: A Tensor scalar, int or None. The sample dimension
+            which `x` has more than `mean` and `logstd`. If None, `x` is
+            supposed to be a one-sample result, which remains the same shape
+            with mean and logstd.
 
         :return: A Tensor of the same shape as `x` (after broadcast) with
             function values.
         """
+        # TODO: static shape inference
         x = tf.convert_to_tensor(x, dtype=tf.float32)
-        loc = tf.convert_to_tensor(loc, dtype=tf.float32)
-        scale = tf.convert_to_tensor(scale, dtype=tf.float32)
-        scale = tf.clip_by_value(scale, eps, np.inf)
+        mean = tf.convert_to_tensor(mean, dtype=tf.float32)
+        logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
+        if sample_dim is not None:
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            mean = tf.expand_dims(mean, sample_dim)
+            logstd = tf.expand_dims(logstd, sample_dim)
+        with tf.control_dependencies([tf.check_numerics(logstd, "logstd")]):
+            std = tf.exp(logstd)
         c = -0.5 * np.log(2 * np.pi)
-        return c - tf.log(scale) - tf.square(x - loc) / (2 * tf.square(scale))
+        return c - logstd - tf.square(x - mean) / (2 * tf.square(std))
 
 
 class Logistic:
