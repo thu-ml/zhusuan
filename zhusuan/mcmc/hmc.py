@@ -58,8 +58,9 @@ class HMC:
         acceptance_rate = tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
         u01 = tf.random_uniform(shape=[])
 
-        new_q = tf.cond(u01 < acceptance_rate,
-                        lambda: map(lambda (x, y): x.assign(y), zip(self.q, current_q)),
-                        lambda: self.q)
+        new_q = map(lambda (q, new_q):
+                    tf.cond(u01 < acceptance_rate,
+                            lambda: q.assign(new_q),
+                            lambda: q), zip(self.q, current_q))
 
         return new_q, p, old_hamiltonian, new_hamiltonian

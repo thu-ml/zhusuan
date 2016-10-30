@@ -14,27 +14,27 @@ from zhusuan.mcmc.hmc import HMC
 float_eps = 1e-30
 
 # Load MNIST dataset
-n = 600
-n_dims = 784
-mu = 0
-sigma = 1./math.sqrt(n)
-
-data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'mnist.pkl.gz')
-X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
-X_train = X_train[:n] * 256
-y_train = y_train[:n]
-X_test = X_test * 256
-
-# Load German credits dataset
-# n = 900
-# n_dims = 24
+# n = 600
+# n_dims = 784
 # mu = 0
 # sigma = 1./math.sqrt(n)
 #
 # data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-#                          'data', 'german.data-numeric')
-# X_train, y_train, X_test, y_test = load_uci_german_credits(data_path, n)
+#                              'data', 'mnist.pkl.gz')
+# X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
+# X_train = X_train[:n] * 256
+# y_train = y_train[:n]
+# X_test = X_test * 256
+
+# Load German credits dataset
+n = 900
+n_dims = 24
+mu = 0
+sigma = 1./math.sqrt(n)
+
+data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         'data', 'german.data-numeric')
+X_train, y_train, X_test, y_test = load_uci_german_credits(data_path, n)
 
 # Define graph
 # Data
@@ -66,7 +66,8 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
 
 # Sampler
 sampler = HMC(step_size=1e-3, num_leapfrog_steps=10)
-sample_step, _, _, _ = sampler.sample(log_joint, vars)
+sample_step, _, old_hamiltonian_step, new_hamiltonian_step = sampler.sample(
+    log_joint, vars)
 
 # Session
 sess = tf.Session()
@@ -90,7 +91,9 @@ test_scores = np.zeros((X_test.shape[0]))
 for i in range(chain_length):
     # Feed data in
     sess.run(update_data, feed_dict={x_input: X_train})
-    model = sess.run(sample_step)
+    model, oh, nh = sess.run([sample_step, old_hamiltonian_step,
+                              new_hamiltonian_step],
+                              feed_dict={y: y_train})
 
     # Compute model sum
     if i == burnin:
