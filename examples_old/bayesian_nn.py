@@ -16,7 +16,7 @@ from dataset import standardize
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.distributions import norm, bernoulli
+    from zhusuan.distributions_old import norm, bernoulli
     from zhusuan.layers_old import *
     from zhusuan.variational import advi
 except:

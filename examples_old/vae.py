@@ -15,7 +15,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.distributions import norm, bernoulli
+    from zhusuan.distributions_old import norm, bernoulli
     from zhusuan.layers_old import *
     from zhusuan.variational import advi
     from zhusuan.evaluation import is_loglikelihood
@@ -25,7 +25,6 @@ except:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     import dataset
-    from deconv import deconv2d
 except:
     raise ImportError()
 
@@ -42,15 +41,11 @@ class M1:
         self.n_x = n_x
         with pt.defaults_scope(activation_fn=tf.nn.relu):
             self.l_x_z = (pt.template('z').
-                          reshape([-1, 1, 1, self.n_z]).
-                          deconv2d(3, 128, edges='VALID').
+                          fully_connected(500).
                           batch_normalize(scale_after_normalization=True).
-                          deconv2d(5, 64, edges='VALID').
+                          fully_connected(500).
                           batch_normalize(scale_after_normalization=True).
-                          deconv2d(5, 32, stride=2).
-                          batch_normalize(scale_after_normalization=True).
-                          deconv2d(5, 1, stride=2,
-                                   activation_fn=tf.nn.sigmoid))
+                          fully_connected(n_x, activation_fn=tf.nn.sigmoid))
 
     def log_prob(self, latent, observed, given):
         """
@@ -76,12 +71,11 @@ class M1:
         return log_px_z + log_pz
 
 
-def q_net(n_x, n_xl, n_z, n_samples):
+def q_net(n_x, n_z, n_samples):
     """
     Build the recognition network (Q-net) used as variational posterior.
 
     :param n_x: Int. The dimension of observed variables (x).
-    :param n_xl: Int. The height/width dimension of observed variables (x).
     :param n_z: Int. The dimension of latent variables (z).
     :param n_samples: A Int or a Tensor of type int. Number of samples of
         latent variables.
@@ -91,15 +85,10 @@ def q_net(n_x, n_xl, n_z, n_samples):
     with pt.defaults_scope(activation_fn=tf.nn.relu):
         lx = InputLayer((None, n_x))
         lz_x = PrettyTensor({'x': lx}, pt.template('x').
-                            reshape([-1, n_xl, n_xl, 1]).
-                            conv2d(5, 32, stride=2).
+                            fully_connected(500).
                             batch_normalize(scale_after_normalization=True).
-                            conv2d(5, 64, stride=2).
-                            batch_normalize(scale_after_normalization=True).
-                            conv2d(5, 128, edges='VALID').
-                            batch_normalize(scale_after_normalization=True).
-                            dropout(0.9).
-                            flatten())
+                            fully_connected(500).
+                            batch_normalize(scale_after_normalization=True))
         lz_mean = PrettyTensor({'z': lz_x}, pt.template('z').
                                fully_connected(n_z, activation_fn=None).
                                reshape((-1, 1, n_z)))
@@ -111,7 +100,7 @@ def q_net(n_x, n_xl, n_z, n_samples):
 
 
 if __name__ == "__main__":
-    tf.set_random_seed(1236)
+    tf.set_random_seed(1237)
 
     # Load MNIST
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -122,21 +111,20 @@ if __name__ == "__main__":
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_x = x_train.shape[1]
-    n_xl = np.sqrt(n_x)
 
     # Define model parameters
     n_z = 40
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 100
+    ll_samples = 5000
     epoches = 3000
     batch_size = 100
     test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
-    learning_rate = 0.0003
+    learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
 
@@ -145,7 +133,7 @@ if __name__ == "__main__":
             with tf.variable_scope("model", reuse=reuse) as scope:
                 model = M1(n_z, x_train.shape[1])
             with tf.variable_scope("variational", reuse=reuse) as scope:
-                lx, lz = q_net(n_x, n_xl, n_z, n_samples)
+                lx, lz = q_net(n_x, n_z, n_samples)
         return model, lx, lz
 
     # Build the training computation graph
