@@ -71,7 +71,8 @@ class Normal:
             mean = tf.stop_gradient(mean)
             std = tf.stop_gradient(std)
         if sample_dim is None:
-            with tf.control_dependencies([tf.equal(n_samples, 1)]):
+            _assert_one_sample = tf.Assert(tf.equal(n_samples, 1), [n_samples])
+            with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
@@ -205,7 +206,8 @@ class Bernoulli:
         p = tf.sigmoid(logits)
         base_shape = tf.shape(p)
         if sample_dim is None:
-            with tf.control_dependencies([tf.equal(n_samples, 1)]):
+            _assert_one_sample = tf.Assert(tf.equal(n_samples, 1), [n_samples])
+            with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
@@ -285,7 +287,8 @@ class Discrete:
         samples_flat = tf.one_hot(tf.multinomial(logits_flat, n_samples),
                                   depth)
         if sample_dim is None:
-            with tf.control_dependencies([tf.equal(n_samples, 1)]):
+            _assert_one_sample = tf.Assert(tf.equal(n_samples, 1), [n_samples])
+            with tf.control_dependencies([_assert_one_sample]):
                 samples = tf.reshape(samples_flat, base_shape)
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
@@ -298,9 +301,9 @@ class Discrete:
             original_mask = tf.cast(tf.one_hot(n_dims - 2, 5), tf.bool)
             sample_dims = tf.ones(n_dims, tf.int32) * sample_dim
             originals = tf.ones(n_dims, tf.int32) * (n_dims - 2)
-            perm_1 = tf.select(original_mask, sample_dims, dims)
-            perm_2 = tf.select(sample_dim_mask, originals, perm_1)
-            samples = tf.transpose(samples, perm_2)
+            perm = tf.select(original_mask, sample_dims, dims)
+            perm = tf.select(sample_dim_mask, originals, perm)
+            samples = tf.transpose(samples, perm)
         return samples
 
     @add_name_scope
@@ -336,7 +339,7 @@ class Discrete:
             tf.equal(tf.shape(logits), tf.shape(x)),
             [tf.shape(logits), tf.shape(x)])
         with tf.control_dependencies([_assert_shape_match]):
-            logits = tf.identity(logits)
+            x = tf.argmax(x, tf.rank(x) - 1)
         return tf.nn.sparse_softmax_cross_entropy_with_logits(logits, x)
 
 
