@@ -13,6 +13,8 @@ from zhusuan.mcmc.hmc import HMC
 
 float_eps = 1e-30
 
+tf.set_random_seed(0)
+
 # Load MNIST dataset
 # n = 600
 # n_dims = 784
@@ -65,7 +67,7 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 # Sampler
-sampler = HMC(step_size=1e-3, num_leapfrog_steps=10)
+sampler = HMC(step_size=1e-3, num_leapfrog_steps=127)
 sample_step, _, old_hamiltonian_step, new_hamiltonian_step = sampler.sample(
     log_joint, vars)
 
@@ -94,6 +96,7 @@ for i in range(chain_length):
     model, oh, nh = sess.run([sample_step, old_hamiltonian_step,
                               new_hamiltonian_step],
                               feed_dict={y: y_train})
+    print(oh, nh)
 
     # Compute model sum
     if i == burnin:
