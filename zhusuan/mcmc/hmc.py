@@ -35,15 +35,6 @@ class HMC:
                                 0.5*tf.reduce_sum(tf.square(x)),
                                 var_list))
 
-        # Half step: p = p + epsilon / 2 * gradient q
-        # _, grads = get_gradient(current_q)
-        # current_p = map(lambda (x, y): x + self.step_size/2 * y,
-        #                 zip(current_p, grads))
-        #
-        # current_p = [tf.tuple([current_p[0],
-        #                       tf.Print(current_p, [current_p, current_q])])[0]]
-        #cp = map(lambda x: tf.identity(x), self.q)
-
         # Full steps
         def loop_cond(i, current_q, current_p):
             return i < self.num_leapfrog_steps + 1
@@ -66,12 +57,6 @@ class HMC:
 
             current_p = map(lambda (x, y): x + step_size2 * y,
                             zip(current_p, grads))
-
-            # print_op = tf.Print(current_p, [i, step_size1, current_p, current_q])
-            #
-            # res = tf.tuple([i+1, current_q[0], current_p[0], print_op])
-            #
-            # return [res[0], [res[1]], [res[2]]]
 
             return [i + 1, current_q, current_p]
 
