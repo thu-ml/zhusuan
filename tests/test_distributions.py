@@ -14,32 +14,75 @@ from zhusuan.distributions import *
 
 
 class TestNormal:
-    def test_rvs(self):
+    def test_rvs_check_shape(self):
         with tf.Session() as sess:
             with pytest.raises(ValueError):
                 sess.run(norm.rvs(mean=tf.ones([3, 2]),
                                   logstd=tf.zeros([1, 3, 2])))
+
             with pytest.raises(tf.errors.InvalidArgumentError):
                 mean = tf.placeholder(tf.float32, [None, 2])
                 logstd = tf.placeholder(tf.float32, [None, 2])
                 sess.run(norm.rvs(mean, logstd),
                          feed_dict={mean: np.ones([3, 2]),
                                     logstd: np.ones([4, 2])})
-            with pytest.raises(tf.errors.InvalidArgumentError):
-                sess.run(norm.rvs(np.ones([1, 2]), np.ones([1, 2]) * np.inf))
 
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(norm.rvs(np.ones([1, 2]), np.ones([1, 2]),
                                   sample_dim=None, n_samples=2))
 
-            test_values = sess.run(
+    def test_rvs_check_numerics(self):
+        with tf.Session() as sess:
+            sess.run(norm.rvs(np.ones([1, 2]), np.ones([1, 2]) * np.inf,
+                              check_numerics=False))
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(norm.rvs(np.ones([1, 2]), np.ones([1, 2]) * np.inf))
+
+    def test_rvs_shape(self):
+        with tf.Session() as sess:
+            mean = tf.placeholder(tf.float32, [None, 2])
+            logstd = tf.placeholder(tf.float32, [None, 2])
+            a = sess.run(
                 norm.rvs(mean, logstd, sample_dim=0, n_samples=3),
                 feed_dict={mean: np.ones([1, 2]), logstd: np.ones([1, 2])})
-            assert(test_values.shape == (3, 1, 2))
+            assert a.shape == (3, 1, 2)
+
+            b = sess.run(
+                norm.rvs(mean, logstd),
+                feed_dict={mean: np.ones([1, 2]), logstd: np.ones([1, 2])}
+            )
+            assert b.shape == (1, 2)
 
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(norm.rvs(np.ones([1, 2]), np.ones([1, 2]),
                                   sample_dim=-1, n_samples=1))
+
+    def test_rvs_static_shape(self):
+        pass
+
+    def test_rvs_reparameterized(self):
+        with tf.Session() as sess:
+            mean = tf.ones([10, 10])
+            logstd = tf.zeros([10, 10])
+            a = norm.rvs(mean, logstd, reparameterized=True)
+            mean_grads, logstd_grads = tf.gradients(tf.reduce_mean(a),
+                                                    [mean, logstd])
+            mean_grads_, logstd_grads_ = sess.run([mean_grads, logstd_grads])
+            assert np.abs(mean_grads_).max() > 1e-6
+            assert np.abs(logstd_grads_).max() > 1e-6
+
+            b = norm.rvs(mean, logstd)
+            mean_grads, logstd_grads = tf.gradients(tf.reduce_mean(b),
+                                                    [mean, logstd])
+            assert mean_grads is None
+            assert logstd_grads is None
+
+    def test_rvs_value(self):
+        with tf.Session() as sess:
+            a = sess.run(
+                norm.rvs(np.ones([10, 10]), np.zeros([10, 10]), sample_dim=0,
+                         n_samples=8))
+            assert np.max(stats.normaltest(a, axis=0)[1]) > 0.05
 
     def test_logpdf(self):
         mean = tf.placeholder(tf.float32, [None, 2])

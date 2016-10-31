@@ -64,9 +64,9 @@ class Normal:
             raise ValueError(
                 "mean and logstd must have the same shape (%s vs %s)"
                 % (mean.get_shape(), logstd.get_shape()))
-        _assert_shape_match = tf.Assert(
-            tf.reduce_all(tf.equal(tf.shape(mean), tf.shape(logstd))),
-            [tf.shape(mean), tf.shape(logstd)])
+        _assert_shape_match = tf.assert_equal(
+            tf.shape(mean), tf.shape(logstd),
+            message="mean and logstd must have the same shape")
         with tf.control_dependencies([_assert_shape_match]):
             base_shape = tf.shape(mean)
         std = tf.exp(logstd)
@@ -77,15 +77,17 @@ class Normal:
             mean = tf.stop_gradient(mean)
             std = tf.stop_gradient(std)
         if sample_dim is None:
-            _assert_one_sample = tf.Assert(tf.equal(n_samples, 1), [n_samples])
+            _assert_one_sample = tf.assert_equal(
+                n_samples, 1,
+                message="n_samples must be 1 when sample_dim is None")
             with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
         else:
-            # TODO: support negative index
-            _assert_positive_dim = tf.Assert(tf.greater_equal(sample_dim, 0),
-                                             [sample_dim])
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
-                sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+                sample_dim = tf.identity(sample_dim)
             shape = tf.concat(0, [base_shape[:sample_dim],
                                   tf.pack([n_samples]),
                                   base_shape[sample_dim:]])
@@ -125,10 +127,11 @@ class Normal:
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         if sample_dim is not None:
-            _assert_positive_dim = tf.Assert(tf.greater_equal(sample_dim, 0),
-                                             [sample_dim])
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
-                sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+                sample_dim = tf.identity(sample_dim)
             mean = tf.expand_dims(mean, sample_dim)
             logstd = tf.expand_dims(logstd, sample_dim)
         c = -0.5 * np.log(2 * np.pi)
@@ -179,10 +182,11 @@ class Logistic:
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         if sample_dim is not None:
-            _assert_positive_dim = tf.Assert(tf.greater_equal(sample_dim, 0),
-                                             [sample_dim])
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
-                sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+                sample_dim = tf.identity(sample_dim)
             mean = tf.expand_dims(mean, sample_dim)
             logstd = tf.expand_dims(logstd, sample_dim)
         inv_std = tf.exp(-logstd)
@@ -222,11 +226,17 @@ class Bernoulli:
         p = tf.sigmoid(logits)
         base_shape = tf.shape(p)
         if sample_dim is None:
-            _assert_one_sample = tf.Assert(tf.equal(n_samples, 1), [n_samples])
+            _assert_one_sample = tf.assert_equal(
+                n_samples, 1,
+                message="n_samples must be 1 when sample_dim is None")
             with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.identity(sample_dim)
             p = tf.expand_dims(p, sample_dim)
             shape = tf.concat(0, [base_shape[:sample_dim],
                                   tf.pack([n_samples]),
@@ -256,13 +266,23 @@ class Bernoulli:
         logits = tf.convert_to_tensor(logits, dtype=tf.float32)
         if sample_dim is not None:
             sample_dim = tf.convert_to_tensor(sample_dim, dtype=tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.identity(sample_dim)
             logits = tf.expand_dims(logits, sample_dim)
             multiples = tf.sparse_to_dense([sample_dim], [tf.rank(logits)],
                                            [tf.shape(x)[sample_dim]], 1)
             logits = tf.tile(logits, multiples)
-        _assert_shape_match = tf.Assert(
-            tf.reduce_all(tf.equal(tf.shape(logits), tf.shape(x))),
-            [tf.shape(logits), tf.shape(x)])
+        try:
+            x.get_shape().merge_with(logits.get_shape())
+        except ValueError:
+            raise ValueError(
+                "Shapes of x and logits don't match (%s vs %s)"
+                % (x.get_shape(), logits.get_shape()))
+        _assert_shape_match = tf.assert_equal(
+            tf.shape(x), tf.shape(logits),
+            message="Shapes of x and logits must match")
         with tf.control_dependencies([_assert_shape_match]):
             logits = tf.identity(logits)
         return -tf.nn.sigmoid_cross_entropy_with_logits(logits, x)
@@ -303,11 +323,17 @@ class Discrete:
         samples_flat = tf.one_hot(tf.multinomial(logits_flat, n_samples),
                                   depth)
         if sample_dim is None:
-            _assert_one_sample = tf.Assert(tf.equal(n_samples, 1), [n_samples])
+            _assert_one_sample = tf.assert_equal(
+                n_samples, 1,
+                message="n_samples must be 1 when sample_dim is None")
             with tf.control_dependencies([_assert_one_sample]):
                 samples = tf.reshape(samples_flat, base_shape)
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.identity(sample_dim)
             shape = tf.concat(0, [base_shape[:-1], tf.pack([n_samples]),
                                   depth])
             samples = tf.reshape(samples_flat, shape)
@@ -347,13 +373,23 @@ class Discrete:
         logits = tf.convert_to_tensor(logits, tf.float32)
         if sample_dim is not None:
             sample_dim = tf.convert_to_tensor(sample_dim, dtype=tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="only support non-negative sample_dim")
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.identity(sample_dim)
             logits = tf.expand_dims(logits, sample_dim)
             multiples = tf.sparse_to_dense([sample_dim], [tf.rank(logits)],
                                            [tf.shape(x)[sample_dim]], 1)
             logits = tf.tile(logits, multiples)
-        _assert_shape_match = tf.Assert(
-            tf.reduce_all(tf.equal(tf.shape(logits), tf.shape(x))),
-            [tf.shape(logits), tf.shape(x)])
+        try:
+            x.get_shape().merge_with(logits.get_shape())
+        except ValueError:
+            raise ValueError(
+                "Shapes of x and logits don't match (%s vs %s)"
+                % (x.get_shape(), logits.get_shape()))
+        _assert_shape_match = tf.assert_equal(
+            tf.shape(x), tf.shape(logits),
+            message="Shapes of x and logits must match")
         with tf.control_dependencies([_assert_shape_match]):
             x = tf.argmax(x, tf.rank(x) - 1)
         return tf.nn.sparse_softmax_cross_entropy_with_logits(logits, x)
