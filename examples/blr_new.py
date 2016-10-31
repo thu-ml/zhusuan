@@ -69,7 +69,7 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
 
 # Sampler
 sampler = HMC(step_size=1e-3, num_leapfrog_steps=127)
-sample_step, _, old_hamiltonian_step, new_hamiltonian_step = sampler.sample(
+sample_step, p_step, old_hamiltonian_step, new_hamiltonian_step = sampler.sample(
     log_joint, vars)
 
 # Session
@@ -96,9 +96,11 @@ all_samples = []
 for i in range(chain_length):
     # Feed data in
     sess.run(update_data, feed_dict={x_input: X_train})
-    model, oh, nh = sess.run([sample_step, old_hamiltonian_step,
+    model, p, oh, nh = sess.run([sample_step, p_step, old_hamiltonian_step,
                               new_hamiltonian_step],
                               feed_dict={y: y_train})
+
+    print(p, oh, nh)
 
     # Compute model sum
     if i == burnin:

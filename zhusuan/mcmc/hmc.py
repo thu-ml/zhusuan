@@ -36,35 +36,50 @@ class HMC:
                                 var_list))
 
         # Half step: p = p + epsilon / 2 * gradient q
-        _, grads = get_gradient(current_q)
-        current_p = map(lambda (x, y): x + self.step_size/2 * y,
-                        zip(current_p, grads))
+        # _, grads = get_gradient(current_q)
+        # current_p = map(lambda (x, y): x + self.step_size/2 * y,
+        #                 zip(current_p, grads))
+        #
+        # current_p = [tf.tuple([current_p[0],
+        #                       tf.Print(current_p, [current_p, current_q])])[0]]
+        #cp = map(lambda x: tf.identity(x), self.q)
 
         # Full steps
         def loop_cond(i, current_q, current_p):
-            return i < self.num_leapfrog_steps
+            return i < self.num_leapfrog_steps + 1
 
         def loop_body(i, current_q, current_p):
-            current_q = map(lambda (x, y): x + self.step_size * y,
+            step_size1 = tf.cond(i > 0,
+                                 lambda: self.step_size,
+                                 lambda: tf.constant(0.0, dtype=tf.float32))
+
+            current_q = map(lambda (x, y): x + step_size1 * y,
                             zip(current_q, current_p))
 
             # p = p + epsilon / 2 * gradient q
             _, grads = get_gradient(current_q)
 
-            step_size = tf.cond(i < self.num_leapfrog_steps - 1,
+            step_size2 = tf.cond(tf.logical_and(tf.less(i, self.num_leapfrog_steps),
+                                                tf.less(0, i)),
                                 lambda: self.step_size,
                                 lambda: self.step_size / 2)
 
-            current_p = map(lambda (x, y): x + step_size * y,
+            current_p = map(lambda (x, y): x + step_size2 * y,
                             zip(current_p, grads))
 
-            return [i+1, current_q, current_p]
+            # print_op = tf.Print(current_p, [i, step_size1, current_p, current_q])
+            #
+            # res = tf.tuple([i+1, current_q[0], current_p[0], print_op])
+            #
+            # return [res[0], [res[1]], [res[2]]]
+
+            return [i + 1, current_q, current_p]
 
         i = tf.constant(0)
         _, current_q, current_p = tf.while_loop(loop_cond,
                              loop_body,
                              [i, current_q, current_p],
-                             back_prop=False)
+                             back_prop=False, parallel_iterations=1)
 
         # Hamiltonian
         old_hamiltonian = -log_posterior(self.q) + kinetic_energy(p)
@@ -82,4 +97,4 @@ class HMC:
         if len(self.q) == 1:
             new_q = [new_q]
 
-        return new_q, current_p, old_hamiltonian, new_hamiltonian
+        return new_q, p, old_hamiltonian, new_hamiltonian
