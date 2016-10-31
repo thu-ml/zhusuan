@@ -8,13 +8,23 @@ import tensorflow as tf
 from copy import copy
 
 
+def leapfrog_integrator(q, p, step_size1, step_size2, grad):
+    q = map(lambda (x, y): x + step_size1 * y,
+                    zip(q, p))
+
+    # p = p + epsilon / 2 * gradient q
+    grads = grad(q)
+
+    p = map(lambda (x, y): x + step_size2 * y,
+                    zip(p, grads))
+
+    return (q, p)
+
+
 class HMC:
     def __init__(self, step_size=1, num_leapfrog_steps=10):
         self.step_size = tf.Variable(step_size)
         self.num_leapfrog_steps = num_leapfrog_steps
-
-    def initialize(self):
-        return tf.initialize_variables(self.step_size)
 
     def sample(self, log_posterior, var_list=None):
         self.q = copy(var_list)
@@ -44,19 +54,14 @@ class HMC:
                                  lambda: self.step_size,
                                  lambda: tf.constant(0.0, dtype=tf.float32))
 
-            current_q = map(lambda (x, y): x + step_size1 * y,
-                            zip(current_q, current_p))
-
-            # p = p + epsilon / 2 * gradient q
-            _, grads = get_gradient(current_q)
-
             step_size2 = tf.cond(tf.logical_and(tf.less(i, self.num_leapfrog_steps),
                                                 tf.less(0, i)),
                                 lambda: self.step_size,
                                 lambda: self.step_size / 2)
 
-            current_p = map(lambda (x, y): x + step_size2 * y,
-                            zip(current_p, grads))
+            current_q, current_p = leapfrog_integrator(current_q, current_p,
+                                                       step_size1, step_size2,
+                                                       lambda q: get_gradient(q)[1])
 
             return [i + 1, current_q, current_p]
 

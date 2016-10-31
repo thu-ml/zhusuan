@@ -100,8 +100,6 @@ for i in range(chain_length):
                               new_hamiltonian_step],
                               feed_dict={y: y_train})
 
-    print(p, oh, nh)
-
     # Compute model sum
     if i == burnin:
         sample_sum = model
