@@ -10,6 +10,7 @@ from zhusuan.optimization.gradient_descent_optimizer import \
     GradientDescentOptimizer
 from zhusuan.distributions import norm, bernoulli
 from zhusuan.mcmc.hmc import HMC
+from zhusuan.diagnostics import ESS
 
 float_eps = 1e-30
 
@@ -78,9 +79,9 @@ sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 sess.run(update_data, feed_dict={x_input: X_train})
 
-#optimizer = GradientDescentOptimizer(sess, {y: y_train}, -log_likelihood,
-#                                     vars, stepsize_tol=1e-9, tol=1e-5)
-#optimizer.optimize()
+optimizer = GradientDescentOptimizer(sess, {y: y_train}, -get_log_joint,
+                                     vars, stepsize_tol=1e-9, tol=1e-5)
+optimizer.optimize()
 
 chain_length = 100
 burnin = 50
@@ -90,13 +91,14 @@ num_samples = chain_length - burnin
 train_scores = np.zeros((X_train.shape[0]))
 test_scores = np.zeros((X_test.shape[0]))
 
+all_samples = []
+
 for i in range(chain_length):
     # Feed data in
     sess.run(update_data, feed_dict={x_input: X_train})
     model, oh, nh = sess.run([sample_step, old_hamiltonian_step,
                               new_hamiltonian_step],
                               feed_dict={y: y_train})
-    print(oh, nh)
 
     # Compute model sum
     if i == burnin:
@@ -104,6 +106,8 @@ for i in range(chain_length):
     elif i > burnin:
         for j in range(len(model)):
             sample_sum[j] += model[j]
+    if i >= burnin:
+        all_samples.append(model)
 
     # evaluate
     n_train_c, train_pred_c, lj = sess.run(
@@ -120,6 +124,8 @@ for i in range(chain_length):
     if i >= burnin:
         train_scores += train_pred_c
         test_scores += test_pred_c
+
+all_samples = np.squeeze(np.array(all_samples))
 
 # Gibbs classifier
 train_scores /= num_samples
@@ -152,4 +158,4 @@ print('Log likelihood of expected parameters: %f, train set accuracy = %f, '
 print('Gibbs classifier: train set accuracy = %f, test set accuracy = %f'
       % (train_accuracy, test_accuracy))
 
-#sampler.stat(burnin)
+print('ESS = {}'.format(ESS(all_samples, burnin=0)))
