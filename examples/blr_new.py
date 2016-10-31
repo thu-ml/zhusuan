@@ -48,7 +48,7 @@ update_data = tf.assign(x, x_input, validate_shape=False, name='update_data')
 
 # Model
 beta = tf.Variable(np.zeros(n_dims), dtype=tf.float32, name='beta')
-mass = [tf.ones([n_dims])]
+mass = [tf.Variable(tf.ones([n_dims]))]
 vars = [beta]
 
 
@@ -70,7 +70,7 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
 
 # Sampler
 chain_length = 1000
-burnin = 500
+burnin = 50
 
 sampler = HMC(step_size=1e-5, num_leapfrog_steps=10, target_acceptance_rate=0.95, m_adapt=burnin)
 sample_steps = sampler.sample(log_joint, vars, mass)

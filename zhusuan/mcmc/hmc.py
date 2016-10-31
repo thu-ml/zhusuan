@@ -120,6 +120,11 @@ class VarianceEstimator:
     def variance(self):
         return map(lambda x: x / (self.count - 1), self.s)
 
+    def precision(self):
+        rate = self.count / (self.count + 5)
+        res = map(lambda x: 1 / (rate * x + (1-rate) * 1e-3), self.variance())
+        return res
+
 
 class HMC:
     def __init__(self, step_size=1, num_leapfrog_steps=10, target_acceptance_rate=0.8,
@@ -131,11 +136,37 @@ class HMC:
         self.step_size_tuner = StepsizeTuner(m_adapt=m_adapt, gamma=gamma, t0=t0, kappa=kappa,
             delta=target_acceptance_rate)
 
+        self.m_adapt = m_adapt
+        self.init_buffer = 10
+        self.term_buffer = 25
+        self.base_window = 15
+        self.next_window = 25
+
     def sample(self, log_posterior, var_list=None, mass=None):
         self.q = copy(var_list)
         self.shapes = map(lambda x: x.initialized_value().get_shape(), self.q)
+        variance_estimator = VarianceEstimator(self.shapes)
 
-        p = random_momentum(mass)
+        # Estimate covariance
+        add_op = tf.cond(tf.logical_and(self.t >= self.init_buffer,
+                                        self.t < self.m_adapt - self.term_buffer),
+                         lambda: variance_estimator.add(self.q),
+                         lambda: [tf.constant(1.0)] + self.q + self.q)
+
+        def update_mass():
+            new_mass = map(lambda(x,y): tf.assign(x, y), zip(mass, variance_estimator.precision()))
+            with tf.control_dependencies(new_mass):
+                variance_estimator.reset()
+            return new_mass
+
+        with tf.control_dependencies(add_op):
+            current_mass = tf.cond(tf.equal(self.t, self.next_window),
+                           update_mass,
+                           lambda: mass)
+            if len(self.shapes) == 1:
+                current_mass = [current_mass]
+
+        p = random_momentum(current_mass)
 
         def get_gradient(var_list):
             log_p = log_posterior(var_list)
@@ -153,11 +184,11 @@ class HMC:
                 # Calculate acceptance_rate
                 new_q, new_p = leapfrog_integrator(self.q, p, tf.constant(0.0), step_size / 2,
                                                    lambda var_list: get_gradient(var_list)[1],
-                                                   mass)
+                                                   current_mass)
                 new_q, new_p = leapfrog_integrator(new_q, new_p, step_size, step_size / 2,
                                                    lambda var_list: get_gradient(var_list)[1],
-                                                   mass)
-                _, _, acceptance_rate = get_acceptance_rate(self.q, p, new_q, new_p, log_posterior, mass)
+                                                   current_mass)
+                _, _, acceptance_rate = get_acceptance_rate(self.q, p, new_q, new_p, log_posterior, current_mass)
 
                 # Change step size and stopping criteria
                 new_step_size = tf.cond(tf.less(acceptance_rate, self.target_acceptance_rate),
@@ -175,7 +206,8 @@ class HMC:
                                         [self.step_size, tf.constant(1.0), tf.constant(True)])
             return tf.assign(self.step_size, new_step_size)
 
-        new_step_size = tf.cond(tf.equal(self.t, 0), tune_step_size, lambda: self.step_size)
+        new_step_size = tf.cond(tf.logical_or(tf.equal(self.t, 0), tf.equal(self.t, self.next_window)),
+                                tune_step_size, lambda: self.step_size)
 
         # Leapfrog
         current_p = p
@@ -197,7 +229,7 @@ class HMC:
             current_q, current_p = leapfrog_integrator(current_q, current_p,
                                                        step_size1, step_size2,
                                                        lambda q: get_gradient(q)[1],
-                                                       mass)
+                                                       current_mass)
 
             return [i + 1, current_q, current_p]
 
@@ -209,7 +241,7 @@ class HMC:
 
         # Hamiltonian
         old_hamiltonian, new_hamiltonian, acceptance_rate = \
-            get_acceptance_rate(self.q, p, current_q, current_p, log_posterior, mass)
+            get_acceptance_rate(self.q, p, current_q, current_p, log_posterior, current_mass)
         u01 = tf.random_uniform(shape=[])
 
         new_q = tf.cond(u01 < acceptance_rate,
@@ -223,7 +255,7 @@ class HMC:
 
         # Tune step size
         with tf.control_dependencies([acceptance_rate]):
-            new_stepsize = tf.cond(tf.equal(self.t, 0),
+            new_stepsize = tf.cond(tf.logical_or(tf.equal(self.t, 0), tf.equal(self.t, self.next_window)),
                                    lambda: self.step_size_tuner.restart_and_tune
                                    (new_step_size, acceptance_rate),
                                    lambda: self.step_size_tuner.tune(acceptance_rate))
