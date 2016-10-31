@@ -84,6 +84,35 @@ class StepsizeTuner:
         return step_size
 
 
+class VarianceEstimator:
+    def __init__(self, shape):
+        self.shape = shape
+        self.num_vars = len(shape)
+        self.count = tf.Variable(0.0)
+        self.mean = map(lambda s: tf.Variable(tf.zeros(s)), shape)
+        self.s = map(lambda s: tf.Variable(tf.zeros(s)), shape)
+
+    def reset(self):
+        update_count = tf.assign(self.count, 0.0)
+        update_mean = map(lambda (x,s): tf.assign(x, tf.zeros(s)), zip(self.mean, self.shape))
+        update_s = map(lambda (x, s): tf.assign(x, tf.zeros(s)), zip(self.s, self.shape))
+        return tf.tuple([update_count] + update_mean + update_s)
+
+    def add(self, x):
+        new_count = tf.assign(self.count, self.count + 1)
+        new_mean = []
+        new_s = []
+        for i in range(self.num_vars):
+            delta = x[i] - self.mean[i]
+            new_mean.append(tf.assign(self.mean[i], self.mean[i] + delta / new_count))
+            new_s.append(tf.assign(self.s[i], self.s[i] + delta * (x[i] - new_mean[i])))
+
+        return tf.tuple([new_count] + new_mean + new_s)
+
+    def variance(self):
+        return map(lambda x: x / (self.count - 1), self.s)
+
+
 class HMC:
     def __init__(self, step_size=1, num_leapfrog_steps=10, target_acceptance_rate=0.8):
         self.step_size = tf.Variable(step_size)
