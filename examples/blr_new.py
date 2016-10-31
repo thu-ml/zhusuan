@@ -69,8 +69,7 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
 
 # Sampler
 sampler = HMC(step_size=1e-3, num_leapfrog_steps=10)
-init_step = sampler.init_step_size(log_joint, vars)
-sample_step, p_step, old_hamiltonian_step, new_hamiltonian_step = sampler.sample(
+sample_steps = sampler.sample(
     log_joint, vars)
 
 # Session
@@ -79,8 +78,6 @@ sess = tf.Session()
 # Find a MAP solution
 sess.run(tf.initialize_all_variables())
 sess.run(update_data, feed_dict={x_input: X_train})
-step_size = sess.run(init_step, feed_dict={y: y_train})
-print('Step size = {}'.format(step_size))
 
 optimizer = GradientDescentOptimizer(sess, {y: y_train}, -get_log_joint,
                                      vars, stepsize_tol=1e-9, tol=1e-5)
@@ -99,8 +96,7 @@ all_samples = []
 for i in range(chain_length):
     # Feed data in
     sess.run(update_data, feed_dict={x_input: X_train})
-    model, p, oh, nh = sess.run([sample_step, p_step, old_hamiltonian_step,
-                              new_hamiltonian_step],
+    model, p, oh, nh, t = sess.run(sample_steps,
                               feed_dict={y: y_train})
 
     # Compute model sum

@@ -39,68 +39,56 @@ class HMC:
         self.step_size = tf.Variable(step_size)
         self.num_leapfrog_steps = num_leapfrog_steps
         self.target_acceptance_rate=target_acceptance_rate
-        #self.t = tf.Variable(0)
-
-    def init_step_size(self, log_posterior, var_list=None):
-        factor = 1.1
-        self.q = copy(var_list)
-        self.shapes = map(lambda x: x.initialized_value().get_shape(), self.q)
-
-        p = map(lambda s: tf.random_normal(shape=s), self.shapes)
-
-        def get_gradient(var_list):
-            log_p = log_posterior(var_list)
-            grads = tf.gradients(log_p, var_list)
-            return log_p, grads
-
-        def loop_cond(step_size, last_acceptance_rate, cond):
-            return cond
-
-        def loop_body(step_size, last_acceptance_rate, cond):
-            # Calculate acceptance_rate
-            new_q, new_p = leapfrog_integrator(self.q, p, tf.constant(0.0), step_size/2,
-                                               lambda var_list: get_gradient(var_list)[1])
-            new_q, new_p = leapfrog_integrator(new_q, new_p, step_size, step_size/2,
-                                               lambda var_list: get_gradient(var_list)[1])
-            _, _, acceptance_rate = get_acceptance_rate(self.q, p, new_q, new_p, log_posterior)
-
-            # Change step size and stopping criteria
-            new_step_size = tf.cond(tf.less(acceptance_rate, self.target_acceptance_rate),
-                                lambda: step_size * (1.0 / factor),
-                                lambda: step_size * factor)
-
-            cond = tf.logical_not(
-                tf.logical_xor(tf.less(last_acceptance_rate, self.target_acceptance_rate),
-                                  tf.less(acceptance_rate, self.target_acceptance_rate)))
-
-            return [tf.Print(new_step_size, [new_step_size, acceptance_rate]),
-                    acceptance_rate, cond]
-
-        new_step_size, new_acceptance_rate, _ = tf.while_loop(loop_cond, loop_body,
-                            [self.step_size, tf.constant(1.0), tf.constant(True)])
-
-        return tf.assign(self.step_size, new_step_size)
+        self.t = tf.Variable(0)
 
     def sample(self, log_posterior, var_list=None):
         self.q = copy(var_list)
         self.shapes = map(lambda x: x.initialized_value().get_shape(), self.q)
 
-        # Leapfrog
         p = map(lambda s: tf.random_normal(shape=s), self.shapes)
-        current_p = p
-        current_q = copy(self.q)
 
         def get_gradient(var_list):
             log_p = log_posterior(var_list)
             grads = tf.gradients(log_p, var_list)
             return log_p, grads
 
-        def kinetic_energy(var_list):
-            return tf.add_n(map(lambda x:
-                                0.5*tf.reduce_sum(tf.square(x)),
-                                var_list))
+        # Initialize step size
+        def tune_step_size():
+            factor = 1.1
 
-        # Full steps
+            def loop_cond(step_size, last_acceptance_rate, cond):
+                return cond
+
+            def loop_body(step_size, last_acceptance_rate, cond):
+                # Calculate acceptance_rate
+                new_q, new_p = leapfrog_integrator(self.q, p, tf.constant(0.0), step_size / 2,
+                                                   lambda var_list: get_gradient(var_list)[1])
+                new_q, new_p = leapfrog_integrator(new_q, new_p, step_size, step_size / 2,
+                                                   lambda var_list: get_gradient(var_list)[1])
+                _, _, acceptance_rate = get_acceptance_rate(self.q, p, new_q, new_p, log_posterior)
+
+                # Change step size and stopping criteria
+                new_step_size = tf.cond(tf.less(acceptance_rate, self.target_acceptance_rate),
+                                        lambda: step_size * (1.0 / factor),
+                                        lambda: step_size * factor)
+
+                cond = tf.logical_not(
+                    tf.logical_xor(tf.less(last_acceptance_rate, self.target_acceptance_rate),
+                                   tf.less(acceptance_rate, self.target_acceptance_rate)))
+
+                return [tf.Print(new_step_size, [new_step_size, acceptance_rate]),
+                        acceptance_rate, cond]
+
+            new_step_size, new_acceptance_rate, _ = tf.while_loop(loop_cond, loop_body,
+                                        [self.step_size, tf.constant(1.0), tf.constant(True)])
+            return tf.assign(self.step_size, new_step_size)
+
+        self.step_size = tf.cond(tf.equal(self.t, 0), tune_step_size, lambda: self.step_size)
+
+        # Leapfrog
+        current_p = p
+        current_q = copy(self.q)
+
         def loop_cond(i, current_q, current_p):
             return i < self.num_leapfrog_steps + 1
 
@@ -140,4 +128,7 @@ class HMC:
         if len(self.q) == 1:
             new_q = [new_q]
 
-        return new_q, p, old_hamiltonian, new_hamiltonian
+        with tf.control_dependencies(new_q):
+            update_t = tf.assign(self.t, self.t+1)
+
+        return new_q, p, old_hamiltonian, new_hamiltonian, update_t
