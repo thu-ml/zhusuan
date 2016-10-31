@@ -68,7 +68,8 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 # Sampler
-sampler = HMC(step_size=1e-3, num_leapfrog_steps=127)
+sampler = HMC(step_size=1e-3, num_leapfrog_steps=10)
+init_step = sampler.init_step_size(log_joint, vars)
 sample_step, p_step, old_hamiltonian_step, new_hamiltonian_step = sampler.sample(
     log_joint, vars)
 
@@ -78,6 +79,8 @@ sess = tf.Session()
 # Find a MAP solution
 sess.run(tf.initialize_all_variables())
 sess.run(update_data, feed_dict={x_input: X_train})
+step_size = sess.run(init_step, feed_dict={y: y_train})
+print('Step size = {}'.format(step_size))
 
 optimizer = GradientDescentOptimizer(sess, {y: y_train}, -get_log_joint,
                                      vars, stepsize_tol=1e-9, tol=1e-5)
