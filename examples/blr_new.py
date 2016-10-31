@@ -17,27 +17,27 @@ float_eps = 1e-30
 tf.set_random_seed(0)
 
 # Load MNIST dataset
-# n = 600
-# n_dims = 784
-# mu = 0
-# sigma = 1./math.sqrt(n)
-#
-# data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-#                              'data', 'mnist.pkl.gz')
-# X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
-# X_train = X_train[:n] * 256
-# y_train = y_train[:n]
-# X_test = X_test * 256
-
-# Load German credits dataset
-n = 900
-n_dims = 24
+n = 600
+n_dims = 784
 mu = 0
 sigma = 1./math.sqrt(n)
 
 data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                         'data', 'german.data-numeric')
-X_train, y_train, X_test, y_test = load_uci_german_credits(data_path, n)
+                             'data', 'mnist.pkl.gz')
+X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
+X_train = X_train[:n] * 256
+y_train = y_train[:n]
+X_test = X_test * 256
+
+# Load German credits dataset
+# n = 900
+# n_dims = 24
+# mu = 0
+# sigma = 1./math.sqrt(n)
+#
+# data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+#                          'data', 'german.data-numeric')
+# X_train, y_train, X_test, y_test = load_uci_german_credits(data_path, n)
 
 # Define graph
 # Data
@@ -69,10 +69,10 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 # Sampler
-chain_length = 1000
+chain_length = 100
 burnin = 50
 
-sampler = HMC(step_size=1e-5, num_leapfrog_steps=10, target_acceptance_rate=0.95, m_adapt=burnin)
+sampler = HMC(step_size=1e-5, num_leapfrog_steps=10, target_acceptance_rate=0.8, m_adapt=burnin)
 sample_steps = sampler.sample(log_joint, vars, mass)
 
 # Session

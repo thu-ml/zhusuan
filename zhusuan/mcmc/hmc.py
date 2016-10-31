@@ -137,10 +137,10 @@ class HMC:
             delta=target_acceptance_rate)
 
         self.m_adapt = m_adapt
-        self.init_buffer = 10
-        self.term_buffer = 25
-        self.base_window = 15
-        self.next_window = 25
+        self.init_buffer = int(m_adapt * 0.2)
+        self.term_buffer = int(m_adapt * 0.5)
+        self.base_window = m_adapt - self.init_buffer - self.term_buffer
+        self.next_window = self.init_buffer + self.base_window
 
     def sample(self, log_posterior, var_list=None, mass=None):
         self.q = copy(var_list)
