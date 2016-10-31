@@ -57,7 +57,7 @@ class StepsizeTuner:
 
     def tune(self, acceptance_rate):
         new_step = tf.assign(self.step, self.step + 1)
-        new_total_step = tf.assign(self.step, self.step + 1)
+        new_total_step = tf.assign(self.total_step, self.total_step + 1)
 
         def adapt_stepsize():
             rate1 = tf.div(1.0, new_step + self.t0)

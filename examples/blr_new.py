@@ -68,7 +68,7 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 # Sampler
-sampler = HMC(step_size=1e-3, num_leapfrog_steps=127, target_acceptance_rate=0.95)
+sampler = HMC(step_size=1e-5, num_leapfrog_steps=127, target_acceptance_rate=0.8)
 sample_steps = sampler.sample(log_joint, vars)
 
 # Session
