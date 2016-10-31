@@ -48,6 +48,7 @@ update_data = tf.assign(x, x_input, validate_shape=False, name='update_data')
 
 # Model
 beta = tf.Variable(np.zeros(n_dims), dtype=tf.float32, name='beta')
+mass = [tf.ones([n_dims])]
 vars = [beta]
 
 
@@ -68,8 +69,11 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 # Sampler
-sampler = HMC(step_size=1e-5, num_leapfrog_steps=10, target_acceptance_rate=0.95)
-sample_steps = sampler.sample(log_joint, vars)
+chain_length = 1000
+burnin = 500
+
+sampler = HMC(step_size=1e-5, num_leapfrog_steps=10, target_acceptance_rate=0.95, m_adapt=burnin)
+sample_steps = sampler.sample(log_joint, vars, mass)
 
 # Session
 sess = tf.Session()
@@ -78,12 +82,9 @@ sess = tf.Session()
 sess.run(tf.initialize_all_variables())
 sess.run(update_data, feed_dict={x_input: X_train})
 
-optimizer = GradientDescentOptimizer(sess, {y: y_train}, -get_log_joint,
-                                     vars, stepsize_tol=1e-9, tol=1e-5)
-optimizer.optimize()
-
-chain_length = 100
-burnin = 50
+#optimizer = GradientDescentOptimizer(sess, {y: y_train}, -get_log_joint,
+#                                     vars, stepsize_tol=1e-9, tol=1e-5)
+#optimizer.optimize()
 
 sample_sum = []
 num_samples = chain_length - burnin

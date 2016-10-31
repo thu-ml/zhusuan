@@ -11,6 +11,7 @@ import os
 import zhusuan
 from zhusuan.mcmc.hmc import VarianceEstimator
 
+
 def test_variance_estimator():
     x = tf.random_normal(shape=[10])
     variance_estimator = VarianceEstimator(shape=x.get_shape())
