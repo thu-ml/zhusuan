@@ -10,8 +10,11 @@ from copy import copy
 
 class HMC:
     def __init__(self, step_size=1, num_leapfrog_steps=10):
-        self.step_size = step_size
+        self.step_size = tf.Variable(step_size)
         self.num_leapfrog_steps = num_leapfrog_steps
+
+    def initialize(self):
+        return tf.initialize_variables(self.step_size)
 
     def sample(self, log_posterior, var_list=None):
         self.q = copy(var_list)
@@ -39,7 +42,7 @@ class HMC:
 
         # Full steps
         def loop_cond(i, current_q, current_p):
-            return i < self.num_leapfrog_steps - 1
+            return i < self.num_leapfrog_steps
 
         def loop_body(i, current_q, current_p):
             current_q = map(lambda (x, y): x + self.step_size * y,
@@ -48,7 +51,11 @@ class HMC:
             # p = p + epsilon / 2 * gradient q
             _, grads = get_gradient(current_q)
 
-            current_p = map(lambda (x, y): x + self.step_size * y,
+            step_size = tf.cond(i < self.num_leapfrog_steps - 1,
+                                lambda: self.step_size,
+                                lambda: self.step_size / 2)
+
+            current_p = map(lambda (x, y): x + step_size * y,
                             zip(current_p, grads))
 
             return [i+1, current_q, current_p]
@@ -58,12 +65,6 @@ class HMC:
                              loop_body,
                              [i, current_q, current_p],
                              back_prop=False)
-
-        current_q = map(lambda (x, y): x + self.step_size * y,
-                        zip(current_q, current_p))
-        _, grads = get_gradient(current_q)
-        current_p = map(lambda (x, y): x + self.step_size / 2* y,
-                        zip(current_p, grads))
 
         # Hamiltonian
         old_hamiltonian = -log_posterior(self.q) + kinetic_energy(p)
