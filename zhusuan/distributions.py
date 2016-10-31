@@ -58,8 +58,14 @@ class Normal:
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
+        try:
+            mean.get_shape().merge_with(logstd.get_shape())
+        except ValueError:
+            raise ValueError(
+                "mean and logstd must have the same shape (%s vs %s)"
+                % (mean.get_shape(), logstd.get_shape()))
         _assert_shape_match = tf.Assert(
-            tf.equal(tf.shape(mean), tf.shape(logstd)),
+            tf.reduce_all(tf.equal(tf.shape(mean), tf.shape(logstd))),
             [tf.shape(mean), tf.shape(logstd)])
         with tf.control_dependencies([_assert_shape_match]):
             base_shape = tf.shape(mean)
@@ -75,7 +81,11 @@ class Normal:
             with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
         else:
-            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            # TODO: support negative index
+            _assert_positive_dim = tf.Assert(tf.greater_equal(sample_dim, 0),
+                                             [sample_dim])
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             shape = tf.concat(0, [base_shape[:sample_dim],
                                   tf.pack([n_samples]),
                                   base_shape[sample_dim:]])
@@ -115,13 +125,16 @@ class Normal:
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         if sample_dim is not None:
-            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.Assert(tf.greater_equal(sample_dim, 0),
+                                             [sample_dim])
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             mean = tf.expand_dims(mean, sample_dim)
             logstd = tf.expand_dims(logstd, sample_dim)
         c = -0.5 * np.log(2 * np.pi)
         acc = tf.exp(-2 * logstd)
         if check_numerics:
-            with tf.control_dependencies(tf.check_numerics(acc, "acc")):
+            with tf.control_dependencies([tf.check_numerics(acc, "acc")]):
                 acc = tf.identity(acc)
         return c - logstd - 0.5 * acc * tf.square(x - mean)
 
@@ -166,7 +179,10 @@ class Logistic:
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         if sample_dim is not None:
-            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.Assert(tf.greater_equal(sample_dim, 0),
+                                             [sample_dim])
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             mean = tf.expand_dims(mean, sample_dim)
             logstd = tf.expand_dims(logstd, sample_dim)
         inv_std = tf.exp(-logstd)
@@ -245,7 +261,7 @@ class Bernoulli:
                                            [tf.shape(x)[sample_dim]], 1)
             logits = tf.tile(logits, multiples)
         _assert_shape_match = tf.Assert(
-            tf.equal(tf.shape(logits), tf.shape(x)),
+            tf.reduce_all(tf.equal(tf.shape(logits), tf.shape(x))),
             [tf.shape(logits), tf.shape(x)])
         with tf.control_dependencies([_assert_shape_match]):
             logits = tf.identity(logits)
@@ -336,7 +352,7 @@ class Discrete:
                                            [tf.shape(x)[sample_dim]], 1)
             logits = tf.tile(logits, multiples)
         _assert_shape_match = tf.Assert(
-            tf.equal(tf.shape(logits), tf.shape(x)),
+            tf.reduce_all(tf.equal(tf.shape(logits), tf.shape(x))),
             [tf.shape(logits), tf.shape(x)])
         with tf.control_dependencies([_assert_shape_match]):
             x = tf.argmax(x, tf.rank(x) - 1)
