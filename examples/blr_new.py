@@ -68,9 +68,8 @@ get_log_joint = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 # Sampler
-sampler = HMC(step_size=1e-3, num_leapfrog_steps=10)
-sample_steps = sampler.sample(
-    log_joint, vars)
+sampler = HMC(step_size=1e-3, num_leapfrog_steps=127, target_acceptance_rate=0.95)
+sample_steps = sampler.sample(log_joint, vars)
 
 # Session
 sess = tf.Session()
@@ -96,7 +95,7 @@ all_samples = []
 for i in range(chain_length):
     # Feed data in
     sess.run(update_data, feed_dict={x_input: X_train})
-    model, p, oh, nh, t = sess.run(sample_steps,
+    model, p, oh, nh, acc, t, ss = sess.run(sample_steps,
                               feed_dict={y: y_train})
 
     # Compute model sum
@@ -114,9 +113,9 @@ for i in range(chain_length):
     sess.run(update_data, feed_dict={x_input: X_test})
     n_test_c, test_pred_c = sess.run((n_correct, logits),
                                      feed_dict={y: y_test})
-    print('Log likelihood = %f, Train set accuracy = %f, '
+    print('Iteration %d, Log likelihood = %f, Acceptance rate = %f, Step size = %f, Train set accuracy = %f, '
           'test set accuracy = %f' %
-          (lj, (float(n_train_c) / X_train.shape[0]),
+          (i, lj, acc, ss, (float(n_train_c) / X_train.shape[0]),
            (float(n_test_c) / X_test.shape[0])))
 
     # Accumulate scores

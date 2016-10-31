@@ -34,12 +34,63 @@ def get_acceptance_rate(old_q, old_p, new_q, new_p, log_posterior):
            tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
 
 
+class StepsizeTuner:
+    def __init__(self, m_adapt=50, gamma=0.05, t0=10, kappa=0.75, delta=0.8):
+        self.m_adapt = m_adapt
+        self.gamma = gamma
+        self.t0 = t0
+        self.kappa = kappa
+        self.delta = delta
+
+        self.step = tf.Variable(0.0)
+        self.total_step = tf.Variable(0.0)
+        self.log_epsilon_bar = tf.Variable(0.0)
+        self.h_bar = tf.Variable(0.0)
+        self.mu = tf.Variable(0.0)
+
+    def restart(self, stepsize):
+        update_mu = tf.assign(self.mu, tf.log(10 * stepsize))
+        update_step = tf.assign(self.step, 0.0)
+        update_log_epsilon_bar = tf.assign(self.log_epsilon_bar, 0.0)
+        update_h_bar = tf.assign(self.h_bar, 0.0)
+        return update_mu, update_step, update_log_epsilon_bar, update_h_bar
+
+    def tune(self, acceptance_rate):
+        new_step = tf.assign(self.step, self.step + 1)
+        new_total_step = tf.assign(self.step, self.step + 1)
+
+        def adapt_stepsize():
+            rate1 = tf.div(1.0, new_step + self.t0)
+            new_h_bar = tf.assign(self.h_bar, (1 - rate1) * self.h_bar +
+                                  rate1 * (self.delta - acceptance_rate))
+            log_epsilon = self.mu - tf.sqrt(new_step) / self.gamma * new_h_bar
+            rate = tf.pow(new_step, -self.kappa)
+            new_log_epsilon_bar = tf.assign(self.log_epsilon_bar,
+                                            rate * log_epsilon + (1 - rate) * self.log_epsilon_bar)
+            with tf.control_dependencies([new_log_epsilon_bar]):
+                new_log_epsilon = tf.identity(log_epsilon)
+
+            return tf.exp(new_log_epsilon)
+
+        c = tf.cond(new_total_step < self.m_adapt,
+                    adapt_stepsize,
+                    lambda: tf.exp(self.log_epsilon_bar))
+
+        return c
+
+    def restart_and_tune(self, stepsize, acceptance_rate):
+        with tf.control_dependencies(self.restart(stepsize)):
+            step_size = self.tune(acceptance_rate)
+        return step_size
+
+
 class HMC:
     def __init__(self, step_size=1, num_leapfrog_steps=10, target_acceptance_rate=0.8):
         self.step_size = tf.Variable(step_size)
         self.num_leapfrog_steps = num_leapfrog_steps
         self.target_acceptance_rate=target_acceptance_rate
         self.t = tf.Variable(0)
+        self.step_size_tuner = StepsizeTuner(delta=target_acceptance_rate)
 
     def sample(self, log_posterior, var_list=None):
         self.q = copy(var_list)
@@ -83,7 +134,7 @@ class HMC:
                                         [self.step_size, tf.constant(1.0), tf.constant(True)])
             return tf.assign(self.step_size, new_step_size)
 
-        self.step_size = tf.cond(tf.equal(self.t, 0), tune_step_size, lambda: self.step_size)
+        new_step_size = tf.cond(tf.equal(self.t, 0), tune_step_size, lambda: self.step_size)
 
         # Leapfrog
         current_p = p
@@ -94,13 +145,13 @@ class HMC:
 
         def loop_body(i, current_q, current_p):
             step_size1 = tf.cond(i > 0,
-                                 lambda: self.step_size,
+                                 lambda: new_step_size,
                                  lambda: tf.constant(0.0, dtype=tf.float32))
 
             step_size2 = tf.cond(tf.logical_and(tf.less(i, self.num_leapfrog_steps),
                                                 tf.less(0, i)),
-                                lambda: self.step_size,
-                                lambda: self.step_size / 2)
+                                lambda: new_step_size,
+                                lambda: new_step_size / 2)
 
             current_q, current_p = leapfrog_integrator(current_q, current_p,
                                                        step_size1, step_size2,
@@ -128,7 +179,15 @@ class HMC:
         if len(self.q) == 1:
             new_q = [new_q]
 
-        with tf.control_dependencies(new_q):
+        # Tune step size
+        with tf.control_dependencies([acceptance_rate]):
+            new_stepsize = tf.cond(tf.equal(self.t, 0),
+                                   lambda: self.step_size_tuner.restart_and_tune
+                                   (new_step_size, acceptance_rate),
+                                   lambda: self.step_size_tuner.tune(acceptance_rate))
+            update_stepsize = tf.assign(self.step_size, new_stepsize)
+
+        with tf.control_dependencies([update_stepsize]):
             update_t = tf.assign(self.t, self.t+1)
 
-        return new_q, p, old_hamiltonian, new_hamiltonian, update_t
+        return new_q, p, old_hamiltonian, new_hamiltonian, acceptance_rate, update_t, update_stepsize
