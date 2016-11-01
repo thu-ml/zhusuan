@@ -230,8 +230,39 @@ class TestBernoulli:
                 sess.run(bernoulli.rvs(np.ones([1, 2]),
                                        sample_dim=-1, n_samples=1))
 
+    def test_logpmf_check_shape(self):
+        with tf.Session() as sess:
+            with pytest.raises(ValueError):
+                sess.run(bernoulli.logpmf(tf.ones([3, 2]),
+                                          tf.zeros([1, 3, 2])))
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                x = tf.placeholder(tf.float32, [None, 2])
+                logits = tf.placeholder(tf.float32, [None, 2])
+                sess.run(bernoulli.logpmf(x, logits),
+                         feed_dict={x: np.ones([3, 2]),
+                                    logits: np.ones([4, 2])})
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(bernoulli.logpmf(np.ones([1, 2, 1]), np.ones([1, 2]),
+                                          sample_dim=-1))
+
+
     def test_logpmf(self):
-        pass
+        with tf.Session() as sess:
+            x = [[1, 0], [1, 1]]
+            logits = np.array([[-3, -3], [-3, -3]], dtype='float32')
+            test_values = sess.run(bernoulli.logpmf(x, logits))
+            true_values = stats.bernoulli.logpmf(
+                x, 1. / (1. + np.exp(-logits)))
+            assert np.abs(test_values - true_values).max() < 1e-6
+
+            x = [0, 1]
+            logits = np.array([-200, 200], dtype='float32')
+            test_values = sess.run(bernoulli.logpmf(x, logits))
+            true_values = stats.bernoulli.logpmf(
+                x, 1. / (1. + np.exp(-logits)))
+            assert np.abs(test_values - true_values).max() < 1e-8
 
 
 class TestDiscrete:
