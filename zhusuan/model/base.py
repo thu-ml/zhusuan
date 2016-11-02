@@ -25,9 +25,9 @@ class StochasticTensor(object):
         distribution.
     """
     def __init__(self, incomings):
+        self.incomings = incomings
         model = StochasticGraph.get_context()
         model.add_stochastic_tensor(self)
-        self.incomings = incomings
 
     @property
     def value(self):
