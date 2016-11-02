@@ -41,7 +41,7 @@ class StochasticTensor(object):
         """
         raise NotImplementedError()
 
-    def log_p(self, given, inputs):
+    def log_prob(self, given, inputs):
         """
         Compute log probability density (mass) function at `given` values,
         provided with parameters `inputs`.
@@ -119,10 +119,7 @@ class StochasticGraph(Context):
                 output = [tensor, None]
                 if tensor in self.stochastic_tensors:
                     s_tensor = self.stochastic_tensors[tensor]
-                    if tensor in inputs:
-                        output[1] = s_tensor.log_p(inputs[tensor])
-                    else:
-                        output[1] = s_tensor.log_p(output[0])
+                    output[1] = s_tensor.log_prob(tensor, s_tensor.incomings)
                 ret.append(output)
         else:
             # inputs are observed
@@ -242,8 +239,8 @@ class StochasticGraph(Context):
                 if tensor in self.stochastic_tensors:
                     s_tensor = self.stochastic_tensors[tensor]
                     dist_inputs = list(map(_get_output_tensor,
-                                           s_tensor.inputs))
-                    output[1] = s_tensor.log_p(output[0], dist_inputs)
+                                           s_tensor.incomings))
+                    output[1] = s_tensor.log_prob(output[0], dist_inputs)
                 ret.append(output)
 
         if isinstance(tensor_or_tensors, (tuple, list)):

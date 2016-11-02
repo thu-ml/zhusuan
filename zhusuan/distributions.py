@@ -25,7 +25,6 @@ class Normal:
     def __init__(self):
         pass
 
-    @add_name_scope
     def rvs(self,
             mean=0.,
             logstd=0.,
@@ -96,7 +95,6 @@ class Normal:
         samples = tf.random_normal(shape) * std + mean
         return samples
 
-    @add_name_scope
     def logpdf(self,
                x,
                mean=0.,
@@ -149,7 +147,6 @@ class Logistic:
     def __init__(self):
         pass
 
-    @add_name_scope
     def rvs(self,
             mean=0.,
             logstd=0.,
@@ -158,7 +155,6 @@ class Logistic:
             reparameterized=False):
         raise NotImplementedError()
 
-    @add_name_scope
     def cdf(self, x, mean=0., logstd=0., sample_dim=None, check_numerics=True):
         """
         Cumulative distribution function of Logistic distribution.
@@ -205,7 +201,6 @@ class Bernoulli:
     def __init__(self):
         pass
 
-    @add_name_scope
     def rvs(self, logits, sample_dim=None, n_samples=1):
         """
         Generate independent Bernoulli samples which forms a Tensor.
@@ -245,7 +240,6 @@ class Bernoulli:
         samples = tf.cast(tf.less(alpha, p), dtype=tf.float32)
         return tf.stop_gradient(samples)
 
-    @add_name_scope
     def logpmf(self, x, logits, sample_dim=None):
         """
         Log probability mass function of Bernoulli distribution.
@@ -295,7 +289,6 @@ class Discrete:
     def __init__(self):
         pass
 
-    @add_name_scope
     def rvs(self, logits, sample_dim=None, n_samples=1):
         """
         Generate samples from Discrete distribution which forms a Tensor.
@@ -348,7 +341,6 @@ class Discrete:
             samples = tf.transpose(samples, perm)
         return samples
 
-    @add_name_scope
     def logpmf(self, x, logits, sample_dim=None):
         """
         Log probability mass function of Discrete distribution.
