@@ -85,7 +85,7 @@ class Normal:
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
-                sample_dim, 0, message="only support non-negative sample_dim")
+                sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             shape = tf.concat(0, [base_shape[:sample_dim],
@@ -129,7 +129,7 @@ class Normal:
         if sample_dim is not None:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
-                sample_dim, 0, message="only support non-negative sample_dim")
+                sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             mean = tf.expand_dims(mean, sample_dim)
@@ -184,7 +184,7 @@ class Logistic:
         if sample_dim is not None:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
-                sample_dim, 0, message="only support non-negative sample_dim")
+                sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             mean = tf.expand_dims(mean, sample_dim)
@@ -234,7 +234,7 @@ class Bernoulli:
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
-                sample_dim, 0, message="only support non-negative sample_dim")
+                sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             p = tf.expand_dims(p, sample_dim)
@@ -267,7 +267,7 @@ class Bernoulli:
         if sample_dim is not None:
             sample_dim = tf.convert_to_tensor(sample_dim, dtype=tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
-                sample_dim, 0, message="only support non-negative sample_dim")
+                sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             logits = tf.expand_dims(logits, sample_dim)
@@ -331,18 +331,18 @@ class Discrete:
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
-                sample_dim, 0, message="only support non-negative sample_dim")
+                sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
-            shape = tf.concat(0, [base_shape[:-1], tf.pack([n_samples]),
-                                  depth])
+            shape = tf.concat(0, [base_shape[:-1],
+                                  tf.pack([n_samples, depth])])
             samples = tf.reshape(samples_flat, shape)
             n_dims = tf.rank(samples)
             dims = tf.range(n_dims)
-            sample_dim_mask = tf.cast(tf.one_hot(sample_dim, 5), tf.bool)
-            original_mask = tf.cast(tf.one_hot(n_dims - 2, 5), tf.bool)
-            sample_dims = tf.ones(n_dims, tf.int32) * sample_dim
-            originals = tf.ones(n_dims, tf.int32) * (n_dims - 2)
+            sample_dim_mask = tf.cast(tf.one_hot(sample_dim, n_dims), tf.bool)
+            original_mask = tf.cast(tf.one_hot(n_dims - 2, n_dims), tf.bool)
+            sample_dims = tf.ones([n_dims], tf.int32) * sample_dim
+            originals = tf.ones([n_dims], tf.int32) * (n_dims - 2)
             perm = tf.select(original_mask, sample_dims, dims)
             perm = tf.select(sample_dim_mask, originals, perm)
             samples = tf.transpose(samples, perm)
@@ -375,7 +375,11 @@ class Discrete:
             sample_dim = tf.convert_to_tensor(sample_dim, dtype=tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
                 sample_dim, 0, message="only support non-negative sample_dim")
-            with tf.control_dependencies([_assert_positive_dim]):
+            _assert_max_dim = tf.assert_less(
+                sample_dim, tf.rank(logits),
+                message="only support sample_dim less than tf.rank(logits)")
+            with tf.control_dependencies([_assert_positive_dim,
+                                          _assert_max_dim]):
                 sample_dim = tf.identity(sample_dim)
             logits = tf.expand_dims(logits, sample_dim)
             multiples = tf.sparse_to_dense([sample_dim], [tf.rank(logits)],
@@ -392,7 +396,7 @@ class Discrete:
             message="Shapes of x and logits must match")
         with tf.control_dependencies([_assert_shape_match]):
             x = tf.argmax(x, tf.rank(x) - 1)
-        return tf.nn.sparse_softmax_cross_entropy_with_logits(logits, x)
+        return -tf.nn.sparse_softmax_cross_entropy_with_logits(logits, x)
 
 
 norm = Normal()

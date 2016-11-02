@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-from scipy import stats
+from scipy import stats, misc
 import numpy as np
 import pytest
 
@@ -130,17 +130,14 @@ class TestNormal:
                                            np.exp(logstd_value))
             assert np.abs((test_value - true_value) / true_value).max() < 1e-6
 
-        mean_value = np.array([2, 3], dtype='float32')
-        logstd_value = np.array([4, 0], dtype='float32')
-        x_value = np.array([3, 2, 3], dtype='float32')
-        mean = tf.constant(mean_value)
-        logstd = tf.constant(logstd_value)
-        x = tf.constant(x_value)
+        mean = np.ones([2, 3], dtype='float32')
+        logstd = np.ones([2, 3], dtype='float32')
+        x = np.random.random([2, 4, 3]).astype('float32') * 5
         with tf.Session() as sess:
             test_value = sess.run(norm.logpdf(x, mean, logstd, sample_dim=1))
-            true_value = stats.norm.logpdf(
-                x_value, np.expand_dims(mean_value, 1),
-                np.exp(np.expand_dims(logstd_value, 1)))
+            true_value = stats.norm.logpdf(x, np.expand_dims(mean, 1),
+                                           np.exp(np.expand_dims(logstd, 1)))
+            assert test_value.shape == (2, 4, 3)
             assert np.abs(test_value - true_value).max() < 1e-6
 
 
@@ -190,34 +187,30 @@ class TestLogistic:
             assert np.abs(
                 (test_value - true_value) / true_value).max() < 1e-6
 
-        mean_value = np.array([2, 3], dtype='float32')
-        logstd_value = np.array([4, 0], dtype='float32')
-        x_value = np.array([3, 2, 3], dtype='float32')
-        mean = tf.constant(mean_value)
-        logstd = tf.constant(logstd_value)
-        x = tf.constant(x_value)
+        mean = np.ones([2, 3], dtype='float32')
+        logstd = np.ones([2, 3], dtype='float32')
+        x = np.random.random([2, 4, 3]).astype('float32') * 5
         with tf.Session() as sess:
-            test_value = sess.run(
-                logistic.cdf(x, mean, logstd, sample_dim=1))
-            true_value = stats.logistic.cdf(
-                x_value, np.expand_dims(mean_value, 1),
-                np.exp(np.expand_dims(logstd_value, 1)))
+            test_value = sess.run(logistic.cdf(x, mean, logstd, sample_dim=1))
+            true_value = stats.logistic.cdf(x, np.expand_dims(mean, 1),
+                                            np.exp(np.expand_dims(logstd, 1)))
+            assert test_value.shape == (2, 4, 3)
             assert np.abs(test_value - true_value).max() < 1e-6
 
 
 class TestBernoulli:
     def test_rvs(self):
         with tf.Session() as sess:
-            p = tf.placeholder(tf.float32, [None, 2])
+            logits = tf.placeholder(tf.float32, [None, 2])
             a = sess.run(
-                bernoulli.rvs(p, sample_dim=0, n_samples=3),
-                feed_dict={p: np.ones([1, 2])})
+                bernoulli.rvs(logits, sample_dim=0, n_samples=3),
+                feed_dict={logits: np.ones([1, 2])})
             assert a.shape == (3, 1, 2)
             assert np.all((np.abs(a - 1) < 1e-8) | (np.abs(a) < 1e-8))
 
             b = sess.run(
-                bernoulli.rvs(p),
-                feed_dict={p: np.ones([1, 2])}
+                bernoulli.rvs(logits),
+                feed_dict={logits: np.ones([1, 2])}
             )
             assert b.shape == (1, 2)
             assert np.all((np.abs(b - 1) < 1e-8) | (np.abs(b) < 1e-8))
@@ -247,7 +240,6 @@ class TestBernoulli:
                 sess.run(bernoulli.logpmf(np.ones([1, 2, 1]), np.ones([1, 2]),
                                           sample_dim=-1))
 
-
     def test_logpmf(self):
         with tf.Session() as sess:
             x = [[1, 0], [1, 1]]
@@ -255,6 +247,7 @@ class TestBernoulli:
             test_values = sess.run(bernoulli.logpmf(x, logits))
             true_values = stats.bernoulli.logpmf(
                 x, 1. / (1. + np.exp(-logits)))
+            assert test_values.shape == (2, 2)
             assert np.abs(test_values - true_values).max() < 1e-6
 
             x = [0, 1]
@@ -262,12 +255,107 @@ class TestBernoulli:
             test_values = sess.run(bernoulli.logpmf(x, logits))
             true_values = stats.bernoulli.logpmf(
                 x, 1. / (1. + np.exp(-logits)))
+            assert test_values.shape == (2,)
             assert np.abs(test_values - true_values).max() < 1e-8
+
+            logits = np.ones([2, 3], dtype='float32')
+            x = np.random.randint(2, size=[2, 3, 4]).astype('float32')
+            test_value = sess.run(
+                bernoulli.logpmf(x, logits, sample_dim=2))
+            true_value = stats.bernoulli.logpmf(
+                x, 1. / (1. + np.exp(-np.expand_dims(logits, 2))))
+            assert test_value.shape == (2, 3, 4)
+            assert np.abs(test_value - true_value).max() < 1e-6
 
 
 class TestDiscrete:
     def test_rvs(self):
-        pass
+        with tf.Session() as sess:
+            logits = tf.placeholder(tf.float32, [None, 3])
+            a = sess.run(
+                discrete.rvs(logits, sample_dim=0, n_samples=3),
+                feed_dict={logits: np.ones([1, 3])})
+            assert a.shape == (3, 1, 3)
+            assert np.all((np.abs(a - 1) < 1e-8) | (np.abs(a) < 1e-8))
+            assert np.max(np.abs(a.sum(axis=-1) - 1)) < 1e-8
+
+            b = sess.run(
+                discrete.rvs(logits),
+                feed_dict={logits: np.ones([1, 3])}
+            )
+            assert b.shape == (1, 3)
+            assert np.all((np.abs(b - 1) < 1e-8) | (np.abs(b) < 1e-8))
+            assert np.max(np.abs(b.sum(axis=-1) - 1)) < 1e-8
+
+            d = sess.run(
+                discrete.rvs(logits, sample_dim=1, n_samples=4),
+                feed_dict={logits: np.ones([2, 3])})
+            assert d.shape == (2, 4, 3)
+            assert np.all((np.abs(d - 1) < 1e-8) | (np.abs(d) < 1e-8))
+            assert np.max(np.abs(d.sum(axis=-1) - 1)) < 1e-8
+
+            e = sess.run(
+                discrete.rvs(logits, sample_dim=2, n_samples=4),
+                feed_dict={logits: np.ones([2, 3])})
+            assert e.shape == (2, 3, 4)
+            assert np.all((np.abs(e - 1) < 1e-8) | (np.abs(e) < 1e-8))
+            assert np.max(np.abs(e.sum(axis=-2) - 1)) < 1e-8
+
+            logits = np.array([[2, 5, 3]], dtype='float32')
+            p = np.exp(logits) / np.sum(np.exp(logits), axis=1, keepdims=True)
+            c = sess.run(discrete.rvs(logits, sample_dim=0, n_samples=1000))
+            assert np.max(np.abs(c.mean(axis=0) - p)) < 0.1
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(discrete.rvs(np.ones([1, 3]),
+                                      sample_dim=None, n_samples=2))
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(discrete.rvs(np.ones([1, 3]),
+                                      sample_dim=-1, n_samples=1))
+
+    def test_logpmf_check_shape(self):
+        with tf.Session() as sess:
+            with pytest.raises(ValueError):
+                sess.run(discrete.logpmf(tf.ones([3, 2]),
+                                         tf.zeros([1, 3, 2])))
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                x = tf.placeholder(tf.float32, [None, 2])
+                logits = tf.placeholder(tf.float32, [None, 2])
+                sess.run(discrete.logpmf(x, logits),
+                         feed_dict={x: np.ones([3, 2]),
+                                    logits: np.ones([4, 2])})
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(discrete.logpmf(np.ones([1, 2, 1]), np.ones([1, 2]),
+                                         sample_dim=-1))
 
     def test_logpmf(self):
-        pass
+        with tf.Session() as sess:
+            logits = np.array([[-5, 7., 1.], [-5, 7., 1.]])
+            p = np.exp(logits - misc.logsumexp(logits, axis=1, keepdims=True))
+            x = np.array([[0, 1, 0], [1, 0, 0]])
+            test_values = sess.run(discrete.logpmf(x, logits))
+            true_values = np.sum(x * np.log(p), axis=-1)
+            assert np.abs(test_values - true_values).max() < 1e-6
+
+            logits = np.array([[0., 2., 3.], [-1., -2., -3.]])
+            p = np.exp(logits - misc.logsumexp(logits, axis=1, keepdims=True))
+            x = np.array([[[1, 0, 0], [0, 1, 0]],
+                          [[0, 0, 1], [0, 0, 1]]])
+            test_values = sess.run(discrete.logpmf(x, logits, sample_dim=1))
+            true_values = np.sum(x * np.log(np.expand_dims(p, 1)), axis=-1)
+            assert test_values.shape == (2, 2)
+            assert np.abs(test_values - true_values).max() < 1e-6
+
+            x = np.array([[[1, 0], [0, 0], [0, 1]], [[0, 0], [1, 0], [0, 1]]])
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(discrete.logpmf(x, logits, sample_dim=2))
+
+            x = [0, 1]
+            logits = np.array([-200, 200], dtype='float32')
+            test_values = sess.run(discrete.logpmf(x, logits))
+            true_values = np.array(0, dtype='float32')
+            assert test_values.shape == ()
+            assert np.abs(test_values - true_values).max() < 1e-8
