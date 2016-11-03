@@ -53,12 +53,41 @@ class TestNormal:
             )
             assert b.shape == (1, 2)
 
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(norm.rvs(np.ones([1, 2]), np.ones([1, 2]),
-                                  sample_dim=-1, n_samples=1))
+                                  sample_dim=sample_dim, n_samples=1),
+                         feed_dict={sample_dim: -1})
 
     def test_rvs_static_shape(self):
-        pass
+        mean = tf.ones([2, 3])
+        logstd = tf.zeros([2, 3])
+        a = norm.rvs(mean, logstd)
+        assert a.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a).shape == (2, 3)
+
+        b = norm.rvs(mean, logstd, sample_dim=0, n_samples=4)
+        assert b.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b).shape == (4, 2, 3)
+
+        c = norm.rvs(mean, logstd, sample_dim=1, n_samples=4)
+        assert c.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c).shape == (2, 4, 3)
+
+        d = norm.rvs(mean, logstd, sample_dim=2, n_samples=4)
+        assert d.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d).shape == (2, 3, 4)
+
+        sample_dim = tf.placeholder(tf.int32, shape=())
+        e = norm.rvs(mean, logstd, sample_dim=sample_dim, n_samples=2)
+        assert e.get_shape().as_list() == [None, None, None]
+
+        with pytest.raises(ValueError):
+            norm.rvs(mean, logstd, sample_dim=-1, n_samples=4)
 
     def test_rvs_reparameterized(self):
         with tf.Session() as sess:
@@ -78,13 +107,42 @@ class TestNormal:
             assert logstd_grads is None
 
     def test_logpdf_static_shape(self):
-        pass
+        mean = tf.ones([2, 3])
+        logstd = tf.zeros([2, 3])
+        a = tf.ones([2, 3])
+        a_logpdf = norm.logpdf(a, mean, logstd)
+        assert a_logpdf.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a_logpdf).shape == (2, 3)
+
+        b = tf.ones([4, 2, 3])
+        b_logpdf = norm.logpdf(b, mean, logstd, sample_dim=0)
+        assert b_logpdf.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b_logpdf).shape == (4, 2, 3)
+
+        c = tf.ones([2, 4, 3])
+        c_logpdf = norm.logpdf(c, mean, logstd, sample_dim=1)
+        assert c_logpdf.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c_logpdf).shape == (2, 4, 3)
+
+        d = tf.ones([2, 3, 4])
+        d_logpdf = norm.logpdf(d, mean, logstd, sample_dim=2)
+        assert d_logpdf.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d_logpdf).shape == (2, 3, 4)
+
+        with pytest.raises(ValueError):
+            norm.logpdf(d, mean, logstd, sample_dim=-1)
 
     def test_logpdf_shape(self):
         with tf.Session() as sess:
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(norm.logpdf(np.ones([2]), np.ones([2]), np.ones([2]),
-                                     sample_dim=-1))
+                                     sample_dim=sample_dim),
+                         feed_dict={sample_dim: -1})
 
         mean = tf.placeholder(tf.float32, [None, 2])
         logstd = tf.placeholder(tf.float32, [None, 2])
@@ -156,14 +214,44 @@ class TestLogistic:
                                       logstd: np.ones([3, 2]),
                                       x: np.ones([3, 2, 10])})
             assert cdf.shape == (3, 2, 10)
+
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
-                sess.run(logistic.cdf(x, mean, logstd, sample_dim=-1),
+                sess.run(logistic.cdf(x, mean, logstd, sample_dim=sample_dim),
                          feed_dict={mean: np.ones([3, 2]),
                                     logstd: np.ones([3, 2]),
-                                    x: np.ones([3, 2, 10])})
+                                    x: np.ones([3, 2, 10]),
+                                    sample_dim: -1})
 
     def test_cdf_static_shape(self):
-        pass
+        mean = tf.ones([2, 3])
+        logstd = tf.zeros([2, 3])
+        a = tf.ones([2, 3])
+        a_logpdf = logistic.cdf(a, mean, logstd)
+        assert a_logpdf.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a_logpdf).shape == (2, 3)
+
+        b = tf.ones([4, 2, 3])
+        b_logpdf = logistic.cdf(b, mean, logstd, sample_dim=0)
+        assert b_logpdf.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b_logpdf).shape == (4, 2, 3)
+
+        c = tf.ones([2, 4, 3])
+        c_logpdf = logistic.cdf(c, mean, logstd, sample_dim=1)
+        assert c_logpdf.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c_logpdf).shape == (2, 4, 3)
+
+        d = tf.ones([2, 3, 4])
+        d_logpdf = logistic.cdf(d, mean, logstd, sample_dim=2)
+        assert d_logpdf.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d_logpdf).shape == (2, 3, 4)
+
+        with pytest.raises(ValueError):
+            logistic.cdf(d, mean, logstd, sample_dim=-1)
 
     def test_cdf_check_numerics(self):
         with tf.Session() as sess:
@@ -199,6 +287,35 @@ class TestLogistic:
 
 
 class TestBernoulli:
+    def test_rvs_static_shape(self):
+        logits = tf.zeros([2, 3])
+        a = bernoulli.rvs(logits)
+        assert a.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a).shape == (2, 3)
+
+        b = bernoulli.rvs(logits, sample_dim=0, n_samples=4)
+        assert b.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b).shape == (4, 2, 3)
+
+        c = bernoulli.rvs(logits, sample_dim=1, n_samples=4)
+        assert c.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c).shape == (2, 4, 3)
+
+        d = bernoulli.rvs(logits, sample_dim=2, n_samples=4)
+        assert d.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d).shape == (2, 3, 4)
+
+        sample_dim = tf.placeholder(tf.int32, shape=())
+        e = bernoulli.rvs(logits, sample_dim=sample_dim, n_samples=2)
+        assert e.get_shape().as_list() == [None, None, None]
+
+        with pytest.raises(ValueError):
+            bernoulli.rvs(logits, sample_dim=-1, n_samples=4)
+
     def test_rvs(self):
         with tf.Session() as sess:
             logits = tf.placeholder(tf.float32, [None, 2])
@@ -219,9 +336,40 @@ class TestBernoulli:
                 sess.run(bernoulli.rvs(np.ones([1, 2]),
                                        sample_dim=None, n_samples=2))
 
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(bernoulli.rvs(np.ones([1, 2]),
-                                       sample_dim=-1, n_samples=1))
+                                       sample_dim=sample_dim, n_samples=1),
+                         feed_dict={sample_dim: -1})
+
+    def test_logpmf_static_shape(self):
+        logits = tf.ones([2, 3])
+        a = tf.ones([2, 3])
+        a_logpmf = bernoulli.logpmf(a, logits)
+        assert a_logpmf.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a_logpmf).shape == (2, 3)
+
+        b = tf.ones([4, 2, 3])
+        b_logpmf = bernoulli.logpmf(b, logits, sample_dim=0)
+        assert b_logpmf.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b_logpmf).shape == (4, 2, 3)
+
+        c = tf.ones([2, 4, 3])
+        c_logpmf = bernoulli.logpmf(c, logits, sample_dim=1)
+        assert c_logpmf.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c_logpmf).shape == (2, 4, 3)
+
+        d = tf.ones([2, 3, 4])
+        d_logpmf = bernoulli.logpmf(d, logits, sample_dim=2)
+        assert d_logpmf.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d_logpmf).shape == (2, 3, 4)
+
+        with pytest.raises(ValueError):
+            bernoulli.logpmf(d, logits, sample_dim=-1)
 
     def test_logpmf_check_shape(self):
         with tf.Session() as sess:
@@ -236,9 +384,11 @@ class TestBernoulli:
                          feed_dict={x: np.ones([3, 2]),
                                     logits: np.ones([4, 2])})
 
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(bernoulli.logpmf(np.ones([1, 2, 1]), np.ones([1, 2]),
-                                          sample_dim=-1))
+                                          sample_dim=sample_dim),
+                         feed_dict={sample_dim: -1})
 
     def test_logpmf(self):
         with tf.Session() as sess:
@@ -269,6 +419,30 @@ class TestBernoulli:
 
 
 class TestDiscrete:
+    def test_rvs_static_shape(self):
+        logits = tf.zeros([2, 3])
+        a = discrete.rvs(logits)
+        assert a.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a).shape == (2, 3)
+
+        b = discrete.rvs(logits, sample_dim=0, n_samples=4)
+        assert b.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b).shape == (4, 2, 3)
+
+        c = discrete.rvs(logits, sample_dim=1, n_samples=4)
+        assert c.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c).shape == (2, 4, 3)
+
+        sample_dim = tf.placeholder(tf.int32, shape=())
+        e = discrete.rvs(logits, sample_dim=sample_dim, n_samples=2)
+        assert e.get_shape().as_list() == [None, None, None]
+
+        with pytest.raises(ValueError):
+            discrete.rvs(logits, sample_dim=-1, n_samples=4)
+
     def test_rvs(self):
         with tf.Session() as sess:
             logits = tf.placeholder(tf.float32, [None, 3])
@@ -310,9 +484,34 @@ class TestDiscrete:
                 sess.run(discrete.rvs(np.ones([1, 3]),
                                       sample_dim=None, n_samples=2))
 
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(discrete.rvs(np.ones([1, 3]),
-                                      sample_dim=-1, n_samples=1))
+                                      sample_dim=sample_dim, n_samples=1),
+                         feed_dict={sample_dim: -1})
+
+    def test_logpmf_static_shape(self):
+        logits = tf.ones([2, 3])
+        a = tf.ones([2, 3]) - tf.constant([1, 1, 0], dtype=tf.float32)
+        a_logpmf = discrete.logpmf(a, logits)
+        assert a_logpmf.get_shape().as_list() == [2]
+        with tf.Session() as sess:
+            assert sess.run(a_logpmf).shape == (2,)
+
+        b = tf.ones([4, 2, 3]) - tf.constant([1, 1, 0], dtype=tf.float32)
+        b_logpmf = discrete.logpmf(b, logits, sample_dim=0)
+        assert b_logpmf.get_shape().as_list() == [4, 2]
+        with tf.Session() as sess:
+            assert sess.run(b_logpmf).shape == (4, 2)
+
+        c = tf.ones([2, 4, 3]) - tf.constant([1, 1, 0], dtype=tf.float32)
+        c_logpmf = discrete.logpmf(c, logits, sample_dim=1)
+        assert c_logpmf.get_shape().as_list() == [2, 4]
+        with tf.Session() as sess:
+            assert sess.run(c_logpmf).shape == (2, 4)
+
+        with pytest.raises(ValueError):
+            discrete.logpmf(c, logits, sample_dim=-2)
 
     def test_logpmf_check_shape(self):
         with tf.Session() as sess:
@@ -327,9 +526,11 @@ class TestDiscrete:
                          feed_dict={x: np.ones([3, 2]),
                                     logits: np.ones([4, 2])})
 
+            sample_dim = tf.placeholder(tf.int32, shape=())
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(discrete.logpmf(np.ones([1, 2, 1]), np.ones([1, 2]),
-                                         sample_dim=-1))
+                                         sample_dim=sample_dim),
+                         feed_dict={sample_dim: -1})
 
     def test_logpmf(self):
         with tf.Session() as sess:

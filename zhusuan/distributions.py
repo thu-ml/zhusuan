@@ -7,7 +7,7 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 
-from .utils import add_name_scope
+from .utils import convert_to_int
 
 
 __all__ = [
@@ -53,16 +53,22 @@ class Normal:
 
         :return: A Tensor. Samples from the Normal distribution.
         """
-        # TODO: static shape inference
+        # TODO: as_list() fails when static_shape unknown
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
+        static_n_samples = convert_to_int(n_samples)
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
         try:
-            mean.get_shape().merge_with(logstd.get_shape())
+            static_base_shape = mean.get_shape().merge_with(logstd.get_shape())
         except ValueError:
             raise ValueError(
                 "mean and logstd must have the same shape (%s vs %s)"
                 % (mean.get_shape(), logstd.get_shape()))
+        static_base_shape = static_base_shape.as_list()
         _assert_shape_match = tf.assert_equal(
             tf.shape(mean), tf.shape(logstd),
             message="mean and logstd must have the same shape")
@@ -81,6 +87,7 @@ class Normal:
                 message="n_samples must be 1 when sample_dim is None")
             with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
+                static_shape = static_base_shape
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
@@ -90,9 +97,15 @@ class Normal:
             shape = tf.concat(0, [base_shape[:sample_dim],
                                   tf.pack([n_samples]),
                                   base_shape[sample_dim:]])
+            if static_sample_dim is not None:
+                static_shape = static_base_shape[:static_sample_dim] + \
+                    [static_n_samples] + static_base_shape[static_sample_dim:]
+            else:
+                static_shape = [None] * (len(static_base_shape) + 1)
             mean = tf.expand_dims(mean, sample_dim)
             std = tf.expand_dims(std, sample_dim)
         samples = tf.random_normal(shape) * std + mean
+        samples.set_shape(static_shape)
         return samples
 
     def logpdf(self,
@@ -120,7 +133,10 @@ class Normal:
         :return: A Tensor of the same shape as `x` (after broadcast) with
             function values.
         """
-        # TODO: static shape inference
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
         x = tf.convert_to_tensor(x, dtype=tf.float32)
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
@@ -130,8 +146,15 @@ class Normal:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
+            mean_shape = mean.get_shape().as_list()
+            logstd_shape = logstd.get_shape().as_list()
             mean = tf.expand_dims(mean, sample_dim)
             logstd = tf.expand_dims(logstd, sample_dim)
+            if static_sample_dim is not None:
+                mean.set_shape(mean_shape[:static_sample_dim] + [1] +
+                               mean_shape[static_sample_dim:])
+                logstd.set_shape(logstd_shape[:static_sample_dim] + [1] +
+                                 logstd_shape[static_sample_dim:])
         c = -0.5 * np.log(2 * np.pi)
         acc = tf.exp(-2 * logstd)
         if check_numerics:
@@ -175,6 +198,10 @@ class Logistic:
         :return: A Tensor of the same shape as `x` (after broadcast) with
             function values.
         """
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
         mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         if sample_dim is not None:
@@ -183,8 +210,15 @@ class Logistic:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
+            mean_shape = mean.get_shape().as_list()
+            logstd_shape = logstd.get_shape().as_list()
             mean = tf.expand_dims(mean, sample_dim)
             logstd = tf.expand_dims(logstd, sample_dim)
+            if static_sample_dim is not None:
+                mean.set_shape(mean_shape[:static_sample_dim] + [1] +
+                               mean_shape[static_sample_dim:])
+                logstd.set_shape(logstd_shape[:static_sample_dim] + [1] +
+                                 logstd_shape[static_sample_dim:])
         inv_std = tf.exp(-logstd)
         if check_numerics:
             with tf.control_dependencies(
@@ -216,16 +250,23 @@ class Bernoulli:
 
         :return: A Tensor. Samples from the Bernoulli distribution.
         """
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
+        static_n_samples = convert_to_int(n_samples)
         logits = tf.convert_to_tensor(logits, dtype=tf.float32)
         n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
         p = tf.sigmoid(logits)
         base_shape = tf.shape(p)
+        static_base_shape = p.get_shape().as_list()
         if sample_dim is None:
             _assert_one_sample = tf.assert_equal(
                 n_samples, 1,
                 message="n_samples must be 1 when sample_dim is None")
             with tf.control_dependencies([_assert_one_sample]):
                 shape = tf.identity(base_shape)
+            static_shape = static_base_shape
         else:
             sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
             _assert_positive_dim = tf.assert_greater_equal(
@@ -236,8 +277,14 @@ class Bernoulli:
             shape = tf.concat(0, [base_shape[:sample_dim],
                                   tf.pack([n_samples]),
                                   base_shape[sample_dim:]])
+            if static_sample_dim is not None:
+                static_shape = static_base_shape[:static_sample_dim] + \
+                    [static_n_samples] + static_base_shape[static_sample_dim:]
+            else:
+                static_shape = [None] * (len(static_base_shape) + 1)
         alpha = tf.random_uniform(shape, minval=0, maxval=1)
         samples = tf.cast(tf.less(alpha, p), dtype=tf.float32)
+        samples.set_shape(static_shape)
         return tf.stop_gradient(samples)
 
     def logpmf(self, x, logits, sample_dim=None):
@@ -256,6 +303,10 @@ class Bernoulli:
 
         :return: A Tensor of the same shape as `x` with function values.
         """
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
         x = tf.convert_to_tensor(x, dtype=tf.float32)
         logits = tf.convert_to_tensor(logits, dtype=tf.float32)
         if sample_dim is not None:
@@ -264,7 +315,11 @@ class Bernoulli:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
+            logits_shape = logits.get_shape().as_list()
             logits = tf.expand_dims(logits, sample_dim)
+            if static_sample_dim is not None:
+                logits.set_shape(logits_shape[:static_sample_dim] + [1] +
+                                 logits_shape[static_sample_dim:])
             multiples = tf.sparse_to_dense([sample_dim], [tf.rank(logits)],
                                            [tf.shape(x)[sample_dim]], 1)
             logits = tf.tile(logits, multiples)
@@ -308,9 +363,15 @@ class Discrete:
             (..., [n_samples], ..., n_classes). Each slice is a one-hot vector
             of the sample.
         """
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
+        static_n_samples = convert_to_int(n_samples)
         logits = tf.convert_to_tensor(logits, dtype=tf.float32)
         n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
         base_shape = tf.shape(logits)
+        static_base_shape = logits.get_shape().as_list()
         depth = base_shape[-1]
         logits_flat = tf.reshape(logits, [-1, depth])
         samples_flat = tf.one_hot(tf.multinomial(logits_flat, n_samples),
@@ -339,6 +400,10 @@ class Discrete:
             perm = tf.select(original_mask, sample_dims, dims)
             perm = tf.select(sample_dim_mask, originals, perm)
             samples = tf.transpose(samples, perm)
+            if static_sample_dim is not None:
+                static_shape = static_base_shape[:static_sample_dim] + \
+                    [static_n_samples] + static_base_shape[static_sample_dim:]
+                samples.set_shape(static_shape)
         return samples
 
     def logpmf(self, x, logits, sample_dim=None):
@@ -361,6 +426,10 @@ class Discrete:
 
         :return: A (N-1)-D Tensor.
         """
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
         x = tf.convert_to_tensor(x, tf.float32)
         logits = tf.convert_to_tensor(logits, tf.float32)
         if sample_dim is not None:
@@ -373,7 +442,11 @@ class Discrete:
             with tf.control_dependencies([_assert_positive_dim,
                                           _assert_max_dim]):
                 sample_dim = tf.identity(sample_dim)
+            logits_shape = logits.get_shape().as_list()
             logits = tf.expand_dims(logits, sample_dim)
+            if static_sample_dim is not None:
+                logits.set_shape(logits_shape[:static_sample_dim] + [1] +
+                                 logits_shape[static_sample_dim:])
             multiples = tf.sparse_to_dense([sample_dim], [tf.rank(logits)],
                                            [tf.shape(x)[sample_dim]], 1)
             logits = tf.tile(logits, multiples)
@@ -386,8 +459,10 @@ class Discrete:
         _assert_shape_match = tf.assert_equal(
             tf.shape(x), tf.shape(logits),
             message="Shapes of x and logits must match")
+        x_shape = x.get_shape().as_list()
         with tf.control_dependencies([_assert_shape_match]):
             x = tf.argmax(x, tf.rank(x) - 1)
+        x.set_shape(x_shape[:-1])
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(logits, x)
 
 
