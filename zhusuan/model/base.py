@@ -31,7 +31,9 @@ class StochasticTensor(object):
 
     @property
     def value(self):
-        return self.sample()
+        if not hasattr(self, '_value'):
+            self._value = self.sample()
+        return self._value
 
     def sample(self, **kwargs):
         """
@@ -227,7 +229,7 @@ class StochasticGraph(Context):
                 """
                 if t in inputs:
                     return inputs[t]
-                elif tensor in copied_tensors:
+                elif t in copied_tensors:
                     return copied_tensors[t]
                 else:
                     return t

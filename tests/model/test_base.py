@@ -516,7 +516,7 @@ class TestStochasticGraph:
             n = tf.placeholder(tf.int32, shape=())
             a_mean = tf.ones([3])
             a_logstd = tf.zeros([3])
-            a = Normal(a_mean, a_logstd, sample_dim=1, n_samples=n)
+            a = Normal(a_mean, a_logstd, sample_dim=0, n_samples=n)
             b_logits = layers.fully_connected(a.value, 5)
             b = Bernoulli(b_logits)
             c_logits = layers.fully_connected(a.value, 4)
