@@ -514,6 +514,7 @@ class TestStochasticGraph:
         #             \ - c_logits - c
         with StochasticGraph() as model:
             n = tf.placeholder(tf.int32, shape=())
+            # n = 5
             a_mean = tf.ones([3])
             a_logstd = tf.zeros([3])
             a = Normal(a_mean, a_logstd, sample_dim=0, n_samples=n)
@@ -523,10 +524,39 @@ class TestStochasticGraph:
             c = Discrete(c_logits)
 
         a_new = tf.zeros([n, 3])
+        b_new = tf.zeros([n, 5])
         a_out, b_out, c_out = model.get_output([a, b, c], inputs={a: a_new})
         with tf.Session() as sess:
             assert a_out[0] is a_new
-            assert a_out[1] is not None
+            # assert a_out[1] is not None
             assert c_out[1] is not None
             assert b_out[1] is not None
             sess.run(tf.initialize_all_variables())
+            a_out_sample, a_out_logpdf, a_new_ = \
+                sess.run([a_out[0], a_out[1], a_new], feed_dict={n: 5})
+            assert np.abs(a_out_sample - a_new_).max() < 1e-6
+        a_out,  b_out, c_out = model.get_output([a, b, c], inputs={b: b_new})
+        with tf.Session() as sess:
+            assert b_out[0] is b_new
+            assert a_out[0] is a.value
+            assert c_out[0] is c.value
+            sess.run(tf.initialize_all_variables())
+            a_out_, b_out_, c_out_ = sess.run([a_out, b_out, c_out],
+                                              feed_dict={n: 1})
+            assert a_out_[0].shape == (1, 3)
+            assert a_out_[1].shape == (1, 3)
+            assert np.abs(b_out_[0] - np.zeros([1, 5])).max() < 1e-6
+            assert b_out_[1].shape == (1, 5)
+            assert c_out_[0].shape == (1, 4)
+
+        b_out = model.get_output(b)
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            b_out_ = sess.run(b_out, feed_dict={n: 2})
+            assert b_out_[1].shape == (2, 5)
+        n_new = tf.constant(1, tf.int32)
+        b_out = model.get_output(b, inputs={a: a_new, n: n_new})
+        with tf.Session() as sess:
+            sess.run(tf.initialize_all_variables())
+            b_out_ = sess.run(b_out)
+            assert b_out_[1].shape == (1, 5)
