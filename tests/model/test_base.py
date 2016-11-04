@@ -14,6 +14,7 @@ from tensorflow.contrib import layers
 
 from .context import zhusuan
 from zhusuan.model.base import *
+from zhusuan.model.stochastic import *
 
 
 class TestStochasticTensor:
@@ -43,7 +44,7 @@ class TestStochasticTensor:
         with mock_graph:
             s_tensor = StochasticTensor([Mock()])
         with pytest.raises(NotImplementedError):
-            s_tensor.log_p(Mock(), [Mock()])
+            s_tensor.log_prob(Mock(), [Mock()])
 
 
 class TestStochasticGraph:
@@ -508,4 +509,24 @@ class TestStochasticGraph:
         # train_writer.close()
 
     def test_get_output_stochastic_tensor(self):
-        pass
+        # a_mean -- \
+        # a_logstd - a -- b_logits - b
+        #             \ - c_logits - c
+        with StochasticGraph() as model:
+            n = tf.placeholder(tf.int32, shape=())
+            a_mean = tf.ones([3])
+            a_logstd = tf.zeros([3])
+            a = Normal(a_mean, a_logstd, sample_dim=1, n_samples=n)
+            b_logits = layers.fully_connected(a.value, 5)
+            b = Bernoulli(b_logits)
+            c_logits = layers.fully_connected(a.value, 4)
+            c = Discrete(c_logits)
+
+        a_new = tf.zeros([n, 3])
+        a_out, b_out, c_out = model.get_output([a, b, c], inputs={a: a_new})
+        with tf.Session() as sess:
+            assert a_out[0] is a_new
+            assert a_out[1] is not None
+            assert c_out[1] is not None
+            assert b_out[1] is not None
+            sess.run(tf.initialize_all_variables())
