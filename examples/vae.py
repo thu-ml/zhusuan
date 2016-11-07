@@ -32,8 +32,11 @@ class M1:
     """
     The deep generative model used in variational autoencoder (VAE).
 
-    :param n_z: Int. The dimension of latent variables (z).
-    :param n_x: Int. The dimension of observed variables (x).
+    :param n_z: A Tensor or int. The dimension of latent variables (z).
+    :param n_x: A Tensor or int. The dimension of observed variables (x).
+    :param n: A Tensor or int. The number of data, or batch size in mini-batch
+        training.
+    :param n_particles: A Tensor or int. The number of particles per node.
     """
     def __init__(self, n_z, n_x, n, n_particles):
         with StochasticGraph() as model:
@@ -53,13 +56,11 @@ class M1:
         """
         The log joint probability function.
 
-        :param latent: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (batch_size, n_samples, n_latent).
-        :param observed: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (batch_size, n_observed).
+        :param latent: A dictionary of pairs: (string, Tensor).
+        :param observed: A dictionary of pairs: (string, Tensor).
+        :param given: A dictionary of pairs: (string, Tensor).
 
-        :return: A Tensor of shape (batch_size, n_samples). The joint log
-            likelihoods.
+        :return: A Tensor. The joint log likelihoods.
         """
         z = latent['z']
         x = observed['x']
@@ -71,17 +72,14 @@ class M1:
         return log_px_z + log_pz
 
 
-def q_net(x, n_x, n_z, n_particles):
+def q_net(x, n_z, n_particles):
     """
     Build the recognition network (Q-net) used as variational posterior.
 
     :param x: A Tensor.
-    :param n_x: Int. The dimension of observed variables (x).
-    :param n_z: Int. The dimension of latent variables (z).
-    :param n_particles: A Int or a Tensor of type int. Number of samples of
-        latent variables.
-
-    :return: All :class:`Layer` instances needed.
+    :param n_x: A Tensor or int. The dimension of observed variables (x).
+    :param n_z: A Tensor or int. The dimension of latent variables (z).
+    :param n_particles: A Tensor or int. Number of samples of latent variables.
     """
     with StochasticGraph() as variational:
         lz_x = layers.fully_connected(x, 500)
@@ -128,7 +126,7 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     model = M1(n_z, n_x, n, n_particles)
-    variational, lz = q_net(x, n_x, n_z, n_particles)
+    variational, lz = q_net(x, n_z, n_particles)
     z, z_logpdf = variational.get_output(lz)
     z_logpdf = tf.reduce_sum(z_logpdf, -1)
     lower_bound = tf.reduce_mean(advi(
