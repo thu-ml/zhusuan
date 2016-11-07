@@ -11,7 +11,7 @@ from six.moves import map
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
 
-from .utils import Context, get_backward_tensors, get_parent_tensors
+from .utils import Context, get_backward_ops
 
 
 class StochasticTensor(object):
@@ -75,7 +75,7 @@ class StochasticGraph(Context):
         """
         self.stochastic_tensors[s_tensor.value] = s_tensor
 
-    def get_output(self, tensor_or_tensors, inputs=None):
+    def get_output(self, tensor_or_tensors, inputs=None, scope_prefix=""):
         """
         Compute the outputs and log probability density/mass values
         at one or more nodes of the stochastic graph.
@@ -93,6 +93,8 @@ class StochasticGraph(Context):
             consisting of forward propagation and sampling.
         :param inputs: A dictionary or None. Any nodes in the current graph
             can be mapped to a Tensor to use instead of its regular output.
+        :param scope_prefix: A name_scope prefix to add to the copied
+            operations.
 
         :return: A tuple or list of tuples. The outputs and log probability
             density/mass values at `tensor_or_tensors`.
@@ -143,9 +145,6 @@ class StochasticGraph(Context):
                                     "StochasticGraph.get_output() should "
                                     "consist of tf.Tensor pairs. Error type: "
                                     "({}, {})".format(type(k), type(v)))
-            input_ops = defaultdict(set)
-            for k, v in six.iteritems(inputs):
-                input_ops[k.op].add(v.op)
 
             def _whether_treat_as_inputs(tensor):
                 """
@@ -165,9 +164,7 @@ class StochasticGraph(Context):
                     return True
 
             treat_as_inputs = filter(_whether_treat_as_inputs, inputs.keys())
-            all_tensors = get_backward_tensors(requested_tensors,
-                                               treat_as_inputs)
-            # print(all_tensors)
+            all_ops = get_backward_ops(requested_tensors, treat_as_inputs)
 
             # copy each op by topological order.
             copied_tensors = {}
@@ -182,45 +179,39 @@ class StochasticGraph(Context):
                     return ge.keep_t_if_possible_handler(info, t)
 
             def _replace_op_with_replacement_handler(info, op):
-                if op in input_ops:
-                    if len(input_ops[op]) > 1:
-                        raise ValueError("Trying to replace several Tensors "
-                                         "that share the same op, while the "
-                                         "op serves as control dependencies "
-                                         "for another tensor being copied.")
-                    else:
-                        return list(input_ops[op])[0]
-                elif op in copied_ops:
+                if op in copied_ops:
                     return copied_ops[op]
                 else:
                     return op
 
-            def _whether_to_copy(t):
-                if t in treat_as_inputs:
-                    return False
-                for parent in get_parent_tensors(t, control_deps=True):
-                    if parent in inputs:
+            def _whether_to_copy(op):
+                for t in op.inputs:
+                    if t in inputs:
                         return True
-                    elif parent in copied_tensors:
+                    elif t in copied_tensors:
+                        return True
+                for dep in op.control_inputs:
+                    if dep in copied_ops:
                         return True
                 return False
 
-            for tensor in all_tensors:
-                # print(tensor.name, _whether_to_copy(tensor))
-                if (_whether_to_copy(tensor)) and (
-                        tensor.op not in copied_ops):
-                    sgv = ge.make_view([tensor.op])
+            for op in all_ops:
+                # print(op.name, _whether_to_copy(op),
+                #       [i.name for i in op.control_inputs[:]])
+                if (_whether_to_copy(op)) and (op not in copied_ops):
+                    sgv = ge.make_view([op])
                     copier = ge.Transformer()
                     copier.transform_external_input_handler = \
                         _replace_t_with_replacement_handler
                     copier.transform_control_input_handler = \
                         _replace_op_with_replacement_handler
                     # not changing scope for now
-                    copied_sgv, info = copier(sgv, sgv.graph, "", "",
+                    copied_sgv, info = copier(sgv, sgv.graph, scope_prefix, "",
                                               reuse_dst_scope=True)
-                    copied_ops[tensor.op] = info.transformed(tensor.op)
-                    op_outputs = tensor.op.outputs[:]
-                    for output in op_outputs:
+                    copied_ops[op] = info.transformed(op)
+                    # print('copying:', op.name,
+                    #       getattr(info.transformed(op), "name", None))
+                    for output in op.outputs:
                         copied_tensors[output] = info.transformed(output)
 
             def _get_output_tensor(t):

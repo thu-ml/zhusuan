@@ -4,7 +4,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-from collections import deque
+from collections import deque, OrderedDict
 
 import tensorflow as tf
 
@@ -54,56 +54,40 @@ def get_unique_graph(tensor_or_tensors):
     return graph
 
 
-def get_backward_tensors(seed_tensors, treat_as_inputs=None):
+def get_backward_ops(seed_tensors, treat_as_inputs=None):
     """
-    Get backward tensors from inputs to `seed_tensors` by topological order.
+    Get backward ops from inputs to `seed_tensors` by topological order.
 
     :param seed_tensors: A Tensor or list of Tensors, for which to get all
         preceding Tensors.
     :param treat_as_inputs: None or a list of Tensors that is treated as
         inputs during the search (where to stop searching the backward graph).
 
-    :return: A list of Tensors in topological order.
+    :return: A list of tf.Operation's in topological order.
     """
-    try:
-        q = deque(seed_tensors)
-    except TypeError:
-        q = deque([seed_tensors])
+    if treat_as_inputs is None:
+        treat_as_inputs = []
+    treat_as_inputs = set(treat_as_inputs)
+    if not isinstance(seed_tensors, (list, tuple)):
+        seed_tensors = [seed_tensors]
+    seed_tensors = [t for t in seed_tensors if t not in treat_as_inputs]
+    seed_ops = list(OrderedDict.fromkeys(t.op for t in seed_tensors))
+    q = deque(seed_ops)
     seen = set()
     done = set()
     ret = []
-    if treat_as_inputs is not None:
-        seen.update(treat_as_inputs)
     while q:
-        tensor = q[0]
-        if tensor not in seen:
-            seen.add(tensor)
-            for parent in reversed(tensor.op.inputs):
-                q.appendleft(parent)
-            for dep in reversed(tensor.op.control_inputs):
-                q.extendleft(reversed(dep.outputs))
+        op = q[0]
+        if op not in seen:
+            seen.add(op)
+            for tensor in reversed(op.inputs):
+                if tensor not in treat_as_inputs:
+                    q.appendleft(tensor.op)
+            q.extendleft(reversed(op.control_inputs))
         else:
-            # have seen this tensor before
+            # have seen this op before
             q.popleft()
-            if tensor not in done:
-                done.add(tensor)
-                ret.append(tensor)
+            if op not in done:
+                done.add(op)
+                ret.append(op)
     return ret
-
-
-def get_parent_tensors(tensor, control_deps=True):
-    """
-    Get parent tensors of input `tensor`.
-
-    :param tensor: A Tensor.
-    :param control_deps: Bool. Whether to treat control dependencies as
-        parents. Default to be True.
-
-    :return: A list of Tensors.
-    """
-    parents = tensor.op.inputs[:]
-    if control_deps:
-        for control_input in tensor.op.control_inputs:
-            parents.extend(control_input.outputs)
-    parents = list(set(parents))
-    return parents

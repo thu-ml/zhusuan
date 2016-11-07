@@ -36,8 +36,6 @@ class M1:
     :param n_x: Int. The dimension of observed variables (x).
     """
     def __init__(self, n_z, n_x, n, n_particles):
-        self.n_z = n_z
-        self.n_x = n_x
         with StochasticGraph() as model:
             z_mean = tf.zeros([n_particles, n_z])
             z_logstd = tf.zeros([n_particles, n_z])
@@ -68,10 +66,8 @@ class M1:
         x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
         z_out, x_out = self.model.get_output([self.z, self.x],
                                              inputs={self.z: z, self.x: x})
-
         log_px_z = tf.reduce_sum(x_out[1], -1)
         log_pz = tf.reduce_sum(z_out[1], -1)
-
         return log_px_z + log_pz
 
 
@@ -81,7 +77,7 @@ def q_net(n_x, n_z, n_particles):
 
     :param n_x: Int. The dimension of observed variables (x).
     :param n_z: Int. The dimension of latent variables (z).
-    :param n_samples: A Int or a Tensor of type int. Number of samples of
+    :param n_particles: A Int or a Tensor of type int. Number of samples of
         latent variables.
 
     :return: All :class:`Layer` instances needed.
@@ -125,34 +121,26 @@ if __name__ == "__main__":
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
 
-    n = tf.placeholder(tf.int32, shape=[])
-    n_particles = tf.placeholder(tf.int32, shape=[])
-
-    def build_model(reuse=False):
-        with tf.variable_scope("model", reuse=reuse) as scope:
-            model = M1(n_z, x_train.shape[1], n, n_particles)
-        with tf.variable_scope("variational", reuse=reuse) as scope:
-            variational, lx, lz = q_net(n_x, n_z, n_particles)
-        return model, variational, lx, lz
-
-    # Build the training computation graph
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
-    x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
+    # Build the computation graph
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
+    n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    model, variational, lx, lz = build_model(reuse=False)
+    model = M1(n_z, n_x, n, n_particles)
+    variational, lx, lz = q_net(n_x, n_z, n_particles)
     z_outputs = variational.get_output(lz, {lx: x})
     lower_bound = tf.reduce_mean(advi(
         model, {'x': x}, {'z': z_outputs}, reduction_indices=0))
+    # log_likelihood = tf.reduce_mean(is_loglikelihood(
+    #     model, {'x': x}, {'z': z_outputs}, reduction_indices=0))
+
+    train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+                                          tf.get_default_graph())
+    train_writer.close()
+
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
-
-    # Build the evaluation computation graph
-    eval_model, eval_variational, eval_lx, eval_lz = build_model(reuse=True)
-    z_outputs = eval_variational.get_output(eval_lz, {eval_lx: x})
-    eval_lower_bound = tf.reduce_mean(advi(
-        eval_model, {'x': x}, {'z': z_outputs}, reduction_indices=0))
-    eval_log_likelihood = tf.reduce_mean(is_loglikelihood(
-        eval_model, {'x': x}, {'z': z_outputs}, reduction_indices=0))
 
     params = tf.trainable_variables()
     for i in params:
@@ -176,8 +164,7 @@ if __name__ == "__main__":
                 _, lb = sess.run([infer, lower_bound],
                                  feed_dict={x: x_batch,
                                             learning_rate_ph: learning_rate,
-                                            n_particles: lb_samples,
-                                            n: batch_size})
+                                            n_particles: lb_samples})
                 lbs.append(lb)
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
@@ -189,14 +176,12 @@ if __name__ == "__main__":
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
-                    test_lb = sess.run(eval_lower_bound,
+                    test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: lb_samples,
-                                                  n: test_batch_size})
-                    test_ll = sess.run(eval_log_likelihood,
+                                                  n_particles: lb_samples})
+                    test_ll = sess.run(log_likelihood,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples,
-                                                  n: test_batch_size})
+                                                  n_particles: ll_samples})
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()

@@ -360,7 +360,7 @@ class TestStochasticGraph:
 
     def test_get_output_control_deps(self):
         # a -> b ---> e -----
-        # c -> d ----/       \
+        # c -> d --- /       \
         #       \ ----------- f
         with StochasticGraph() as model:
             a = tf.placeholder(tf.float32, name='a_deps')
@@ -375,17 +375,38 @@ class TestStochasticGraph:
         d_new = tf.add(1., tf.ones([]), name='d_deps_new')
         e_new = tf.add(1., tf.ones([2, 2]), name='e_deps_new')
         f_out_only_c = model.get_output(f, inputs={d: d_new, e: e_new})
+        assert f_out_only_c[0] is f
         f_out_only_a = model.get_output(f, inputs={d: d_new})
+        assert f_out_only_a[0] is f
 
         with tf.Session() as sess:
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(f)
             with pytest.raises(tf.errors.InvalidArgumentError):
                 sess.run(e, feed_dict={a: 1.})
-            f_out_only_c_ = sess.run(f_out_only_c[0], feed_dict={c: 1.})
-            f_out_only_a_ = sess.run(f_out_only_a[0], feed_dict={a: 1.})
+            f_out_only_c_ = sess.run(f_out_only_c[0], feed_dict={a: 1., c: 1.})
+            f_out_only_a_ = sess.run(f_out_only_a[0], feed_dict={a: 1., c: 1.})
             assert np.abs(f_out_only_c_ - np.ones([2, 2]) - 1.).max() < 1e-8
             assert np.abs(f_out_only_a_ - np.ones([2, 2]) - 1.).max() < 1e-8
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
+
+    def test_get_output_assert_equal(self):
+        with StochasticGraph() as model:
+            a = tf.placeholder(tf.float32, shape=(), name='ass')
+            b = tf.identity(a, name='bss')
+            c = tf.identity(a, name='css')
+            _assert_equal = tf.assert_equal(b, c)
+            with tf.control_dependencies([_assert_equal]):
+                d = tf.add(b, c, name='dss')
+
+        a_new = tf.constant(1, dtype=tf.float32, name='ass_new')
+        d_out = model.get_output(d, inputs={a: a_new})
+        with tf.Session() as sess:
+            d_out_ = sess.run(d_out[0])
+            assert np.abs(d_out_ - 2.) < 1e-8
 
         # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
         #                                       tf.get_default_graph())
@@ -490,7 +511,7 @@ class TestStochasticGraph:
                               weights_initializer=tf.constant_initializer(
                                   w_value))
         x_new = tf.constant(x_value, dtype=tf.float32, name='x')
-        y_out = model.get_output(y, inputs={x: x_new})
+        y_out = model.get_output(y, inputs={x: x_new}, scope_prefix="copied")
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             y_out_1 = sess.run(y_out[0], feed_dict={is_training: False})
@@ -566,3 +587,7 @@ class TestStochasticGraph:
             sess.run(tf.initialize_all_variables())
             b_out_ = sess.run(b_out)
             assert b_out_[1].shape == (1, 5)
+
+        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+        #                                       tf.get_default_graph())
+        # train_writer.close()
