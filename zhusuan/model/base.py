@@ -216,7 +216,7 @@ class StochasticGraph(Context):
                         _replace_op_with_replacement_handler
                     # not changing scope for now
                     copied_sgv, info = copier(sgv, sgv.graph, scope_prefix, "",
-                                              reuse_dst_scope=True)
+                                              reuse_dst_scope=False)
                     copied_ops[op] = info.transformed(op)
                     # print('copying:', op.name,
                     #       getattr(info.transformed(op), "name", None))

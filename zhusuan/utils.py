@@ -131,9 +131,8 @@ def ensure_dim_match(inputs, dim):
 def add_name_scope(f):
     @wraps(f)
     def _func(*args, **kwargs):
-        with tf.name_scope(args[0].__class__.__name__):
-            with tf.name_scope(f.__name__):
-                return f(*args, **kwargs)
+        with tf.name_scope(args[0].__class__.__name__ + '.' + f.__name__):
+            return f(*args, **kwargs)
 
     return _func
 

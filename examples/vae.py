@@ -42,7 +42,7 @@ class M1:
             z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
             lx_z = layers.fully_connected(z.value, 500)
             lx_z = layers.fully_connected(lx_z, 500)
-            lx_z = layers.fully_connected(lx_z, n_x)
+            lx_z = layers.fully_connected(lx_z, n_x, activation_fn=None)
             x = Bernoulli(lx_z)
         self.model = model
         self.x = x
@@ -71,10 +71,11 @@ class M1:
         return log_px_z + log_pz
 
 
-def q_net(n_x, n_z, n_particles):
+def q_net(x, n_x, n_z, n_particles):
     """
     Build the recognition network (Q-net) used as variational posterior.
 
+    :param x: A Tensor.
     :param n_x: Int. The dimension of observed variables (x).
     :param n_z: Int. The dimension of latent variables (z).
     :param n_particles: A Int or a Tensor of type int. Number of samples of
@@ -83,13 +84,12 @@ def q_net(n_x, n_z, n_particles):
     :return: All :class:`Layer` instances needed.
     """
     with StochasticGraph() as variational:
-        x = tf.placeholder(tf.float32, shape=(None, n_x))
         lz_x = layers.fully_connected(x, 500)
         lz_x = layers.fully_connected(lz_x, 500)
-        lz_mean = layers.fully_connected(lz_x, n_z)
-        lz_logstd = layers.fully_connected(lz_x, n_z)
+        lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = Normal(lz_mean, lz_logstd, sample_dim=0, n_samples=n_particles)
-    return variational, x, z
+    return variational, z
 
 
 if __name__ == "__main__":
@@ -128,29 +128,28 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     model = M1(n_z, n_x, n, n_particles)
-    variational, lx, lz = q_net(n_x, n_z, n_particles)
-    z_outputs = variational.get_output(lz, {lx: x})
+    variational, lz = q_net(x, n_x, n_z, n_particles)
+    z, z_logpdf = variational.get_output(lz)
+    z_logpdf = tf.reduce_sum(z_logpdf, -1)
     lower_bound = tf.reduce_mean(advi(
-        model, {'x': x}, {'z': z_outputs}, reduction_indices=0))
-    # log_likelihood = tf.reduce_mean(is_loglikelihood(
-    #     model, {'x': x}, {'z': z_outputs}, reduction_indices=0))
-
-    train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-                                          tf.get_default_graph())
-    train_writer.close()
+        model, {'x': x}, {'z': [z, z_logpdf]}, reduction_indices=0))
+    log_likelihood = tf.reduce_mean(is_loglikelihood(
+        model, {'x': x}, {'z': [z, z_logpdf]}, reduction_indices=0))
 
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
+
+    # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
+    #                                       tf.get_default_graph())
+    # train_writer.close()
 
     params = tf.trainable_variables()
     for i in params:
         print(i.name, i.get_shape())
 
-    init = tf.initialize_all_variables()
-
     # Run the inference
     with tf.Session() as sess:
-        sess.run(init)
+        sess.run(tf.initialize_all_variables())
         for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
