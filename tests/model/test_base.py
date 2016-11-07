@@ -68,6 +68,8 @@ class TestStochasticGraph:
             a = tf.constant(1.)
         with pytest.raises(TypeError):
             model.get_output(a, inputs=[Mock()])
+        with pytest.raises(ValueError):
+            model.get_output(a, inputs={a: tf.ones([2])})
 
     def test_get_output_chain(self):
         # a -> b -> c

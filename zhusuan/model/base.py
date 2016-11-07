@@ -4,7 +4,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import six
 from six.moves import map
@@ -135,16 +135,25 @@ class StochasticGraph(Context):
                            for k, v in six.iteritems(inputs)])
             for k, v in six.iteritems(inputs):
                 if isinstance(k, tf.Variable):
-                    raise TypeError("StochasticGraph.get_output() doesn't "
-                                    "accept replacing Tensorflow variables "
-                                    "with given inputs. Error pair: "
-                                    "({}, {})".format(k, v))
+                    raise TypeError(
+                        "StochasticGraph.get_output() doesn't accept "
+                        "replacing Tensorflow variables with given inputs. "
+                        "Error pair: ({}, {})".format(k, v))
                 elif not isinstance(k, tf.Tensor) or \
                         not isinstance(v, tf.Tensor):
-                    raise TypeError("The 'inputs' argument of "
-                                    "StochasticGraph.get_output() should "
-                                    "consist of tf.Tensor pairs. Error type: "
-                                    "({}, {})".format(type(k), type(v)))
+                    raise TypeError(
+                        "The 'inputs' argument of "
+                        "StochasticGraph.get_output() should consist of "
+                        "tf.Tensor pairs. Error type: ({}, {})".format(
+                            type(k), type(v)))
+                else:
+                    try:
+                        k.get_shape().merge_with(v.get_shape())
+                    except ValueError:
+                        raise ValueError(
+                            "Key-value pairs in 'inputs' should have the same "
+                            "shape ({} vs {}). Error pair: ({}, {})".format(
+                                k.get_shape(), v.get_shape(), k, v))
 
             def _whether_treat_as_inputs(tensor):
                 """
