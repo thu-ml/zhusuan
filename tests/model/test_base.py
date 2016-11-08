@@ -508,7 +508,7 @@ class TestStochasticGraph:
 
         with StochasticGraph() as model:
             is_training = tf.placeholder(tf.bool, name='is_training')
-            x = tf.constant(x_value, dtype=tf.float32, name='x')
+            x = tf.constant(np.zeros([2, 5, 5, 3]), dtype=tf.float32, name='x')
             y = layers.conv2d(x, 2, [3, 3], normalizer_fn=layers.batch_norm,
                               normalizer_params={'is_training': is_training,
                                                  'updates_collections': None},
