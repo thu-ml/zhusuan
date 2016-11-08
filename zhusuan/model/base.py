@@ -10,6 +10,7 @@ import six
 from six.moves import map
 import tensorflow as tf
 import tensorflow.contrib.graph_editor as ge
+from tensorflow.python.ops import control_flow_ops
 
 from .utils import Context, get_backward_ops
 
@@ -204,6 +205,17 @@ class StochasticGraph(Context):
                         return True
                 return False
 
+            def _get_output_tensor(t):
+                """
+                Get corresponding output of a tensor.
+                """
+                if t in inputs:
+                    return inputs[t]
+                elif t in copied_tensors:
+                    return copied_tensors[t]
+                else:
+                    return t
+
             for op in all_ops:
                 # print(op.name, _whether_to_copy(op),
                 #       [i.name for i in op.control_inputs[:]])
@@ -217,22 +229,27 @@ class StochasticGraph(Context):
                     # not changing scope for now
                     copied_sgv, info = copier(sgv, sgv.graph, scope_prefix, "",
                                               reuse_dst_scope=False)
-                    copied_ops[op] = info.transformed(op)
+                    new_op = info.transformed(op)
+                    # fix for control flow (Copy _control_flow_context)
+                    orig_cf_context = op._get_control_flow_context()
+                    if isinstance(orig_cf_context,
+                                  control_flow_ops.CondContext):
+                        _control_flow_context = control_flow_ops.CondContext(
+                            pred=_get_output_tensor(orig_cf_context.pred),
+                            pivot=_get_output_tensor(orig_cf_context.pivot),
+                            branch=orig_cf_context.branch,
+                            name=orig_cf_context.name
+                        )
+                        new_op._control_flow_context = _control_flow_context
+                    elif isinstance(orig_cf_context,
+                                    control_flow_ops.WhileContext):
+                        raise NotImplementedError(
+                            "Do not support while loop ops for now.")
+                    copied_ops[op] = new_op
                     # print('copying:', op.name,
                     #       getattr(info.transformed(op), "name", None))
                     for output in op.outputs:
                         copied_tensors[output] = info.transformed(output)
-
-            def _get_output_tensor(t):
-                """
-                Get corresponding output of a tensor.
-                """
-                if t in inputs:
-                    return inputs[t]
-                elif t in copied_tensors:
-                    return copied_tensors[t]
-                else:
-                    return t
 
             # compute log probability density for each requested tensor
             ret = []

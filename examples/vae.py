@@ -38,13 +38,19 @@ class M1:
         training.
     :param n_particles: A Tensor or int. The number of particles per node.
     """
-    def __init__(self, n_z, n_x, n, n_particles):
+    def __init__(self, n_z, n_x, n, n_particles, is_training):
         with StochasticGraph() as model:
             z_mean = tf.zeros([n_particles, n_z])
             z_logstd = tf.zeros([n_particles, n_z])
             z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            lx_z = layers.fully_connected(z.value, 500)
-            lx_z = layers.fully_connected(lx_z, 500)
+            lx_z = layers.fully_connected(
+                z.value, 500, normalizer_fn=layers.batch_norm,
+                normalizer_params={'is_training': is_training,
+                                   'updates_collections': None})
+            lx_z = layers.fully_connected(
+                lx_z, 500, normalizer_fn=layers.batch_norm,
+                normalizer_params={'is_training': is_training,
+                                   'updates_collections': None})
             lx_z = layers.fully_connected(lx_z, n_x, activation_fn=None)
             x = Bernoulli(lx_z)
         self.model = model
@@ -72,7 +78,7 @@ class M1:
         return log_px_z + log_pz
 
 
-def q_net(x, n_z, n_particles):
+def q_net(x, n_z, n_particles, is_training):
     """
     Build the recognition network (Q-net) used as variational posterior.
 
@@ -82,8 +88,14 @@ def q_net(x, n_z, n_particles):
     :param n_particles: A Tensor or int. Number of samples of latent variables.
     """
     with StochasticGraph() as variational:
-        lz_x = layers.fully_connected(x, 500)
-        lz_x = layers.fully_connected(lz_x, 500)
+        lz_x = layers.fully_connected(
+            x, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params={'is_training': is_training,
+                               'updates_collections': None})
+        lz_x = layers.fully_connected(
+            lz_x, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params={'is_training': is_training,
+                               'updates_collections': None})
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = Normal(lz_mean, lz_logstd, sample_dim=0, n_samples=n_particles)
@@ -120,13 +132,14 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
+    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    model = M1(n_z, n_x, n, n_particles)
-    variational, lz = q_net(x, n_z, n_particles)
+    model = M1(n_z, n_x, n, n_particles, is_training)
+    variational, lz = q_net(x, n_z, n_particles, is_training)
     z, z_logpdf = variational.get_output(lz)
     z_logpdf = tf.reduce_sum(z_logpdf, -1)
     lower_bound = tf.reduce_mean(advi(
@@ -161,7 +174,8 @@ if __name__ == "__main__":
                 _, lb = sess.run([infer, lower_bound],
                                  feed_dict={x: x_batch,
                                             learning_rate_ph: learning_rate,
-                                            n_particles: lb_samples})
+                                            n_particles: lb_samples,
+                                            is_training: True})
                 lbs.append(lb)
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
@@ -175,10 +189,12 @@ if __name__ == "__main__":
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: lb_samples})
+                                                  n_particles: lb_samples,
+                                                  is_training: False})
                     test_ll = sess.run(log_likelihood,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples})
+                                                  n_particles: ll_samples,
+                                                  is_training: False})
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()

@@ -498,10 +498,12 @@ class TestStochasticGraph:
                                                'updates_collections': None},
                             weights_initializer=tf.constant_initializer(
                                 w_value))
+        optimizer_t = tf.train.AdamOptimizer()
+        optimize_t = optimizer_t.minimize(tf.reduce_sum(y_t))
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             y_test_1 = sess.run(y_t, feed_dict={is_training_t: False})
-            sess.run(y_t, feed_dict={is_training_t: True})
+            sess.run(optimize_t, feed_dict={is_training_t: True})
             y_test_2 = sess.run(y_t, feed_dict={is_training_t: False})
 
         with StochasticGraph() as model:
@@ -514,11 +516,13 @@ class TestStochasticGraph:
                                   w_value))
         x_new = tf.constant(x_value, dtype=tf.float32, name='x')
         y_out = model.get_output(y, inputs={x: x_new}, scope_prefix="copied")
+        optimizer = tf.train.AdamOptimizer()
+        optimize = optimizer.minimize(tf.reduce_sum(y_out[0]))
         with tf.Session() as sess:
             sess.run(tf.initialize_all_variables())
             y_out_1 = sess.run(y_out[0], feed_dict={is_training: False})
             y_out_2 = sess.run(y_out[0], feed_dict={is_training: False})
-            sess.run(y_out[0], feed_dict={is_training: True})
+            sess.run(optimize, feed_dict={is_training: True})
             y_out_3 = sess.run(y_out[0], feed_dict={is_training: False})
             assert np.abs(y_out_1 - y_out_2).max() < 1e-6
             assert np.abs(y_out_1 - y_out_3).max() > 1e-6
