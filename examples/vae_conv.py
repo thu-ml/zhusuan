@@ -39,12 +39,12 @@ class M1:
     :param n_particles: A Tensor or int. The number of particles per node.
     """
     def __init__(self, n_z, n_x, n, n_particles, is_training):
+        normalizer_params = {'is_training': is_training,
+                             'updates_collections': None}
         with StochasticGraph() as model:
             z_mean = tf.zeros([n_particles, n_z])
             z_logstd = tf.zeros([n_particles, n_z])
             z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            normalizer_params = {'is_training': is_training,
-                                 'updates_collections': None}
             lx_z = tf.reshape(z.value, [-1, 1, 1, n_z])
             lx_z = layers.conv2d_transpose(
                 lx_z, 128, kernel_size=3, padding='VALID',
@@ -101,23 +101,22 @@ def q_net(x, n_xl, n_z, n_particles, is_training):
     :param n_z: A Tensor or int. The dimension of latent variables (z).
     :param n_particles: A Tensor or int. Number of samples of latent variables.
     """
+    normalizer_params = {'is_training': is_training,
+                         'updates_collections': None}
     with StochasticGraph() as variational:
         lz_x = tf.reshape(x, [-1, n_xl, n_xl, 1])
         lz_x = layers.conv2d(
             lz_x, 32, kernel_size=5, stride=2,
             normalizer_fn=layers.batch_norm,
-            normalizer_params={'is_training': is_training,
-                               'updates_collections': None})
+            normalizer_params=normalizer_params)
         lz_x = layers.conv2d(
             lz_x, 64, kernel_size=5, stride=2,
             normalizer_fn=layers.batch_norm,
-            normalizer_params={'is_training': is_training,
-                               'updates_collections': None})
+            normalizer_params=normalizer_params)
         lz_x = layers.conv2d(
             lz_x, 128, kernel_size=5, padding='VALID',
             normalizer_fn=layers.batch_norm,
-            normalizer_params={'is_training': is_training,
-                               'updates_collections': None})
+            normalizer_params=normalizer_params)
         lz_x = layers.dropout(lz_x, keep_prob=0.9, is_training=is_training)
         lz_x = tf.reshape(lz_x, [-1, 128*3*3])
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
@@ -139,6 +138,7 @@ if __name__ == "__main__":
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_x = x_train.shape[1]
     n_xl = int(np.sqrt(n_x))
+
     # Define model parameters
     n_z = 40
 
