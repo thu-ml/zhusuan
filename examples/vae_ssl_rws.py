@@ -66,15 +66,6 @@ class M2(object):
         self.n_particles = n_particles
 
     def log_prob(self, latent, observed, given):
-        raise NotImplementedError()
-
-
-class M2Labeled(M2):
-    def __init__(self, n_x, n_y, n_z, n, n_particles, is_training):
-        super(M2Labeled, self).__init__(
-            n_x, n_y, n_z, n, n_particles, is_training)
-
-    def log_prob(self, latent, observed, given):
         """
         The log joint probability function.
 
@@ -82,33 +73,15 @@ class M2Labeled(M2):
             Tensor has shape (batch_size, n_samples, n_latent).
         :param observed: A dictionary of pairs: (string, Tensor). Each of the
             Tensor has shape (batch_size, n_observed).
-
         :return: A Tensor of shape (batch_size, n_samples). The joint log
             likelihoods.
         """
         # z: (n_samples, batch_size, n_z)
         z = latent['z']
-        # y: (batch_size, n_y), x: (batch_size, n_x)
-        y, x = observed['y'], observed['x']
-        y = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1, 1])
-        x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-        z_out, x_out = self.model.get_output(
-            [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
-        log_px_zy = tf.reduce_sum(x_out[1], -1)
-        log_pz = tf.reduce_sum(z_out[1], -1)
-        # log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-        #                                                       tf.float32))
-        return log_px_zy + log_pz  # + log_py
-
-
-class M2Unlabeled(M2):
-    def __init__(self, n_x, n_y, n_z, n, n_particles, is_training):
-        super(M2Unlabeled, self).__init__(
-            n_x, n_y, n_z, n, n_particles, is_training)
-
-    def log_prob(self, latent, observed, given):
-        y, z = latent['y'], latent['z']
         x = observed['x']
+        # y: (batch_size, n_y), x: (batch_size, n_x)
+        y = tf.tile(tf.expand_dims(observed['y'], 0),
+                    [self.n_particles, 1, 1]) if 'y' in observed else latent['y']
         x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
         z_out, x_out = self.model.get_output(
             [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
@@ -217,9 +190,7 @@ if __name__ == "__main__":
 
     n = tf.shape(x_labeled_ph)[0]
     with tf.variable_scope('model') as scope:
-        m2_labeled = M2Labeled(n_x, n_y, n_z, n, n_particles, is_training)
-    with tf.variable_scope('model', reuse=True) as scope:
-        m2_unlabeled = M2Unlabeled(n_x, n_y, n_z, n, n_particles, is_training)
+        m2 = M2(n_x, n_y, n_z, n, n_particles, is_training)
 
     variational, lx, ly, lz, lx_u, ly_u, lz_u, qy_x = \
         q_net(n_x, n_y, n_z, n_particles, is_training)
@@ -228,7 +199,7 @@ if __name__ == "__main__":
 
     labeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
     labeled_observed = {'x': x_labeled_ph, 'y': y_labeled_ph}
-    labeled_cost, labeled_log_likelihood = rws(m2_labeled, labeled_observed,
+    labeled_cost, labeled_log_likelihood = rws(m2, labeled_observed,
                                                labeled_latent, reduction_indices=0)
     labeled_cost = tf.reduce_mean(labeled_cost)
     labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
@@ -244,7 +215,7 @@ if __name__ == "__main__":
     unlabeled_observed = {'x': x_unlabeled_ph}
 
     unlabeled_cost, unlabeled_log_likelihood = rws(
-        m2_unlabeled, unlabeled_observed, unlabeled_latent, reduction_indices=0)
+        m2, unlabeled_observed, unlabeled_latent, reduction_indices=0)
     unlabeled_cost = tf.reduce_mean(unlabeled_cost)
     unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
 
