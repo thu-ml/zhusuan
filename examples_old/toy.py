@@ -12,8 +12,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.distributions import norm
-    from zhusuan.model import *
+    from zhusuan.distributions_old import norm
+    from zhusuan.layers_old import *
     from zhusuan.variational import advi
 except:
     raise ImportError()
@@ -30,16 +30,19 @@ class ToyIntractablePosterior:
         """
         The log joint probability function.
 
-        :param latent: A dictionary of pairs: (string, Tensor).
-        :param observed: A dictionary of pairs: (string, Tensor).
-        :param given: A dictionary of pairs: (string, Tensor).
+        :param latent: A dictionary of pairs: (string, Tensor). Each of the
+            Tensor has shape (batch_size, n_samples, n_latent).
+        :param observed: A dictionary of pairs: (string, Tensor). Each of the
+            Tensor has shape (batch_size, n_observed).
 
-        :return: A Tensor. The joint log likelihoods.
+        :return: A Tensor of shape (batch_size, n_samples). The joint log
+            likelihoods.
         """
         z = latent['z']
 
-        mu, logstd = z[:, 0], z[:, 1]
-        return norm.logpdf(logstd) + norm.logpdf(mu, 0, logstd)
+        mu, logvar = z[:, :, 0], z[:, :, 1]
+        return norm.logpdf(logvar, 0, 2.7) + norm.logpdf(
+            mu, 0, tf.exp(0.5 * logvar))
 
 
 if __name__ == "__main__":
@@ -60,23 +63,23 @@ if __name__ == "__main__":
         z = zs.reshape(xx.shape)
         ax.contour(xx, yy, z)
 
-    def draw(vmean, vlogstd):
+    def draw(vmean, vlogvar):
         from scipy import stats
         plt.cla()
         xlimits = [-2, 2]
-        ylimits = [-4, 2]
+        ylimits = [-8, 4]
 
         def log_prob(z, x):
-            mu, logstd = z[:, 0], z[:, 1]
-            return stats.norm.logpdf(logstd, 0, 1.35) + \
-                stats.norm.logpdf(mu, 0, np.exp(logstd))
+            mu, logvar = z[:, 0], z[:, 1]
+            return stats.norm.logpdf(logvar, 0, 2.7) + stats.norm.logpdf(
+                mu, 0, np.exp(0.5 * logvar))
 
         plot_isocontours(ax, lambda z: np.exp(log_prob(z, None)),
                          xlimits, ylimits)
 
         def variational_contour(z):
             return stats.multivariate_normal.pdf(
-                z, vmean, np.diag(np.exp(vlogstd)))
+                z, vmean[0], np.diag(np.exp(vlogvar[0])))
 
         plot_isocontours(ax, variational_contour, xlimits, ylimits)
         plt.draw()
@@ -84,16 +87,16 @@ if __name__ == "__main__":
 
     # Build the computation graph
     model = ToyIntractablePosterior()
-    n_particles = tf.placeholder(tf.int32, shape=[])
+    n_samples = tf.placeholder(tf.int32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
-    with StochasticGraph() as variational:
-        z_mean = tf.Variable(np.array([-2, -2], dtype='float32'))
-        z_logstd = tf.Variable(np.array([-5, -5], dtype='float32'))
-        qz = Normal(z_mean, z_logstd, sample_dim=0, n_samples=n_particles)
-    z, z_logpdf = variational.get_output(qz)
-    z_logpdf = tf.reduce_sum(z_logpdf, -1)
-    lower_bound = tf.reduce_mean(advi(
-        model, {}, {'z': [z, z_logpdf]}, reduction_indices=0))
+    z_mean = tf.Variable(np.array([[[-2, -2]]], dtype='float32'))
+    z_logvar = tf.Variable(np.array([[[-10, -10]]], dtype='float32'))
+    lz_mean = InputLayer((None, 1, 2), input=z_mean)
+    lz_logvar = InputLayer((None, 1, 2), input=z_logvar)
+    lz = Normal([lz_mean, lz_logvar], n_samples)
+    z_outputs = get_output(lz)
+    latent = {'z': z_outputs}
+    lower_bound = tf.reduce_mean(advi(model, {}, latent, reduction_indices=1))
     infer = optimizer.minimize(-lower_bound)
     init = tf.initialize_all_variables()
 
@@ -102,8 +105,8 @@ if __name__ == "__main__":
     with tf.Session() as sess:
         sess.run(init)
         for t in range(iters):
-            _, lb, vmean, vlogstd = sess.run(
-                [infer, lower_bound, z_mean, z_logstd],
-                feed_dict={n_particles: 200})
+            _, lb, vmean, vlogvar = sess.run(
+                [infer, lower_bound, z_mean, z_logvar],
+                feed_dict={n_samples: 200})
             print('Iteration {}: lower bound = {}'.format(t, lb))
-            draw(vmean, vlogstd)
+            draw(vmean[0], vlogvar[0])

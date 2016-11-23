@@ -9,15 +9,15 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
+import prettytensor as pt
 from six.moves import range
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.model import *
+    from zhusuan.distributions_old import norm, bernoulli
+    from zhusuan.layers_old import *
     from zhusuan.variational import advi
-    from zhusuan.evaluation import is_loglikelihood
 except:
     raise ImportError()
 
@@ -38,31 +38,19 @@ class M2(object):
         classes.
     :param n_z: Int. The dimension of latent variables (z).
     """
-    def __init__(self, n_x, n_y, n_z, n, n_particles, is_training):
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        with StochasticGraph() as model:
-            z_mean = tf.zeros([n_particles, n_z])
-            z_logstd = tf.zeros([n_particles, n_z])
-            z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            y = tf.placeholder(tf.float32, [None, None, n_y])
-            lx_zy = layers.fully_connected(
-                tf.concat(2, [z.value, y]), 500,
-                normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params
-            )
-            lx_zy = layers.fully_connected(
-                lx_zy, 500,
-                normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params
-            )
-            lx_zy = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-            x = Bernoulli(lx_zy)
-        self.x = x
-        self.z = z
-        self.y = y
-        self.model = model
-        self.n_particles = n_particles
+    def __init__(self, n_x, n_y, n_z):
+        self.n_y = n_y
+        self.n_z = n_z
+        self.n_x = n_x
+        self.l_x_zy = self.p_net()
+
+    def p_net(self):
+        with pt.defaults_scope(activation_fn=tf.nn.relu):
+            l_x_zy = (pt.template('z').join([pt.template('y')]).
+                      fully_connected(500).
+                      fully_connected(500).
+                      fully_connected(self.n_x, activation_fn=tf.nn.sigmoid))
+        return l_x_zy
 
     def log_prob(self, latent, observed, given):
         """
@@ -76,67 +64,61 @@ class M2(object):
         :return: A Tensor of shape (batch_size, n_samples). The joint log
             likelihoods.
         """
-        # z: (n_samples, batch_size, n_z)
+        # z: (batch_size, n_samples, n_z)
         z = latent['z']
         # y: (batch_size, n_y), x: (batch_size, n_x)
         y, x = observed['y'], observed['x']
-        y = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1, 1])
-        x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-        z_out, x_out = self.model.get_output(
-            [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
-        log_px_zy = tf.reduce_sum(x_out[1], -1)
-        log_pz = tf.reduce_sum(z_out[1], -1)
-        log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-                                                              tf.float32))
+
+        y_in = tf.reshape(
+            tf.tile(tf.expand_dims(y, 1), [1, tf.shape(z)[1], 1]),
+            (-1, self.n_y))
+        l_x_zy = (self.l_x_zy.construct(z=tf.reshape(z, (-1, self.n_z)),
+                                        y=y_in)).tensor
+        l_x_zy = tf.reshape(l_x_zy, [-1, tf.shape(z)[1], self.n_x])
+        log_px_zy = tf.reduce_sum(
+            bernoulli.logpdf(tf.expand_dims(x, 1), l_x_zy, eps=1e-6), 2)
+        log_pz = tf.reduce_sum(norm.logpdf(z), 2)
+        log_py = tf.log(tf.constant(1., tf.float32) / self.n_y)
         return log_px_zy + log_pz + log_py
 
 
-def q_net(n_x, n_y, n_z, n_particles, is_training):
+def q_net(n_x, n_y, n_z, n_samples):
     """
     Build the recognition network q(y, z|x) = q(y|x)q(z|x, y) used as
     variational posterior.
 
+    :param n_x: Int. The dimension of observed variable x.
+    :param n_y: Int. The dimension of latent variable y, i.e., the number of
+        classes.
     :param n_z: Int. The dimension of latent variable z.
-    :param n_particles: Tensor or int. Number of samples of latent variables.
-    :param is_training: Bool.
+    :param n_samples: Int. Number of samples of latent variable z used.
+
     :return: All :class:`Layer` instances needed.
     """
-    normalizer_params = {'is_training': is_training,
-                         'updates_collections': None}
-    with StochasticGraph() as variational:
-        x = tf.placeholder(tf.float32, shape=(None, n_x))
-        y = tf.placeholder(tf.float32, shape=(None, n_y))
-        lz_xy = layers.fully_connected(tf.concat(1, [x, y]), 500,
-                                       normalizer_fn=layers.batch_norm,
-                                       normalizer_params=normalizer_params
-                                       )
-        lz_xy = layers.fully_connected(lz_xy, 500,
-                                       normalizer_fn=layers.batch_norm,
-                                       normalizer_params=normalizer_params
-                                       )
-        lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-        lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-        z = Normal(lz_mean, lz_logstd, sample_dim=0, n_samples=n_particles)
-    return variational, x, y, z
+    with pt.defaults_scope(activation_fn=tf.nn.relu):
+        lx = InputLayer((None, n_x))
+        ly = InputLayer((None, n_y))
+        lz_xy = PrettyTensor({'x': lx, 'y': ly}, pt.template('x').
+                             join([pt.template('y')]).
+                             fully_connected(500).
+                             fully_connected(500))
+        lz_mean = PrettyTensor({'z': lz_xy}, pt.template('z').
+                               fully_connected(n_z, activation_fn=None).
+                               reshape((-1, 1, n_z)))
+        lz_logvar = PrettyTensor({'z': lz_xy}, pt.template('z').
+                                 fully_connected(n_z, activation_fn=None).
+                                 reshape((-1, 1, n_z)))
+        lz = Normal([lz_mean, lz_logvar], n_samples=n_samples)
+    return lx, ly, lz
 
 
-def qy_x_net(n_x, n_y, is_training):
-    normalizer_params = {'is_training': is_training,
-                         'updates_collections': None}
-    with StochasticGraph() as variational_y_x:
-        x = tf.placeholder(tf.float32, [None, n_x])
-        qy_x = layers.fully_connected(
-            x, 500,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
-        qy_x = layers.fully_connected(
-            qy_x, 500,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
-        qy_x = layers.fully_connected(qy_x, n_y, activation_fn=tf.nn.softmax)
-    return variational_y_x, x, qy_x
+def qy_x_net(n_y):
+    with pt.defaults_scope(activation_fn=tf.nn.relu):
+        qy_x = (pt.template('x').
+                fully_connected(500).
+                fully_connected(500).
+                fully_connected(n_y, activation_fn=tf.nn.softmax))
+    return qy_x
 
 
 if __name__ == "__main__":
@@ -150,7 +132,7 @@ if __name__ == "__main__":
         dataset.load_mnist_semi_supervised(data_path, one_hot=True)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_labeled, n_x = x_labeled.shape
-    n_y = 10
+    n_y = t_labeled.shape[1]
 
     # Define model parameters
     n_z = 100
@@ -169,44 +151,39 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
-    n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
+    n_samples = tf.placeholder(tf.int32, shape=[])
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
+    m2 = M2(n_x, n_y, n_z)
+    lx, ly, lz = q_net(n_x, n_y, n_z, n_samples)
+    qy_x = qy_x_net(n_y)
 
     # Labeled
-    x_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_l')
-    y_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_y), name='y_l')
-
-    n = tf.shape(x_labeled_ph)[0]
-    m2 = M2(n_x, n_y, n_z, n, n_particles, is_training)
-
-    variational, lx, ly, lz = q_net(n_x, n_y, n_z, n_particles, is_training)
-    variational_y_x, llx, qy_x = qy_x_net(n_x, n_y, is_training)
+    x_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_x))
+    y_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_y))
     inputs = {lx: x_labeled_ph, ly: y_labeled_ph}
-    z_outputs = variational.get_output(lz, inputs)
-
-    labeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
+    z_outputs = get_output(lz, inputs)
+    labeled_latent = {'z': z_outputs}
     labeled_observed = {'x': x_labeled_ph, 'y': y_labeled_ph}
-    labeled_lower_bound = tf.reduce_mean(
-        advi(m2, labeled_observed, labeled_latent, reduction_indices=0))
+    labeled_lower_bound = advi(m2, labeled_observed, labeled_latent,
+                               reduction_indices=1)
+    labeled_lower_bound = tf.reduce_mean(labeled_lower_bound)
 
     # Unlabeled
-    x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_u')
+    x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x))
     y = tf.diag(tf.ones(n_y))
     y_u = tf.reshape(tf.tile(tf.expand_dims(y, 0), (batch_size, 1, 1)),
                      (-1, n_y))
     x_u = tf.reshape(tf.tile(tf.expand_dims(x_unlabeled_ph, 1), (1, n_y, 1)),
                      (-1, n_x))
     inputs = {lx: x_u, ly: y_u}
-    z_outputs = variational.get_output(lz, inputs)
-    unlabeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
+    z_outputs = get_output(lz, inputs)
+    unlabeled_latent = {'z': z_outputs}
     unlabeled_observed = {'x': x_u, 'y': y_u}
-    lb_z = advi(m2, unlabeled_observed, unlabeled_latent, reduction_indices=0)
+    lb_z = advi(m2, unlabeled_observed, unlabeled_latent, reduction_indices=1)
     # sum over y
     lb_z = tf.reshape(lb_z, (-1, n_y))
-    qy_outputs = variational_y_x.get_output(qy_x, inputs={llx: x_unlabeled_ph})
-    qy = tf.reshape(qy_outputs[0], [-1, n_y])
+    qy = qy_x.construct(x=x_unlabeled_ph)
     qy += 1e-8
     qy /= tf.reduce_sum(qy, 1, keep_dims=True)
     log_qy = tf.log(qy)
@@ -214,12 +191,12 @@ if __name__ == "__main__":
         tf.reduce_sum(qy * (lb_z - log_qy), 1))
 
     # Build classifier
-    y_output = variational_y_x.get_output(qy_x, inputs={llx: x_labeled_ph})
-    pred_y = tf.argmax(y_output[0], 1)
+    y = qy_x.construct(x=x_labeled_ph).tensor
+    pred_y = tf.argmax(y, 1)
     acc = tf.reduce_sum(
         tf.cast(tf.equal(pred_y, tf.argmax(y_labeled_ph, 1)), tf.float32) /
         tf.cast(tf.shape(y_labeled_ph)[0], tf.float32))
-    log_qy_x = discrete.logpmf(y_labeled_ph, y_output[0])
+    log_qy_x = discrete.logpdf(y_labeled_ph, y, eps=1e-8)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
 
     # Gather gradients
@@ -233,6 +210,7 @@ if __name__ == "__main__":
         print(i.name, i.get_shape())
 
     init = tf.initialize_all_variables()
+
     # graph_writer = tf.train.SummaryWriter('/home/ishijiaxin/log',
     #                                       tf.get_default_graph())
 
@@ -266,8 +244,7 @@ if __name__ == "__main__":
                                y_labeled_ph: y_labeled_batch,
                                x_unlabeled_ph: x_unlabeled_batch,
                                learning_rate_ph: learning_rate,
-                               n_particles: lb_samples,
-                               is_training: True})
+                               n_samples: lb_samples})
                 lbs_labeled.append(lb_labeled)
                 lbs_unlabeled.append(lb_unlabeled)
                 train_accs.append(train_acc)
@@ -291,8 +268,7 @@ if __name__ == "__main__":
                         feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
                                    x_unlabeled_ph: test_x_batch,
-                                   n_particles: lb_samples,
-                                   is_training: False})
+                                   n_samples: lb_samples})
                     test_lls_labeled.append(test_ll_labeled)
                     test_lls_unlabeled.append(test_ll_unlabeled)
                     test_accs.append(test_acc)

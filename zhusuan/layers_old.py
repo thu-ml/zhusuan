@@ -13,7 +13,7 @@ import prettytensor as pt
 import six
 from six.moves import map, range
 
-from .distributions import norm, discrete
+from .distributions_old import norm, discrete
 from .utils import as_tensor, add_name_scope, ensure_dim_match
 
 

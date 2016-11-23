@@ -12,7 +12,7 @@ from six.moves import range, map
 import prettytensor as pt
 
 from .context import zhusuan
-from zhusuan.layers import *
+from zhusuan.layers_old import *
 
 
 class TestLayer:

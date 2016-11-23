@@ -5,10 +5,10 @@ import tensorflow as tf
 import numpy as np
 import math
 import os
-from dataset import load_uci_german_credits, load_mnist_realval, one_hot
+from dataset import load_uci_german_credits, load_binary_mnist_realval
 from zhusuan.optimization.gradient_descent_optimizer import \
     GradientDescentOptimizer
-from zhusuan.distributions import norm, discrete
+from zhusuan.distributions_old import norm, bernoulli
 from zhusuan.mcmc.nuts import NUTS
 
 float_eps = 1e-30
@@ -16,13 +16,12 @@ float_eps = 1e-30
 # Load MNIST dataset
 # n = 600
 # n_dims = 784
-# n_classes = 10
 # mu = 0
 # sigma = 1./math.sqrt(n)
 #
 # data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 #                              'data', 'mnist.pkl.gz')
-# X_train, y_train, _, _, X_test, y_test = load_mnist_realval(data_path)
+# X_train, y_train, _, _, X_test, y_test = load_binary_mnist_realval(data_path)
 # X_train = X_train[:n] * 256
 # y_train = y_train[:n]
 # X_test = X_test * 256
@@ -30,33 +29,29 @@ float_eps = 1e-30
 # Load German credits dataset
 n = 900
 n_dims = 24
-n_classes = 2
 mu = 0
 sigma = 1./math.sqrt(n)
 
 data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          'data', 'german.data-numeric')
 X_train, y_train, X_test, y_test = load_uci_german_credits(data_path, n)
-y_train = one_hot(y_train.astype(np.int32), 2)
-y_test = one_hot(y_test.astype(np.int32), 2)
 
 # Define graph
 # Data
 x_input = tf.placeholder(tf.float32, [None, n_dims], name='x_input')
 x = tf.Variable(tf.zeros((n, n_dims)), trainable=False, name='x')
-y = tf.placeholder(tf.float32, [None, n_classes], name='y')
+y = tf.placeholder(tf.float32, [None], name='y')
 update_data = tf.assign(x, x_input, validate_shape=False, name='update_data')
 
 # Model
-beta = tf.Variable(np.zeros((n_dims, n_classes)),
-                   dtype=tf.float32, name='beta')
-scores = tf.matmul(x, beta)
-logits = tf.nn.softmax(scores)
-correct = tf.nn.in_top_k(scores, tf.argmax(y, dimension=1), 1)
-n_correct = tf.reduce_sum(tf.cast(correct, tf.int32))
+beta = tf.Variable(np.zeros(n_dims), dtype=tf.float32, name='beta')
+scores = tf.reduce_sum(x * beta, reduction_indices=(1,))
+logits = tf.nn.sigmoid(scores, name='logits')
+predictions = tf.cast(logits > 0.5, tf.float32)
+n_correct = tf.reduce_sum(predictions * y + (1 - predictions) * (1 - y))
 
 log_likelihood = tf.reduce_sum(norm.logpdf(beta, 0, sigma)) + \
-                 tf.reduce_sum(discrete.logpdf(y, logits))
+                 tf.reduce_sum(bernoulli.logpdf(y, logits))
 
 vars = [beta]
 
@@ -80,8 +75,8 @@ sampler = NUTS(sess, {y: y_train}, [beta], log_likelihood, 1e-2,
 
 sample_sum = []
 num_samples = chain_length - burnin
-train_scores = np.zeros((X_train.shape[0], n_classes))
-test_scores = np.zeros((X_test.shape[0], n_classes))
+train_scores = np.zeros((X_train.shape[0]))
+test_scores = np.zeros((X_test.shape[0]))
 for i in range(chain_length):
     # Feed data in
     sess.run(update_data, feed_dict={x_input: X_train})
@@ -124,13 +119,11 @@ n_train_c = sess.run(n_correct, feed_dict={y: y_train})
 sess.run(update_data, feed_dict={x_input: X_test})
 n_test_c = sess.run(n_correct, feed_dict={y: y_test})
 
-train_pred = np.argmax(train_scores, axis=1)
-test_pred = np.argmax(test_scores, axis=1)
-train_label = np.argmax(y_train, axis=1)
-test_label = np.argmax(y_test, axis=1)
+train_pred = (train_scores > 0.5).astype(np.float32)
+test_pred = (test_scores > 0.5).astype(np.float32)
 
-train_accuracy = float(np.sum(train_pred == train_label)) / X_train.shape[0]
-test_accuracy = float(np.sum(test_pred == test_label)) / X_test.shape[0]
+train_accuracy = float(np.sum(train_pred == y_train)) / X_train.shape[0]
+test_accuracy = float(np.sum(test_pred == y_test)) / X_test.shape[0]
 
 print('Log likelihood of expected parameters: %f, train set accuracy = %f, '
       'test set accuracy = %f' %

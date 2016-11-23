@@ -12,6 +12,8 @@ from six.moves import range
 
 def log_sum_exp(x, reduction_indices=None, keep_dims=False):
     """
+    Deprecated: Use tf.reduce_logsumexp().
+
     Tensorflow numerically stable log sum of exps across the
     `reduction_indices`.
 
@@ -58,6 +60,8 @@ def log_mean_exp(x, reduction_indices=None, keep_dims=False):
 
 def as_tensor(input):
     """
+    Deprecated: Use tf.convert_to_tensor.
+
     Wrap an input (python scalar or numpy array) into Tensors.
 
     :param input: A number, numpy array or Tensor.
@@ -71,6 +75,19 @@ def as_tensor(input):
         except Exception as e:
             raise TypeError("Input of type %s cannot be wrapped as Tensors. "
                             "(Error message: %s)" % (type(input), e))
+
+
+def convert_to_int(x):
+    """
+    Try to convert input to type int in python.
+
+    :param x: The input instance.
+    :return: A int if succeed, else None.
+    """
+    try:
+        return int(x)
+    except TypeError:
+        return None
 
 
 def ensure_dim_match(inputs, dim):
@@ -114,9 +131,8 @@ def ensure_dim_match(inputs, dim):
 def add_name_scope(f):
     @wraps(f)
     def _func(*args, **kwargs):
-        with tf.name_scope(args[0].__class__.__name__):
-            with tf.name_scope(f.__name__):
-                return f(*args, **kwargs)
+        with tf.name_scope(args[0].__class__.__name__ + '.' + f.__name__):
+            return f(*args, **kwargs)
 
     return _func
 
