@@ -101,7 +101,7 @@ def test_add_name_scope():
 
     a = A()
     node = a.f()
-    assert(node.name == 'A/f/ones:0')
+    assert(node.name == 'A.f/ones:0')
 
 
 def test_copy():
