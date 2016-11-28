@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from zhusuan.model import *
-    from zhusuan.distributions import norm, bernoulli
     from zhusuan.variational import advi
 except:
     raise ImportError()
@@ -45,29 +44,21 @@ class BayesianNN():
         self.N = N
 
         with StochasticGraph() as model:
-            is_training = tf.cast(1.0, tf.float32)
-            dropout_rate = tf.cast(0.5, tf.float32)
-
             #define parameters
             def sample_param(layer_sizes):
                 w = []
                 for n_in, n_out in zip(layer_sizes[:-1], layer_sizes[1:]):
-                    mu = tf.zeros([n_out, n_in + 1])
-                    logstd = tf.zeros([n_out, n_in + 1])
-                    w.append(Normal(mu, logstd, sample_dim=0,
-                                    n_samples=n_particles))
+                    mu = tf.zeros([n_particles, n_out, n_in + 1])
+                    logstd = tf.zeros([n_particles, n_out, n_in + 1])
+                    w.append(Normal(mu, logstd))
                 return w
             w = sample_param(layer_sizes)
 
             #define x
-            x_mu = tf.zeros([n, n_x])
-            x_logstd = tf.zeros([n, n_x])
-            x = Normal(x_mu, x_logstd)
+            x = tf.placeholder(tf.float32, [None, layer_sizes[0]])
 
-            y = self._forward([item.value for item in w], x.value,
-                              {'is_training': is_training,
-                               'dropout_rate': dropout_rate})
-            y_sample = self._sample(y, 1)
+            y = self._forward([item.value for item in w], x)
+            y_sample = Normal(y, self.y_logstd * tf.ones_like(y))
 
         self.model = model
         self.w = w
@@ -76,8 +67,6 @@ class BayesianNN():
         self.y_sample = y_sample
 
         self.n_particles = n_particles
-        self.is_training = is_training
-        self.dropout_rate = dropout_rate
         self.layer_sizes = layer_sizes
 
     def log_prob(self, latent, observed, given):
@@ -96,24 +85,20 @@ class BayesianNN():
         y = tf.squeeze(observed['y'])
         y = tf.tile(tf.expand_dims(y, 1), [1, self.n_particles])
         w = [latent['w'+str(i)] for i in range(len(self.layer_sizes)-1)]
-        is_training = given['is_training']
-        dropout_rate = given['dropout_rate']
 
         w_dict = {self.w[i]: w[i] for i in range(len(w))}
-        inputs = {self.x: x, self.y_sample: y, self.is_training: is_training,
-                  self.dropout_rate: dropout_rate}
+        inputs = {self.x: x, self.y_sample: y}
         inputs.update(w_dict)
         out = self.model.get_output([self.y_sample] + self.w,
                                     inputs=inputs)
         y_out = out[0]
         w_out = out[1:]
 
-        log_py_x = tf.reduce_sum(y_out[1], 0) * self.N
+        log_py_x = tf.reduce_mean(y_out[1], 0) * self.N
         log_pw = sum([tf.reduce_sum(item[1], [-1, -2]) for item in w_out])
-        log_pw = tf.tile(tf.expand_dims(log_pw, 0), [tf.shape(log_py_x)[0], 1])
         return log_py_x + log_pw
 
-    def _forward(self, w, x, given):
+    def _forward(self, w, x):
         """
         get the network output of x with latent variables.
         :param w1: A Tensor has shape (n_samples, ...).
@@ -123,11 +108,7 @@ class BayesianNN():
 
         :return: A Tensor of shape (batch_size, n_samples)
         """
-        is_training = given['is_training']
-        dropout_rate = given['dropout_rate']
-
-        temp = (1-dropout_rate) * (1-is_training) + is_training
-        w = [tf.tile(tf.expand_dims(item, 0), [tf.shape(x)[0], 1, 1, 1]) * temp
+        w = [tf.tile(tf.expand_dims(item, 0), [tf.shape(x)[0], 1, 1, 1])
              for item in w]
 
         x = tf.tile(tf.expand_dims(tf.expand_dims(x, 2), 1),
@@ -139,30 +120,20 @@ class BayesianNN():
                 tf.sqrt(tf.cast(tf.shape(x)[2], tf.float32))
 
             if i < len(w)-1:
-                temp = 1-is_training + is_training *\
-                    bernoulli.rvs((1-dropout_rate) * tf.ones_like(x))
-                x = x * temp
                 x = tf.nn.relu(x)
 
         return tf.squeeze(x, [2, 3])
 
-    def _sample(self, y, n_samples):
-        y = Normal(y, self.y_logstd * tf.ones_like(y))
-        return y
-
-    def evaluate(self, latent, observed, given=None, std_y_train=1.):
+    def evaluate(self, latent, observed, std_y_train=1.):
         """
         Calculate the rmse and log likelihood.
         """
         x = observed['x']
         y = tf.squeeze(observed['y'], 1)
         w = [latent['w'+str(i)] for i in range(len(self.layer_sizes)-1)]
-        is_training = given['is_training']
-        dropout_rate = given['dropout_rate']
 
         w_dict = {self.w[i]: w[i] for i in range(len(w))}
-        inputs = {self.x: x, self.is_training: is_training,
-                  self.dropout_rate: dropout_rate}
+        inputs = {self.x: x}
         inputs.update(w_dict)
         y_out = self.model.get_output(self.y, inputs=inputs)[0]
         y_out_mean = tf.reduce_mean(y_out, 1)
@@ -215,8 +186,6 @@ if __name__ == '__main__':
     anneal_lr_rate = 1.
 
     # Build training model
-    is_training = tf.placeholder(tf.float32, shape=[], name='is_training')
-    dropout_rate = tf.placeholder(tf.float32, shape=[], name='dropout_rate')
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=(None, x_train.shape[1]))
@@ -241,17 +210,15 @@ if __name__ == '__main__':
                  for item in w_outputs]
     latent = {'w'+str(i): w_outputs[i] for i in range(len(w_outputs))}
 
-    drop = {'is_training': is_training,
-            'dropout_rate': dropout_rate}
     lower_bound = -tf.reduce_mean(advi(
-        model, observed, latent, reduction_indices=1, given=drop))
+        model, observed, latent, reduction_indices=0))
     grads = optimizer.compute_gradients(lower_bound)
     infer = optimizer.apply_gradients(grads)
 
     latent_outputs = {'w'+str(i): w_outputs[i][0]
                       for i in range(len(w_outputs))}
     rmse, ll = model.evaluate(latent_outputs, observed,
-                              given=drop, std_y_train=std_y_train)
+                              std_y_train=std_y_train)
 
     params = tf.trainable_variables()
     for i in params:
@@ -273,9 +240,7 @@ if __name__ == '__main__':
                     [infer, grads, lower_bound],
                     feed_dict={n_particles: lb_samples,
                                learning_rate_ph: learning_rate,
-                               x: x_batch, y: y_batch,
-                               is_training: 1.0,
-                               dropout_rate: 0.2})
+                               x: x_batch, y: y_batch})
 
                 lbs.append(lb)
             time_epoch += time.time()
@@ -288,9 +253,7 @@ if __name__ == '__main__':
                 test_lb, test_rmse, test_ll = sess.run(
                     [lower_bound, rmse, ll],
                     feed_dict={n_particles: ll_samples,
-                               x: x_test, y: y_test,
-                               is_training: 0.,
-                               dropout_rate: 0.2})
+                               x: x_test, y: y_test})
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(test_lb))
