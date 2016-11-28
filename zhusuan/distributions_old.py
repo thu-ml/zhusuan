@@ -107,13 +107,13 @@ class Bernoulli:
         pass
 
     @add_name_scope
-    def rvs(self, p, size=None):
+    def rvs(self, p, shape=None):
         """
         Not implemented for now due to absence of Bernoulli in Tensorflow.
 
         :param p: A Tensor or numpy array. The probability of 1. Can be
             broadcast to size given.
-        :param size: A 1-D Tensor or numpy array. The shape of the output
+        :param shape: A 1-D Tensor or numpy array. The shape of the output
             tensor.
 
         :return: A Tensor of specified shape filled with random independent

@@ -69,13 +69,13 @@ class TestBernoulli:
 
 class TestDiscrete:
     def test_rvs(self):
-        p = tf.placeholder(tf.float32, shape=(None, 5, 3))
+        p = tf.placeholder(tf.float32, shape=(5, 3))
         output = discrete.rvs(p)
-        assert(output.get_shape().as_list() == [None, 5, 3])
+        assert(output.get_shape().as_list() == [5, 3])
 
-        p = np.array([[[0.5, 7., 1.], [0.6, 2., 5.]]])
+        p = np.array([[0.5, 7., 1.], [0.6, 2., 5.]])
         output = discrete.rvs(p)
-        assert(output.get_shape().as_list() == [1, 2, 3])
+        assert(output.get_shape().as_list() == [2, 3])
         with tf.Session() as sess:
             test_values = sess.run(output)
             assert(test_values.shape == p.shape)
@@ -88,8 +88,8 @@ class TestDiscrete:
 
     def test_logpdf(self):
         with tf.Session() as sess:
-            p = np.array([[[0.5, 7., 1.], [0.5, 7., 1.]]])
-            x = np.array([[[0, 1, 0], [0, 1, 0]]])
+            p = np.array([[0.5, 7., 1.], [0.5, 7., 1.]])
+            x = np.array([[0, 1, 0], [0, 1, 0]])
             test_values = sess.run(discrete.logpdf(x, p))[0]
             true_values = np.sum(x * np.log(p / p.sum(axis=-1, keepdims=True)),
                                  axis=-1)
