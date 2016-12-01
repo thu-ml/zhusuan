@@ -8,6 +8,7 @@ from __future__ import division
 import tensorflow as tf
 import six
 from six.moves import zip, map
+from tensorflow.python.training import moving_averages
 
 from .utils import log_mean_exp
 from .evaluation import is_loglikelihood
@@ -105,3 +106,47 @@ def rws(model, observed, latent, reduction_indices=1, given=None):
     fake_proposal_cost = tf.reduce_sum(w_tilde*entropy, reduction_indices)
     cost = fake_log_joint_cost + fake_proposal_cost
     return cost, log_likelihood
+
+
+def nvil(model, observed, latent, baseline=None, reduction_indices=1,
+         given=None, variance_normalization=False, alpha=0.8):
+    latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
+    latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
+    latent_logpdfs = map(lambda x: x[1], latent_v)
+    given = given if given is not None else {}
+    log_joint = model.log_prob(latent_outputs, observed, given)  # log p(x,h)
+    entropy = -sum(latent_logpdfs)  # -log q(h|x)
+    l_signal = log_joint + entropy
+    cost = 0.
+    if baseline is not None:
+        baseline = tf.expand_dims(baseline, reduction_indices)
+        baseline_cost = 0.5 * tf.reduce_mean(tf.square(
+            tf.stop_gradient(l_signal) - baseline), reduction_indices)
+        l_signal = l_signal - baseline
+        cost += baseline_cost
+
+    if variance_normalization is True:
+        bc = tf.reduce_mean(l_signal)
+        bv = tf.reduce_mean(tf.square(l_signal - bc))
+        moving_mean = tf.get_variable('moving_mean', shape=[],
+                                      initializer=tf.zeros_initializer,
+                                      trainable=False)
+        moving_variance = tf.get_variable('moving_variance', shape=[],
+                                          initializer=tf.ones_initializer,
+                                          trainable=False)
+
+        update_mean = moving_averages.assign_moving_average(
+            moving_mean, bc, decay=alpha)
+        update_variance = moving_averages.assign_moving_average(
+            moving_variance, bv, decay=alpha)
+        l_signal = (l_signal - moving_mean) / tf.maximum(
+            1., tf.sqrt(moving_variance))
+        with tf.control_dependencies([update_mean, update_variance]):
+            l_signal = tf.identity(l_signal)
+
+    fake_log_joint_cost = -tf.reduce_mean(log_joint, reduction_indices)
+    fake_variational_cost = tf.reduce_mean(
+        tf.stop_gradient(l_signal) * entropy, reduction_indices)
+    cost += fake_log_joint_cost + fake_variational_cost
+    lower_bound = tf.reduce_mean(log_joint + entropy, reduction_indices)
+    return cost, lower_bound
