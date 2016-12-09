@@ -33,11 +33,9 @@ class BayesianNN:
     :param x: A Tensor. The data, or mini-batch of data.
     :param layer_sizes: A list of Int. The dimensions of all layers.
     :param n_particles: A Tensor or int. The number of particles per node.
-    :param y_logstd: Float. Given log standard deviation of q(y|w, x).
     :param N: Int. The total number of training data.
     """
-    def __init__(self, x, layer_sizes, n_particles, y_logstd, N):
-        self.y_logstd = y_logstd
+    def __init__(self, x, layer_sizes, n_particles, N):
         self.N = N
 
         with StochasticGraph() as model:
@@ -47,12 +45,14 @@ class BayesianNN:
                 w_logstd = tf.zeros([n_particles, n_out, n_in + 1])
                 ws.append(Normal(w_mu, w_logstd))
             ly_x = self._forward([w.value for w in ws], x)
-            y = Normal(ly_x, self.y_logstd * tf.ones_like(ly_x))
+            y_logstd = tf.Variable(0.)
+            y = Normal(ly_x, y_logstd * tf.ones_like(ly_x))
 
         self.model = model
         self.ws = ws
         self.ly_x = ly_x
         self.y = y
+        self.y_logstd = y_logstd
 
         self.n_particles = n_particles
         self.layer_sizes = layer_sizes
@@ -118,8 +118,8 @@ class BayesianNN:
         rmse = tf.sqrt(tf.reduce_mean((y_pred - y)**2)) * std_y_train
 
         mean = tf.reduce_mean(y_out, 0, keep_dims=True)
-        variance = tf.reduce_mean((y_out - mean)**2, 0, keep_dims=True)
-        variance = variance + np.exp(self.y_logstd)
+        variance = tf.reduce_mean((y_out - mean)**2, 0)
+        variance = variance + tf.exp(self.y_logstd)**2
         ll = tf.reduce_mean(-0.5 *
                             tf.log(2 * np.pi * variance * std_y_train**2) -
                             0.5 * (y - y_pred)**2 / variance)
@@ -147,9 +147,6 @@ if __name__ == '__main__':
         y_train, y_test)
     std_y_train = np.squeeze(std_y_train)
 
-    # Define model parameters
-    y_logstd = np.log(0.1)
-
     # Define training/evaluation parameters
     lb_samples = 10
     ll_samples = 5000
@@ -166,7 +163,7 @@ if __name__ == '__main__':
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=(None, n_x))
     layer_sizes = [n_x, 50, 1]
-    bnn = BayesianNN(x, layer_sizes, n_particles, y_logstd, x_train.shape[0])
+    bnn = BayesianNN(x, layer_sizes, n_particles, x_train.shape[0])
     y = tf.placeholder(tf.float32, shape=(None, 1))
     observed = {'y': y}
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
