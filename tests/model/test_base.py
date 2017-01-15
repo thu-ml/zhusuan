@@ -252,7 +252,7 @@ class TestStochasticGraph:
             a = tf.zeros([3, 2, 1, 4], name="ao")
             a0, a1, a2 = tf.unpack(a, axis=0)
             b = tf.ones([2, 4, 1], name="bo")
-            c = tf.batch_matmul(a2, b, name="co")
+            c = tf.matmul(a2, b, name="co")
 
         a1_new = tf.ones([2, 1, 4], name="a1_new")
         a_new = tf.ones([3, 2, 1, 4], name="ao_new")
@@ -345,7 +345,7 @@ class TestStochasticGraph:
             a = tf.placeholder(tf.float32, name='ap')
             b = tf.placeholder(tf.int32, name='bp')
             c = tf.expand_dims(a, b, name='cp')
-            c0 = tf.split(b, 1, c)[0]
+            c0 = tf.split(c, 1, axis=b)[0]
 
         b_new = tf.placeholder(tf.int32, name='bp_new')
         c0_out = model.get_output(c0, inputs={b: b_new})
@@ -437,7 +437,7 @@ class TestStochasticGraph:
         # case 1
         y_out = model.get_output(y, inputs={x: x_new})
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             y_out_ = sess.run(y_out[0])
             assert y_out_.shape == (4, 2)
             assert np.abs(y_out_).max() < 1e-8
@@ -462,7 +462,7 @@ class TestStochasticGraph:
         x_new = tf.zeros([3, 4], name='x_new')
         y_out = model.get_output(y, inputs={x: x_new})
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             y_out_ = sess.run(y_out[0])
             assert y_out_.shape == (3, 10)
             assert np.abs(y_out_).max() < 1e-8
@@ -479,7 +479,7 @@ class TestStochasticGraph:
         x_new = tf.zeros([2, 5, 5, 3], name='x_new')
         y_out = model.get_output(y, inputs={x: x_new})
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             y_out_ = sess.run(y_out[0])
             assert y_out_.shape == (2, 5, 5, 2)
             assert np.abs(y_out_).max() < 1e-8
@@ -501,7 +501,7 @@ class TestStochasticGraph:
         optimizer_t = tf.train.AdamOptimizer()
         optimize_t = optimizer_t.minimize(tf.reduce_sum(y_t))
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             y_test_1 = sess.run(y_t, feed_dict={is_training_t: False})
             sess.run(optimize_t, feed_dict={is_training_t: True})
             y_test_2 = sess.run(y_t, feed_dict={is_training_t: False})
@@ -519,7 +519,7 @@ class TestStochasticGraph:
         optimizer = tf.train.AdamOptimizer()
         optimize = optimizer.minimize(tf.reduce_sum(y_out[0]))
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             y_out_1 = sess.run(y_out[0], feed_dict={is_training: False})
             y_out_2 = sess.run(y_out[0], feed_dict={is_training: False})
             sess.run(optimize, feed_dict={is_training: True})
@@ -558,7 +558,7 @@ class TestStochasticGraph:
             assert a_out[1] is not None
             assert c_out[1] is not None
             assert b_out[1] is not None
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             a_out_sample, a_out_logpdf, a_new_ = \
                 sess.run([a_out[0], a_out[1], a_new], feed_dict={n: 5})
             assert np.abs(a_out_sample - a_new_).max() < 1e-6
@@ -569,7 +569,7 @@ class TestStochasticGraph:
             assert b_out[0] is b_new
             assert a_out[0] is a.value
             assert c_out[0] is c.value
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             a_out_, b_out_, c_out_ = sess.run([a_out, b_out, c_out],
                                               feed_dict={n: 1})
             assert a_out_[0].shape == (1, 3)
@@ -581,7 +581,7 @@ class TestStochasticGraph:
         # case 3
         b_out = model.get_output(b)
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             b_out_ = sess.run(b_out, feed_dict={n: 2})
             assert b_out_[1].shape == (2, 5)
 
@@ -590,7 +590,7 @@ class TestStochasticGraph:
         a_new = tf.zeros([n_new, 3])
         b_out = model.get_output(b, inputs={a: a_new, n: n_new})
         with tf.Session() as sess:
-            sess.run(tf.initialize_all_variables())
+            sess.run(tf.global_variables_initializer())
             b_out_ = sess.run(b_out)
             assert b_out_[1].shape == (1, 5)
 

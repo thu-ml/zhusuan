@@ -97,7 +97,7 @@ def q_net(x, n_xl, n_z, n_particles, is_training):
     Build the recognition network (Q-net) used as variational posterior.
 
     :param x: A Tensor.
-    :param n_xl: A Tensor or int. The dimension of observed variables (x) width.
+    :param n_xl: A Tensor or int. The dimension of observed variable (x) width.
     :param n_z: A Tensor or int. The dimension of latent variables (z).
     :param n_particles: A Tensor or int. Number of samples of latent variables.
     """
@@ -184,7 +184,7 @@ if __name__ == "__main__":
 
     # Run the inference
     with tf.Session() as sess:
-        sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:

@@ -116,7 +116,7 @@ def ensure_dim_match(inputs, dim):
         with tf.control_dependencies([assert_op]):
             input_ = tf.identity(input_)
         mask = tf.cast(tf.one_hot(dim, tf.rank(input_)), tf.bool)
-        tile_shape = tf.select(
+        tile_shape = tf.where(
             mask, tf.ones([tf.rank(input_)], tf.int32) * max_value,
             tf.ones([tf.rank(input_)], tf.int32))
         output = tf.cond(tf.equal(tf.shape(input_)[dim], 1),

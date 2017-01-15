@@ -215,8 +215,8 @@ class Normal(MergeLayer):
         samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
             mean_
         samples_n = norm.rvs(
-            shape=tf.concat(0, [tf.pack([tf.shape(mean_)[0], self.n_samples]),
-                                tf.shape(mean_)[2:]])
+            shape=tf.concat_v2([tf.pack([tf.shape(mean_)[0], self.n_samples]),
+                                tf.shape(mean_)[2:]], 0)
             ) * tf.exp(0.5 * logvar) + mean_
 
         def _output():
@@ -393,12 +393,12 @@ class ReadAttentionLayer(MergeLayer):
         x_hat = tf.reshape(x - tf.sigmoid(c_t), [-1, self.height, self.width])
         x = tf.reshape(x, [-1, self.height, self.width])
         read_x = gamma * tf.reshape(
-            tf.batch_matmul(fy, tf.batch_matmul(x, fxt)),
+            tf.matmul(fy, tf.matmul(x, fxt)),
             [-1, self.read_n*self.read_n])
         read_x_hat = gamma * tf.reshape(
-            tf.batch_matmul(fy, tf.batch_matmul(x_hat, fxt)),
+            tf.matmul(fy, tf.matmul(x_hat, fxt)),
             [-1, self.read_n*self.read_n])
-        return tf.concat(1, [read_x, read_x_hat])
+        return tf.concat_v2([read_x, read_x_hat], 1)
 
 
 class WriteAttentionLayer(MergeLayer):
@@ -436,7 +436,7 @@ class WriteAttentionLayer(MergeLayer):
         fx /= tf.maximum(tf.reduce_sum(fx, 2, keep_dims=True), 1e-8)
         fy /= tf.maximum(tf.reduce_sum(fy, 2, keep_dims=True), 1e-8)
         fyt = tf.transpose(fy, perm=[0, 2, 1])
-        wr = tf.batch_matmul(fyt, tf.batch_matmul(write_patch, fx))
+        wr = tf.matmul(fyt, tf.matmul(write_patch, fx))
         wr = tf.reshape(wr, [-1, self.height * self.width]) * 1.0 / gamma
         return wr + c_t
 

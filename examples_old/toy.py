@@ -98,7 +98,7 @@ if __name__ == "__main__":
     latent = {'z': z_outputs}
     lower_bound = tf.reduce_mean(advi(model, {}, latent, reduction_indices=1))
     infer = optimizer.minimize(-lower_bound)
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
 
     # Run the inference
     iters = 1000

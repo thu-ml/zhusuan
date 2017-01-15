@@ -259,7 +259,7 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
 
     # Run the inference
     with tf.Session() as sess:

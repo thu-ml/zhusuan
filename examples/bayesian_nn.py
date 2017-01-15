@@ -96,9 +96,9 @@ class BayesianNN:
         x = tf.tile(tf.expand_dims(tf.expand_dims(x, 2), 0),
                     [tf.shape(ws[0])[0], 1, 1, 1])
         for i in range(len(ws)):
-            x = tf.concat(2, [x, tf.ones([tf.shape(x)[0],
-                                          tf.shape(x)[1], 1, 1])])
-            x = tf.batch_matmul(ws[i], x) / \
+            x = tf.concat_v2(
+                [x, tf.ones([tf.shape(x)[0], tf.shape(x)[1], 1, 1])], 2)
+            x = tf.matmul(ws[i], x) / \
                 tf.sqrt(tf.cast(tf.shape(x)[2], tf.float32))
             if i < len(ws) - 1:
                 x = tf.nn.relu(x)
@@ -195,7 +195,7 @@ if __name__ == '__main__':
 
     # Run the inference
     with tf.Session() as sess:
-        sess.run(tf.initialize_all_variables())
+        sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:

@@ -94,9 +94,9 @@ class Normal:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
-            shape = tf.concat(0, [base_shape[:sample_dim],
-                                  tf.pack([n_samples]),
-                                  base_shape[sample_dim:]])
+            shape = tf.concat_v2([base_shape[:sample_dim],
+                                  tf.stack([n_samples]),
+                                  base_shape[sample_dim:]], 0)
             if static_sample_dim is not None:
                 static_shape = static_base_shape[:static_sample_dim] + \
                     [static_n_samples] + static_base_shape[static_sample_dim:]
@@ -274,9 +274,9 @@ class Bernoulli:
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             p = tf.expand_dims(p, sample_dim)
-            shape = tf.concat(0, [base_shape[:sample_dim],
-                                  tf.pack([n_samples]),
-                                  base_shape[sample_dim:]])
+            shape = tf.concat_v2([base_shape[:sample_dim],
+                                  tf.stack([n_samples]),
+                                  base_shape[sample_dim:]], 0)
             if static_sample_dim is not None:
                 static_shape = static_base_shape[:static_sample_dim] + \
                     [static_n_samples] + static_base_shape[static_sample_dim:]
@@ -334,7 +334,8 @@ class Bernoulli:
             message="Shapes of x and logits must match")
         with tf.control_dependencies([_assert_shape_match]):
             logits = tf.identity(logits)
-        return -tf.nn.sigmoid_cross_entropy_with_logits(logits, x)
+        return -tf.nn.sigmoid_cross_entropy_with_logits(labels=x,
+                                                        logits=logits)
 
 
 class Discrete:
@@ -388,8 +389,8 @@ class Discrete:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
-            shape = tf.concat(0, [base_shape[:-1],
-                                  tf.pack([n_samples, depth])])
+            shape = tf.concat_v2([base_shape[:-1],
+                                  tf.stack([n_samples, depth])], 0)
             samples = tf.reshape(samples_flat, shape)
             n_dims = tf.rank(samples)
             dims = tf.range(n_dims)
@@ -397,8 +398,8 @@ class Discrete:
             original_mask = tf.cast(tf.one_hot(n_dims - 2, n_dims), tf.bool)
             sample_dims = tf.ones([n_dims], tf.int32) * sample_dim
             originals = tf.ones([n_dims], tf.int32) * (n_dims - 2)
-            perm = tf.select(original_mask, sample_dims, dims)
-            perm = tf.select(sample_dim_mask, originals, perm)
+            perm = tf.where(original_mask, sample_dims, dims)
+            perm = tf.where(sample_dim_mask, originals, perm)
             samples = tf.transpose(samples, perm)
             if static_sample_dim is not None:
                 static_shape = static_base_shape[:static_sample_dim] + \
@@ -463,7 +464,8 @@ class Discrete:
         with tf.control_dependencies([_assert_shape_match]):
             x = tf.argmax(x, tf.rank(x) - 1)
         x.set_shape(x_shape[:-1])
-        return -tf.nn.sparse_softmax_cross_entropy_with_logits(logits, x)
+        return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=x,
+                                                               logits=logits)
 
 
 norm = Normal()

@@ -23,7 +23,7 @@ def test_nuts():
     data = {}
 
     sess = tf.Session()
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
 
     n_samples = 1000
     burnin = 500

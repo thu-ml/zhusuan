@@ -68,7 +68,7 @@ class BaseHMC:
                                                 self.hamiltonian)
 
         # Initialize
-        # init = tf.initialize_all_variables()
+        # init = tf.global_variables_initializer()
         # self.sess.run(init)
 
         # Summary

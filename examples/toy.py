@@ -95,7 +95,7 @@ if __name__ == "__main__":
     lower_bound = tf.reduce_mean(advi(
         model, {}, {'z': [z, z_logpdf]}, reduction_indices=0))
     infer = optimizer.minimize(-lower_bound)
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
 
     # Run the inference
     iters = 1000

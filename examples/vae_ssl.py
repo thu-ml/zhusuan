@@ -47,7 +47,7 @@ class M2(object):
             z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
             y = tf.placeholder(tf.float32, [None, None, n_y])
             lx_zy = layers.fully_connected(
-                tf.concat(2, [z.value, y]), 500,
+                tf.concat_v2([z.value, y], 2), 500,
                 normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params
             )
@@ -106,7 +106,7 @@ def q_net(n_x, n_y, n_z, n_particles, is_training):
     with StochasticGraph() as variational:
         x = tf.placeholder(tf.float32, shape=(None, n_x))
         y = tf.placeholder(tf.float32, shape=(None, n_y))
-        lz_xy = layers.fully_connected(tf.concat(1, [x, y]), 500,
+        lz_xy = layers.fully_connected(tf.concat_v2([x, y], 1), 500,
                                        normalizer_fn=layers.batch_norm,
                                        normalizer_params=normalizer_params
                                        )
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
     # graph_writer = tf.train.SummaryWriter('/home/ishijiaxin/log',
     #                                       tf.get_default_graph())
 

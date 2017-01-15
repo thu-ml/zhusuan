@@ -17,7 +17,7 @@ def test_gradient_descent_optimizer():
     func = (x + 1) * (x + 1)
 
     sess = tf.Session()
-    sess.run(tf.initialize_all_variables())
+    sess.run(tf.global_variables_initializer())
 
     optimizer = GradientDescentOptimizer(sess, {}, func, [x], init=[0.0],
                                          stepsize=1, tol=1e-7)

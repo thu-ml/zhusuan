@@ -64,7 +64,7 @@ sess = tf.Session()
 train_writer = tf.train.SummaryWriter('train', sess.graph)
 
 # Find a MAP solution
-sess.run(tf.initialize_all_variables())
+sess.run(tf.global_variables_initializer())
 sess.run(update_data, feed_dict={x_input: X_train})
 
 optimizer = GradientDescentOptimizer(sess, {y: y_train}, -log_likelihood,

@@ -45,10 +45,11 @@ class M2(object):
             z_mean = tf.zeros([n_particles, n_z])
             z_logstd = tf.zeros([n_particles, n_z])
             z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            y = Discrete(tf.zeros([n_particles, n_y]), sample_dim=1, n_samples=n)
+            y = Discrete(tf.zeros([n_particles, n_y]), sample_dim=1,
+                         n_samples=n)
             # y = tf.placeholder(tf.float32, [None, None, n_y])
             lx_zy = layers.fully_connected(
-                tf.concat(2, [z.value, y.value]), 500,
+                tf.concat_v2([z.value, y.value], 2), 500,
                 normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params
             )
@@ -80,8 +81,11 @@ class M2(object):
         z = latent['z']
         x = observed['x']
         # y: (batch_size, n_y), x: (batch_size, n_x)
-        y = tf.tile(tf.expand_dims(observed['y'], 0),
-                    [self.n_particles, 1, 1]) if 'y' in observed else latent['y']
+        if 'y' in observed:
+            y = tf.tile(tf.expand_dims(observed['y'], 0),
+                        [self.n_particles, 1, 1])
+        else:
+            y = latent['y']
         x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
         z_out, x_out = self.model.get_output(
             [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
@@ -107,16 +111,10 @@ def q_net(n_x, n_y, n_z, n_particles, is_training):
     with StochasticGraph() as variational:
         l_x = tf.placeholder(tf.float32, shape=(None, n_x))
         l_y = tf.placeholder(tf.float32, shape=(None, n_y))
-        lz_xy = layers.fully_connected(tf.concat(1, [l_x, l_y]), 500,
-                                       # normalizer_fn=layers.batch_norm,
-                                       # normalizer_params=normalizer_params,
-                                       scope='lz_xy1'
-                                       )
+        lz_xy = layers.fully_connected(tf.concat_v2([l_x, l_y], 1), 500,
+                                       scope='lz_xy1')
         lz_xy = layers.fully_connected(lz_xy, 500,
-                                       # normalizer_fn=layers.batch_norm,
-                                       # normalizer_params=normalizer_params,
-                                       scope='lz_xy2'
-                                       )
+                                       scope='lz_xy2')
         lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None,
                                          scope='lz_mean')
         lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None,
@@ -138,8 +136,10 @@ def q_net(n_x, n_y, n_z, n_particles, is_training):
         qy_x = layers.fully_connected(qy_x, n_y, activation_fn=None)
         ly_u = Discrete(qy_x, sample_dim=0, n_samples=n_particles)
         lz_xy_u = layers.fully_connected(
-            tf.concat(2, [tf.tile(tf.expand_dims(lx_u, 0), [n_particles, 1, 1]),
-                          ly_u.value]), 500, reuse=True, scope='lz_xy1')
+            tf.concat_v2([tf.tile(tf.expand_dims(lx_u, 0),
+                                  [n_particles, 1, 1]),
+                          ly_u.value], 2),
+            500, reuse=True, scope='lz_xy1')
         lz_mean_u = layers.fully_connected(lz_xy_u, n_z, activation_fn=None,
                                            reuse=True, scope='lz_mean')
         lz_logstd_u = layers.fully_connected(lz_xy_u, n_z, activation_fn=None,
@@ -199,8 +199,8 @@ if __name__ == "__main__":
 
     labeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
     labeled_observed = {'x': x_labeled_ph, 'y': y_labeled_ph}
-    labeled_cost, labeled_log_likelihood = rws(m2, labeled_observed,
-                                               labeled_latent, reduction_indices=0)
+    labeled_cost, labeled_log_likelihood = rws(
+        m2, labeled_observed, labeled_latent, reduction_indices=0)
     labeled_cost = tf.reduce_mean(labeled_cost)
     labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
 
@@ -209,9 +209,9 @@ if __name__ == "__main__":
     inputs = {lx_u: x_unlabeled_ph}
     y_u_outputs, z_u_outputs = variational.get_output([ly_u, lz_u], inputs)
 
-    unlabeled_latent = {'z': [z_u_outputs[0], tf.reduce_sum(z_u_outputs[1], -1)],
-                        'y': [y_u_outputs[0], y_u_outputs[1]]
-                        }
+    unlabeled_latent = {'z': [z_u_outputs[0],
+                              tf.reduce_sum(z_u_outputs[1], -1)],
+                        'y': [y_u_outputs[0], y_u_outputs[1]]}
     unlabeled_observed = {'x': x_unlabeled_ph}
 
     unlabeled_cost, unlabeled_log_likelihood = rws(
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    init = tf.initialize_all_variables()
+    init = tf.global_variables_initializer()
     # graph_writer = tf.train.SummaryWriter('/home/ishijiaxin/log',
     #                                       tf.get_default_graph())
 
@@ -292,7 +292,8 @@ if __name__ == "__main__":
                     test_y_batch = t_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
-                        [labeled_log_likelihood, unlabeled_log_likelihood, acc],
+                        [labeled_log_likelihood, unlabeled_log_likelihood,
+                         acc],
                         feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
                                    x_unlabeled_ph: test_x_batch,
