@@ -12,6 +12,13 @@ from zhusuan.distributions import norm, discrete, bernoulli
 from .base import StochasticTensor
 
 
+__all__ = [
+    'Normal',
+    'Bernoulli',
+    'Discrete',
+]
+
+
 class Normal(StochasticTensor):
     """
     The class of independent Normal StochasticTensor.

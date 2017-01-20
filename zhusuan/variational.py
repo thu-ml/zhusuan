@@ -14,6 +14,14 @@ from .utils import log_mean_exp
 from .evaluation import is_loglikelihood
 
 
+__all__ = [
+    'advi',
+    'iwae',
+    'rws',
+    'nvil'
+]
+
+
 def advi(log_joint, observed, latent, reduction_indices=1, given=None):
     """
     Implements the automatic differentiation variational inference (ADVI)

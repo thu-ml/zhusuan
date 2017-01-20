@@ -10,6 +10,11 @@ from six.moves import zip, map
 from .utils import log_mean_exp
 
 
+__all__ = [
+    'is_loglikelihood',
+]
+
+
 def is_loglikelihood(model, observed, latent, reduction_indices=1, given=None):
     """
     Data log likelihood (:math:`\log p(x)`) estimates using self-normalized

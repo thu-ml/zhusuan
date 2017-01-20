@@ -9,10 +9,13 @@ from collections import OrderedDict
 import six
 from six.moves import map
 import tensorflow as tf
-import tensorflow.contrib.graph_editor as ge
-from tensorflow.python.ops import control_flow_ops
 
-from .utils import Context, get_backward_ops
+from .utils import Context
+
+
+__all__ = [
+    'StochasticGraph',
+]
 
 
 class StochasticTensor(object):

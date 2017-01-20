@@ -15,9 +15,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.model import *
-    from zhusuan.variational import advi
-    from zhusuan.evaluation import is_loglikelihood
+    import zhusuan as zs
 except:
     raise ImportError()
 
@@ -29,12 +27,12 @@ except:
 
 
 def vae(observed, n, n_x, n_z):
-    with StochasticGraph(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
                              'update_collections': None}
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
-        z = Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
         lx_z = layers.fully_connected(
             z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
@@ -42,12 +40,12 @@ def vae(observed, n, n_x, n_z):
             lx_z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
         x_mean = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = Bernoulli('x', x_mean)
+        x = zs.Bernoulli('x', x_mean)
     return model
 
 
 def q_net(x, n_z):
-    with StochasticGraph() as variational:
+    with zs.StochasticGraph() as variational:
         normalizer_params = {'is_training': is_training,
                              'update_collections': None}
         lz_x = layers.fully_connected(
@@ -58,8 +56,8 @@ def q_net(x, n_z):
             normalizer_params=normalizer_params)
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = Normal('z', lz_mean, lz_logstd, sample_dim=0,
-                   n_samples=n_particles)
+        z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
+                      n_samples=n_particles)
     return variational
 
 
@@ -115,11 +113,11 @@ if __name__ == "__main__":
     variational = q_net(x, n_z)
     qz_samples, log_qz = variational.query('z')
     with tf.variable_scope("model"):
-        lower_bound = tf.reduce_mean(advi(
+        lower_bound = tf.reduce_mean(zs.advi(
             log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
             reduction_indices=0))
     with tf.variable_scope("model", reuse=True):
-        log_likelihood = tf.reduce_mean(is_loglikelihood(
+        log_likelihood = tf.reduce_mean(zs.is_loglikelihood(
             log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
             reduction_indices=0))
 
