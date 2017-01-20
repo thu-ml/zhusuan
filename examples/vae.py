@@ -135,6 +135,10 @@ if __name__ == "__main__":
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    x_orig = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
+                    tf.float32)
+    #x = tf.cond(is_training, lambda: x_bin, lambda: x)
     x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
@@ -169,10 +173,9 @@ if __name__ == "__main__":
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
-                x_batch = np.random.binomial(
-                    n=1, p=x_batch, size=x_batch.shape).astype('float32')
+                x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
                 _, lb = sess.run([infer, lower_bound],
-                                 feed_dict={x: x_batch,
+                                 feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples,
                                             is_training: True})
