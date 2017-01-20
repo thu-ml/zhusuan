@@ -28,78 +28,39 @@ except:
     raise ImportError()
 
 
-class M1:
-    """
-    The deep generative model used in variational autoencoder (VAE).
-
-    :param n_z: A Tensor or int. The dimension of latent variables (z).
-    :param n_x: A Tensor or int. The dimension of observed variables (x).
-    :param n: A Tensor or int. The number of data, or batch size in mini-batch
-        training.
-    :param n_particles: A Tensor or int. The number of particles per node.
-    """
-    def __init__(self, n_z, n_x, n, n_particles, is_training):
-        with StochasticGraph() as model:
-            z_mean = tf.zeros([n_particles, n_z])
-            z_logstd = tf.zeros([n_particles, n_z])
-            z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            lx_z = layers.fully_connected(
-                z.value, 500, normalizer_fn=layers.batch_norm,
-                normalizer_params={'is_training': is_training,
-                                   'updates_collections': None})
-            lx_z = layers.fully_connected(
-                lx_z, 500, normalizer_fn=layers.batch_norm,
-                normalizer_params={'is_training': is_training,
-                                   'updates_collections': None})
-            lx_z = layers.fully_connected(lx_z, n_x, activation_fn=None)
-            x = Bernoulli(lx_z)
-        self.model = model
-        self.x = x
-        self.z = z
-        self.n_particles = n_particles
-
-    def log_prob(self, latent, observed, given):
-        """
-        The log joint probability function.
-
-        :param latent: A dictionary of pairs: (string, Tensor).
-        :param observed: A dictionary of pairs: (string, Tensor).
-        :param given: A dictionary of pairs: (string, Tensor).
-
-        :return: A Tensor. The joint log likelihoods.
-        """
-        z = latent['z']
-        x = observed['x']
-        x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-        z_out, x_out = self.model.get_output([self.z, self.x],
-                                             inputs={self.z: z, self.x: x})
-        log_px_z = tf.reduce_sum(x_out[1], -1)
-        log_pz = tf.reduce_sum(z_out[1], -1)
-        return log_px_z + log_pz
+def vae(observed, n, n_x, n_z):
+    with StochasticGraph(observed=observed) as model:
+        normalizer_params = {'is_training': is_training,
+                             'update_collections': None}
+        z_mean = tf.zeros([n_particles, n_z])
+        z_logstd = tf.zeros([n_particles, n_z])
+        z = Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+        lx_z = layers.fully_connected(
+            z, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        lx_z = layers.fully_connected(
+            lx_z, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        x_mean = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        x = Bernoulli('x', x_mean)
+    return model
 
 
-def q_net(x, n_z, n_particles, is_training):
-    """
-    Build the recognition network (Q-net) used as variational posterior.
-
-    :param x: A Tensor.
-    :param n_x: A Tensor or int. The dimension of observed variables (x).
-    :param n_z: A Tensor or int. The dimension of latent variables (z).
-    :param n_particles: A Tensor or int. Number of samples of latent variables.
-    """
+def q_net(x, n_z):
     with StochasticGraph() as variational:
+        normalizer_params = {'is_training': is_training,
+                             'update_collections': None}
         lz_x = layers.fully_connected(
             x, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params={'is_training': is_training,
-                               'updates_collections': None})
+            normalizer_params=normalizer_params)
         lz_x = layers.fully_connected(
             lz_x, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params={'is_training': is_training,
-                               'updates_collections': None})
+            normalizer_params=normalizer_params)
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = Normal(lz_mean, lz_logstd, sample_dim=0, n_samples=n_particles)
-    return variational, z
+        z = Normal('z', lz_mean, lz_logstd, sample_dim=0,
+                   n_samples=n_particles)
+    return variational
 
 
 if __name__ == "__main__":
@@ -138,25 +99,32 @@ if __name__ == "__main__":
     x_orig = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
-    #x = tf.cond(is_training, lambda: x_bin, lambda: x)
     x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    model = M1(n_z, n_x, n, n_particles, is_training)
-    variational, lz = q_net(x, n_z, n_particles, is_training)
-    z, z_logpdf = variational.get_output(lz)
-    z_logpdf = tf.reduce_sum(z_logpdf, -1)
-    lower_bound = tf.reduce_mean(advi(
-        model, {'x': x}, {'z': [z, z_logpdf]}, reduction_indices=0))
-    log_likelihood = tf.reduce_mean(is_loglikelihood(
-        model, {'x': x}, {'z': [z, z_logpdf]}, reduction_indices=0))
+
+    def log_joint(observed, latent):
+        x = observed['x']
+        z = latent['z']
+        x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
+        model = vae({'x': x, 'z': z}, n, n_x, n_z)
+        _, log_pz = model.query('z')
+        _, log_px_z = model.query('x')
+        return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
+
+    variational = q_net(x, n_z)
+    qz_samples, log_qz = variational.query('z')
+    with tf.variable_scope("model"):
+        lower_bound = tf.reduce_mean(advi(
+            log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
+            reduction_indices=0))
+    with tf.variable_scope("model", reuse=True):
+        log_likelihood = tf.reduce_mean(is_loglikelihood(
+            log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
+            reduction_indices=0))
 
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
-
-    # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-    #                                       tf.get_default_graph())
-    # train_writer.close()
 
     params = tf.trainable_variables()
     for i in params:
@@ -189,7 +157,7 @@ if __name__ == "__main__":
                 test_lls = []
                 for t in range(test_iters):
                     test_x_batch = x_test[
-                        t * test_batch_size: (t + 1) * test_batch_size]
+                        t * test_batch_size:(t + 1) * test_batch_size]
                     test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
                                                   n_particles: lb_samples,

@@ -14,7 +14,7 @@ from .utils import log_mean_exp
 from .evaluation import is_loglikelihood
 
 
-def advi(model, observed, latent, reduction_indices=1, given=None):
+def advi(log_joint, observed, latent, reduction_indices=1, given=None):
     """
     Implements the automatic differentiation variational inference (ADVI)
     algorithm. For now we assume all latent variables have been transformed in
@@ -40,7 +40,7 @@ def advi(model, observed, latent, reduction_indices=1, given=None):
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
     given = given if given is not None else {}
-    lower_bound = model.log_prob(latent_outputs, observed, given) - \
+    lower_bound = log_joint(latent_outputs, observed, given) - \
         sum(latent_logpdfs)
     lower_bound = tf.reduce_mean(lower_bound, reduction_indices)
     return lower_bound
