@@ -66,10 +66,29 @@ class TestStochasticGraph:
     def test_get_output_inputs_check(self):
         with StochasticGraph() as model:
             a = tf.constant(1.)
+            b = a + 1
         with pytest.raises(TypeError):
             model.get_output(a, inputs=[Mock()])
+
+        # Shape mismatch
         with pytest.raises(ValueError):
             model.get_output(a, inputs={a: tf.ones([2])})
+
+        # Tensor -> numpy array
+        a_out, _ = model.get_output(a, inputs={a: np.zeros([])})
+        assert type(a_out) is tf.Tensor
+        with tf.Session() as sess:
+            assert np.abs(sess.run(a_out)) < 1e-6
+
+        # Tensor -> Variable
+        a_new = tf.Variable(tf.zeros([]))
+        b_out, _ = model.get_output(b, inputs={a: a_new})
+        assert type(b_out) is tf.Tensor
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            assert np.abs(sess.run(b_out) - 1.) < 1e-6
+            sess.run(a_new.assign(-1.))
+            assert np.abs(sess.run(b_out)) < 1e-6
 
     def test_get_output_chain(self):
         # a -> b -> c

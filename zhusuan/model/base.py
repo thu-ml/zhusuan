@@ -140,14 +140,15 @@ class StochasticGraph(Context):
                         "StochasticGraph.get_output() doesn't accept "
                         "replacing Tensorflow variables with given inputs. "
                         "Error pair: ({}, {})".format(k, v))
-                elif not isinstance(k, tf.Tensor) or \
-                        not isinstance(v, tf.Tensor):
+                elif not isinstance(k, tf.Tensor):
                     raise TypeError(
                         "The 'inputs' argument of "
-                        "StochasticGraph.get_output() should consist of "
-                        "tf.Tensor pairs. Error type: ({}, {})".format(
-                            type(k), type(v)))
+                        "StochasticGraph.get_output() should have Tensor or"
+                        "StochasticTensor as key. Error type: {}".format(
+                            type(k)))
                 else:
+                    v = tf.convert_to_tensor(v)
+                    inputs[k] = v
                     try:
                         k.get_shape().merge_with(v.get_shape())
                     except ValueError:
