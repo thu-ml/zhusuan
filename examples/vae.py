@@ -106,12 +106,12 @@ if __name__ == "__main__":
         z = latent['z']
         x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
         model = vae({'x': x, 'z': z}, n, n_x, n_z)
-        _, log_pz = model.query('z')
-        _, log_px_z = model.query('x')
+        log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
     variational = q_net(x, n_z)
-    qz_samples, log_qz = variational.query('z')
+    qz_samples, log_qz = variational.query('z', outputs=True,
+                                           local_log_prob=True)
     with tf.variable_scope("model"):
         lower_bound = tf.reduce_mean(zs.advi(
             log_joint, {'x': x}, {'z': [qz_samples, log_qz]},

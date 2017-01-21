@@ -13,6 +13,7 @@ from .utils import Context
 
 
 __all__ = [
+    'StochasticTensor',
     'StochasticGraph',
 ]
 
@@ -93,8 +94,8 @@ class StochasticGraph(Context):
     :param observed: A dictionary of (string, Tensor) pairs, which maps from
         names of random variables to their observed values.
     """
-    def __init__(self, observed):
-        self.observed = observed
+    def __init__(self, observed=None):
+        self.observed = observed if observed else {}
         self.stochastic_tensors = OrderedDict()
 
     def _add_stochastic_tensor(self, s_tensor):
@@ -170,7 +171,9 @@ class StochasticGraph(Context):
             ret.append(self.outputs(name_or_names))
         if local_log_prob:
             ret.append(self.local_log_prob(name_or_names))
-        if isinstance(name_or_names, (tuple, list)):
+        if len(ret) == 0:
+            raise ValueError("No query options are selected.")
+        elif isinstance(name_or_names, (tuple, list)):
             return list(zip(*ret))
         else:
             return tuple(ret)

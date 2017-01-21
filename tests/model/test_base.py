@@ -25,16 +25,22 @@ class TestStochasticTensor:
             def sample(self):
                 return _sample
         incomings = [Mock()]
-        with StochasticGraph() as model:
-            s_tensor = _Dist(incomings)
+        with StochasticGraph() as m1:
+            s_tensor = _Dist('a', incomings)
         assert s_tensor.incomings == incomings
-        assert s_tensor.value == _sample
+        assert s_tensor.tensor == _sample
+        assert s_tensor.s_graph == m1
+
+        _observed = Mock()
+        with StochasticGraph(observed={'a': _observed}):
+            s_tensor = _Dist('a', incomings)
+        assert s_tensor.tensor == _observed
 
     def test_sample(self):
         mock_graph = StochasticGraph()
         mock_graph.add_stochastic_tensor = Mock(return_value=None)
         with mock_graph:
-            s_tensor = StochasticTensor([Mock()])
+            s_tensor = StochasticTensor('a', [Mock()])
         with pytest.raises(NotImplementedError):
             s_tensor.sample()
 
@@ -42,9 +48,12 @@ class TestStochasticTensor:
         mock_graph = StochasticGraph()
         mock_graph.add_stochastic_tensor = Mock(return_value=None)
         with mock_graph:
-            s_tensor = StochasticTensor([Mock()])
+            s_tensor = StochasticTensor('a', [Mock()])
         with pytest.raises(NotImplementedError):
-            s_tensor.log_prob(Mock(), [Mock()])
+            s_tensor.log_prob(Mock())
+
+    def test_tensor_conversion(self):
+        pass
 
 
 class TestStochasticGraph:
