@@ -7,7 +7,7 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 
-from .utils import convert_to_int
+from .utils import convert_to_int, add_name_scope
 
 
 __all__ = [
@@ -25,6 +25,7 @@ class Normal:
     def __init__(self):
         pass
 
+    @add_name_scope
     def rvs(self,
             mean=0.,
             logstd=0.,
@@ -108,6 +109,7 @@ class Normal:
         samples.set_shape(static_shape)
         return samples
 
+    @add_name_scope
     def logpdf(self,
                x,
                mean=0.,
@@ -170,6 +172,7 @@ class Logistic:
     def __init__(self):
         pass
 
+    @add_name_scope
     def rvs(self,
             mean=0.,
             logstd=0.,
@@ -178,6 +181,7 @@ class Logistic:
             reparameterized=False):
         raise NotImplementedError()
 
+    @add_name_scope
     def cdf(self, x, mean=0., logstd=0., sample_dim=None, check_numerics=True):
         """
         Cumulative distribution function of Logistic distribution.
@@ -235,6 +239,7 @@ class Bernoulli:
     def __init__(self):
         pass
 
+    @add_name_scope
     def rvs(self, logits, sample_dim=None, n_samples=1):
         """
         Generate independent Bernoulli samples which forms a Tensor.
@@ -287,6 +292,7 @@ class Bernoulli:
         samples.set_shape(static_shape)
         return tf.stop_gradient(samples)
 
+    @add_name_scope
     def logpmf(self, x, logits, sample_dim=None):
         """
         Log probability mass function of Bernoulli distribution.
@@ -345,6 +351,7 @@ class Discrete:
     def __init__(self):
         pass
 
+    @add_name_scope
     def rvs(self, logits, sample_dim=None, n_samples=1):
         """
         Generate samples from Discrete distribution which forms a Tensor.
@@ -376,7 +383,7 @@ class Discrete:
         depth = base_shape[-1]
         logits_flat = tf.reshape(logits, [-1, depth])
         samples_flat = tf.one_hot(tf.multinomial(logits_flat, n_samples),
-                                  depth)
+                                  depth, dtype=tf.float32)
         if sample_dim is None:
             _assert_one_sample = tf.assert_equal(
                 n_samples, 1,
@@ -407,6 +414,7 @@ class Discrete:
                 samples.set_shape(static_shape)
         return samples
 
+    @add_name_scope
     def logpmf(self, x, logits, sample_dim=None):
         """
         Log probability mass function of Discrete distribution.

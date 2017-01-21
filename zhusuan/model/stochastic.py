@@ -7,7 +7,6 @@ from __future__ import division
 
 import tensorflow as tf
 
-from zhusuan.utils import add_name_scope
 from zhusuan.distributions import norm, discrete, bernoulli
 from .base import StochasticTensor
 
@@ -40,6 +39,7 @@ class Normal(StochasticTensor):
     :param check_numerics: Bool. Whether to check numeric issues.
     """
     def __init__(self,
+                 name,
                  mean,
                  logstd,
                  sample_dim=None,
@@ -49,9 +49,8 @@ class Normal(StochasticTensor):
         incomings = [mean, logstd, sample_dim, n_samples]
         self.reparameterized = reparameterized
         self.check_numerics = check_numerics
-        super(Normal, self).__init__(incomings)
+        super(Normal, self).__init__(name, incomings, dtype=tf.float32)
 
-    @add_name_scope
     def sample(self, **kwargs):
         mean, logstd, sample_dim, n_samples = self.incomings
         return norm.rvs(mean=mean,
@@ -61,9 +60,8 @@ class Normal(StochasticTensor):
                         reparameterized=self.reparameterized,
                         check_numerics=self.check_numerics)
 
-    @add_name_scope
-    def log_prob(self, given, inputs):
-        mean, logstd, sample_dim, n_samples = inputs
+    def log_prob(self, given):
+        mean, logstd, sample_dim, n_samples = self.incomings
         return norm.logpdf(given,
                            mean=mean,
                            logstd=logstd,
@@ -84,20 +82,18 @@ class Bernoulli(StochasticTensor):
     :param n_samples: A Tensor scalar or int. Number of samples to
         generate.
     """
-    def __init__(self, logits, sample_dim=None, n_samples=1):
+    def __init__(self, name, logits, sample_dim=None, n_samples=1):
         incomings = [logits, sample_dim, n_samples]
-        super(Bernoulli, self).__init__(incomings)
+        super(Bernoulli, self).__init__(name, incomings, tf.float32)
 
-    @add_name_scope
     def sample(self, **kwargs):
         logits, sample_dim, n_samples = self.incomings
         return bernoulli.rvs(logits,
                              sample_dim=sample_dim,
                              n_samples=n_samples)
 
-    @add_name_scope
-    def log_prob(self, given, inputs):
-        logits, sample_dim, n_samples = inputs
+    def log_prob(self, given):
+        logits, sample_dim, n_samples = self.incomings
         return bernoulli.logpmf(given, logits, sample_dim=sample_dim)
 
 
@@ -119,18 +115,16 @@ class Discrete(StochasticTensor):
     (..., [n_samples,] ..., n_classes). Each slice is a one-hot vector
     of the sample.
     """
-    def __init__(self, logits, sample_dim=None, n_samples=1):
+    def __init__(self, name, logits, sample_dim=None, n_samples=1):
         incomings = [logits, sample_dim, n_samples]
-        super(Discrete, self).__init__(incomings)
+        super(Discrete, self).__init__(name, incomings, tf.float32)
 
-    @add_name_scope
     def sample(self, **kwargs):
         logits, sample_dim, n_samples = self.incomings
         return discrete.rvs(logits,
                             sample_dim=sample_dim,
                             n_samples=n_samples)
 
-    @add_name_scope
-    def log_prob(self, given, inputs):
-        logits, sample_dim, n_samples = inputs
+    def log_prob(self, given):
+        logits, sample_dim, n_samples = self.incomings
         return discrete.logpmf(given, logits, sample_dim=sample_dim)
