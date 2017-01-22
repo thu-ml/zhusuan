@@ -10,7 +10,6 @@ import pytest
 from mock import Mock
 import numpy as np
 import tensorflow as tf
-from tensorflow.contrib import layers
 
 from .context import zhusuan
 from zhusuan.model.base import *
@@ -27,14 +26,17 @@ class TestStochasticTensor:
         incomings = [Mock()]
         with StochasticGraph() as m1:
             s_tensor = _Dist('a', incomings)
-        assert s_tensor.incomings == incomings
-        assert s_tensor.tensor == _sample
-        assert s_tensor.s_graph == m1
+        assert s_tensor.incomings is incomings
+        assert s_tensor.tensor is _sample
+        assert s_tensor.s_graph is m1
 
-        _observed = Mock()
-        with StochasticGraph(observed={'a': _observed}):
-            s_tensor = _Dist('a', incomings)
-        assert s_tensor.tensor == _observed
+        _observed = tf.ones(2)
+        with StochasticGraph(observed={'a': _observed, 'b': _observed}):
+            a = _Dist('a', incomings, dtype=tf.float32)
+            b = _Dist('b', incomings, dtype=tf.int32)
+        assert a.tensor is _observed
+        with pytest.raises(ValueError):
+            _ = b.tensor
 
     def test_sample(self):
         mock_graph = StochasticGraph()
@@ -53,7 +55,16 @@ class TestStochasticTensor:
             s_tensor.log_prob(Mock())
 
     def test_tensor_conversion(self):
-        pass
+        with StochasticGraph(observed={'a': 1., 'c': tf.ones([])}) as model:
+            a = StochasticTensor('a', [], dtype=tf.float32)
+            b = tf.constant(1.) + a
+            c = StochasticTensor('c', [], dtype=tf.int32)
+            with pytest.raises(ValueError):
+                _ = tf.constant(1.) + c
+        with tf.Session() as sess:
+            assert np.abs(sess.run(b) - 2) < 1e-6
+        with pytest.raises(ValueError):
+            StochasticTensor._to_tensor(a, as_ref=True)
 
 
 class TestStochasticGraph:
@@ -64,100 +75,49 @@ class TestStochasticGraph:
             StochasticGraph.get_context()
 
     def test_add_stochastic_tensor(self):
-        s_tensor = Mock(value=Mock())
+        s_tensor = Mock(name=Mock())
         model = StochasticGraph()
-        model.add_stochastic_tensor(s_tensor)
-        assert model.stochastic_tensors[s_tensor.value] == s_tensor
+        model._add_stochastic_tensor(s_tensor)
+        assert model.stochastic_tensors[s_tensor.name] == s_tensor
 
-    def _augment_outputs(self, outputs):
-        return [[i, None] for i in outputs]
+    def test_query(self):
+        # outputs
+        a_observed = tf.zeros([])
+        with StochasticGraph({'a': a_observed}) as model:
+            a = Normal('a', 0, 1)
+            b = Normal('b', 0, 1)
+            c = Normal('c', b, 1)
+        assert model.outputs('a') is a_observed
+        b_out, c_out = model.outputs(['b', 'c'])
+        assert b_out is b.tensor
+        assert c_out is c.tensor
 
-    def test_get_output_inputs_check(self):
-        with StochasticGraph() as model:
-            a = tf.constant(1.)
-            b = a + 1
-        with pytest.raises(TypeError):
-            model.get_output(a, inputs=[Mock()])
-
-        # Shape mismatch
-        with pytest.raises(ValueError):
-            model.get_output(a, inputs={a: tf.ones([2])})
-
-        # Tensor -> numpy array
-        a_out, _ = model.get_output(a, inputs={a: np.zeros([])})
-        assert type(a_out) is tf.Tensor
+        # local_log_prob
+        log_pa = model.local_log_prob('a')
+        log_pa_t = a.log_prob(a_observed)
         with tf.Session() as sess:
-            assert np.abs(sess.run(a_out)) < 1e-6
-
-        # Tensor -> Variable
-        a_new = tf.Variable(tf.zeros([]))
-        b_out, _ = model.get_output(b, inputs={a: a_new})
-        assert type(b_out) is tf.Tensor
+            log_pa_out, log_pa_t_out = sess.run([log_pa, log_pa_t])
+            assert np.abs(log_pa_out - log_pa_t_out) < 1e-6
+        log_pb, log_pc = model.local_log_prob(['b', 'c'])
+        log_pb_t, log_pc_t = b.log_prob(b), c.log_prob(c)
         with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            assert np.abs(sess.run(b_out) - 1.) < 1e-6
-            sess.run(a_new.assign(-1.))
-            assert np.abs(sess.run(b_out)) < 1e-6
+            log_pb_out, log_pb_t_out = sess.run([log_pb, log_pb_t])
+            log_pc_out, log_pc_t_out = sess.run([log_pc, log_pc_t])
+            assert np.abs(log_pb_out - log_pb_t_out) < 1e-6
+            assert np.abs(log_pc_out - log_pc_t_out) < 1e-6
 
-    def test_get_output_stochastic_tensor(self):
-        # a_mean -- \
-        # a_logstd - a -- b_logits - b
-        #             \ - c_logits - c
-        with StochasticGraph() as model:
-            n = tf.placeholder(tf.int32, shape=())
-            a_mean = tf.ones([3])
-            a_logstd = tf.zeros([3])
-            a = Normal(a_mean, a_logstd, sample_dim=0, n_samples=n)
-            b_logits = layers.fully_connected(a.value, 5)
-            b = Bernoulli(b_logits)
-            c_logits = layers.fully_connected(a.value, 4)
-            c = Discrete(c_logits)
-
-        # case 1
-        a_new = tf.zeros([n, 3])
-        b_new = tf.zeros([n, 5])
-        a_out, b_out, c_out = model.get_output([a, b, c], inputs={a: a_new})
+        # query
+        a_out, log_pa = model.query('a', outputs=True, local_log_prob=True)
+        b_outs, c_outs = model.query(['b', 'c'],
+                                     outputs=True, local_log_prob=True)
+        b_out, log_pb = b_outs
+        c_out, log_pc = c_outs
+        assert a_out is a.tensor
+        assert b_out is b.tensor
+        assert c_out is c.tensor
         with tf.Session() as sess:
-            assert a_out[0] is a_new
-            assert a_out[1] is not None
-            assert c_out[1] is not None
-            assert b_out[1] is not None
-            sess.run(tf.global_variables_initializer())
-            a_out_sample, a_out_logpdf, a_new_ = \
-                sess.run([a_out[0], a_out[1], a_new], feed_dict={n: 5})
-            assert np.abs(a_out_sample - a_new_).max() < 1e-6
-
-        # case 2
-        a_out,  b_out, c_out = model.get_output([a, b, c], inputs={b: b_new})
-        with tf.Session() as sess:
-            assert b_out[0] is b_new
-            assert a_out[0] is a.value
-            assert c_out[0] is c.value
-            sess.run(tf.global_variables_initializer())
-            a_out_, b_out_, c_out_ = sess.run([a_out, b_out, c_out],
-                                              feed_dict={n: 1})
-            assert a_out_[0].shape == (1, 3)
-            assert a_out_[1].shape == (1, 3)
-            assert np.abs(b_out_[0]).max() < 1e-6
-            assert b_out_[1].shape == (1, 5)
-            assert c_out_[0].shape == (1, 4)
-
-        # case 3
-        b_out = model.get_output(b)
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            b_out_ = sess.run(b_out, feed_dict={n: 2})
-            assert b_out_[1].shape == (2, 5)
-
-        # case 4
-        n_new = tf.constant(1, tf.int32)
-        a_new = tf.zeros([n_new, 3])
-        b_out = model.get_output(b, inputs={a: a_new, n: n_new})
-        with tf.Session() as sess:
-            sess.run(tf.global_variables_initializer())
-            b_out_ = sess.run(b_out)
-            assert b_out_[1].shape == (1, 5)
-
-        # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-        #                                       tf.get_default_graph())
-        # train_writer.close()
+            log_pa_out, log_pb_out, log_pc_out = sess.run(
+                [log_pa, log_pb, log_pc])
+            assert np.abs(log_pa_out - log_pa_t_out) < 1e-6
+            assert np.abs(log_pb_out - log_pb_t_out) < 1e-6
+            assert np.abs(log_pc_out - log_pc_t_out) < 1e-6

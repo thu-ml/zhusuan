@@ -48,7 +48,13 @@ class StochasticTensor(object):
         """
         if not hasattr(self, '_tensor'):
             if self.name in self.s_graph.observed:
-                self._tensor = self.s_graph.observed[self.name]
+                try:
+                    self._tensor = tf.convert_to_tensor(
+                        self.s_graph.observed[self.name], dtype=self.dtype)
+                except ValueError as e:
+                    raise ValueError("StochasticTensor('{}')'s dtype not "
+                                     "compatible with its observed value. "
+                                     "Error message: {}".format(self.name, e))
             else:
                 self._tensor = self.sample()
         return self._tensor
