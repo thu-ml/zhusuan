@@ -15,7 +15,8 @@ __all__ = [
 ]
 
 
-def is_loglikelihood(model, observed, latent, reduction_indices=1, given=None):
+def is_loglikelihood(log_joint, observed, latent, reduction_indices=1,
+                     given=None):
     """
     Data log likelihood (:math:`\log p(x)`) estimates using self-normalized
     importance sampling.
@@ -40,6 +41,6 @@ def is_loglikelihood(model, observed, latent, reduction_indices=1, given=None):
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
     given = given if given is not None else {}
-    log_w = model.log_prob(latent_outputs, observed, given) - \
+    log_w = log_joint(latent_outputs, observed, given) - \
         sum(latent_logpdfs)
     return log_mean_exp(log_w, reduction_indices)

@@ -29,7 +29,7 @@ except:
 def vae(observed, n, n_x, n_z):
     with zs.StochasticGraph(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
-                             'update_collections': None}
+                             'updates_collections': None}
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
@@ -47,7 +47,7 @@ def vae(observed, n, n_x, n_z):
 def q_net(x, n_z):
     with zs.StochasticGraph() as variational:
         normalizer_params = {'is_training': is_training,
-                             'update_collections': None}
+                             'updates_collections': None}
         lz_x = layers.fully_connected(
             x, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
-    def log_joint(observed, latent):
+    def log_joint(latent, observed, given):
         x = observed['x']
         z = latent['z']
         x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
@@ -112,6 +112,7 @@ if __name__ == "__main__":
     variational = q_net(x, n_z)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
     with tf.variable_scope("model"):
         lower_bound = tf.reduce_mean(zs.advi(
             log_joint, {'x': x}, {'z': [qz_samples, log_qz]},

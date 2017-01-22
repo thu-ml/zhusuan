@@ -116,8 +116,9 @@ class TestStochasticGraph:
         assert b_out is b.tensor
         assert c_out is c.tensor
         with tf.Session() as sess:
-            log_pa_out, log_pb_out, log_pc_out = sess.run(
-                [log_pa, log_pb, log_pc])
+            log_pa_out, log_pa_t_out, log_pb_out, log_pb_t_out, log_pc_out, \
+                log_pc_t_out = sess.run([log_pa, log_pa_t, log_pb, log_pb_t,
+                                         log_pc, log_pc_t])
             assert np.abs(log_pa_out - log_pa_t_out) < 1e-6
             assert np.abs(log_pb_out - log_pb_t_out) < 1e-6
             assert np.abs(log_pc_out - log_pc_t_out) < 1e-6

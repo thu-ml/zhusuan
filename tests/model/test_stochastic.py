@@ -20,12 +20,11 @@ def test_Normal():
         logstd = tf.zeros([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
         n_samples = tf.placeholder(tf.int32, shape=())
-        a = Normal(mean, logstd, sample_dim, n_samples)
-    ops = set(get_backward_ops(a.value))
+        a = Normal('a', mean, logstd, sample_dim, n_samples)
+    ops = set(get_backward_ops(a.tensor))
     for i in [mean, logstd, sample_dim, n_samples]:
         assert i.op in ops
-    _ = a.log_prob(np.ones([2, 3]),
-                   [mean, logstd, sample_dim, n_samples])
+    _ = a.log_prob(np.ones([2, 3]))
 
 
 def test_Bernoulli():
@@ -33,12 +32,11 @@ def test_Bernoulli():
         logits = tf.zeros([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
         n_samples = tf.placeholder(tf.int32, shape=())
-        a = Bernoulli(logits, sample_dim, n_samples)
-    ops = set(get_backward_ops(a.value))
+        a = Bernoulli('a', logits, sample_dim, n_samples)
+    ops = set(get_backward_ops(a.tensor))
     for i in [logits, sample_dim, n_samples]:
         assert i.op in ops
-    _ = a.log_prob(np.ones([2, 3]),
-                   [logits, sample_dim, n_samples])
+    _ = a.log_prob(np.ones([2, 3]))
 
 
 def test_Discrete():
@@ -46,9 +44,8 @@ def test_Discrete():
         logits = tf.zeros([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
         n_samples = tf.placeholder(tf.int32, shape=())
-        a = Discrete(logits, sample_dim, n_samples)
-    ops = set(get_backward_ops(a.value))
+        a = Discrete('a', logits, sample_dim, n_samples)
+    ops = set(get_backward_ops(a.tensor))
     for i in [logits, sample_dim, n_samples]:
         assert i.op in ops
-    _ = a.log_prob(np.array([[0, 1, 0], [1, 0, 0]]),
-                   [logits, sample_dim, n_samples])
+    _ = a.log_prob(np.array([[0, 1, 0], [1, 0, 0]]))

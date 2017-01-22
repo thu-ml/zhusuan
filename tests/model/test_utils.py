@@ -74,7 +74,7 @@ def test_get_backward_ops_split():
     a = tf.placeholder(tf.float32)
     b = tf.exp(a)
     c = tf.log(b)
-    d = tf.neg(b)
+    d = tf.negative(b)
     assert get_backward_ops(d) == [a.op, b.op, d.op]
     assert get_backward_ops(c) == [a.op, b.op, c.op]
     assert get_backward_ops([c, d]) == [a.op, b.op, c.op, d.op]
