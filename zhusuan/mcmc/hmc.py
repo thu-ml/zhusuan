@@ -46,12 +46,12 @@ def leapfrog_integrator(q, p, step_size1, step_size2, grad, mass):
 
 def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axis):
     # (n_particles, n)
-    old_hamiltonian, _ = hamiltonian(q, p, log_posterior, mass, data_axis)
+    old_hamiltonian, old_log_prob = hamiltonian(q, p, log_posterior, mass, data_axis)
     # (n_particles, n)
 #TODO
     new_hamiltonian, new_log_prob = hamiltonian(new_q, new_p, log_posterior, mass, data_axis)
     # (n_particles, n)
-    return old_hamiltonian, new_hamiltonian, new_log_prob, \
+    return old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
         tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
 
 
@@ -157,7 +157,7 @@ class HMC:
 #current_p = [tf.Print(current_p[0], [current_p[0]], "cp")]
 
         # (n_particles, n)
-        old_hamiltonian, new_hamiltonian, new_log_prob, acceptance_rate = \
+        old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, acceptance_rate = \
             get_acceptance_rate(self.q, p, current_q, current_p,
                                 get_log_posterior, current_mass, self.data_axis)
 
@@ -173,4 +173,6 @@ class HMC:
 #current_p = [tf.Print(current_p[0], [current_p[0]], "cp2")]
 
         return update_q, p, tf.squeeze(old_hamiltonian), tf.squeeze(new_hamiltonian), \
-               new_log_prob, tf.squeeze(acceptance_rate)
+               old_log_prob, new_log_prob, tf.squeeze(acceptance_rate)
+
+               #TODO: compute old log prob and new log prob

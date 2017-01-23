@@ -87,14 +87,14 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     mcmc_iters = 5
-    n_leapfrogs = 1
-    ll_samples = 5000
+    ais_iters = 50
+    ais_samples = 5
+    n_leapfrogs = 5
     epoches = 3000
     batch_size = 1000
-    test_batch_size = 100
     iters = x_train.shape[0] // batch_size
-    test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 10
+    test_iters = x_test.shape[0] // batch_size
+    test_freq = 1
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
-    def log_joint(latent, observed, given):
+    def mcem_obj(latent, observed, given):
         x = observed['x']
         z = latent['z']
         x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
@@ -118,22 +118,50 @@ if __name__ == "__main__":
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    def log_joint2(latent, observed, given):
+    def hmc_obj(latent, observed, given):
         x = tf.expand_dims(observed['x'], 0)
         z = tf.expand_dims(latent['z'], 0)
         model = try_vae({'x': x, 'z': z}, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.squeeze(tf.reduce_sum(log_pz, -1)) + tf.squeeze(tf.reduce_sum(log_px_z, -1))
 
+    def ais_obj(latent, observed, given):
+        # (n_particles*n, n_z)
+        x = observed['x']
+        z = tf.expand_dims(latent['z'], 0)
+        x = tf.tile(tf.expand_dims(x, 0), [1, n_particles, 1])
+        temporature = observed['temp']
+        model = try_vae({'x': x, 'z': z}, n_particles*n, n_x, n_z, 1, is_training)
+        log_pz, log_px_z = model.local_log_prob(['z', 'x'])
+        print('X shape = {}, {}'.format(z.get_shape(), x.get_shape()))
+        print('Z shape = {}, {}'.format(log_pz.get_shape(), log_px_z.get_shape()))
+
+        # (n_particles*n)
+        return tf.squeeze(tf.reduce_sum(log_pz, -1) * (1-temporature) + \
+               tf.reduce_sum(log_px_z, -1) * temporature)
+
+
     # HMC
     z_train = tf.Variable(tf.zeros([batch_size, n_z]), trainable=False)
     reset_z_train = tf.assign(z_train, tf.zeros([batch_size, n_z]))
     z_train_input = tf.placeholder(tf.float32, shape=[mcmc_iters, batch_size, n_z])
-    train_hmc = HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs)
-    train_sampler = train_hmc.sample(log_joint2,
+    train_hmc = HMC(step_size=2e-6, n_leapfrogs=n_leapfrogs)
+    train_sampler = train_hmc.sample(hmc_obj,
                                      {'x': x}, {'z': z_train}, chain_axis=0)
 
-    obj = tf.reduce_mean(log_joint({'z': z_train_input}, {'x': x}, None))
+    # AIS
+    z_test = tf.Variable(tf.zeros([ais_samples*batch_size, n_z]), trainable=False)
+    reset_z_test = tf.assign(z_test, tf.random_normal([ais_samples*batch_size, n_z]))
+    temporature = tf.placeholder(tf.float32, shape=[])
+    eval_ais_obj = ais_obj({'z': z_test}, {'x': x, 'temp': temporature}, None)
+    print('AIS OBJ shape = {}'.format(eval_ais_obj.get_shape()))
+    test_hmc = HMC(step_size=2e-2, n_leapfrogs=n_leapfrogs)
+    test_sampler = test_hmc.sample(ais_obj,
+                                   {'x': x, 'temp': temporature}, {'z': z_test}, chain_axis=0)
+
+
+    # MCEM
+    obj = tf.reduce_mean(mcem_obj({'z': z_train_input}, {'x': x}, None))
 
     # variational = q_net(x, n_z, n_particles, is_training)
     # qz_samples, log_qz = variational.query('z', outputs=True,
@@ -163,12 +191,13 @@ if __name__ == "__main__":
         x_batch = x_train[:batch_size]
         x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
 
-        for epoch in range(1, epoches + 1):
+        for epoch in range(epoches):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
             lbs = []
+            accs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
@@ -177,12 +206,16 @@ if __name__ == "__main__":
                 sess.run(reset_z_train)
                 samples = []
                 for i in range(mcmc_iters):
-                    sample, _, oh, nh, ll, acc = sess.run(train_sampler,
+                    sample, _, oh, nh, _, ll, acc = sess.run(train_sampler,
                                                           feed_dict={x: x_batch_bin,
                                                                      is_training: True,
                                                                      n_particles: 1})
+                    mean_ll = np.mean(ll)
+                    mean_acc = np.mean(acc)
                     samples.append(sample[0])
-                    print('Step {}: ll = {}, acceptance = {}'.format(i, np.mean(ll), np.mean(acc)))
+                    accs.append(acc)
+                    #print('Step {}: ll = {}, acceptance = {}'.format(i, mean_ll, mean_acc))
+
 
                 samples = np.array(samples)
 
@@ -196,9 +229,47 @@ if __name__ == "__main__":
                 lbs.append(lb)
 
             time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
-                epoch, time_epoch, np.mean(lbs)))
+            print('Epoch {} ({:.1f}s): Obj = {}, Acceptance = {}'.format(
+                epoch, time_epoch, np.mean(lbs), np.mean(accs)))
 
+            if epoch % test_freq == 0:
+                time_test = -time.time()
+                test_lls = []
+                accs = []
+                for t in range(test_iters):
+                    test_x_batch = x_test[
+                        t * batch_size:(t + 1) * batch_size]
+
+                    # Sample z from prior
+                    sess.run(reset_z_test)
+                    log_weights = -sess.run(eval_ais_obj, feed_dict={x: test_x_batch,
+                                                                     is_training: False,
+                                                                     n_particles: ais_samples,
+                                                                     temporature: 0.0})
+
+                    # AIS
+                    for i in range(ais_iters - 1):
+                        current_temp = 1.0/ais_iters*(i+1)
+                        _, _, _, _, ol, nl, acc = sess.run(test_sampler,
+                                                       feed_dict={x: test_x_batch,
+                                                                  is_training: False,
+                                                                  n_particles: ais_samples,
+                                                                  temporature: current_temp})
+                        accs.append(np.mean(acc))
+                        log_weights += ol - nl
+
+                    log_weights += sess.run(eval_ais_obj, feed_dict={x: test_x_batch,
+                                                                     is_training: False,
+                                                                     n_particles: ais_samples,
+                                                                     temporature: 1.0})
+
+                    test_lls.append(np.mean(log_weights))
+
+                    #print(np.reshape(log_weights, (ais_samples, -1)))
+
+                time_test += time.time()
+                print('>>> TEST ({:.1f}s)'.format(time_test))
+                print('>> Test log likelihood = {}, Acceptance = {}'.format(np.mean(test_lls), np.mean(accs)))
 
         # for epoch in range(1, epoches + 1):
         #     time_epoch = -time.time()
