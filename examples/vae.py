@@ -81,7 +81,7 @@ if __name__ == "__main__":
     lb_samples = 1
     ll_samples = 5000
     epoches = 3000
-    batch_size = 100
+    batch_size = 1000
     test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
