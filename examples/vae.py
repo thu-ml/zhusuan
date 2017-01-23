@@ -26,7 +26,7 @@ except:
     raise ImportError()
 
 
-def vae(observed, n, n_x, n_z):
+def vae(observed, n, n_x, n_z, n_particles, is_training):
     with zs.StochasticGraph(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
@@ -44,7 +44,7 @@ def vae(observed, n, n_x, n_z):
     return model
 
 
-def q_net(x, n_z):
+def q_net(x, n_z, n_particles, is_training):
     with zs.StochasticGraph() as variational:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
@@ -105,11 +105,11 @@ if __name__ == "__main__":
         x = observed['x']
         z = latent['z']
         x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-        model = vae({'x': x, 'z': z}, n, n_x, n_z)
+        model = vae({'x': x, 'z': z}, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    variational = q_net(x, n_z)
+    variational = q_net(x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
