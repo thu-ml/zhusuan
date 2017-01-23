@@ -15,9 +15,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.model import *
-    from zhusuan.variational import advi
-    from zhusuan.evaluation import is_loglikelihood
+    import zhusuan as zs
 except:
     raise ImportError()
 
@@ -28,115 +26,79 @@ except:
     raise ImportError()
 
 
-class M2(object):
-    """
-    The deep generative model used in semi-supervised learning with variational
-    autoencoders (Kingma, 2014).
-
-    :param n_x: Int. The dimension of observed variables (x).
-    :param n_y: Int. The dimension of latent variables (y), i.e., the number of
-        classes.
-    :param n_z: Int. The dimension of latent variables (z).
-    """
-    def __init__(self, n_x, n_y, n_z, n, n_particles, is_training):
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        with StochasticGraph() as model:
-            z_mean = tf.zeros([n_particles, n_z])
-            z_logstd = tf.zeros([n_particles, n_z])
-            z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            y = tf.placeholder(tf.float32, [None, None, n_y])
-            lx_zy = layers.fully_connected(
-                tf.concat_v2([z.value, y], 2), 500,
-                normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params
-            )
-            lx_zy = layers.fully_connected(
-                lx_zy, 500,
-                normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params
-            )
-            lx_zy = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-            x = Bernoulli(lx_zy)
-        self.x = x
-        self.z = z
-        self.y = y
-        self.model = model
-        self.n_particles = n_particles
-
-    def log_prob(self, latent, observed, given):
-        """
-        The log joint probability function.
-
-        :param latent: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (batch_size, n_samples, n_latent).
-        :param observed: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (batch_size, n_observed).
-
-        :return: A Tensor of shape (batch_size, n_samples). The joint log
-            likelihoods.
-        """
-        # z: (n_samples, batch_size, n_z)
-        z = latent['z']
-        # y: (batch_size, n_y), x: (batch_size, n_x)
-        y, x = observed['y'], observed['x']
-        y = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1, 1])
-        x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-        z_out, x_out = self.model.get_output(
-            [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
-        log_px_zy = tf.reduce_sum(x_out[1], -1)
-        log_pz = tf.reduce_sum(z_out[1], -1)
-        log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-                                                              tf.float32))
-        return log_px_zy + log_pz + log_py
-
-
-def q_net(n_x, n_y, n_z, n_particles, is_training):
-    """
-    Build the recognition network q(y, z|x) = q(y|x)q(z|x, y) used as
-    variational posterior.
-
-    :param n_z: Int. The dimension of latent variable z.
-    :param n_particles: Tensor or int. Number of samples of latent variables.
-    :param is_training: Bool.
-    :return: All :class:`Layer` instances needed.
-    """
+def M2(observed, y, n, n_x, n_y, n_z, n_particles, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
-    with StochasticGraph() as variational:
-        x = tf.placeholder(tf.float32, shape=(None, n_x))
-        y = tf.placeholder(tf.float32, shape=(None, n_y))
-        lz_xy = layers.fully_connected(tf.concat_v2([x, y], 1), 500,
-                                       normalizer_fn=layers.batch_norm,
-                                       normalizer_params=normalizer_params
-                                       )
-        lz_xy = layers.fully_connected(lz_xy, 500,
-                                       normalizer_fn=layers.batch_norm,
-                                       normalizer_params=normalizer_params
-                                       )
+    with zs.StochasticGraph(observed=observed) as model:
+        z_mean = tf.zeros([n_particles, n_z])
+        z_logstd = tf.zeros([n_particles, n_z])
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+        lx_zy = layers.fully_connected(
+            tf.concat_v2([z, y], 2), 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        lx_zy = layers.fully_connected(
+            lx_zy, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        x_mean = layers.fully_connected(lx_zy, n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_mean)
+    return model
+
+
+def qz_xy(x, y, n_x, n_y, n_z, n_particles, is_training):
+    normalizer_params = {'is_training': is_training,
+                         'updates_collections': None}
+    with zs.StochasticGraph() as variational:
+        lz_xy = layers.fully_connected(
+            tf.concat_v2([x, y], 1), 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        lz_xy = layers.fully_connected(
+            lz_xy, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
         lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-        z = Normal(lz_mean, lz_logstd, sample_dim=0, n_samples=n_particles)
-    return variational, x, y, z
+        z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
+                      n_samples=n_particles)
+    return variational
 
 
-def qy_x_net(n_x, n_y, is_training):
+def qy_x(observed, x, n_x, n_y, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
-    with StochasticGraph() as variational_y_x:
-        x = tf.placeholder(tf.float32, [None, n_x])
-        qy_x = layers.fully_connected(
-            x, 500,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
-        qy_x = layers.fully_connected(
-            qy_x, 500,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
-        qy_x = layers.fully_connected(qy_x, n_y, activation_fn=tf.nn.softmax)
-    return variational_y_x, x, qy_x
+    ly_x = layers.fully_connected(
+        x, 500, normalizer_fn=layers.batch_norm,
+        normalizer_params=normalizer_params)
+    ly_x = layers.fully_connected(
+        ly_x, 500, normalizer_fn=layers.batch_norm,
+        normalizer_params=normalizer_params)
+    ly_x = layers.fully_connected(ly_x, n_y, activation_fn=tf.nn.softmax)
+    return ly_x
+
+
+def log_prob(self, latent, observed, given):
+    """
+    The log joint probability function.
+
+    :param latent: A dictionary of pairs: (string, Tensor). Each of the
+        Tensor has shape (batch_size, n_samples, n_latent).
+    :param observed: A dictionary of pairs: (string, Tensor). Each of the
+        Tensor has shape (batch_size, n_observed).
+
+    :return: A Tensor of shape (batch_size, n_samples). The joint log
+        likelihoods.
+    """
+    # z: (n_samples, batch_size, n_z)
+    z = latent['z']
+    # y: (batch_size, n_y), x: (batch_size, n_x)
+    y, x = observed['y'], observed['x']
+    y = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1, 1])
+    x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
+    z_out, x_out = self.model.get_output(
+        [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
+    log_px_zy = tf.reduce_sum(x_out[1], -1)
+    log_pz = tf.reduce_sum(z_out[1], -1)
+    log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
+                                                          tf.float32))
+    return log_px_zy + log_pz + log_py
 
 
 if __name__ == "__main__":
