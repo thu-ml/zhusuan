@@ -77,15 +77,15 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 500
+    ll_samples = 5000
     mcmc_iters = 1
     n_leapfrogs = 5
-    epoches = 100 
-    batch_size = 1000
-    test_batch_size = 1000
+    epoches = 3000 
+    batch_size = 100
+    test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 3
+    test_freq = 30 
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -122,7 +122,7 @@ if __name__ == "__main__":
     z_train = tf.Variable(tf.zeros([batch_size, n_z]), trainable=False)
     z_train_input = tf.placeholder(tf.float32, shape=[mcmc_iters, batch_size, n_z])
     z_train_input2 = tf.placeholder(tf.float32, shape=[batch_size, n_z])
-    train_hmc = HMC(step_size=1e-1, n_leapfrogs=n_leapfrogs)
+    train_hmc = HMC(step_size=1e-2, n_leapfrogs=n_leapfrogs)
     train_sampler = train_hmc.sample(hmc_obj,
                                      {'x': x}, {'z': z_train}, chain_axis=0)
 
@@ -173,7 +173,7 @@ if __name__ == "__main__":
         x_batch = x_train[:batch_size]
         x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
 
-        for epoch in range(epoches):
+        for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
@@ -204,13 +204,13 @@ if __name__ == "__main__":
                 samples = []
                 inner_objs = []
                 for i in range(mcmc_iters):
-                    sample, _, oh, nh, _, ll, acc = sess.run(train_sampler,
+                    sample, _, oh, nh, ol, nl, acc = sess.run(train_sampler,
                                                           feed_dict={x: x_batch_bin,
                                                                      n_particles: 1})
-                    mean_ll = np.mean(ll)
                     mean_acc = np.mean(acc)
                     samples.append(sample[0])
-                    inner_objs.append(mean_ll)
+                    inner_objs.append(np.mean(ol))
+                    inner_objs.append(np.mean(nl))
                     accs.append(acc)
                     #print('Step {}: ll = {}, acceptance = {}'.format(i, mean_ll, mean_acc))
 
