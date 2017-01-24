@@ -39,7 +39,7 @@ def log_joint(latent, observed, given):
     log_p = model.local_log_prob(['x'])
     return log_p[0]
 
-hmc = HMC(step_size=0.3, n_leapfrogs=5)
+hmc = HMC(step_size=0.3, n_leapfrogs=5, target_acceptance_rate=0.6)
 
 x = tf.Variable(tf.zeros((num_chains)), name='x')
 sampler = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)
@@ -56,7 +56,8 @@ train_writer.close()
 samples = []
 print('Sampling...')
 for i in range(num_samples):
-    q, p, oh, nh, ol, nl, ar = sess.run(sampler)
+    q, p, oh, nh, ol, nl, ar, ss = sess.run(sampler)
+    print(np.mean(ar), ss)
     #print(q, p, oh, nh, ar)
     if isinstance(q[0], np.ndarray):
         samples.extend(list(q[0]))

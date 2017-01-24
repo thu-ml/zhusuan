@@ -48,19 +48,67 @@ def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axis):
     # (n_particles, n)
     old_hamiltonian, old_log_prob = hamiltonian(q, p, log_posterior, mass, data_axis)
     # (n_particles, n)
-#TODO
     new_hamiltonian, new_log_prob = hamiltonian(new_q, new_p, log_posterior, mass, data_axis)
     # (n_particles, n)
     return old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
         tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
 
 
+class StepsizeTuner:
+    def __init__(self, initial_stepsize, m_adapt, gamma, t0, kappa, delta):
+        with tf.name_scope("StepsizeTuner"):
+            self.m_adapt = tf.convert_to_tensor(m_adapt, dtype=tf.float32, name="m_adapt")
+            self.gamma = tf.convert_to_tensor(gamma, dtype=tf.float32, name="gamma")
+            self.t0 = tf.convert_to_tensor(t0, dtype=tf.float32, name="t0")
+            self.kappa = tf.convert_to_tensor(kappa, dtype=tf.float32, name="kappa")
+            self.delta = tf.convert_to_tensor(delta, dtype=tf.float32, name="delta")
+
+            self.step = tf.Variable(0.0, dtype=tf.float32,
+                                    name="step", trainable=False)
+            self.log_epsilon_bar = tf.Variable(0.0, dtype=tf.float32,
+                                               name="log_epsilon_bar", trainable=False)
+            self.h_bar = tf.Variable(0.0, dtype=tf.float32,
+                                     name="h_bar", trainable=False)
+            self.mu = tf.Variable(10 * initial_stepsize, dtype=tf.float32,
+                                  name="mu", trainable=False)
+
+    @add_name_scope
+    def tune(self, acceptance_rate):
+        new_step = tf.assign(self.step, self.step + 1)
+
+        def adapt_stepsize():
+            rate1 = tf.div(1.0, new_step + self.t0)
+            new_h_bar = tf.assign(self.h_bar, (1 - rate1) * self.h_bar +
+                                  rate1 * (self.delta - acceptance_rate))
+            log_epsilon = self.mu - tf.sqrt(new_step) / \
+                self.gamma * new_h_bar
+            rate = tf.pow(new_step, -self.kappa)
+            new_log_epsilon_bar = tf.assign(
+                self.log_epsilon_bar,
+                rate * log_epsilon + (1 - rate) * self.log_epsilon_bar)
+            with tf.control_dependencies([new_log_epsilon_bar]):
+                new_log_epsilon = tf.identity(log_epsilon)
+
+            return tf.exp(new_log_epsilon)
+
+        c = tf.cond(new_step < self.m_adapt,
+                    adapt_stepsize,
+                    lambda: tf.exp(self.log_epsilon_bar))
+
+        return c
+
 class HMC:
-    def __init__(self, step_size=1, n_leapfrogs=10):
+    def __init__(self, step_size=1, n_leapfrogs=10,
+                 target_acceptance_rate=0.8,
+                 m_adapt=10000, gamma=0.05, t0=100, kappa=0.75):
         with tf.name_scope("HMC"):
             self.step_size = tf.Variable(step_size, name="step_size", trainable=False)
             self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
                                                     name="n_leapfrogs")
+            self.target_acceptance_rate = tf.convert_to_tensor(
+                target_acceptance_rate, name="target_acceptance_rate")
+            self.step_size_tuner = StepsizeTuner(step_size, m_adapt, gamma,
+                                                 t0, kappa, target_acceptance_rate)
 
     # Shape = [ChainShape DataShape]
     # Data shape should not change
@@ -170,9 +218,11 @@ class HMC:
 
         new_q = [myselect(if_accept, x, y) for x, y in zip(current_q, self.q)]
         update_q = [old.assign(new) for old, new in zip(latent_v, new_q)]
+
 #current_p = [tf.Print(current_p[0], [current_p[0]], "cp2")]
+        new_step_size = self.step_size_tuner.tune(tf.reduce_mean(acceptance_rate))
+        update_step_size = tf.assign(self.step_size, new_step_size)
 
-        return update_q, p, tf.squeeze(old_hamiltonian), tf.squeeze(new_hamiltonian), \
-               old_log_prob, new_log_prob, tf.squeeze(acceptance_rate)
-
-               #TODO: compute old log prob and new log prob
+        with tf.control_dependencies([update_step_size]):
+            return update_q, p, tf.squeeze(old_hamiltonian), tf.squeeze(new_hamiltonian), \
+               old_log_prob, new_log_prob, tf.squeeze(acceptance_rate), update_step_size
