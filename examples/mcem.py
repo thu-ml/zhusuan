@@ -85,7 +85,7 @@ if __name__ == "__main__":
     test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 30 
+    test_freq = 10 
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -187,6 +187,7 @@ if __name__ == "__main__":
             accs = []
             starts = []
             ends = []
+            step_sizes = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
@@ -204,7 +205,7 @@ if __name__ == "__main__":
                 samples = []
                 inner_objs = []
                 for i in range(mcmc_iters):
-                    sample, _, oh, nh, ol, nl, acc = sess.run(train_sampler,
+                    sample, _, oh, nh, ol, nl, acc, ss = sess.run(train_sampler,
                                                           feed_dict={x: x_batch_bin,
                                                                      n_particles: 1})
                     mean_acc = np.mean(acc)
@@ -212,6 +213,7 @@ if __name__ == "__main__":
                     inner_objs.append(np.mean(ol))
                     inner_objs.append(np.mean(nl))
                     accs.append(acc)
+                    step_sizes.append(ss)
                     #print('Step {}: ll = {}, acceptance = {}'.format(i, mean_ll, mean_acc))
 
                 lvs[t * batch_size:(t + 1) * batch_size] = samples[-1]
@@ -230,8 +232,8 @@ if __name__ == "__main__":
                 ends.append(inner_objs[-1])
 
             time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Obj = {}, Start = {}, End = {}, Lower Bound = {}, Acceptance = {}'.format(
-                epoch, time_epoch, np.mean(objs), np.mean(starts), np.mean(ends), np.mean(lbs), np.mean(accs)))
+            print('Epoch {} ({:.1f}s): Obj = {}, Start = {}, End = {}, Lower Bound = {}, Acceptance = {}, Step Size = {}'.format(
+                epoch, time_epoch, np.mean(objs), np.mean(starts), np.mean(ends), np.mean(lbs), np.mean(accs), np.mean(ss)))
 
             if epoch % test_freq == 0:
                 time_test = -time.time()
