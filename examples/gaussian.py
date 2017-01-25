@@ -25,12 +25,12 @@ tf.set_random_seed(1)
 
 kernel_width = 0.1
 num_samples = 100
-num_chains = 1000
+num_chains = 1
 burnin = num_samples // 2
-n_dims = 10
-stdev = np.abs(np.random.rand(n_dims) + 1e-3)
-print(stdev)
+n_dims = 1
+stdev = 1 / (np.array(range(n_dims)) + 1)
 log_stdev = np.log(stdev)
+n_leapfrogs = 1
 
 def gaussian(observed):
     with zs.StochasticGraph(observed=observed) as model:
@@ -45,8 +45,8 @@ def log_joint(latent, observed, given):
     return tf.reduce_sum(log_p[0], -1)
 
 adapt_step_size = tf.placeholder(dtype=tf.bool, shape=[], name="adapt_step_size")
-hmc = HMC(step_size=0.3, n_leapfrogs=1, adapt_step_size=adapt_step_size)
-#hmc = HMC(step_size=0.3, n_leapfrogs=1)
+hmc = HMC(step_size=0.1, n_leapfrogs=n_leapfrogs, adapt_step_size=adapt_step_size)
+#hmc = HMC(step_size=0.1, n_leapfrogs=n_leapfrogs)
 
 x = tf.Variable(tf.zeros((num_chains, n_dims)), name='x')
 sampler = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)

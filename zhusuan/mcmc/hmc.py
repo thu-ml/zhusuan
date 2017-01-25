@@ -97,6 +97,51 @@ class StepsizeTuner:
 
         return c
 
+
+def initialize_step_size(old_step_size, q, p, mass, get_gradient, get_log_posterior, 
+                         data_axis, target_acceptance_rate):
+    factor = 1.5
+    
+    def loop_cond(step_size, last_acceptance_rate, cond):
+        return cond
+    
+    def loop_body(step_size, last_acceptance_rate, cond):
+        # Calculate acceptance_rate
+        new_q, new_p = leapfrog_integrator(
+            q, p, tf.constant(0.0), step_size / 2,
+            get_gradient, mass)
+        new_q, new_p = leapfrog_integrator(
+            new_q, new_p, step_size, step_size / 2,
+            get_gradient, mass)
+        __, _, _, _, acceptance_rate = get_acceptance_rate(
+            q, p, new_q, new_p, 
+            get_log_posterior, mass, data_axis)
+    
+        acceptance_rate = tf.reduce_mean(acceptance_rate)
+    
+        # Change step size and stopping criteria
+        new_step_size = tf.cond(
+            tf.less(acceptance_rate,
+                    target_acceptance_rate),
+            lambda: step_size * (1.0 / factor),
+            lambda: step_size * factor)
+    
+        cond = tf.logical_not(tf.logical_xor(
+            tf.less(last_acceptance_rate, target_acceptance_rate),
+            tf.less(acceptance_rate, target_acceptance_rate)))
+        return [new_step_size, acceptance_rate, cond]
+        #return [tf.Print(new_step_size,
+        #                  [new_step_size, acceptance_rate]),
+        #         acceptance_rate, cond]
+    
+    new_step_size, _, _ = tf.while_loop(
+        loop_cond,
+        loop_body,
+        [old_step_size, tf.constant(1.0), tf.constant(True)]
+    )
+    return new_step_size
+
+
 class HMC:
     def __init__(self, step_size=1, n_leapfrogs=10,
                  adapt_step_size=None, target_acceptance_rate=0.8,
@@ -109,6 +154,7 @@ class HMC:
                 target_acceptance_rate, name="target_acceptance_rate")
 
             self.adapt_step_size = adapt_step_size
+            self.t = tf.Variable(0.0, dtype=tf.float32, name="t")
             if adapt_step_size is not None: # TODO make sure adapt_step_size is a placeholder
                 self.step_size_tuner = StepsizeTuner(step_size, adapt_step_size, gamma,
                                                  t0, kappa, target_acceptance_rate)
@@ -117,6 +163,7 @@ class HMC:
     # Data shape should not change
     #@add_name_scope
     def sample(self, log_posterior, observed, latent, given=None, chain_axis=None):
+        new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 
         self.q = copy(latent_v)
@@ -143,8 +190,6 @@ class HMC:
         p = random_momentum(self.dshapes, expanded_mass)
 #p = [tf.Print(p[0], [p[0]], "p")]
 
-        new_step_size = self.step_size
-
         def get_log_posterior(var_list):
             # (chain_axis)
             log_p = log_posterior(dict(zip(latent_k, var_list)),
@@ -164,6 +209,15 @@ class HMC:
         # print('p shape = {}'.format(current_p[0].get_shape()))
         # print('q shape = {}'.format(current_q[0].get_shape()))
 
+        # Initialize step size
+        iss = lambda: initialize_step_size(self.step_size,
+            current_q, current_p, current_mass,
+            get_gradient, get_log_posterior, 
+            self.data_axis, self.target_acceptance_rate)
+        new_step_size = tf.cond(tf.equal(new_t, 1), iss, lambda: self.step_size)
+        #new_step_size = tf.Print(new_step_size, [new_step_size])
+
+        # Leapfrog
         def loop_cond(i, current_q, current_p):
             return i < self.n_leapfrogs + 1
 
