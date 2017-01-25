@@ -25,26 +25,30 @@ tf.set_random_seed(1)
 
 kernel_width = 0.1
 num_samples = 100
-num_chains = 100
+num_chains = 1000
 burnin = num_samples // 2
-
+n_dims = 10
+stdev = np.abs(np.random.rand(n_dims) + 1e-3)
+print(stdev)
+log_stdev = np.log(stdev)
 
 def gaussian(observed):
     with zs.StochasticGraph(observed=observed) as model:
-        lx = zs.Normal('x', tf.zeros((num_chains)), tf.zeros((num_chains)))
+        lx = zs.Normal('x', tf.zeros((num_chains, n_dims)),
+                       np.tile(log_stdev, (num_chains, 1)))
     return model
 
 
 def log_joint(latent, observed, given):
     model = gaussian(latent)
     log_p = model.local_log_prob(['x'])
-    return log_p[0]
+    return tf.reduce_sum(log_p[0], -1)
 
 adapt_step_size = tf.placeholder(dtype=tf.bool, shape=[], name="adapt_step_size")
 hmc = HMC(step_size=0.3, n_leapfrogs=1, adapt_step_size=adapt_step_size)
 #hmc = HMC(step_size=0.3, n_leapfrogs=1)
 
-x = tf.Variable(tf.zeros((num_chains)), name='x')
+x = tf.Variable(tf.zeros((num_chains, n_dims)), name='x')
 sampler = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)
 
 sess = tf.Session()
@@ -63,12 +67,11 @@ for i in range(num_samples):
                                             feed_dict={adapt_step_size: i < burnin})
     print(np.mean(ar), ss)
     #print(q, p, oh, nh, ar)
+
     if i >= burnin:
-        if isinstance(q[0], np.ndarray):
-            samples.extend(list(q[0]))
-        else:
-            samples.append(q[0])
+        samples.append(q[0])
 print('Finished.')
+samples = np.vstack(samples)
 
 
 def kde(xs, mu, batch_size):
@@ -85,15 +88,19 @@ def kde(xs, mu, batch_size):
     ys /= (mu_n / batch_size)
     return ys
 
-# xs = np.linspace(-5, 5, 1000)
-# ys = kde(xs, np.array(samples), num_chains)
-#
-# f, ax = plt.subplots()
-# ax.plot(xs, ys)
-# ax.plot(xs, scipy.stats.norm.pdf(xs))
+if n_dims == 1:
+    xs = np.linspace(-5, 5, 1000)
+    ys = kde(xs, np.squeeze(samples), num_chains)
 
-print(scipy.stats.normaltest(samples))
-print(np.mean(samples))
-print(np.var(samples))
+    f, ax = plt.subplots()
+    ax.plot(xs, ys)
+    ax.plot(xs, scipy.stats.norm.pdf(xs, scale=stdev[0]))
+
+for i in range(n_dims):
+    print(scipy.stats.normaltest(samples[:,i]))
+
+print('Sample mean = {}'.format(np.mean(samples, 0)))
+print('Expected stdev = {}'.format(np.std(samples, 0)))
+print('Relative error of stdev = {}'.format((np.std(samples, 0)-stdev)/stdev))
 
 plt.show()
