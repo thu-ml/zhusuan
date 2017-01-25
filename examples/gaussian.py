@@ -25,7 +25,8 @@ tf.set_random_seed(1)
 
 kernel_width = 0.1
 num_samples = 100
-num_chains = 1000
+num_chains = 100
+burnin = num_samples // 2
 
 
 def gaussian(observed):
@@ -39,7 +40,9 @@ def log_joint(latent, observed, given):
     log_p = model.local_log_prob(['x'])
     return log_p[0]
 
-hmc = HMC(step_size=0.3, n_leapfrogs=5, target_acceptance_rate=0.6)
+adapt_step_size = tf.placeholder(dtype=tf.bool, shape=[], name="adapt_step_size")
+hmc = HMC(step_size=0.3, n_leapfrogs=1, adapt_step_size=adapt_step_size)
+#hmc = HMC(step_size=0.3, n_leapfrogs=1)
 
 x = tf.Variable(tf.zeros((num_chains)), name='x')
 sampler = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)
@@ -56,13 +59,15 @@ train_writer.close()
 samples = []
 print('Sampling...')
 for i in range(num_samples):
-    q, p, oh, nh, ol, nl, ar, ss = sess.run(sampler)
+    q, p, oh, nh, ol, nl, ar, ss = sess.run(sampler,
+                                            feed_dict={adapt_step_size: i < burnin})
     print(np.mean(ar), ss)
     #print(q, p, oh, nh, ar)
-    if isinstance(q[0], np.ndarray):
-        samples.extend(list(q[0]))
-    else:
-        samples.append(q[0])
+    if i >= burnin:
+        if isinstance(q[0], np.ndarray):
+            samples.extend(list(q[0]))
+        else:
+            samples.append(q[0])
 print('Finished.')
 
 
@@ -80,14 +85,15 @@ def kde(xs, mu, batch_size):
     ys /= (mu_n / batch_size)
     return ys
 
-xs = np.linspace(-5, 5, 1000)
-ys = kde(xs, np.array(samples), num_chains)
+# xs = np.linspace(-5, 5, 1000)
+# ys = kde(xs, np.array(samples), num_chains)
+#
+# f, ax = plt.subplots()
+# ax.plot(xs, ys)
+# ax.plot(xs, scipy.stats.norm.pdf(xs))
 
-f, ax = plt.subplots()
-ax.plot(xs, ys)
-ax.plot(xs, scipy.stats.norm.pdf(xs))
-
-#print(samples)
 print(scipy.stats.normaltest(samples))
+print(np.mean(samples))
+print(np.var(samples))
 
 plt.show()
