@@ -15,7 +15,7 @@ from zhusuan.utils import add_name_scope
 
 
 def random_momentum(dshapes, mass):
-    return [tf.random_normal(shape=shape) for shape,m in zip(dshapes, mass)]
+    return [tf.random_normal(shape=shape) * tf.sqrt(m) for shape,m in zip(dshapes, mass)]
 
 
 def velocity(momentum, mass):
@@ -58,11 +58,13 @@ class StepsizeTuner:
     def __init__(self, initial_stepsize, adapt_step_size, gamma, t0, kappa, delta):
         with tf.name_scope("StepsizeTuner"):
             self.adapt_step_size = adapt_step_size
+            self.initial_stepsize = initial_stepsize
 
             self.gamma = tf.convert_to_tensor(gamma, dtype=tf.float32, name="gamma")
             self.t0 = tf.convert_to_tensor(t0, dtype=tf.float32, name="t0")
             self.kappa = tf.convert_to_tensor(kappa, dtype=tf.float32, name="kappa")
             self.delta = tf.convert_to_tensor(delta, dtype=tf.float32, name="delta")
+            self.mu = tf.constant(10 * initial_stepsize, dtype=tf.float32, name="mu")
 
             self.step = tf.Variable(0.0, dtype=tf.float32,
                                     name="step", trainable=False)
@@ -70,22 +72,20 @@ class StepsizeTuner:
                                                name="log_epsilon_bar", trainable=False)
             self.h_bar = tf.Variable(0.0, dtype=tf.float32,
                                      name="h_bar", trainable=False)
-            self.mu = tf.Variable(10 * initial_stepsize, dtype=tf.float32,
-                                  name="mu", trainable=False)
 
     @add_name_scope
-    def tune(self, acceptance_rate):
+    def tune(self, acceptance_rate, fresh_start):
         def adapt_stepsize():
-            new_step = tf.assign(self.step, self.step + 1)
+            new_step = tf.assign(self.step, 
+                                 (1-fresh_start)*self.step + 1)
             rate1 = tf.div(1.0, new_step + self.t0)
-            new_h_bar = tf.assign(self.h_bar, (1 - rate1) * self.h_bar +
-                                  rate1 * (self.delta - acceptance_rate))
-            log_epsilon = self.mu - tf.sqrt(new_step) / \
-                self.gamma * new_h_bar
+            new_h_bar = tf.assign(self.h_bar, (1-fresh_start) * (1 - rate1) * \
+                                 self.h_bar + rate1 * (self.delta - acceptance_rate))
+            log_epsilon = self.mu - tf.sqrt(new_step) / self.gamma * new_h_bar
             rate = tf.pow(new_step, -self.kappa)
             new_log_epsilon_bar = tf.assign(
                 self.log_epsilon_bar,
-                rate * log_epsilon + (1 - rate) * self.log_epsilon_bar)
+                rate * log_epsilon + (1-fresh_start)*(1 - rate) * self.log_epsilon_bar)
             with tf.control_dependencies([new_log_epsilon_bar]):
                 new_log_epsilon = tf.identity(log_epsilon)
 
@@ -131,7 +131,7 @@ def initialize_step_size(old_step_size, q, p, mass, get_gradient, get_log_poster
             tf.less(acceptance_rate, target_acceptance_rate)))
         return [new_step_size, acceptance_rate, cond]
         #return [tf.Print(new_step_size,
-        #                  [new_step_size, acceptance_rate]),
+        #                  [new_step_size, acceptance_rate], "Tuning"),
         #         acceptance_rate, cond]
     
     new_step_size, _, _ = tf.while_loop(
@@ -142,10 +142,45 @@ def initialize_step_size(old_step_size, q, p, mass, get_gradient, get_log_poster
     return new_step_size
 
 
+class ExponentialWeightedMovingVariance:
+    def __init__(self, decay, shape):
+        with tf.name_scope("ExponentialWeightedMovingVariance"):
+            self.t = tf.Variable(0.0, name="t")
+            self.mean = [tf.Variable(tf.zeros(s), name="mean") for s in shape]
+            self.var = [tf.Variable(tf.zeros(s), name="var") for s in shape]
+            self.decay = decay
+            self.one = tf.constant(1.0, dtype=tf.float32)
+
+    def update(self, x):
+        # x: (n_chain, n1, .., nk)
+        new_t = tf.assign(self.t, self.t + 1)
+        weight = (1 - self.decay) / (1 - tf.pow(self.decay, new_t))
+        # incr: (n_chain, n1, .., nk)
+        incr = [weight * (q - tf.expand_dims(mean, 0)) for q, mean in zip(x, self.mean)]
+        # mean: (n1, ..., nk)
+        update_mean = [mean.assign_add(tf.reduce_mean(i, 0))
+                       for mean, i in zip(self.mean, incr)]
+        # var: (n1, ..., nk)
+        new_var = [(1-weight)*var + tf.reduce_mean(i*(q-tf.expand_dims(mean, 0)), 0)
+                   for var, i, q, mean in zip(self.var, incr, x, update_mean)]
+        update_var =  [tf.assign(var, n_var) for var, n_var in zip(self.var, new_var)]
+        return update_var
+
+    def get_precision(self, var_in):
+        return [tf.div(self.one, var) for var in var_in]
+
+    def get_updated_precision(self, x):     # Should be called only once
+        return self.get_precision(self.update(x))
+
+    def precision(self):
+        return self.get_precision(self.var)
+
+
 class HMC:
     def __init__(self, step_size=1, n_leapfrogs=10,
                  adapt_step_size=None, target_acceptance_rate=0.8,
-                 gamma=0.05, t0=100, kappa=0.75):
+                 gamma=0.05, t0=100, kappa=0.75,
+                 adapt_mass=None, mass_collect_iters=10, mass_decay=0.99):
         with tf.name_scope("HMC"):
             self.step_size = tf.Variable(step_size, name="step_size", trainable=False)
             self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
@@ -156,13 +191,19 @@ class HMC:
             self.adapt_step_size = adapt_step_size
             self.t = tf.Variable(0.0, dtype=tf.float32, name="t")
             if adapt_step_size is not None: # TODO make sure adapt_step_size is a placeholder
-                self.step_size_tuner = StepsizeTuner(step_size, adapt_step_size, gamma,
-                                                 t0, kappa, target_acceptance_rate)
+                self.step_size_tuner = StepsizeTuner(step_size, 
+                    adapt_step_size, gamma, t0, kappa, target_acceptance_rate)
+            if adapt_mass is None:
+                mass_collect_iters = 0
+            self.adapt_mass = adapt_mass
+            self.mass_collect_iters = mass_collect_iters
+            self.mass_decay = mass_decay
 
     # Shape = [ChainShape DataShape]
     # Data shape should not change
     #@add_name_scope
     def sample(self, log_posterior, observed, latent, given=None, chain_axis=None):
+        # TODO merge the sample function to __init__
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 
@@ -178,9 +219,31 @@ class HMC:
 
         # print('Static shape = {}'.format(self.sshapes))
         # print('Data axis = {}'.format(self.data_axis))
-        # print('Data shape = {}'.format(self.data_shape))
+        print('Data shape = {}'.format(self.data_shape))
 
-        current_mass = [tf.ones(shape) for shape in self.data_shape]
+        if self.adapt_mass is not None:
+            with tf.name_scope("HMC"):
+                ewmv = ExponentialWeightedMovingVariance(self.mass_decay, self.data_shape)
+            new_mass = tf.cond(self.adapt_mass,
+                            lambda: ewmv.get_updated_precision(self.q),
+                            lambda: ewmv.precision())
+            if not isinstance(new_mass, list):
+                new_mass = [new_mass]
+
+            #print('New mass is = {}'.format(new_mass))
+            # TODO incorrect shape?
+            #print('New mass={}'.format(new_mass))
+            #print('q={}, NMS={}'.format(self.q[0].get_shape(), new_mass[0].get_shape()))
+            with tf.control_dependencies(new_mass):
+                current_mass = tf.cond(tf.less(new_t, self.mass_collect_iters),
+                    lambda: [tf.ones(shape) for shape in self.data_shape],
+                    lambda: new_mass)
+            if not isinstance(current_mass, list):
+                current_mass = [current_mass]
+        else:
+            current_mass = [tf.ones(shape) for shape in self.data_shape]
+        #current_mass = [tf.Print(current_mass[0], [current_mass[0]], "mass", summarize=10)]
+
         expanded_mass = current_mass if chain_axis == None else \
                     [tf.expand_dims(m, chain_axis) for m in current_mass]
 
@@ -210,11 +273,14 @@ class HMC:
         # print('q shape = {}'.format(current_q[0].get_shape()))
 
         # Initialize step size
+        if_initialize_step_size = tf.logical_or(tf.equal(new_t, 1), 
+                                                tf.equal(new_t, self.mass_collect_iters))
         iss = lambda: initialize_step_size(self.step_size,
             current_q, current_p, current_mass,
             get_gradient, get_log_posterior, 
             self.data_axis, self.target_acceptance_rate)
-        new_step_size = tf.cond(tf.equal(new_t, 1), iss, lambda: self.step_size)
+        new_step_size = tf.cond(if_initialize_step_size,
+                iss, lambda: self.step_size)
         #new_step_size = tf.Print(new_step_size, [new_step_size])
 
         # Leapfrog
@@ -277,7 +343,8 @@ class HMC:
         update_q = [old.assign(new) for old, new in zip(latent_v, new_q)]
 
         if self.adapt_step_size is not None:
-            new_step_size = self.step_size_tuner.tune(tf.reduce_mean(acceptance_rate))
+            new_step_size = self.step_size_tuner.tune(tf.reduce_mean(acceptance_rate), 
+                                tf.cast(if_initialize_step_size, tf.float32))
             update_step_size = tf.assign(self.step_size, new_step_size)
         else:
             update_step_size = self.step_size
