@@ -143,25 +143,26 @@ def initialize_step_size(old_step_size, q, p, mass, get_gradient, get_log_poster
 
 
 class ExponentialWeightedMovingVariance:
-    def __init__(self, decay, shape):
+    def __init__(self, decay, shape, chain_axis):
         with tf.name_scope("ExponentialWeightedMovingVariance"):
             self.t = tf.Variable(0.0, name="t")
             self.mean = [tf.Variable(tf.zeros(s), name="mean") for s in shape]
             self.var = [tf.Variable(tf.zeros(s), name="var") for s in shape]
             self.decay = decay
             self.one = tf.constant(1.0, dtype=tf.float32)
+            self.chain_axis = chain_axis
 
     def update(self, x):
         # x: (n_chain, n1, .., nk)
         new_t = tf.assign(self.t, self.t + 1)
         weight = (1 - self.decay) / (1 - tf.pow(self.decay, new_t))
         # incr: (n_chain, n1, .., nk)
-        incr = [weight * (q - tf.expand_dims(mean, 0)) for q, mean in zip(x, self.mean)]
+        incr = [weight * (q - tf.expand_dims(mean, self.chain_axis)) for q, mean in zip(x, self.mean)]
         # mean: (n1, ..., nk)
-        update_mean = [mean.assign_add(tf.reduce_mean(i, 0))
+        update_mean = [mean.assign_add(tf.reduce_mean(i, self.chain_axis))
                        for mean, i in zip(self.mean, incr)]
         # var: (n1, ..., nk)
-        new_var = [(1-weight)*var + tf.reduce_mean(i*(q-tf.expand_dims(mean, 0)), 0)
+        new_var = [(1-weight)*var + tf.reduce_mean(i*(q-tf.expand_dims(mean, self.chain_axis)), self.chain_axis)
                    for var, i, q, mean in zip(self.var, incr, x, update_mean)]
         update_var =  [tf.assign(var, n_var) for var, n_var in zip(self.var, new_var)]
         return update_var
@@ -223,7 +224,7 @@ class HMC:
 
         if self.adapt_mass is not None:
             with tf.name_scope("HMC"):
-                ewmv = ExponentialWeightedMovingVariance(self.mass_decay, self.data_shape)
+                ewmv = ExponentialWeightedMovingVariance(self.mass_decay, self.data_shape, chain_axis)
             new_mass = tf.cond(self.adapt_mass,
                             lambda: ewmv.get_updated_precision(self.q),
                             lambda: ewmv.precision())
