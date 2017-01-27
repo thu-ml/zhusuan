@@ -30,7 +30,7 @@ def hamiltonian(q, p, log_posterior, mass, data_axis):
                           for momentum, m, axis in zip(p, mass, data_axis)])
     # (n_particles, n)
     return tf.reshape(potential, tf.shape(kinetic)) + kinetic, -potential
-#return tf.reshape(potential, tf.shape(kinetic)) + tf.Print(kinetic, [q, p, potential, kinetic])
+    # return tf.reshape(potential, tf.shape(kinetic)) + tf.Print(kinetic, [q, p, potential, kinetic])
 
 
 def leapfrog_integrator(q, p, step_size1, step_size2, grad, mass):
@@ -130,9 +130,9 @@ def initialize_step_size(old_step_size, q, p, mass, get_gradient, get_log_poster
             tf.less(last_acceptance_rate, target_acceptance_rate),
             tf.less(acceptance_rate, target_acceptance_rate)))
         return [new_step_size, acceptance_rate, cond]
-        #return [tf.Print(new_step_size,
-        #                  [new_step_size, acceptance_rate], "Tuning"),
-        #         acceptance_rate, cond]
+        # return [tf.Print(new_step_size,
+        #                   [new_step_size, acceptance_rate], "Tuning"),
+        #          acceptance_rate, cond]
     
     new_step_size, _, _ = tf.while_loop(
         loop_cond,
@@ -181,6 +181,7 @@ class HMC:
                  adapt_step_size=None, target_acceptance_rate=0.8,
                  gamma=0.05, t0=100, kappa=0.75,
                  adapt_mass=None, mass_collect_iters=10, mass_decay=0.99):
+        # Maintain the variables somewhere else to let the sample be called multiple times
         with tf.name_scope("HMC"):
             self.step_size = tf.Variable(step_size, name="step_size", trainable=False)
             self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
@@ -203,12 +204,11 @@ class HMC:
     # Data shape should not change
     #@add_name_scope
     def sample(self, log_posterior, observed, latent, given=None, chain_axis=None):
-        # TODO merge the sample function to __init__
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 
         self.q = copy(latent_v)
-#self.q = [tf.Print(self.q[0], [self.q[0]], "q")]
+        # self.q = [tf.Print(self.q[0], [self.q[0]], "q")]
 
         self.sshapes = [q.get_shape() for q in self.q]
         self.dshapes = [tf.shape(q) for q in self.q]
@@ -230,10 +230,10 @@ class HMC:
             if not isinstance(new_mass, list):
                 new_mass = [new_mass]
 
-            #print('New mass is = {}'.format(new_mass))
+            # print('New mass is = {}'.format(new_mass))
             # TODO incorrect shape?
-            #print('New mass={}'.format(new_mass))
-            #print('q={}, NMS={}'.format(self.q[0].get_shape(), new_mass[0].get_shape()))
+            # print('New mass={}'.format(new_mass))
+            # print('q={}, NMS={}'.format(self.q[0].get_shape(), new_mass[0].get_shape()))
             with tf.control_dependencies(new_mass):
                 current_mass = tf.cond(tf.less(new_t, self.mass_collect_iters),
                     lambda: [tf.ones(shape) for shape in self.data_shape],
@@ -242,7 +242,7 @@ class HMC:
                 current_mass = [current_mass]
         else:
             current_mass = [tf.ones(shape) for shape in self.data_shape]
-        #current_mass = [tf.Print(current_mass[0], [current_mass[0]], "mass", summarize=10)]
+        # current_mass = [tf.Print(current_mass[0], [current_mass[0]], "mass", summarize=10)]
 
         expanded_mass = current_mass if chain_axis == None else \
                     [tf.expand_dims(m, chain_axis) for m in current_mass]
@@ -251,7 +251,7 @@ class HMC:
         # print('Expanded mass shape = {}'.format(expanded_mass[0].get_shape()))
 
         p = random_momentum(self.dshapes, expanded_mass)
-#p = [tf.Print(p[0], [p[0]], "p")]
+        # p = [tf.Print(p[0], [p[0]], "p")]
 
         def get_log_posterior(var_list):
             # (chain_axis)
@@ -281,7 +281,7 @@ class HMC:
             self.data_axis, self.target_acceptance_rate)
         new_step_size = tf.cond(if_initialize_step_size,
                 iss, lambda: self.step_size)
-        #new_step_size = tf.Print(new_step_size, [new_step_size])
+        # new_step_size = tf.Print(new_step_size, [new_step_size])
 
         # Leapfrog
         def loop_cond(i, current_q, current_p):
@@ -324,8 +324,8 @@ class HMC:
         #     print(q.get_shape())
         # for pp in p:
         #     print(pp.get_shape())
-#current_q = [tf.Print(current_q[0], [current_q[0]], "cq")]
-#current_p = [tf.Print(current_p[0], [current_p[0]], "cp")]
+        # current_q = [tf.Print(current_q[0], [current_q[0]], "cq")]
+        # current_p = [tf.Print(current_p[0], [current_p[0]], "cp")]
 
         # (n_particles, n)
         old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, acceptance_rate = \
