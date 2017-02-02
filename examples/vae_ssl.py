@@ -26,7 +26,8 @@ except:
     raise ImportError()
 
 
-def M2(observed, y, n, n_x, n_y, n_z, n_particles, is_training):
+@zs.reuse('model')
+def M2(observed, y, n, n_x, n_z, n_particles, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
     with zs.StochasticGraph(observed=observed) as model:
@@ -39,12 +40,13 @@ def M2(observed, y, n, n_x, n_y, n_z, n_particles, is_training):
         lx_zy = layers.fully_connected(
             lx_zy, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        x_mean = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_mean)
+        x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_logits)
     return model
 
 
-def qz_xy(x, y, n_x, n_y, n_z, n_particles, is_training):
+@zs.reuse('variational')
+def qz_xy(x, y, n_z, n_particles, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
     with zs.StochasticGraph() as variational:
@@ -61,7 +63,7 @@ def qz_xy(x, y, n_x, n_y, n_z, n_particles, is_training):
     return variational
 
 
-def qy_x(observed, x, n_x, n_y, is_training):
+def qy_x(x, n_y, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
     ly_x = layers.fully_connected(
@@ -72,33 +74,6 @@ def qy_x(observed, x, n_x, n_y, is_training):
         normalizer_params=normalizer_params)
     ly_x = layers.fully_connected(ly_x, n_y, activation_fn=tf.nn.softmax)
     return ly_x
-
-
-def log_prob(self, latent, observed, given):
-    """
-    The log joint probability function.
-
-    :param latent: A dictionary of pairs: (string, Tensor). Each of the
-        Tensor has shape (batch_size, n_samples, n_latent).
-    :param observed: A dictionary of pairs: (string, Tensor). Each of the
-        Tensor has shape (batch_size, n_observed).
-
-    :return: A Tensor of shape (batch_size, n_samples). The joint log
-        likelihoods.
-    """
-    # z: (n_samples, batch_size, n_z)
-    z = latent['z']
-    # y: (batch_size, n_y), x: (batch_size, n_x)
-    y, x = observed['y'], observed['x']
-    y = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1, 1])
-    x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-    z_out, x_out = self.model.get_output(
-        [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
-    log_px_zy = tf.reduce_sum(x_out[1], -1)
-    log_pz = tf.reduce_sum(z_out[1], -1)
-    log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-                                                          tf.float32))
-    return log_px_zy + log_pz + log_py
 
 
 if __name__ == "__main__":
@@ -134,37 +109,52 @@ if __name__ == "__main__":
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
+    x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
+                    tf.float32)
+    n = tf.shape(x_orig)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
 
+    def log_joint(latent, observed, given):
+        # z: (n_samples, batch_size, n_z)
+        z = latent['z']
+        # y: (batch_size, n_y), x: (batch_size, n_x)
+        y, x = observed['y'], observed['x']
+        y = tf.tile(tf.expand_dims(y, 0), [n_particles, 1, 1])
+        x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
+        model = M2({'x': x}, y, n, n_x, n_z, n_particles, is_training)
+        log_px_zy, log_pz = model.local_log_prob(['x', 'z'])
+        log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
+                                                              tf.float32))
+        return tf.reduce_sum(log_px_zy, -1) + tf.reduce_sum(log_pz, -1) + \
+            log_py
+
     # Labeled
-    x_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_l')
-    y_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_y), name='y_l')
-
-    n = tf.shape(x_labeled_ph)[0]
-    m2 = M2(n_x, n_y, n_z, n, n_particles, is_training)
-
-    variational, lx, ly, lz = q_net(n_x, n_y, n_z, n_particles, is_training)
-    variational_y_x, llx, qy_x = qy_x_net(n_x, n_y, is_training)
-    inputs = {lx: x_labeled_ph, ly: y_labeled_ph}
-    z_outputs = variational.get_output(lz, inputs)
-
-    labeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
-    labeled_observed = {'x': x_labeled_ph, 'y': y_labeled_ph}
+    x_labeled_ph = tf.placeholder(tf.float32, shape=[None, n_x], name='x_l')
+    y_labeled_ph = tf.placeholder(tf.float32, shape=[None, n_y], name='y_l')
+    variational = qz_xy(x_labeled_ph, y_labeled_ph, n, n_particles,
+                        is_training)
+    qz_samples, log_qz = variational.query('z', outputs=True,
+                                           local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
     labeled_lower_bound = tf.reduce_mean(
-        advi(m2, labeled_observed, labeled_latent, reduction_indices=0))
+        zs.advi(log_joint, {'x': x_labeled_ph, 'y': y_labeled_ph},
+                {'z': [qz_samples, log_qz]}, reduction_indices=0))
+    ly_x = qy_x(x_labeled_ph, n_y, is_training)
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_u')
     y = tf.diag(tf.ones(n_y))
-    y_u = tf.reshape(tf.tile(tf.expand_dims(y, 0), (batch_size, 1, 1)),
+    y_u = tf.reshape(tf.tile(tf.expand_dims(y, 0), [n, 1, 1]),
                      (-1, n_y))
-    x_u = tf.reshape(tf.tile(tf.expand_dims(x_unlabeled_ph, 1), (1, n_y, 1)),
+    x_u = tf.reshape(tf.tile(tf.expand_dims(x_unlabeled_ph, 1), [1, n_y, 1]),
                      (-1, n_x))
-    inputs = {lx: x_u, ly: y_u}
-    z_outputs = variational.get_output(lz, inputs)
-    unlabeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
-    unlabeled_observed = {'x': x_u, 'y': y_u}
-    lb_z = advi(m2, unlabeled_observed, unlabeled_latent, reduction_indices=0)
+    variational = qz_xy(x_u, y_u, n_z, n_particles, is_training)
+    qz_samples, log_qz = variational.query('z', outputs=True,
+                                           local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
+    lb_z = zs.advi(log_joint, {'x': x_u, 'y': y_u},
+                   {'z': [qz_samples, log_qz]}, reduction_indices=0)
     # sum over y
     lb_z = tf.reshape(lb_z, (-1, n_y))
     qy_outputs = variational_y_x.get_output(qy_x, inputs={llx: x_unlabeled_ph})
@@ -216,17 +206,15 @@ if __name__ == "__main__":
                 y_labeled_batch = t_labeled[labeled_indices]
                 x_unlabeled_batch = x_unlabeled[t * batch_size:
                                                 (t + 1) * batch_size]
-                x_labeled_batch = np.random.binomial(
-                    n=1, p=x_labeled_batch,
-                    size=x_labeled_batch.shape).astype('float32')
-                x_unlabeled_batch = np.random.binomial(
-                    n=1, p=x_unlabeled_batch,
-                    size=x_unlabeled_batch.shape).astype('float32')
+                x_labeled_batch_bin = sess.run(
+                    x_bin, feed_dict={x_orig: x_labeled_batch})
+                x_unlabeled_batch_bin = sess.run(
+                    x_bin, feed_dict={x_orig: x_unlabeled_batch})
                 _, lb_labeled, lb_unlabeled, train_acc = sess.run(
                     [infer, labeled_lower_bound, unlabeled_lower_bound, acc],
-                    feed_dict={x_labeled_ph: x_labeled_batch,
+                    feed_dict={x_labeled_ph: x_labeled_batch_bin,
                                y_labeled_ph: y_labeled_batch,
-                               x_unlabeled_ph: x_unlabeled_batch,
+                               x_unlabeled_ph: x_unlabeled_batch_bin,
                                learning_rate_ph: learning_rate,
                                n_particles: lb_samples,
                                is_training: True})

@@ -38,24 +38,20 @@ def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
         lx_z = layers.conv2d_transpose(
             lx_z, 128, kernel_size=3, padding='VALID',
             normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
+            normalizer_params=normalizer_params)
         lx_z = layers.conv2d_transpose(
             lx_z, 64, kernel_size=5, padding='VALID',
             normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
+            normalizer_params=normalizer_params)
         lx_z = layers.conv2d_transpose(
             lx_z, 32, kernel_size=5, stride=2,
             normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
+            normalizer_params=normalizer_params)
         lx_z = layers.conv2d_transpose(
             lx_z, 1, kernel_size=5, stride=2,
-            activation_fn=None,
-        )
-        x_mean = tf.reshape(lx_z, [n_particles, n, -1])
-        x = zs.Bernoulli('x', x_mean)
+            activation_fn=None)
+        x_logits = tf.reshape(lx_z, [n_particles, n, -1])
+        x = zs.Bernoulli('x', x_logits)
     return model
 
 
@@ -120,10 +116,10 @@ if __name__ == "__main__":
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    x_orig = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
-    x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 

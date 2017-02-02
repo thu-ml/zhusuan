@@ -40,8 +40,8 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
         lx_z = layers.fully_connected(
             lx_z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        x_mean = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_mean)
+        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_logits)
     return model
 
 
@@ -96,10 +96,10 @@ if __name__ == "__main__":
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    x_orig = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
-    x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
