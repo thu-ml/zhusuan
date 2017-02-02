@@ -5,6 +5,8 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import OrderedDict
+from functools import wraps
+import re
 
 from six.moves import zip
 import tensorflow as tf
@@ -15,6 +17,7 @@ from .utils import Context
 __all__ = [
     'StochasticTensor',
     'StochasticGraph',
+    'reuse',
 ]
 
 
@@ -155,7 +158,7 @@ class StochasticGraph(Context):
             ret = s_tensor.log_prob(s_tensor.tensor)
         return ret
 
-    def query(self, name_or_names, outputs=True, local_log_prob=True):
+    def query(self, name_or_names, outputs=False, local_log_prob=False):
         """
         Make probabilistic queries on the StochasticGraph. Various options
         are available:
@@ -183,3 +186,28 @@ class StochasticGraph(Context):
             return list(zip(*ret))
         else:
             return tuple(ret)
+
+
+def reuse(scope):
+    """
+    A decorator for transparent reuse of `tf.Variable`s in a function.
+    When a `StochasticGraph` is reused as in a function, this decorator helps
+    reuse the `tf.Variable`s in the graph every time the function is called.
+
+    :param scope: A String. The scope name passed to `tf.variable_scope()`.
+    """
+    def reuse_decorator(f):
+        @wraps(f)
+        def _func(*args, **kwargs):
+            try:
+                with tf.variable_scope(scope, reuse=True):
+                    return f(*args, **kwargs)
+            except ValueError as e:
+                if re.search(r'.*not exist.*tf\.get_variable.*', str(e)):
+                    with tf.variable_scope(scope):
+                        return f(*args, **kwargs)
+                else:
+                    raise
+        return _func
+
+    return reuse_decorator

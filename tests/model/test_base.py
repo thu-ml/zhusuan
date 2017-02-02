@@ -122,3 +122,16 @@ class TestStochasticGraph:
             assert np.abs(log_pa_out - log_pa_t_out) < 1e-6
             assert np.abs(log_pb_out - log_pb_t_out) < 1e-6
             assert np.abs(log_pc_out - log_pc_t_out) < 1e-6
+
+
+def test_reuse():
+    @reuse("test")
+    def f():
+        w = tf.get_variable("w", shape=[])
+        return w
+
+    w1 = f()
+    w2 = f()
+    w3 = f()
+    assert w1 is w2
+    assert w2 is w3

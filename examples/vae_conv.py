@@ -26,6 +26,7 @@ except:
     raise ImportError()
 
 
+@zs.reuse('model')
 def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
     with zs.StochasticGraph(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
@@ -58,6 +59,7 @@ def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
     return model
 
 
+@zs.reuse('variational')
 def q_net(x, n_xl, n_z, n_particles, is_training):
     with zs.StochasticGraph() as variational:
         normalizer_params = {'is_training': is_training,
@@ -139,14 +141,12 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
-    with tf.variable_scope("model"):
-        lower_bound = tf.reduce_mean(zs.advi(
-            log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-            reduction_indices=0))
-    with tf.variable_scope("model", reuse=True):
-        log_likelihood = tf.reduce_mean(zs.is_loglikelihood(
-            log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-            reduction_indices=0))
+    lower_bound = tf.reduce_mean(
+        zs.advi(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
+                reduction_indices=0))
+    log_likelihood = tf.reduce_mean(
+        zs.is_loglikelihood(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
+                            reduction_indices=0))
 
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
