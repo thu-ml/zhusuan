@@ -27,13 +27,15 @@ except:
 
 
 @zs.reuse('model')
-def M2(observed, y, n, n_x, n_z, n_particles, is_training):
+def M2(observed, n, n_x, n_y, n_z, n_particles, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
     with zs.StochasticGraph(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+        y_logits = tf.zeros([n_particles, n_y])
+        y = zs.Discrete('y', y_logits, sample_dim=1, n_samples=n)
         lx_zy = layers.fully_connected(
             tf.concat_v2([z, y], 2), 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
@@ -63,6 +65,7 @@ def qz_xy(x, y, n_z, n_particles, is_training):
     return variational
 
 
+@zs.reuse('classifier')
 def qy_x(x, n_y, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
@@ -72,7 +75,7 @@ def qy_x(x, n_y, is_training):
     ly_x = layers.fully_connected(
         ly_x, 500, normalizer_fn=layers.batch_norm,
         normalizer_params=normalizer_params)
-    ly_x = layers.fully_connected(ly_x, n_y, activation_fn=tf.nn.softmax)
+    ly_x = layers.fully_connected(ly_x, n_y, activation_fn=None)
     return ly_x
 
 
@@ -122,17 +125,16 @@ if __name__ == "__main__":
         y, x = observed['y'], observed['x']
         y = tf.tile(tf.expand_dims(y, 0), [n_particles, 1, 1])
         x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-        model = M2({'x': x}, y, n, n_x, n_z, n_particles, is_training)
-        log_px_zy, log_pz = model.local_log_prob(['x', 'z'])
-        log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-                                                              tf.float32))
+        model = M2({'x': x, 'y': y, 'z': z}, tf.shape(x)[0], n_x, n_y, n_z,
+                   n_particles, is_training)
+        log_px_zy, log_pz, log_py = model.local_log_prob(['x', 'z', 'y'])
         return tf.reduce_sum(log_px_zy, -1) + tf.reduce_sum(log_pz, -1) + \
             log_py
 
     # Labeled
     x_labeled_ph = tf.placeholder(tf.float32, shape=[None, n_x], name='x_l')
     y_labeled_ph = tf.placeholder(tf.float32, shape=[None, n_y], name='y_l')
-    variational = qz_xy(x_labeled_ph, y_labeled_ph, n, n_particles,
+    variational = qz_xy(x_labeled_ph, y_labeled_ph, n_z, n_particles,
                         is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
@@ -140,15 +142,15 @@ if __name__ == "__main__":
     labeled_lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_labeled_ph, 'y': y_labeled_ph},
                 {'z': [qz_samples, log_qz]}, reduction_indices=0))
-    ly_x = qy_x(x_labeled_ph, n_y, is_training)
 
     # Unlabeled
-    x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_u')
+    x_unlabeled_ph = tf.placeholder(tf.float32, shape=[None, n_x], name='x_u')
+    n = tf.shape(x_unlabeled_ph)[0]
     y = tf.diag(tf.ones(n_y))
     y_u = tf.reshape(tf.tile(tf.expand_dims(y, 0), [n, 1, 1]),
-                     (-1, n_y))
+                     [-1, n_y])
     x_u = tf.reshape(tf.tile(tf.expand_dims(x_unlabeled_ph, 1), [1, n_y, 1]),
-                     (-1, n_x))
+                     [-1, n_x])
     variational = qz_xy(x_u, y_u, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
@@ -156,22 +158,21 @@ if __name__ == "__main__":
     lb_z = zs.advi(log_joint, {'x': x_u, 'y': y_u},
                    {'z': [qz_samples, log_qz]}, reduction_indices=0)
     # sum over y
-    lb_z = tf.reshape(lb_z, (-1, n_y))
-    qy_outputs = variational_y_x.get_output(qy_x, inputs={llx: x_unlabeled_ph})
-    qy = tf.reshape(qy_outputs[0], [-1, n_y])
-    qy += 1e-8
-    qy /= tf.reduce_sum(qy, 1, keep_dims=True)
-    log_qy = tf.log(qy)
+    lb_z = tf.reshape(lb_z, [-1, n_y])
+    qy_logits_u = qy_x(x_unlabeled_ph, n_y, is_training)
+    qy_u = tf.reshape(tf.nn.softmax(qy_logits_u), [-1, n_y])
+    log_qy_u = tf.log(qy_u)
     unlabeled_lower_bound = tf.reduce_mean(
-        tf.reduce_sum(qy * (lb_z - log_qy), 1))
+        tf.reduce_sum(qy_u * (lb_z - log_qy_u), 1))
 
     # Build classifier
-    y_output = variational_y_x.get_output(qy_x, inputs={llx: x_labeled_ph})
-    pred_y = tf.argmax(y_output[0], 1)
+    qy_logits_l = qy_x(x_labeled_ph, n_y, is_training)
+    qy_l = tf.nn.softmax(qy_logits_l)
+    pred_y = tf.argmax(qy_l, 1)
     acc = tf.reduce_sum(
         tf.cast(tf.equal(pred_y, tf.argmax(y_labeled_ph, 1)), tf.float32) /
-        tf.cast(tf.shape(y_labeled_ph)[0], tf.float32))
-    log_qy_x = discrete.logpmf(y_labeled_ph, y_output[0])
+        tf.cast(n, tf.float32))
+    log_qy_x = zs.discrete.logpmf(y_labeled_ph, qy_logits_l)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
 
     # Gather gradients
@@ -184,13 +185,9 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    init = tf.global_variables_initializer()
-    # graph_writer = tf.train.SummaryWriter('/home/ishijiaxin/log',
-    #                                       tf.get_default_graph())
-
     # Run the inference
     with tf.Session() as sess:
-        sess.run(init)
+        sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
