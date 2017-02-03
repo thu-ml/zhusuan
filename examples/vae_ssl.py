@@ -115,7 +115,6 @@ if __name__ == "__main__":
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
-    n = tf.shape(x_orig)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
 
     def log_joint(latent, observed, given):
@@ -161,6 +160,8 @@ if __name__ == "__main__":
     lb_z = tf.reshape(lb_z, [-1, n_y])
     qy_logits_u = qy_x(x_unlabeled_ph, n_y, is_training)
     qy_u = tf.reshape(tf.nn.softmax(qy_logits_u), [-1, n_y])
+    qy_u += 1e-8
+    qy_u /= tf.reduce_sum(qy_u, 1, keep_dims=True)
     log_qy_u = tf.log(qy_u)
     unlabeled_lower_bound = tf.reduce_mean(
         tf.reduce_sum(qy_u * (lb_z - log_qy_u), 1))
