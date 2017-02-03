@@ -15,9 +15,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.model import *
-    from zhusuan.variational import advi, rws
-    from zhusuan.evaluation import is_loglikelihood
+    import zhusuan as zs
 except:
     raise ImportError()
 
@@ -28,72 +26,60 @@ except:
     raise ImportError()
 
 
-class M2(object):
+@zs.reuse('model')
+def M2(observed, n, n_x, n_y, n_z, n_particles, is_training):
+    normalizer_params = {'is_training': is_training,
+                         'updates_collections': None}
+    with StochasticGraph() as model:
+        z_mean = tf.zeros([n_particles, n_z])
+        z_logstd = tf.zeros([n_particles, n_z])
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+        y_logits = tf.zeros([n_particles, n_y])
+        y = zs.Discrete('y', y_logits, sample_dim=1, n_samples=n)
+        lx_zy = layers.fully_connected(
+            tf.concat_v2([z, y], 2), 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        lx_zy = layers.fully_connected(
+            lx_zy, 500, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_logits)
+    return model
+
+
+@zs.reuse('variational')
+def q_net(observed, n_x, n_y, n_z, n_particles, is_training):
+    pass
+
+
+def log_prob(self, latent, observed, given):
     """
-    The deep generative model used in semi-supervised learning with variational
-    autoencoders (Kingma, 2014).
+    The log joint probability function.
 
-    :param n_x: Int. The dimension of observed variables (x).
-    :param n_y: Int. The dimension of latent variables (y), i.e., the number of
-        classes.
-    :param n_z: Int. The dimension of latent variables (z).
+    :param latent: A dictionary of pairs: (string, Tensor). Each of the
+        Tensor has shape (batch_size, n_samples, n_latent).
+    :param observed: A dictionary of pairs: (string, Tensor). Each of the
+        Tensor has shape (batch_size, n_observed).
+    :return: A Tensor of shape (batch_size, n_samples). The joint log
+        likelihoods.
     """
-    def __init__(self, n_x, n_y, n_z, n, n_particles, is_training):
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        with StochasticGraph() as model:
-            z_mean = tf.zeros([n_particles, n_z])
-            z_logstd = tf.zeros([n_particles, n_z])
-            z = Normal(z_mean, z_logstd, sample_dim=1, n_samples=n)
-            y = Discrete(tf.zeros([n_particles, n_y]), sample_dim=1,
-                         n_samples=n)
-            # y = tf.placeholder(tf.float32, [None, None, n_y])
-            lx_zy = layers.fully_connected(
-                tf.concat_v2([z.value, y.value], 2), 500,
-                normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params
-            )
-            lx_zy = layers.fully_connected(
-                lx_zy, 500,
-                normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params
-            )
-            lx_zy = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-            x = Bernoulli(lx_zy)
-        self.x = x
-        self.z = z
-        self.y = y
-        self.model = model
-        self.n_particles = n_particles
-
-    def log_prob(self, latent, observed, given):
-        """
-        The log joint probability function.
-
-        :param latent: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (batch_size, n_samples, n_latent).
-        :param observed: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (batch_size, n_observed).
-        :return: A Tensor of shape (batch_size, n_samples). The joint log
-            likelihoods.
-        """
-        # z: (n_samples, batch_size, n_z)
-        z = latent['z']
-        x = observed['x']
-        # y: (batch_size, n_y), x: (batch_size, n_x)
-        if 'y' in observed:
-            y = tf.tile(tf.expand_dims(observed['y'], 0),
-                        [self.n_particles, 1, 1])
-        else:
-            y = latent['y']
-        x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-        z_out, x_out = self.model.get_output(
-            [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
-        log_px_zy = tf.reduce_sum(x_out[1], -1)
-        log_pz = tf.reduce_sum(z_out[1], -1)
-        log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-                                                              tf.float32))
-        return log_px_zy + log_pz + log_py
+    # z: (n_samples, batch_size, n_z)
+    z = latent['z']
+    x = observed['x']
+    # y: (batch_size, n_y), x: (batch_size, n_x)
+    if 'y' in observed:
+        y = tf.tile(tf.expand_dims(observed['y'], 0),
+                    [self.n_particles, 1, 1])
+    else:
+        y = latent['y']
+    x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
+    z_out, x_out = self.model.get_output(
+        [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
+    log_px_zy = tf.reduce_sum(x_out[1], -1)
+    log_pz = tf.reduce_sum(z_out[1], -1)
+    log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
+                                                          tf.float32))
+    return log_px_zy + log_pz + log_py
 
 
 def q_net(n_x, n_y, n_z, n_particles, is_training):
