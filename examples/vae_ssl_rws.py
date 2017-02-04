@@ -27,21 +27,15 @@ except:
 
 
 @zs.reuse('model')
-def M2(observed, n, n_x, n_y, n_z, n_particles, is_training):
-    normalizer_params = {'is_training': is_training,
-                         'updates_collections': None}
+def M2(observed, n, n_x, n_y, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
         y_logits = tf.zeros([n_particles, n_y])
         y = zs.Discrete('y', y_logits, sample_dim=1, n_samples=n)
-        lx_zy = layers.fully_connected(
-            tf.concat_v2([z, y], 2), 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lx_zy = layers.fully_connected(
-            lx_zy, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
+        lx_zy = layers.fully_connected(tf.concat_v2([z, y], 2), 500)
+        lx_zy = layers.fully_connected(lx_zy, 500)
         x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits)
     return model
@@ -57,15 +51,9 @@ def qz_xy(x, y, n_z):
 
 
 @zs.reuse('qy_x')
-def qy_x(x, n_y, is_training):
-    normalizer_params = {'is_training': is_training,
-                         'updates_collections': None}
-    ly_x = layers.fully_connected(
-        x, 500, normalizer_fn=layers.batch_norm,
-        normalizer_params=normalizer_params)
-    ly_x = layers.fully_connected(
-        ly_x, 500, normalizer_fn=layers.batch_norm,
-        normalizer_params=normalizer_params)
+def qy_x(x, n_y):
+    ly_x = layers.fully_connected(x, 500)
+    ly_x = layers.fully_connected(ly_x, 500)
     y_logits = layers.fully_connected(ly_x, n_y, activation_fn=None)
     return y_logits
 
@@ -78,9 +66,9 @@ def labeled_proposal(x, y, n_z, n_particles):
     return proposal
 
 
-def unlabeled_proposal(x, n_y, n_z, n_particles, is_training):
+def unlabeled_proposal(x, n_y, n_z, n_particles):
     with zs.StochasticGraph() as proposal:
-        y_logits = qy_x(x, n_y, is_training)
+        y_logits = qy_x(x, n_y)
         y = zs.Discrete('y', y_logits, sample_dim=0, n_samples=n_particles)
         x_tiled = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
         z_mean, z_logstd = qz_xy(x_tiled, y, n_z)
@@ -118,7 +106,6 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
@@ -134,7 +121,7 @@ if __name__ == "__main__":
         y = observed['y'] if 'y' in observed else latent['y']
         x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
         model = M2({'x': x, 'y': y, 'z': z}, tf.shape(x)[0], n_x, n_y, n_z,
-                   n_particles, is_training)
+                   n_particles)
         log_px_zy, log_py, log_pz = model.local_log_prob(['x', 'y', 'z'])
         return tf.reduce_sum(log_px_zy, -1) + tf.reduce_sum(log_pz, -1) + \
             log_py
@@ -155,8 +142,7 @@ if __name__ == "__main__":
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_u')
     n = tf.shape(x_unlabeled_ph)[0]
-    proposal = unlabeled_proposal(x_unlabeled_ph, n_y, n_z, n_particles,
-                                  is_training)
+    proposal = unlabeled_proposal(x_unlabeled_ph, n_y, n_z, n_particles)
     qy_samples, log_qy = proposal.query('y', outputs=True, local_log_prob=True)
     qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
@@ -168,7 +154,7 @@ if __name__ == "__main__":
     unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
 
     # Build classifier
-    qy_logits_l = qy_x(x_labeled_ph, n_y, is_training)
+    qy_logits_l = qy_x(x_labeled_ph, n_y)
     qy_l = tf.nn.softmax(qy_logits_l)
     pred_y = tf.argmax(qy_l, 1)
     acc = tf.reduce_sum(
@@ -217,8 +203,7 @@ if __name__ == "__main__":
                                y_labeled_ph: y_labeled_batch,
                                x_unlabeled_ph: x_unlabeled_batch_bin,
                                learning_rate_ph: learning_rate,
-                               n_particles: ll_samples,
-                               is_training: True})
+                               n_particles: ll_samples})
                 lbs_labeled.append(lb_labeled)
                 lbs_unlabeled.append(lb_unlabeled)
                 train_accs.append(train_acc)
@@ -243,8 +228,7 @@ if __name__ == "__main__":
                         feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
                                    x_unlabeled_ph: test_x_batch,
-                                   n_particles: ll_samples,
-                                   is_training: False})
+                                   n_particles: ll_samples})
                     test_lls_labeled.append(test_ll_labeled)
                     test_lls_unlabeled.append(test_ll_unlabeled)
                     test_accs.append(test_acc)
