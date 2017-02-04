@@ -30,7 +30,7 @@ except:
 def M2(observed, n, n_x, n_y, n_z, n_particles, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
-    with StochasticGraph() as model:
+    with zs.StochasticGraph(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
@@ -47,92 +47,45 @@ def M2(observed, n, n_x, n_y, n_z, n_particles, is_training):
     return model
 
 
-@zs.reuse('variational')
-def q_net(observed, n_x, n_y, n_z, n_particles, is_training):
-    pass
+@zs.reuse('qz_xy')
+def qz_xy(x, y, n_z):
+    lz_xy = layers.fully_connected(tf.concat_v2([x, y], -1), 500)
+    lz_xy = layers.fully_connected(lz_xy, 500)
+    z_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
+    z_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
+    return z_mean, z_logstd
 
 
-def log_prob(self, latent, observed, given):
-    """
-    The log joint probability function.
-
-    :param latent: A dictionary of pairs: (string, Tensor). Each of the
-        Tensor has shape (batch_size, n_samples, n_latent).
-    :param observed: A dictionary of pairs: (string, Tensor). Each of the
-        Tensor has shape (batch_size, n_observed).
-    :return: A Tensor of shape (batch_size, n_samples). The joint log
-        likelihoods.
-    """
-    # z: (n_samples, batch_size, n_z)
-    z = latent['z']
-    x = observed['x']
-    # y: (batch_size, n_y), x: (batch_size, n_x)
-    if 'y' in observed:
-        y = tf.tile(tf.expand_dims(observed['y'], 0),
-                    [self.n_particles, 1, 1])
-    else:
-        y = latent['y']
-    x = tf.tile(tf.expand_dims(x, 0), [self.n_particles, 1, 1])
-    z_out, x_out = self.model.get_output(
-        [self.z, self.x], inputs={self.z: z, self.x: x, self.y: y})
-    log_px_zy = tf.reduce_sum(x_out[1], -1)
-    log_pz = tf.reduce_sum(z_out[1], -1)
-    log_py = tf.log(tf.constant(1., tf.float32) / tf.cast(tf.shape(y)[-1],
-                                                          tf.float32))
-    return log_px_zy + log_pz + log_py
-
-
-def q_net(n_x, n_y, n_z, n_particles, is_training):
-    """
-    Build the recognition network q(y, z|x) = q(y|x)q(z|x, y) used as
-    variational posterior.
-
-    :param n_z: Int. The dimension of latent variable z.
-    :param n_particles: Tensor or int. Number of samples of latent variables.
-    :param is_training: Bool.
-    :return: All :class:`Layer` instances needed.
-    """
+@zs.reuse('qy_x')
+def qy_x(x, n_y, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
-    with StochasticGraph() as variational:
-        l_x = tf.placeholder(tf.float32, shape=(None, n_x))
-        l_y = tf.placeholder(tf.float32, shape=(None, n_y))
-        lz_xy = layers.fully_connected(tf.concat_v2([l_x, l_y], 1), 500,
-                                       scope='lz_xy1')
-        lz_xy = layers.fully_connected(lz_xy, 500,
-                                       scope='lz_xy2')
-        lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None,
-                                         scope='lz_mean')
-        lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None,
-                                           scope='lz_logstd')
-        lz = Normal(lz_mean, lz_logstd, sample_dim=0, n_samples=n_particles,
-                    reparameterized=False)
+    ly_x = layers.fully_connected(
+        x, 500, normalizer_fn=layers.batch_norm,
+        normalizer_params=normalizer_params)
+    ly_x = layers.fully_connected(
+        ly_x, 500, normalizer_fn=layers.batch_norm,
+        normalizer_params=normalizer_params)
+    y_logits = layers.fully_connected(ly_x, n_y, activation_fn=None)
+    return y_logits
 
-        lx_u = tf.placeholder(tf.float32, shape=(None, n_x))
-        qy_x = layers.fully_connected(
-            lx_u, 500,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
-        qy_x = layers.fully_connected(
-            qy_x, 500,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params
-        )
-        qy_x = layers.fully_connected(qy_x, n_y, activation_fn=None)
-        ly_u = Discrete(qy_x, sample_dim=0, n_samples=n_particles)
-        lz_xy_u = layers.fully_connected(
-            tf.concat_v2([tf.tile(tf.expand_dims(lx_u, 0),
-                                  [n_particles, 1, 1]),
-                          ly_u.value], 2),
-            500, reuse=True, scope='lz_xy1')
-        lz_mean_u = layers.fully_connected(lz_xy_u, n_z, activation_fn=None,
-                                           reuse=True, scope='lz_mean')
-        lz_logstd_u = layers.fully_connected(lz_xy_u, n_z, activation_fn=None,
-                                             reuse=True, scope='lz_logstd')
-        lz_u = Normal(lz_mean_u, lz_logstd_u, reparameterized=False)
 
-    return variational, l_x, l_y, lz, lx_u, ly_u, lz_u, qy_x
+def labeled_proposal(x, y, n_z, n_particles):
+    with zs.StochasticGraph() as proposal:
+        z_mean, z_logstd = qz_xy(x, y, n_z)
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=0,
+                      n_samples=n_particles, reparameterized=False)
+    return proposal
+
+
+def unlabeled_proposal(x, n_y, n_z, n_particles, is_training):
+    with zs.StochasticGraph() as proposal:
+        y_logits = qy_x(x, n_y, is_training)
+        y = zs.Discrete('y', y_logits, sample_dim=0, n_samples=n_particles)
+        x_tiled = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
+        z_mean, z_logstd = qz_xy(x_tiled, y, n_z)
+        z = zs.Normal('z', z_mean, z_logstd, reparameterized=False)
+    return proposal
 
 
 if __name__ == "__main__":
@@ -168,49 +121,60 @@ if __name__ == "__main__":
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
+    x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
+                    tf.float32)
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
+
+    def log_joint(latent, observed, given):
+        # z: (n_particles, batch_size, n_z)
+        # y: (n_particles, batch_size, n_y), x: (batch_size, n_x)
+        z = latent['z']
+        x = observed['x']
+        y = observed['y'] if 'y' in observed else latent['y']
+        x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
+        model = M2({'x': x, 'y': y, 'z': z}, tf.shape(x)[0], n_x, n_y, n_z,
+                   n_particles, is_training)
+        log_px_zy, log_py, log_pz = model.local_log_prob(['x', 'y', 'z'])
+        return tf.reduce_sum(log_px_zy, -1) + tf.reduce_sum(log_pz, -1) + \
+            log_py
 
     # Labeled
     x_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_l')
     y_labeled_ph = tf.placeholder(tf.float32, shape=(None, n_y), name='y_l')
-
-    n = tf.shape(x_labeled_ph)[0]
-    with tf.variable_scope('model') as scope:
-        m2 = M2(n_x, n_y, n_z, n, n_particles, is_training)
-
-    variational, lx, ly, lz, lx_u, ly_u, lz_u, qy_x = \
-        q_net(n_x, n_y, n_z, n_particles, is_training)
-    inputs = {lx: x_labeled_ph, ly: y_labeled_ph, lx_u: x_labeled_ph}
-    z_outputs, y_outputs = variational.get_output([lz, qy_x], inputs)
-
-    labeled_latent = {'z': [z_outputs[0], tf.reduce_sum(z_outputs[1], -1)]}
-    labeled_observed = {'x': x_labeled_ph, 'y': y_labeled_ph}
-    labeled_cost, labeled_log_likelihood = rws(
-        m2, labeled_observed, labeled_latent, reduction_indices=0)
+    y_l = tf.tile(tf.expand_dims(y_labeled_ph, 0), [n_particles, 1, 1])
+    proposal = labeled_proposal(x_labeled_ph, y_labeled_ph, n_z, n_particles)
+    qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
+    labeled_cost, labeled_log_likelihood = zs.rws(
+        log_joint, {'x': x_labeled_ph, 'y': y_l},
+        {'z': [qz_samples, log_qz]}, reduction_indices=0)
     labeled_cost = tf.reduce_mean(labeled_cost)
     labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, n_x), name='x_u')
-    inputs = {lx_u: x_unlabeled_ph}
-    y_u_outputs, z_u_outputs = variational.get_output([ly_u, lz_u], inputs)
-
-    unlabeled_latent = {'z': [z_u_outputs[0],
-                              tf.reduce_sum(z_u_outputs[1], -1)],
-                        'y': [y_u_outputs[0], y_u_outputs[1]]}
-    unlabeled_observed = {'x': x_unlabeled_ph}
-
-    unlabeled_cost, unlabeled_log_likelihood = rws(
-        m2, unlabeled_observed, unlabeled_latent, reduction_indices=0)
+    n = tf.shape(x_unlabeled_ph)[0]
+    proposal = unlabeled_proposal(x_unlabeled_ph, n_y, n_z, n_particles,
+                                  is_training)
+    qy_samples, log_qy = proposal.query('y', outputs=True, local_log_prob=True)
+    qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
+    unlabeled_cost, unlabeled_log_likelihood = zs.rws(
+        log_joint, {'x': x_unlabeled_ph},
+        {'y': [qy_samples, log_qy], 'z': [qz_samples, log_qz]},
+        reduction_indices=0)
     unlabeled_cost = tf.reduce_mean(unlabeled_cost)
     unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
 
     # Build classifier
-    pred_y = tf.argmax(y_outputs[0], 1)
+    qy_logits_l = qy_x(x_labeled_ph, n_y, is_training)
+    qy_l = tf.nn.softmax(qy_logits_l)
+    pred_y = tf.argmax(qy_l, 1)
     acc = tf.reduce_sum(
         tf.cast(tf.equal(pred_y, tf.argmax(y_labeled_ph, 1)), tf.float32) /
-        tf.cast(tf.shape(y_labeled_ph)[0], tf.float32))
-    log_qy_x = discrete.logpmf(y_labeled_ph, y_outputs[0])
+        tf.cast(n, tf.float32))
+    log_qy_x = zs.discrete.logpmf(y_labeled_ph, qy_logits_l)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
 
     # Gather gradients
@@ -222,13 +186,9 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    init = tf.global_variables_initializer()
-    # graph_writer = tf.train.SummaryWriter('/home/ishijiaxin/log',
-    #                                       tf.get_default_graph())
-
     # Run the inference
     with tf.Session() as sess:
-        sess.run(init)
+        sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
@@ -244,18 +204,18 @@ if __name__ == "__main__":
                 y_labeled_batch = t_labeled[labeled_indices]
                 x_unlabeled_batch = x_unlabeled[t * batch_size:
                                                 (t + 1) * batch_size]
-                x_labeled_batch = np.random.binomial(
-                    n=1, p=x_labeled_batch,
-                    size=x_labeled_batch.shape).astype('float32')
-                x_unlabeled_batch = np.random.binomial(
-                    n=1, p=x_unlabeled_batch,
-                    size=x_unlabeled_batch.shape).astype('float32')
+                x_unlabeled_batch = x_unlabeled[t * batch_size:
+                                                (t + 1) * batch_size]
+                x_labeled_batch_bin = sess.run(
+                    x_bin, feed_dict={x_orig: x_labeled_batch})
+                x_unlabeled_batch_bin = sess.run(
+                    x_bin, feed_dict={x_orig: x_unlabeled_batch})
                 _, lb_labeled, lb_unlabeled, train_acc = sess.run(
                     [infer, labeled_log_likelihood, unlabeled_log_likelihood,
                      acc],
-                    feed_dict={x_labeled_ph: x_labeled_batch,
+                    feed_dict={x_labeled_ph: x_labeled_batch_bin,
                                y_labeled_ph: y_labeled_batch,
-                               x_unlabeled_ph: x_unlabeled_batch,
+                               x_unlabeled_ph: x_unlabeled_batch_bin,
                                learning_rate_ph: learning_rate,
                                n_particles: ll_samples,
                                is_training: True})

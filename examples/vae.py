@@ -45,7 +45,6 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
     return model
 
 
-@zs.reuse('variational')
 def q_net(x, n_z, n_particles, is_training):
     with zs.StochasticGraph() as variational:
         normalizer_params = {'is_training': is_training,

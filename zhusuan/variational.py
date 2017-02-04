@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 
-def advi(log_joint, observed, latent, reduction_indices=1, given=None):
+def advi(log_joint, observed, latent, reduction_indices=0, given=None):
     """
     Implements the automatic differentiation variational inference (ADVI)
     algorithm. For now we assume all latent variables have been transformed in
@@ -54,7 +54,7 @@ def advi(log_joint, observed, latent, reduction_indices=1, given=None):
     return lower_bound
 
 
-def iwae(model, observed, latent, reduction_indices=1, given=None):
+def iwae(log_joint, observed, latent, reduction_indices=0, given=None):
     """
     Implements the importance weighted lower bound from (Burda, 2015).
 
@@ -74,10 +74,11 @@ def iwae(model, observed, latent, reduction_indices=1, given=None):
 
     :return: A Tensor. The importance weighted lower bound.
     """
-    return is_loglikelihood(model, observed, latent, reduction_indices, given)
+    return is_loglikelihood(log_joint, observed, latent, reduction_indices,
+                            given)
 
 
-def rws(model, observed, latent, reduction_indices=1, given=None):
+def rws(log_joint, observed, latent, reduction_indices=0, given=None):
     """
     Implements Reweighted Wake-sleep from (Bornschein, 2015).
 
@@ -102,21 +103,22 @@ def rws(model, observed, latent, reduction_indices=1, given=None):
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
     given = given if given is not None else {}
-    log_joint = model.log_prob(latent_outputs, observed, given)
+    log_joint_value = log_joint(latent_outputs, observed, given)
     entropy = -sum(latent_logpdfs)
-    log_w = log_joint + entropy
+    log_w = log_joint_value + entropy
     log_w_max = tf.reduce_max(log_w, reduction_indices, keep_dims=True)
     w_u = tf.exp(log_w - log_w_max)
     w_tilde = tf.stop_gradient(w_u / tf.reduce_sum(w_u, reduction_indices,
                                                    keep_dims=True))
     log_likelihood = log_mean_exp(log_w, reduction_indices)
-    fake_log_joint_cost = -tf.reduce_sum(w_tilde*log_joint, reduction_indices)
+    fake_log_joint_cost = -tf.reduce_sum(w_tilde*log_joint_value,
+                                         reduction_indices)
     fake_proposal_cost = tf.reduce_sum(w_tilde*entropy, reduction_indices)
     cost = fake_log_joint_cost + fake_proposal_cost
     return cost, log_likelihood
 
 
-def nvil(model, observed, latent, baseline=None, reduction_indices=1,
+def nvil(model, observed, latent, baseline=None, reduction_indices=0,
          given=None, variance_normalization=False, alpha=0.8):
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
