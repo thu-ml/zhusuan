@@ -9,37 +9,32 @@ import os
 
 from six.moves import range
 import numpy as np
+import tensorflow as tf
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
-    from zhusuan.distributions import norm
-    from zhusuan.model import *
-    from zhusuan.variational import advi
+    import zhusuan as zs
 except:
     raise ImportError()
 
 
-class ToyIntractablePosterior:
-    """
-    A Toy 2D intractable distribution.
-    """
-    def __init__(self):
-        pass
+def toy_2d_intractable_posterior(observed, n_particles):
+    with zs.StochasticGraph(observed=observed) as model:
+        z2_mean = tf.zeros([n_particles])
+        z2_logstd = tf.ones([n_particles]) * tf.log(1.35)
+        z2 = zs.Normal('z2', z2_mean, z2_logstd)
+        z1_mean = tf.zeros([n_particles])
+        z1 = zs.Normal('z1', z1_mean, z2)
+    return model
 
-    def log_prob(self, latent, observed, given):
-        """
-        The log joint probability function.
 
-        :param latent: A dictionary of pairs: (string, Tensor).
-        :param observed: A dictionary of pairs: (string, Tensor).
-        :param given: A dictionary of pairs: (string, Tensor).
-
-        :return: A Tensor. The joint log likelihoods.
-        """
-        z = latent['z']
-
-        mu, logstd = z[:, 0], z[:, 1]
-        return norm.logpdf(logstd) + norm.logpdf(mu, 0, logstd)
+def mean_field_variational(n_particles):
+    with zs.StochasticGraph() as variational:
+        z_mean = tf.Variable(np.array([-2, -2], dtype='float32'))
+        z_logstd = tf.Variable(np.array([-5, -5], dtype='float32'))
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=0,
+                      n_samples=n_particles)
+    return variational, z_mean, z_logstd
 
 
 if __name__ == "__main__":
@@ -55,9 +50,9 @@ if __name__ == "__main__":
         x = np.linspace(*xlimits, num=numticks)
         y = np.linspace(*ylimits, num=numticks)
         xx, yy = np.meshgrid(x, y)
-        zs = func(np.concatenate(
-            [np.atleast_2d(xx.ravel()), np.atleast_2d(yy.ravel())]).T)
-        z = zs.reshape(xx.shape)
+        z = func(np.concatenate([np.atleast_2d(xx.ravel()),
+                                 np.atleast_2d(yy.ravel())]).T)
+        z = z.reshape(xx.shape)
         ax.contour(xx, yy, z)
 
     def draw(vmean, vlogstd):
@@ -66,13 +61,12 @@ if __name__ == "__main__":
         xlimits = [-2, 2]
         ylimits = [-4, 2]
 
-        def log_prob(z, x):
-            mu, logstd = z[:, 0], z[:, 1]
-            return stats.norm.logpdf(logstd, 0, 1.35) + \
-                stats.norm.logpdf(mu, 0, np.exp(logstd))
+        def log_prob(z):
+            z1, z2 = z[:, 0], z[:, 1]
+            return stats.norm.logpdf(z2, 0, 1.35) + \
+                stats.norm.logpdf(z1, 0, np.exp(z2))
 
-        plot_isocontours(ax, lambda z: np.exp(log_prob(z, None)),
-                         xlimits, ylimits)
+        plot_isocontours(ax, lambda z: np.exp(log_prob(z)), xlimits, ylimits)
 
         def variational_contour(z):
             return stats.multivariate_normal.pdf(
@@ -83,27 +77,31 @@ if __name__ == "__main__":
         plt.pause(1.0 / 30.0)
 
     # Build the computation graph
-    model = ToyIntractablePosterior()
     n_particles = tf.placeholder(tf.int32, shape=[])
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
-    with StochasticGraph() as variational:
-        z_mean = tf.Variable(np.array([-2, -2], dtype='float32'))
-        z_logstd = tf.Variable(np.array([-5, -5], dtype='float32'))
-        qz = Normal(z_mean, z_logstd, sample_dim=0, n_samples=n_particles)
-    z, z_logpdf = variational.get_output(qz)
-    z_logpdf = tf.reduce_sum(z_logpdf, -1)
-    lower_bound = tf.reduce_mean(advi(
-        model, {}, {'z': [z, z_logpdf]}, reduction_indices=0))
+
+    def log_joint(latent, observed, given):
+        z = latent['z']
+        z1, z2 = tf.unstack(z, axis=1)
+        model = toy_2d_intractable_posterior({'z1': z1, 'z2': z2}, n_particles)
+        log_pz1, log_pz2 = model.local_log_prob(['z1', 'z2'])
+        return log_pz1 + log_pz2
+
+    variational, z_mean, z_logstd = mean_field_variational(n_particles)
+    qz_samples, log_qz = variational.query('z', outputs=True,
+                                           local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
+    lower_bound = zs.advi(log_joint, {}, {'z': [qz_samples, log_qz]},
+        reduction_indices=0)
     infer = optimizer.minimize(-lower_bound)
-    init = tf.global_variables_initializer()
 
     # Run the inference
     iters = 1000
     with tf.Session() as sess:
-        sess.run(init)
+        sess.run(tf.global_variables_initializer())
         for t in range(iters):
             _, lb, vmean, vlogstd = sess.run(
                 [infer, lower_bound, z_mean, z_logstd],
-                feed_dict={n_particles: 200})
+                feed_dict={n_particles: 500})
             print('Iteration {}: lower bound = {}'.format(t, lb))
             draw(vmean, vlogstd)
