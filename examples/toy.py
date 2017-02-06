@@ -4,18 +4,11 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
-import os
 
 from six.moves import range
 import numpy as np
 import tensorflow as tf
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import zhusuan as zs
-except:
-    raise ImportError()
+import zhusuan as zs
 
 
 def toy_2d_intractable_posterior(observed, n_particles):

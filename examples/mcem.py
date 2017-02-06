@@ -13,19 +13,11 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import zhusuan as zs
-    from zhusuan.mcmc.hmc import HMC
-except:
-    raise ImportError()
+import zhusuan as zs
+from zhusuan.mcmc.hmc import HMC
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-except:
-    raise ImportError()
+import dataset
 
 
 def vae(observed, n, n_x, n_z, n_particles):

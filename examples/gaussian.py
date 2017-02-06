@@ -2,24 +2,16 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
-import os
-import time
 
 import tensorflow as tf
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import zhusuan as zs
 from zhusuan.mcmc.hmc import HMC
 from matplotlib import pyplot as plt
 import scipy
 import scipy.stats
 import math
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import zhusuan as zs
-except:
-    raise ImportError()
 
 tf.set_random_seed(1)
 

@@ -11,18 +11,10 @@ import time
 import tensorflow as tf
 from six.moves import range, zip
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import zhusuan as zs
-except:
-    raise ImportError()
+import zhusuan as zs
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-except:
-    raise ImportError()
+import dataset
 
 
 @zs.reuse('model')
@@ -105,7 +97,7 @@ if __name__ == '__main__':
     test_freq = 10
     learning_rate = 0.01
     anneal_lr_freq = 100
-    anneal_lr_rate = 1.
+    anneal_lr_rate = 0.75
 
     # Build the computation graph
     learning_rate_ph = tf.placeholder(tf.float32, shape=[])
