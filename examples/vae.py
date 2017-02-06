@@ -15,7 +15,10 @@ import numpy as np
 import zhusuan as zs
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import dataset
+try:
+    import dataset
+except:
+    raise ImportError()
 
 
 @zs.reuse('model')

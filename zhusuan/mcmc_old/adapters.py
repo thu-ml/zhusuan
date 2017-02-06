@@ -133,7 +133,7 @@ class VarianceAdapter:
         """
         self.step += 1
         if self.step >= self.init_buffer and \
-           self.step < self.burnin - self.term_buffer:
+                self.step < self.burnin - self.term_buffer:
             self.estimator.add(q)
 
         if self.step >= self.burnin:

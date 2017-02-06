@@ -21,4 +21,4 @@ def test_gradient_descent_optimizer():
     optimizer = GradientDescentOptimizer(sess, {}, func, [x],
                                          stepsize=1, tol=1e-7)
     x = optimizer.optimize()
-    assert(abs(x[0] + 1) < 1e-3)
+    assert abs(x[0] + 1) < 1e-3

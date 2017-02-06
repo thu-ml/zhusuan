@@ -9,7 +9,6 @@ import numpy as np
 
 from .utils import convert_to_int, add_name_scope
 
-
 __all__ = [
     'norm',
     'logistic',
@@ -22,6 +21,7 @@ class Normal:
     """
     Class of Normal distribution.
     """
+
     def __init__(self):
         pass
 
@@ -169,6 +169,7 @@ class Logistic:
     """
     Class of Logistic distribution.
     """
+
     def __init__(self):
         pass
 
@@ -236,6 +237,7 @@ class Bernoulli:
     """
     Class of Bernoulli distribution.
     """
+
     def __init__(self):
         pass
 
@@ -348,6 +350,7 @@ class Discrete:
     """
     Class of discrete distribution.
     """
+
     def __init__(self):
         pass
 

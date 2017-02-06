@@ -35,6 +35,7 @@ class NUTS(BaseHMC):
     :param term_buffer: Size of terminating buffer, which only adapts the
     stepsize (default 50).
     """
+
     def __init__(self, sess, data, vars, log_likelihood, epsilon=0.1,
                  mass=None,
                  m_adapt=50, gamma=0.05, t0=10, kappa=0.75, delta=0.8,

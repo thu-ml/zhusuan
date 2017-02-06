@@ -84,7 +84,7 @@ if __name__ == "__main__":
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = zs.advi(log_joint, {}, {'z': [qz_samples, log_qz]},
-        reduction_indices=0)
+                          reduction_indices=0)
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer = optimizer.minimize(-lower_bound)
 

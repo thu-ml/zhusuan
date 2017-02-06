@@ -17,11 +17,11 @@ def ESS1(samples):
     """
     n = samples.shape[0]
     mu_hat = np.mean(samples)
-    var = np.var(samples) * n / (n-1)
-    var_plus = var * (n-1) / n
+    var = np.var(samples) * n / (n - 1)
+    var_plus = var * (n - 1) / n
 
     def autocovariance(lag):
-        return np.mean((samples[:n-lag]-mu_hat) * (samples[lag:]-mu_hat))
+        return np.mean((samples[:n - lag] - mu_hat) * (samples[lag:] - mu_hat))
 
     sum_rho = 0
     for t in range(0, n):
@@ -30,7 +30,7 @@ def ESS1(samples):
             break
         sum_rho += rho
 
-    ess = n / (1 + 2*sum_rho)
+    ess = n / (1 + 2 * sum_rho)
     return ess
 
 
@@ -47,7 +47,7 @@ def ESS(samples, burnin=100):
     esss = []
     for d in range(samples.shape[1]):
         ess = ESS1(np.squeeze(samples[burnin:, d]))
-        assert(ess >= 0)
+        assert ess >= 0
         if ess > 0:
             current_ess = min(current_ess, ess)
 

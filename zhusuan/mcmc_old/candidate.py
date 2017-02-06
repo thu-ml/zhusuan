@@ -18,6 +18,7 @@ class Candidate:
     :param shape: The shape of each item.
     :param init: An initial item.
     """
+
     def __init__(self, shape=None, init=None):
         if int(shape is None) + int(init is None) != 1:
             raise RuntimeError('Only one of shape and init should be '

@@ -10,7 +10,6 @@ import tensorflow as tf
 from zhusuan.distributions import norm, discrete, bernoulli
 from .base import StochasticTensor
 
-
 __all__ = [
     'Normal',
     'Bernoulli',
@@ -38,6 +37,7 @@ class Normal(StochasticTensor):
         function, using the reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
     """
+
     def __init__(self,
                  name,
                  mean,
@@ -82,6 +82,7 @@ class Bernoulli(StochasticTensor):
     :param n_samples: A Tensor scalar or int. Number of samples to
         generate.
     """
+
     def __init__(self, name, logits, sample_dim=None, n_samples=1):
         incomings = [logits, sample_dim, n_samples]
         super(Bernoulli, self).__init__(name, incomings, tf.float32)
@@ -115,6 +116,7 @@ class Discrete(StochasticTensor):
     (..., [n_samples,] ..., n_classes). Each slice is a one-hot vector
     of the sample.
     """
+
     def __init__(self, name, logits, sample_dim=None, n_samples=1):
         incomings = [logits, sample_dim, n_samples]
         super(Discrete, self).__init__(name, incomings, tf.float32)

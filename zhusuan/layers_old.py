@@ -31,6 +31,7 @@ class Layer(object):
         into this layer.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, incoming, name=None):
         self.input_layer = incoming
         self.name = name
@@ -63,6 +64,7 @@ class MergeLayer(object):
     :param incomings: A list of :class:`Layer` objects feeding into this layer.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, incomings, name=None):
         if not isinstance(incomings, list):
             raise TypeError("incomings of a MergeLayer (%s) must be of type "
@@ -100,6 +102,7 @@ class InputLayer(Layer):
     :param input: A Tensor or `None`, which represents a network input.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, shape, input=None, name=None):
         super(InputLayer, self).__init__(None, name)
         if any(isinstance(s, tf.Tensor) or isinstance(s, tf.Variable)
@@ -141,6 +144,7 @@ class ReparameterizedNormalOld(MergeLayer):
         drawn for distribution layers. Default to be 1.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, incomings, n_samples=1, name=None):
         super(ReparameterizedNormalOld, self).__init__(incomings, name)
         if len(incomings) != 2:
@@ -192,6 +196,7 @@ class Normal(MergeLayer):
         drawn for distribution layers. Default to be 1.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, incomings, n_samples=1, reparameterized=True,
                  name=None):
         super(Normal, self).__init__(incomings, name)
@@ -258,6 +263,7 @@ class Discrete(Layer):
         Should be the same as the 3rd dimension of the incoming.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, incoming, n_classes, n_samples=1, name=None):
         super(Discrete, self).__init__(incoming, name)
         if isinstance(n_samples, int):
@@ -324,6 +330,7 @@ class PrettyTensor(MergeLayer):
         corresponding incoming layer when calling get_output_for.
     :param name: A string or None. An optional name to attach to this layer.
     """
+
     def __init__(self, incomings, pt_expr, name=None):
         ks = incomings.keys()
         vs = [incomings[k] for k in incomings]
@@ -357,6 +364,7 @@ class ReadAttentionLayer(MergeLayer):
     """
     Read attention of DRAW
     """
+
     def __init__(self, incomings, width=28, height=28, read_n=5, name=None):
         super(ReadAttentionLayer, self).__init__(incomings, name)
         if len(incomings) != 7:
@@ -394,10 +402,10 @@ class ReadAttentionLayer(MergeLayer):
         x = tf.reshape(x, [-1, self.height, self.width])
         read_x = gamma * tf.reshape(
             tf.matmul(fy, tf.matmul(x, fxt)),
-            [-1, self.read_n*self.read_n])
+            [-1, self.read_n * self.read_n])
         read_x_hat = gamma * tf.reshape(
             tf.matmul(fy, tf.matmul(x_hat, fxt)),
-            [-1, self.read_n*self.read_n])
+            [-1, self.read_n * self.read_n])
         return tf.concat_v2([read_x, read_x_hat], 1)
 
 
@@ -405,6 +413,7 @@ class WriteAttentionLayer(MergeLayer):
     """
     Write attention of DRAW.
     """
+
     def __init__(self, incomings, width=28, height=28, write_n=5, name=None):
         super(WriteAttentionLayer, self).__init__(incomings, name)
         self.width = width
@@ -448,6 +457,7 @@ class ListLayer(MergeLayer):
 
     :param incomings: A list of :class:`Layer` objects feeding into this layer.
     """
+
     def __init__(self, incomings, **kwargs):
         super(ListLayer, self).__init__(incomings, **kwargs)
 
@@ -464,6 +474,7 @@ class ListIndexLayer(Layer):
     :param incoming: A :class:`Layer` instance.
     :param index: The index to fetch.
     """
+
     def __init__(self, incoming, index, **kwargs):
         super(ListIndexLayer, self).__init__(incoming, **kwargs)
         self.index = index

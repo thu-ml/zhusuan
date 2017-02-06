@@ -13,6 +13,7 @@ class Context(object):
     """
     Context stack.
     """
+
     def __enter__(self):
         type(self).get_contexts().append(self)
         return self

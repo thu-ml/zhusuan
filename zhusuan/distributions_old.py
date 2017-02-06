@@ -22,6 +22,7 @@ class Normal:
     """
     Class of Normal distribution.
     """
+
     def __init__(self):
         pass
 
@@ -73,6 +74,7 @@ class Logistic:
     """
     Class of Logistic distribution.
     """
+
     def __init__(self):
         pass
 
@@ -103,6 +105,7 @@ class Bernoulli:
     """
     Class of Bernoulli distribution.
     """
+
     def __init__(self):
         pass
 
@@ -147,6 +150,7 @@ class Discrete:
     """
     Class of discrete distribution.
     """
+
     def __init__(self):
         pass
 

@@ -67,17 +67,17 @@ class BaseHMC:
                                                 self.stepsize,
                                                 self.hamiltonian)
 
-        # Initialize
-        # init = tf.global_variables_initializer()
-        # self.sess.run(init)
+            # Initialize
+            # init = tf.global_variables_initializer()
+            # self.sess.run(init)
 
-        # Summary
-        # tf.scalar_summary('Loss', self.log_likelihood)
-        # tf.scalar_summary('Hamiltonian', finishing_hamiltonian)
-        # tf.histogram_summary('W', self.q[0])
-        # tf.histogram_summary('pW', self.p[0])
-        # self.merged = tf.merge_all_summaries()
-        # self.train_writer = tf.train.SummaryWriter('train', sess.graph)
+            # Summary
+            # tf.scalar_summary('Loss', self.log_likelihood)
+            # tf.scalar_summary('Hamiltonian', finishing_hamiltonian)
+            # tf.histogram_summary('W', self.q[0])
+            # tf.histogram_summary('pW', self.p[0])
+            # self.merged = tf.merge_all_summaries()
+            # self.train_writer = tf.train.SummaryWriter('train', sess.graph)
 
     def stat(self, burnin):
         self.models = np.array(self.models)
@@ -89,7 +89,7 @@ class BaseHMC:
         print("Effectiveness = {}%, "
               "{} leapfrog steps per sample ({} grads / s), "
               "{} seconds per sample"
-              .format(effectiveness*100, grad_per_sample, grad_per_second,
+              .format(effectiveness * 100, grad_per_sample, grad_per_second,
                       second_per_sample))
 
     def sample(self):

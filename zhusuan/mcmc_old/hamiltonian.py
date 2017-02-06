@@ -14,6 +14,7 @@ class Hamiltonian:
     :param mass: The diagonal of the mass matrix, which is a list of numpy
     arrays.
     """
+
     def __init__(self, mass):
         self.mass = mass
 
@@ -24,7 +25,7 @@ class Hamiltonian:
         :param momentum: The momentum.
         :return: The velocity.
         """
-        return map(lambda(x, y): x/y, zip(momentum, self.mass))
+        return map(lambda (x, y): x / y, zip(momentum, self.mass))
 
     def energy(self, momentum, potential=0):
         """

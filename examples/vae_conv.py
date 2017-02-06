@@ -15,7 +15,10 @@ import numpy as np
 import zhusuan as zs
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import dataset
+try:
+    import dataset
+except:
+    raise ImportError()
 
 
 @zs.reuse('model')
@@ -120,7 +123,6 @@ if __name__ == "__main__":
                          is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
-
 
     variational = q_net(x, n_xl, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,

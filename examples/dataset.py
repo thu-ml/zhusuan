@@ -27,12 +27,10 @@ def standardize(data_train, data_test):
     std[std == 0] = 1
     mean = np.mean(data_train, 0)
     data_train_standardized \
-        = (data_train -
-           np.full(data_train.shape, mean, dtype='float32')) / \
+        = (data_train - np.full(data_train.shape, mean, dtype='float32')) / \
         np.full(data_train.shape, std, dtype='float32')
     data_test_standardized \
-        = (data_test -
-           np.full(data_test.shape, mean, dtype='float32')) / \
+        = (data_test - np.full(data_test.shape, mean, dtype='float32')) / \
         np.full(data_test.shape, std, dtype='float32')
     return data_train_standardized, data_test_standardized, mean, std
 

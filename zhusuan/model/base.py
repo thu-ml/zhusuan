@@ -13,7 +13,6 @@ import tensorflow as tf
 
 from .utils import Context
 
-
 __all__ = [
     'StochasticTensor',
     'StochasticGraph',
@@ -34,6 +33,7 @@ class StochasticTensor(object):
         distribution.
     :param dtype: The type of the resulting Tensor.
     """
+
     def __init__(self, name, incomings, dtype=None):
         self.name = name
         self.incomings = incomings
@@ -103,6 +103,7 @@ class StochasticGraph(Context):
     :param observed: A dictionary of (string, Tensor) pairs, which maps from
         names of random variables to their observed values.
     """
+
     def __init__(self, observed=None):
         self.observed = observed if observed else {}
         self.stochastic_tensors = OrderedDict()
@@ -196,6 +197,7 @@ def reuse(scope):
 
     :param scope: A String. The scope name passed to `tf.variable_scope()`.
     """
+
     def reuse_decorator(f):
         @wraps(f)
         def _func(*args, **kwargs):
@@ -208,6 +210,7 @@ def reuse(scope):
                         return f(*args, **kwargs)
                 else:
                     raise
+
         return _func
 
     return reuse_decorator

@@ -19,6 +19,7 @@ stdev = 1 / (np.array(range(n_dims)) + 1)
 log_stdev = np.log(stdev)
 n_leapfrogs = 5
 
+
 def gaussian(observed):
     with zs.StochasticGraph(observed=observed) as model:
         lx = zs.Normal('x', tf.zeros((num_chains, n_dims)),
@@ -30,6 +31,7 @@ def log_joint(latent, observed, given):
     model = gaussian(latent)
     log_p = model.local_log_prob(['x'])
     return tf.reduce_sum(log_p[0], -1)
+
 
 adapt_step_size = tf.placeholder(dtype=tf.bool, shape=[],
                                  name="adapt_step_size")
@@ -68,20 +70,21 @@ samples = np.vstack(samples)
 
 def kde(xs, mu, batch_size):
     mu_n = len(mu)
-    assert(mu_n % batch_size == 0)
+    assert mu_n % batch_size == 0
     xs_row = np.expand_dims(xs, 1)
     ys = np.zeros(xs.shape)
 
     for b in range(mu_n // batch_size):
-        mu_col = np.expand_dims(mu[b*batch_size:(b+1)*batch_size], 0)
+        mu_col = np.expand_dims(mu[b * batch_size:(b + 1) * batch_size], 0)
         ys += (1 / np.sqrt(2 * np.pi) / kernel_width) * \
-             np.mean(np.exp((-0.5 / kernel_width ** 2) *
-                            np.square(xs_row - mu_col)), 1)
+            np.mean(np.exp((-0.5 / kernel_width ** 2) *
+                    np.square(xs_row - mu_col)), 1)
 
     ys /= (mu_n / batch_size)
     return ys
 
-#if n_dims == 1:
+
+# if n_dims == 1:
 #    xs = np.linspace(-5, 5, 1000)
 #    ys = kde(xs, np.squeeze(samples), num_chains)
 #
@@ -90,11 +93,12 @@ def kde(xs, mu, batch_size):
 #    ax.plot(xs, scipy.stats.norm.pdf(xs, scale=stdev[0]))
 
 for i in range(n_dims):
-    print(scipy.stats.normaltest(samples[:,i]))
+    print(scipy.stats.normaltest(samples[:, i]))
 
 print('Sample mean = {}'.format(np.mean(samples, 0)))
 print('Expected stdev = {}'.format(stdev))
 print('Got stdev = {}'.format(np.std(samples, 0)))
-print('Relative error of stdev = {}'.format((np.std(samples, 0)-stdev)/stdev))
+print('Relative error of stdev = {}'.format(
+    (np.std(samples, 0) - stdev) / stdev))
 
-#plt.show()
+# plt.show()

@@ -13,7 +13,6 @@ from tensorflow.python.training import moving_averages
 from .utils import log_mean_exp
 from .evaluation import is_loglikelihood
 
-
 __all__ = [
     'advi',
     'iwae',
@@ -111,9 +110,9 @@ def rws(log_joint, observed, latent, reduction_indices=0, given=None):
     w_tilde = tf.stop_gradient(w_u / tf.reduce_sum(w_u, reduction_indices,
                                                    keep_dims=True))
     log_likelihood = log_mean_exp(log_w, reduction_indices)
-    fake_log_joint_cost = -tf.reduce_sum(w_tilde*log_joint_value,
+    fake_log_joint_cost = -tf.reduce_sum(w_tilde * log_joint_value,
                                          reduction_indices)
-    fake_proposal_cost = tf.reduce_sum(w_tilde*entropy, reduction_indices)
+    fake_proposal_cost = tf.reduce_sum(w_tilde * entropy, reduction_indices)
     cost = fake_log_joint_cost + fake_proposal_cost
     return cost, log_likelihood
 
