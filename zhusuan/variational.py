@@ -118,15 +118,15 @@ def rws(log_joint, observed, latent, reduction_indices=0, given=None):
     return cost, log_likelihood
 
 
-def nvil(model, observed, latent, baseline=None, reduction_indices=0,
+def nvil(log_joint, observed, latent, baseline=None, reduction_indices=0,
          given=None, variance_normalization=False, alpha=0.8):
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
     given = given if given is not None else {}
-    log_joint = model.log_prob(latent_outputs, observed, given)  # log p(x,h)
-    entropy = -sum(latent_logpdfs)  # -log q(h|x)
-    l_signal = log_joint + entropy
+    log_joint_value = log_joint(latent_outputs, observed, given)
+    entropy = -sum(latent_logpdfs)
+    l_signal = log_joint_value + entropy
     cost = 0.
     if baseline is not None:
         baseline = tf.expand_dims(baseline, reduction_indices)
@@ -154,9 +154,9 @@ def nvil(model, observed, latent, baseline=None, reduction_indices=0,
         with tf.control_dependencies([update_mean, update_variance]):
             l_signal = tf.identity(l_signal)
 
-    fake_log_joint_cost = -tf.reduce_mean(log_joint, reduction_indices)
+    fake_log_joint_cost = -tf.reduce_mean(log_joint_value, reduction_indices)
     fake_variational_cost = tf.reduce_mean(
         tf.stop_gradient(l_signal) * entropy, reduction_indices)
     cost += fake_log_joint_cost + fake_variational_cost
-    lower_bound = tf.reduce_mean(log_joint + entropy, reduction_indices)
+    lower_bound = tf.reduce_mean(log_joint_value + entropy, reduction_indices)
     return cost, lower_bound

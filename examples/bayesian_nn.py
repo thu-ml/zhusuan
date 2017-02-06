@@ -100,11 +100,9 @@ if __name__ == '__main__':
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=[None, n_x])
     y = tf.placeholder(tf.float32, shape=[None])
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     layer_sizes = [n_x] + n_hiddens + [1]
     w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
 
@@ -126,6 +124,9 @@ if __name__ == '__main__':
     latent = dict(zip(w_names, qw_outputs))
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'y': y}, latent, reduction_indices=0))
+
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 

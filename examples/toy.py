@@ -71,7 +71,6 @@ if __name__ == "__main__":
 
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[])
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
 
     def log_joint(latent, observed, given):
         z = latent['z']
@@ -86,6 +85,7 @@ if __name__ == "__main__":
     log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = zs.advi(log_joint, {}, {'z': [qz_samples, log_qz]},
         reduction_indices=0)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer = optimizer.minimize(-lower_bound)
 
     # Run the inference

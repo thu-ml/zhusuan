@@ -83,12 +83,10 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph)
 
     def log_joint(latent, observed, given):
         # z: (n_samples, batch_size, n_z)
@@ -151,6 +149,8 @@ if __name__ == "__main__":
     # Gather gradients
     cost = -(labeled_lower_bound + unlabeled_lower_bound -
              classifier_cost) / 2.
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph)
     grads = optimizer.compute_gradients(cost)
     infer = optimizer.apply_gradients(grads)
 

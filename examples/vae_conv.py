@@ -105,14 +105,12 @@ if __name__ == "__main__":
 
     # Build the computation graph
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
     x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     n = tf.shape(x)[0]
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
     def log_joint(latent, observed, given):
         z = latent['z']
@@ -135,6 +133,8 @@ if __name__ == "__main__":
         zs.is_loglikelihood(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
                             reduction_indices=0))
 
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 
