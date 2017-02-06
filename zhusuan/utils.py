@@ -10,6 +10,11 @@ import numpy as np
 from six.moves import range
 
 
+__all__ = [
+    'log_mean_exp',
+]
+
+
 def log_sum_exp(x, reduction_indices=None, keep_dims=False):
     """
     Deprecated: Use tf.reduce_logsumexp().
