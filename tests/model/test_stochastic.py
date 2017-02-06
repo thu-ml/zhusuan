@@ -8,7 +8,7 @@ from __future__ import division
 import numpy as np
 import tensorflow as tf
 
-from .context import zhusuan
+from tests.context import zhusuan
 from zhusuan.model.stochastic import *
 from zhusuan.model.base import StochasticGraph
 from zhusuan.model.utils import get_backward_ops

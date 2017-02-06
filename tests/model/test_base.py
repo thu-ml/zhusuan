@@ -11,7 +11,7 @@ from mock import Mock
 import numpy as np
 import tensorflow as tf
 
-from .context import zhusuan
+from tests.context import zhusuan
 from zhusuan.model.base import *
 from zhusuan.model.stochastic import *
 

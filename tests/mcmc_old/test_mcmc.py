@@ -10,9 +10,9 @@ import pytest
 import scipy
 import scipy.stats
 
-from .context import zhusuan
-from zhusuan.mcmc.nuts import NUTS
-from zhusuan.mcmc.base_hmc import BaseHMC
+from tests.context import zhusuan
+from zhusuan.mcmc_old.nuts import NUTS
+from zhusuan.mcmc_old.base_hmc import BaseHMC
 
 
 def test_nuts():

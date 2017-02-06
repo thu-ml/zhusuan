@@ -1,15 +1,16 @@
 
 # -*- coding: utf-8 -*-
 
-import tensorflow as tf
-import numpy as np
 import math
 import os
-from dataset import load_uci_german_credits, load_binary_mnist_realval
-from zhusuan.optimization.gradient_descent_optimizer import \
-    GradientDescentOptimizer
+
+import numpy as np
+import tensorflow as tf
+
+from dataset import load_uci_german_credits
 from zhusuan.distributions_old import norm, bernoulli
-from zhusuan.mcmc.nuts import NUTS
+from zhusuan.mcmc_old.nuts import NUTS
+from zhusuan.mcmc_old.optimization import GradientDescentOptimizer
 
 float_eps = 1e-30
 

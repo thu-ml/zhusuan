@@ -1,17 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import
-from __future__ import print_function
 from __future__ import division
+from __future__ import print_function
 
-import tensorflow as tf
 import numpy as np
-import zhusuan as zs
-from zhusuan.mcmc.hmc import HMC
-from matplotlib import pyplot as plt
-import scipy
 import scipy.stats
-import math
-
+import tensorflow as tf
+import zhusuan as zs
 
 tf.set_random_seed(1)
 
@@ -36,13 +31,14 @@ def log_joint(latent, observed, given):
     log_p = model.local_log_prob(['x'])
     return tf.reduce_sum(log_p[0], -1)
 
-adapt_step_size = tf.placeholder(dtype=tf.bool, shape=[], name="adapt_step_size")
+adapt_step_size = tf.placeholder(dtype=tf.bool, shape=[],
+                                 name="adapt_step_size")
 adapt_mass = tf.placeholder(dtype=tf.bool, shape=[], name="adapt_mass")
-hmc = HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs, 
-          adapt_step_size=adapt_step_size, adapt_mass=adapt_mass)
-#hmc = HMC(step_size=0.1, n_leapfrogs=n_leapfrogs, 
-#          adapt_step_size=adapt_step_size)
-#hmc = HMC(step_size=0.1, n_leapfrogs=n_leapfrogs)
+hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
+             adapt_step_size=adapt_step_size, adapt_mass=adapt_mass)
+# hmc = zs.HMC(step_size=0.1, n_leapfrogs=n_leapfrogs,
+#              adapt_step_size=adapt_step_size)
+# hmc = zs.HMC(step_size=0.1, n_leapfrogs=n_leapfrogs)
 
 x = tf.Variable(tf.zeros((num_chains, n_dims)), name='x')
 sampler = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)
@@ -59,9 +55,9 @@ train_writer.close()
 samples = []
 print('Sampling...')
 for i in range(num_samples):
-    q, p, oh, nh, ol, nl, ar, ss = sess.run(sampler,
-                                            feed_dict={adapt_step_size: i < burnin,
-                                                       adapt_mass: i < burnin})
+    q, p, oh, nh, ol, nl, ar, ss = sess.run(
+        sampler, feed_dict={adapt_step_size: i < burnin,
+                            adapt_mass: i < burnin})
     print('Acceptance rate = {}, step size = {}'.format(np.mean(ar), ss))
 
     if i >= burnin:
@@ -79,7 +75,8 @@ def kde(xs, mu, batch_size):
     for b in range(mu_n // batch_size):
         mu_col = np.expand_dims(mu[b*batch_size:(b+1)*batch_size], 0)
         ys += (1 / np.sqrt(2 * np.pi) / kernel_width) * \
-             np.mean(np.exp((-0.5 / kernel_width ** 2) * np.square(xs_row - mu_col)), 1)
+             np.mean(np.exp((-0.5 / kernel_width ** 2) *
+                            np.square(xs_row - mu_col)), 1)
 
     ys /= (mu_n / batch_size)
     return ys

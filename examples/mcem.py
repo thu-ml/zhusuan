@@ -2,19 +2,21 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from __future__ import print_function
 from __future__ import division
-import sys
-import os
-import time
-import random
+from __future__ import print_function
 
-import tensorflow as tf
-from tensorflow.contrib import layers
-from six.moves import range
+import os
+import random
+import sys
+import time
+
 import numpy as np
+import tensorflow as tf
+from six.moves import range
+from tensorflow.contrib import layers
+
 import zhusuan as zs
-from zhusuan.mcmc.hmc import HMC
+from zhusuan.hmc import HMC
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import dataset

@@ -8,7 +8,7 @@ from itertools import permutations
 
 import pytest
 
-from .context import zhusuan
+from tests.context import zhusuan
 from zhusuan.model.utils import *
 
 

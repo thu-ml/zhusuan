@@ -173,7 +173,7 @@ class StochasticGraph(Context):
         :param local_log_prob: A bool. Whether to query local log probability
             density (mass) values.
 
-        :return: Tuples of Tensors or a list of tuples of Tensors.
+        :return: Tuple of Tensors or a list of tuples of Tensors.
         """
         ret = []
         if outputs:

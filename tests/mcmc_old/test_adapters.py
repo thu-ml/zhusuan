@@ -7,9 +7,9 @@ from __future__ import division
 import numpy as np
 import pytest
 
-from .context import zhusuan
-from zhusuan.mcmc.adapters import *
-from zhusuan.mcmc.hamiltonian import Hamiltonian
+from tests.context import zhusuan
+from zhusuan.mcmc_old.adapters import *
+from zhusuan.mcmc_old.hamiltonian import Hamiltonian
 
 
 def test_stepsize_adapter():

@@ -5,11 +5,8 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-import pytest
-
-from .context import zhusuan
-from zhusuan.optimization.gradient_descent_optimizer import \
-    GradientDescentOptimizer
+from tests.context import zhusuan
+from zhusuan.mcmc_old.optimization import GradientDescentOptimizer
 
 
 def test_gradient_descent_optimizer():

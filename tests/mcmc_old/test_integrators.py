@@ -8,9 +8,9 @@ import numpy as np
 import tensorflow as tf
 import pytest
 
-from .context import zhusuan
-from zhusuan.mcmc.integrators import *
-from zhusuan.mcmc.hamiltonian import *
+from tests.context import zhusuan
+from zhusuan.mcmc_old.integrators import *
+from zhusuan.mcmc_old.hamiltonian import *
 
 
 def test_leapfrog_integrator():

@@ -8,8 +8,8 @@ import tensorflow as tf
 import numpy as np
 import pytest
 
-from .context import zhusuan
-from zhusuan.mcmc.candidate import *
+from tests.context import zhusuan
+from zhusuan.mcmc_old.candidate import *
 
 
 def test_candidate():
