@@ -10,16 +10,15 @@ import numpy as np
 from six.moves import range
 
 
-def log_sum_exp(x, reduction_indices=None, keep_dims=False):
+def log_sum_exp(x, axis=None, keep_dims=False):
     """
     Deprecated: Use tf.reduce_logsumexp().
 
-    Tensorflow numerically stable log sum of exps across the
-    `reduction_indices`.
+    Tensorflow numerically stable log sum of exps across the `axis`.
 
     :param x: A Tensor or numpy array.
-    :param reduction_indices: An int or list or tuple. The dimensions to
-        reduce. If `None` (the default), reduces all dimensions.
+    :param axis: An int or list or tuple. The dimensions to reduce.
+        If `None` (the default), reduces all dimensions.
     :param keep_dims: Bool. If true, retains reduced dimensions with length 1.
         Default to be False.
 
@@ -27,22 +26,21 @@ def log_sum_exp(x, reduction_indices=None, keep_dims=False):
         x.
     """
     x = tf.cast(x, dtype=tf.float32)
-    x_max = tf.reduce_max(x, reduction_indices, keep_dims=True)
-    ret = tf.log(tf.reduce_sum(tf.exp(x - x_max), reduction_indices,
+    x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
+    ret = tf.log(tf.reduce_sum(tf.exp(x - x_max), axis=axis,
                                keep_dims=True)) + x_max
     if not keep_dims:
-        ret = tf.reduce_sum(ret, reduction_indices)
+        ret = tf.reduce_sum(ret, axis=axis)
     return ret
 
 
-def log_mean_exp(x, reduction_indices=None, keep_dims=False):
+def log_mean_exp(x, axis=None, keep_dims=False):
     """
-    Tensorflow numerically stable log mean of exps across the
-    `reduction_indices`.
+    Tensorflow numerically stable log mean of exps across the `axis`.
 
     :param x: A Tensor or numpy array.
-    :param reduction_indices: An int or list or tuple. The dimensions to
-        reduce. If `None` (the default), reduces all dimensions.
+    :param axis: An int or list or tuple. The dimensions to reduce.
+        If `None` (the default), reduces all dimensions.
     :param keep_dims: Bool. If true, retains reduced dimensions with length 1.
         Default to be False.
 
@@ -50,11 +48,11 @@ def log_mean_exp(x, reduction_indices=None, keep_dims=False):
         x.
     """
     x = tf.cast(x, dtype=tf.float32)
-    x_max = tf.reduce_max(x, reduction_indices, keep_dims=True)
-    ret = tf.log(tf.reduce_mean(tf.exp(x - x_max), reduction_indices,
+    x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
+    ret = tf.log(tf.reduce_mean(tf.exp(x - x_max), axis=axis,
                                 keep_dims=True)) + x_max
     if not keep_dims:
-        ret = tf.reduce_mean(ret, reduction_indices)
+        ret = tf.reduce_mean(ret, axis=axis)
     return ret
 
 
@@ -135,6 +133,17 @@ def add_name_scope(f):
             return f(*args, **kwargs)
 
     return _func
+
+
+def merge_dicts(*dict_args):
+    """
+    Given any number of dicts, shallow copy and merge into a new dict,
+    precedence goes to key value pairs in latter dicts.
+    """
+    result = {}
+    for dictionary in dict_args:
+        result.update(dictionary)
+    return result
 
 
 def copy(x):

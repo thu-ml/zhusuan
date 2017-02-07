@@ -72,9 +72,8 @@ if __name__ == "__main__":
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[])
 
-    def log_joint(latent, observed, given):
-        z = latent['z']
-        z1, z2 = tf.unstack(z, axis=1)
+    def log_joint(observed, given):
+        z1, z2 = tf.unstack(observed['z'], axis=1)
         model = toy_2d_intractable_posterior({'z1': z1, 'z2': z2}, n_particles)
         log_pz1, log_pz2 = model.local_log_prob(['z1', 'z2'])
         return log_pz1 + log_pz2
@@ -83,8 +82,7 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
-    lower_bound = zs.advi(log_joint, {}, {'z': [qz_samples, log_qz]},
-                          reduction_indices=0)
+    lower_bound = zs.advi(log_joint, {}, {'z': [qz_samples, log_qz]})
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer = optimizer.minimize(-lower_bound)
 

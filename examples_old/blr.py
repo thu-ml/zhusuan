@@ -46,7 +46,7 @@ update_data = tf.assign(x, x_input, validate_shape=False, name='update_data')
 
 # Model
 beta = tf.Variable(np.zeros(n_dims), dtype=tf.float32, name='beta')
-scores = tf.reduce_sum(x * beta, reduction_indices=(1,))
+scores = tf.reduce_sum(x * beta, axis=1)
 logits = tf.nn.sigmoid(scores, name='logits')
 predictions = tf.cast(logits > 0.5, tf.float32)
 n_correct = tf.reduce_sum(predictions * y + (1 - predictions) * (1 - y))

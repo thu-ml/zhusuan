@@ -93,13 +93,11 @@ if __name__ == "__main__":
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
     x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
+    x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
 
-    def log_joint(latent, observed, given):
-        x = observed['x']
-        z = latent['z']
-        x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-        model = vae({'x': x, 'z': z}, n, n_x, n_z, n_particles, is_training)
+    def log_joint(observed, given):
+        model = vae(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
@@ -108,11 +106,10 @@ if __name__ == "__main__":
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-                reduction_indices=0))
+        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
     log_likelihood = tf.reduce_mean(
-        zs.is_loglikelihood(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-                            reduction_indices=0))
+        zs.is_loglikelihood(log_joint, {'x': x_obs},
+                            {'z': [qz_samples, log_qz]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)

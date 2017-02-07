@@ -180,8 +180,7 @@ if __name__ == '__main__':
     w1_outputs, w2_outputs = get_output([lw1, lw2])
     latent = {'w1': w1_outputs, 'w2': w2_outputs}
 
-    lower_bound = tf.reduce_mean(advi(
-        model, observed, latent, reduction_indices=1))
+    lower_bound = tf.reduce_mean(advi(model, observed, latent))
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 

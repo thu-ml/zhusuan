@@ -164,8 +164,8 @@ if __name__ == "__main__":
     z_outputs = outputs[:-1]
     c_t, _ = outputs[-1]
     z_dic = dict(('z_' + str(i), z_outputs[i]) for i in range(len(z_outputs)))
-    lower_bound = tf.reduce_mean(advi(model, {'x': x}, z_dic,
-                                 reduction_indices=1, given={'c': c_t}))
+    lower_bound = tf.reduce_mean(
+        advi(model, {'x': x}, z_dic, given={'c': c_t}))
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
     # samples = get_output(c_t, inputs={lx: x})

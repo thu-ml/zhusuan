@@ -37,8 +37,8 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
             w = tf.tile(tf.expand_dims(ws[i], 1), [1, tf.shape(x)[0], 1, 1])
             ly_x = tf.concat_v2(
                 [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-            ly_x = tf.matmul(w, ly_x) / \
-                tf.sqrt(tf.cast(tf.shape(ly_x)[2], tf.float32))
+            ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.cast(tf.shape(ly_x)[2],
+                                                        tf.float32))
             if i < len(ws) - 1:
                 ly_x = tf.nn.relu(ly_x)
 
@@ -106,15 +106,12 @@ if __name__ == '__main__':
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=[None, n_x])
     y = tf.placeholder(tf.float32, shape=[None])
+    y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
     layer_sizes = [n_x] + n_hiddens + [1]
     w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
 
-    def log_joint(latent, observed, given):
-        y = observed['y']
-        y = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
-        obs = dict((w_name, latent[w_name]) for w_name in w_names)
-        obs.update({'y': y})
-        model, _ = bayesianNN(obs, x, n_x, layer_sizes, n_particles)
+    def log_joint(observed, given):
+        model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
         log_pws = model.local_log_prob(w_names)
         log_py_xw = model.local_log_prob('y')
         return sum([tf.reduce_sum(log_pw, [-1, -2]) for log_pw in log_pws]) + \
@@ -126,7 +123,7 @@ if __name__ == '__main__':
                   qw_samples, log_qw in qw_outputs]
     latent = dict(zip(w_names, qw_outputs))
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'y': y}, latent, reduction_indices=0))
+        zs.advi(log_joint, {'y': y_obs}, latent, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)

@@ -96,7 +96,7 @@ if __name__ == "__main__":
     lz = Normal([lz_mean, lz_logvar], n_samples)
     z_outputs = get_output(lz)
     latent = {'z': z_outputs}
-    lower_bound = tf.reduce_mean(advi(model, {}, latent, reduction_indices=1))
+    lower_bound = tf.reduce_mean(advi(model, {}, latent))
     infer = optimizer.minimize(-lower_bound)
     init = tf.global_variables_initializer()
 

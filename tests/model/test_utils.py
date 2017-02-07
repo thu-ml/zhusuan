@@ -90,7 +90,7 @@ def test_get_backward_ops_merge():
     # b ->/
     a = tf.placeholder(tf.float32)
     b = tf.constant(0, dtype=tf.int32)
-    c = tf.reduce_sum(a, reduction_indices=b)
+    c = tf.reduce_sum(a, axis=b)
     d = tf.stop_gradient(c)
     assert get_backward_ops(d) == [a.op, b.op, c.op, d.op]
     assert get_backward_ops(d, treat_as_inputs=[c]) == [d.op]

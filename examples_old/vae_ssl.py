@@ -165,8 +165,7 @@ if __name__ == "__main__":
     z_outputs = get_output(lz, inputs)
     labeled_latent = {'z': z_outputs}
     labeled_observed = {'x': x_labeled_ph, 'y': y_labeled_ph}
-    labeled_lower_bound = advi(m2, labeled_observed, labeled_latent,
-                               reduction_indices=1)
+    labeled_lower_bound = advi(m2, labeled_observed, labeled_latent)
     labeled_lower_bound = tf.reduce_mean(labeled_lower_bound)
 
     # Unlabeled
@@ -180,7 +179,7 @@ if __name__ == "__main__":
     z_outputs = get_output(lz, inputs)
     unlabeled_latent = {'z': z_outputs}
     unlabeled_observed = {'x': x_u, 'y': y_u}
-    lb_z = advi(m2, unlabeled_observed, unlabeled_latent, reduction_indices=1)
+    lb_z = advi(m2, unlabeled_observed, unlabeled_latent)
     # sum over y
     lb_z = tf.reshape(lb_z, (-1, n_y))
     qy = qy_x.construct(x=x_unlabeled_ph)

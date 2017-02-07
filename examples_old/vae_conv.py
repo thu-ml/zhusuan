@@ -155,18 +155,17 @@ if __name__ == "__main__":
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     model, lx, lz = build_model(pt.Phase.train)
     z_outputs = get_output(lz, x)
-    lower_bound = tf.reduce_mean(advi(
-        model, {'x': x}, {'z': z_outputs}, reduction_indices=1))
+    lower_bound = tf.reduce_mean(advi(model, {'x': x}, {'z': z_outputs}))
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 
     # Build the evaluation computation graph
     eval_model, eval_lx, eval_lz = build_model(pt.Phase.test, reuse=True)
     z_outputs = get_output(eval_lz, x)
-    eval_lower_bound = tf.reduce_mean(advi(
-        eval_model, {'x': x}, {'z': z_outputs}, reduction_indices=1))
-    eval_log_likelihood = tf.reduce_mean(is_loglikelihood(
-        eval_model, {'x': x}, {'z': z_outputs}, reduction_indices=1))
+    eval_lower_bound = tf.reduce_mean(
+        advi(eval_model, {'x': x}, {'z': z_outputs}))
+    eval_log_likelihood = tf.reduce_mean(
+        is_loglikelihood(eval_model, {'x': x}, {'z': z_outputs}))
 
     params = tf.trainable_variables()
     for i in params:

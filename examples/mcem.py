@@ -135,12 +135,11 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
-    lower_bound = tf.reduce_mean(zs.advi(
-        log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-        reduction_indices=0))
-    log_likelihood = tf.reduce_mean(zs.is_loglikelihood(
-        log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-        reduction_indices=0))
+    lower_bound = tf.reduce_mean(
+        zs.advi(log_joint, {'x': x}, {'z': [qz_samples, log_qz]}, axis=0))
+    log_likelihood = tf.reduce_mean(
+        zs.is_loglikelihood(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
+                            axis=0))
 
     if mode == 'restart':
         reset_z_train = tf.assign(z_train, tf.zeros([batch_size, n_z]))
