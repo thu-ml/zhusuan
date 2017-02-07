@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[])
 
-    def log_joint(observed, given):
+    def log_joint(observed):
         z1, z2 = tf.unstack(observed['z'], axis=1)
         model = toy_2d_intractable_posterior({'z1': z1, 'z2': z2}, n_particles)
         log_pz1, log_pz2 = model.local_log_prob(['z1', 'z2'])

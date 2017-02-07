@@ -195,7 +195,7 @@ def reuse(scope):
     When a `StochasticGraph` is reused as in a function, this decorator helps
     reuse the `tf.Variable`s in the graph every time the function is called.
 
-    :param scope: A String. The scope name passed to `tf.variable_scope()`.
+    :param scope: A string. The scope name passed to `tf.variable_scope()`.
     """
 
     def reuse_decorator(f):

@@ -106,7 +106,7 @@ if __name__ == "__main__":
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
 
-    def log_joint(observed, given):
+    def log_joint(observed):
         n = tf.shape(observed['x'])[0]
         model = M2(observed, n, n_x, n_y, n_z, n_particles)
         log_px_zy, log_py, log_pz = model.local_log_prob(['x', 'y', 'z'])

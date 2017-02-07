@@ -14,9 +14,7 @@ import numpy as np
 import tensorflow as tf
 from six.moves import range
 from tensorflow.contrib import layers
-
 import zhusuan as zs
-from zhusuan.hmc import HMC
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -99,14 +97,12 @@ if __name__ == "__main__":
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
     x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
-    def log_joint(latent, observed, given):
-        x = observed['x']
-        z = latent['z']
-        x = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-        model = try_vae({'x': x, 'z': z}, n, n_x, n_z, n_particles)
+    def log_joint(observed):
+        model = try_vae(observed, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
@@ -123,12 +119,12 @@ if __name__ == "__main__":
     z_train_input = tf.placeholder(tf.float32,
                                    shape=[mcmc_iters, batch_size, n_z])
     z_train_input2 = tf.placeholder(tf.float32, shape=[batch_size, n_z])
-    train_hmc = HMC(step_size=1e-2, n_leapfrogs=n_leapfrogs)
+    train_hmc = zs.HMC(step_size=1e-2, n_leapfrogs=n_leapfrogs)
     train_sampler = train_hmc.sample(hmc_obj,
                                      {'x': x}, {'z': z_train}, chain_axis=0)
 
     # MCEM
-    obj = tf.reduce_mean(log_joint({'z': z_train_input}, {'x': x}, None))
+    obj = tf.reduce_mean(log_joint({'z': z_train_input, 'x': x_obs}))
 
     # Variational
     variational = q_net(x, n_z, n_particles)
@@ -136,10 +132,10 @@ if __name__ == "__main__":
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x}, {'z': [qz_samples, log_qz]}, axis=0))
+        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
     log_likelihood = tf.reduce_mean(
-        zs.is_loglikelihood(log_joint, {'x': x}, {'z': [qz_samples, log_qz]},
-                            axis=0))
+        zs.is_loglikelihood(log_joint, {'x': x_obs},
+                            {'z': [qz_samples, log_qz]}, axis=0))
 
     if mode == 'restart':
         reset_z_train = tf.assign(z_train, tf.zeros([batch_size, n_z]))

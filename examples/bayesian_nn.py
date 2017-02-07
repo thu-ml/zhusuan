@@ -110,7 +110,7 @@ if __name__ == '__main__':
     layer_sizes = [n_x] + n_hiddens + [1]
     w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
 
-    def log_joint(observed, given):
+    def log_joint(observed):
         model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
         log_pws = model.local_log_prob(w_names)
         log_py_xw = model.local_log_prob('y')

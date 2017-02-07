@@ -96,7 +96,7 @@ if __name__ == "__main__":
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
 
-    def log_joint(observed, given):
+    def log_joint(observed):
         model = vae(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
