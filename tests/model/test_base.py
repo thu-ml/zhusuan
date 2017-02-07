@@ -57,14 +57,22 @@ class TestStochasticTensor:
     def test_tensor_conversion(self):
         with StochasticGraph(observed={'a': 1., 'c': tf.ones([])}) as model:
             a = StochasticTensor('a', [], dtype=tf.float32)
-            b = tf.constant(1.) + a
+            b = tf.add(1., a)
             c = StochasticTensor('c', [], dtype=tf.int32)
             with pytest.raises(ValueError):
-                _ = tf.constant(1.) + c
+                _ = tf.add(1., c)
         with tf.Session() as sess:
             assert np.abs(sess.run(b) - 2) < 1e-6
         with pytest.raises(ValueError):
             StochasticTensor._to_tensor(a, as_ref=True)
+
+    def test_overload_operator(self):
+        with StochasticGraph(observed={'a': 1.}) as model:
+            a = StochasticTensor('a', [], dtype=tf.float32)
+            b = a + 1
+            # TODO: test all operators
+        with tf.Session() as sess:
+            assert np.abs(sess.run(b) - 2) < 1e-6
 
 
 class TestStochasticGraph:

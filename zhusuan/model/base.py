@@ -13,6 +13,7 @@ import tensorflow as tf
 
 from .utils import Context
 
+
 __all__ = [
     'StochasticTensor',
     'StochasticGraph',
@@ -79,6 +80,91 @@ class StochasticTensor(object):
         :return: A Tensor. The log probability density (mass) evaluated.
         """
         raise NotImplementedError()
+
+    # overloading arithmetic operations
+    def __abs__(self):
+        return tf.abs(self)
+
+    def __neg__(self):
+        return tf.negative(self)
+
+    def __pos__(self):
+        return self
+
+    def __add__(self, other):
+        return tf.add(self, other)
+
+    def __radd__(self, other):
+        return tf.add(other, self)
+
+    def __sub__(self, other):
+        return tf.subtract(self, other)
+
+    def __rsub__(self, other):
+        return tf.subtract(other, self)
+
+    def __mul__(self, other):
+        return tf.multiply(self, other)
+
+    def __rmul__(self, other):
+        return tf.multiply(other, self)
+
+    def __truediv__(self, other):
+        return tf.div(self, other)
+
+    __div__ = __truediv__
+
+    def __rtruediv__(self, other):
+        return tf.div(other, self)
+
+    __rdiv__ = __rtruediv__
+
+    def __mod__(self, other):
+        return tf.mod(self, other)
+
+    def __rmod__(self, other):
+        return tf.mod(other, self)
+
+    def __pow__(self, other):
+        return tf.pow(self, other)
+
+    def __rpow__(self, other):
+        return tf.pow(other, self)
+
+    # logical operations
+    def __invert__(self):
+        return tf.logical_not(self)
+
+    def __and__(self, other):
+        return tf.logical_and(self, other)
+
+    def __or__(self, other):
+        return tf.logical_or(self, other)
+
+    def __xor__(self, other):
+        return tf.logical_xor(self, other)
+
+    # boolean operations
+    def __lt__(self, other):
+        return tf.less(self, other)
+
+    def __le__(self, other):
+        return tf.less_equal(self, other)
+
+    def __gt__(self, other):
+        return tf.greater(self, other)
+
+    def __ge__(self, other):
+        return tf.greater_equal(self, other)
+
+    def __eq__(self, other):
+        return tf.equal(self, other)
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash(self.tensor)
 
     @staticmethod
     def _to_tensor(value, dtype=None, name=None, as_ref=False):
