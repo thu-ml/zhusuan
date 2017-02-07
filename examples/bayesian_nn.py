@@ -35,7 +35,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
             tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
         for i in range(len(ws)):
             w = tf.tile(tf.expand_dims(ws[i], 1), [1, tf.shape(x)[0], 1, 1])
-            ly_x = tf.concat_v2(
+            ly_x = tf.concat(
                 [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
             ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.cast(tf.shape(ly_x)[2],
                                                         tf.float32))

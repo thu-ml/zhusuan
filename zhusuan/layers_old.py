@@ -220,7 +220,7 @@ class Normal(MergeLayer):
         samples_1 = norm.rvs(shape=tf.shape(mean_)) * tf.exp(0.5 * logvar) + \
             mean_
         samples_n = norm.rvs(
-            shape=tf.concat_v2([tf.pack([tf.shape(mean_)[0], self.n_samples]),
+            shape=tf.concat([tf.pack([tf.shape(mean_)[0], self.n_samples]),
                                 tf.shape(mean_)[2:]], 0)
             ) * tf.exp(0.5 * logvar) + mean_
 
@@ -406,7 +406,7 @@ class ReadAttentionLayer(MergeLayer):
         read_x_hat = gamma * tf.reshape(
             tf.matmul(fy, tf.matmul(x_hat, fxt)),
             [-1, self.read_n * self.read_n])
-        return tf.concat_v2([read_x, read_x_hat], 1)
+        return tf.concat([read_x, read_x_hat], 1)
 
 
 class WriteAttentionLayer(MergeLayer):

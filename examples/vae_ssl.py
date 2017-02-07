@@ -29,7 +29,7 @@ def M2(observed, n, n_x, n_y, n_z, n_particles):
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
         y_logits = tf.zeros([n_particles, n_y])
         y = zs.Discrete('y', y_logits, sample_dim=1, n_samples=n)
-        lx_zy = layers.fully_connected(tf.concat_v2([z, y], 2), 500)
+        lx_zy = layers.fully_connected(tf.concat([z, y], 2), 500)
         lx_zy = layers.fully_connected(lx_zy, 500)
         x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits)
@@ -39,7 +39,7 @@ def M2(observed, n, n_x, n_y, n_z, n_particles):
 @zs.reuse('variational')
 def qz_xy(x, y, n_z, n_particles):
     with zs.StochasticGraph() as variational:
-        lz_xy = layers.fully_connected(tf.concat_v2([x, y], 1), 500)
+        lz_xy = layers.fully_connected(tf.concat([x, y], 1), 500)
         lz_xy = layers.fully_connected(lz_xy, 500)
         lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)

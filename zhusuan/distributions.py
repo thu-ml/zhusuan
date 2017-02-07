@@ -9,6 +9,7 @@ import numpy as np
 
 from .utils import convert_to_int, add_name_scope
 
+
 __all__ = [
     'norm',
     'logistic',
@@ -95,9 +96,9 @@ class Normal:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
-            shape = tf.concat_v2([base_shape[:sample_dim],
-                                  tf.stack([n_samples]),
-                                  base_shape[sample_dim:]], 0)
+            shape = tf.concat([base_shape[:sample_dim],
+                               tf.stack([n_samples]),
+                               base_shape[sample_dim:]], 0)
             if static_sample_dim is not None:
                 static_shape = static_base_shape[:static_sample_dim] + \
                     [static_n_samples] + static_base_shape[static_sample_dim:]
@@ -281,9 +282,9 @@ class Bernoulli:
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
             p = tf.expand_dims(p, sample_dim)
-            shape = tf.concat_v2([base_shape[:sample_dim],
-                                  tf.stack([n_samples]),
-                                  base_shape[sample_dim:]], 0)
+            shape = tf.concat([base_shape[:sample_dim],
+                               tf.stack([n_samples]),
+                               base_shape[sample_dim:]], 0)
             if static_sample_dim is not None:
                 static_shape = static_base_shape[:static_sample_dim] + \
                     [static_n_samples] + static_base_shape[static_sample_dim:]
@@ -399,8 +400,8 @@ class Discrete:
                 sample_dim, 0, message="Only support non-negative sample_dim")
             with tf.control_dependencies([_assert_positive_dim]):
                 sample_dim = tf.identity(sample_dim)
-            shape = tf.concat_v2([base_shape[:-1],
-                                  tf.stack([n_samples, depth])], 0)
+            shape = tf.concat([base_shape[:-1],
+                              tf.stack([n_samples, depth])], 0)
             samples = tf.reshape(samples_flat, shape)
             n_dims = tf.rank(samples)
             dims = tf.range(n_dims)
