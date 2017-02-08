@@ -74,7 +74,10 @@ class Bernoulli(StochasticTensor):
     The class of independent Bernoulli StochasticTensor.
 
     :param logits: A Tensor, python value, or numpy array. The unnormalized
-        log probabilities of being 1. (:math:`logits=\log \frac{p}{1 - p}`)
+        log probabilities of being 1.
+
+        .. math:: \\mathrm{logits}=\\log \\frac{p}{1 - p}
+
     :param sample_dim: A Tensor scalar, int, or None. The sample dimension.
         If None, this means no new sample dimension is created. In this
         case `n_samples` must be set to 1, otherwise an Exception is

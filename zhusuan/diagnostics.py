@@ -12,7 +12,7 @@ def ESS1(samples):
     Compute the effective sample size of a chain of scalar samples.
 
     :param samples: The chain of samples, which is a one dimensional numpy
-    array.
+        array.
     :return: The effective sample size.
     """
     n = samples.shape[0]
@@ -40,7 +40,7 @@ def ESS(samples, burnin=100):
     algorithm in Stan. Users should flatten their samples as vectors if not so.
 
     :param samples: A M by D matrix, where M is the number of samples, and D is
-     the number of dimensions.
+        the number of dimensions.
     :param burnin: The number of discarded samples.
     """
     current_ess = 1e9

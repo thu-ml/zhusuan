@@ -25,7 +25,7 @@ __all__ = [
 def advi(log_joint, observed, latent, axis=0):
     """
     Implements the automatic differentiation variational inference (ADVI)
-    algorithm. This only works for continuous latent `StochasticTensor`s that
+    algorithm. This only works for continuous latent `StochasticTensor` s that
     can be reparameterized (Kingma, 2013).
 
     :param log_joint: A function that accepts a dictionary argument of
@@ -33,9 +33,9 @@ def advi(log_joint, observed, latent, axis=0):
         names in the model to their observed values. The function should
         return a Tensor, representing the log joint likelihood of the model.
     :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
-        of observed `StochasticTensor`s to their values
+        of observed `StochasticTensor` s to their values
     :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
-        from names of latent `StochasticTensor`s to their samples and log
+        from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
         variational lower bound.
@@ -54,7 +54,7 @@ def advi(log_joint, observed, latent, axis=0):
 def iwae(log_joint, observed, latent, axis=0):
     """
     Implements the importance weighted lower bound from (Burda, 2015).
-    This only works for continuous latent `StochasticTensor`s that
+    This only works for continuous latent `StochasticTensor` s that
     can be reparameterized (Kingma, 2013).
 
     :param log_joint: A function that accepts a dictionary argument of
@@ -62,9 +62,9 @@ def iwae(log_joint, observed, latent, axis=0):
         names in the model to their observed values. The function should
         return a Tensor, representing the log joint likelihood of the model.
     :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
-        of observed `StochasticTensor`s to their values.
+        of observed `StochasticTensor` s to their values.
     :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
-        from names of latent `StochasticTensor`s to their samples and log
+        from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
         variational lower bound.
@@ -77,16 +77,16 @@ def iwae(log_joint, observed, latent, axis=0):
 def rws(log_joint, observed, latent, axis=0):
     """
     Implements Reweighted Wake-sleep from (Bornschein, 2015). This works for
-    both continuous and discrete latent `StochasticTensor`s.
+    both continuous and discrete latent `StochasticTensor` s.
 
     :param log_joint: A function that accepts a dictionary argument of
         (str, Tensor) pairs, which are mappings from all `StochasticTensor`
         names in the model to their observed values. The function should
         return a Tensor, representing the log joint likelihood of the model.
     :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
-        of observed `StochasticTensor`s to their values.
+        of observed `StochasticTensor` s to their values.
     :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
-        from names of latent `StochasticTensor`s to their samples and log
+        from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
         log likelihood and the cost for adapting proposals.
@@ -122,16 +122,16 @@ def nvil(log_joint,
     Implements the variance reduced score function estimator for gradients
     of the variational lower bound from (Mnih, 2014). This algorithm is also
     called "REINFORCE" or "baseline". This works for both continuous and
-    discrete latent `StochasticTensor`s.
+    discrete latent `StochasticTensor` s.
 
     :param log_joint: A function that accepts a dictionary argument of
         (str, Tensor) pairs, which are mappings from all `StochasticTensor`
         names in the model to their observed values. The function should
         return a Tensor, representing the log joint likelihood of the model.
     :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
-        of observed `StochasticTensor`s to their values.
+        of observed `StochasticTensor` s to their values.
     :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
-        from names of latent `StochasticTensor`s to their samples and log
+        from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param baseline: A Tensor with the same shape as returned by `log_joint`.
         A trainable estimation for the scale of the variational lower bound,

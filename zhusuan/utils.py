@@ -209,7 +209,7 @@ class VarianceEstimator:
     arrays, and the estimator calculates the unbiased variance per dimension.
 
     :param shape: The shape of each item, which is a list of shapes for each
-    numpy array.
+        numpy array.
     """
 
     def __init__(self, shape):
