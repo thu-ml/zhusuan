@@ -26,15 +26,15 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
         ws = []
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
-            w_mu = tf.zeros([n_particles, n_out, n_in + 1])
-            w_logstd = tf.zeros([n_particles, n_out, n_in + 1])
+            w_mu = tf.zeros([n_particles, 1, n_out, n_in + 1])
+            w_logstd = tf.zeros([n_particles, 1, n_out, n_in + 1])
             ws.append(zs.Normal('w' + str(i), w_mu, w_logstd))
 
         # forward
         ly_x = tf.expand_dims(
             tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
         for i in range(len(ws)):
-            w = tf.tile(tf.expand_dims(ws[i], 1), [1, tf.shape(x)[0], 1, 1])
+            w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
             ly_x = tf.concat(
                 [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
             ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.cast(tf.shape(ly_x)[2],
@@ -56,10 +56,10 @@ def mean_field_variational(layer_sizes, n_particles):
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
             w_mean = tf.get_variable(
-                'w_mean_' + str(i), shape=[n_out, n_in + 1],
+                'w_mean_' + str(i), shape=[1, n_out, n_in + 1],
                 initializer=tf.constant_initializer(0.))
             w_logstd = tf.get_variable(
-                'w_logstd_' + str(i), shape=[n_out, n_in + 1],
+                'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
                 initializer=tf.constant_initializer(0.))
             ws.append(
                 zs.Normal('w' + str(i), w_mean, w_logstd, sample_dim=0,
@@ -130,10 +130,9 @@ if __name__ == '__main__':
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 
-    # evaluation
-    y_tile = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
+    # prediction: rmse & log likelihood
     observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y_tile})
+    observed.update({'y': y_obs})
     model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
