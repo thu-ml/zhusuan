@@ -92,7 +92,7 @@ if __name__ == "__main__":
                     tf.float32)
 
     def log_joint(observed):
-        n = tf.shape(observed['x'])[0]
+        n = tf.shape(observed['x'])[1]
         model = M2(observed, n, n_x, n_y, n_z, n_particles)
         log_px_zy, log_pz, log_py = model.local_log_prob(['x', 'z', 'y'])
         return tf.reduce_sum(log_px_zy, -1) + tf.reduce_sum(log_pz, -1) + \
