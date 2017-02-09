@@ -163,7 +163,8 @@ if __name__ == "__main__":
     test_batch_size = 24
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 10
+    print_freq = 10
+    test_freq = 500
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -210,13 +211,6 @@ if __name__ == "__main__":
     grads = optimizer.compute_gradients(bits_per_dim)
     infer = optimizer.apply_gradients(grads)
 
-    def l2_norm(x):
-        return tf.sqrt(tf.reduce_sum(tf.square(x)))
-
-    update_ratio = learning_rate_ph * tf.reduce_mean(tf.stack(list(
-        (l2_norm(k) / (l2_norm(v) + 1e-8)) for k, v in grads
-        if k is not None)))
-
     total_size = 0
     params = tf.trainable_variables()
     for i in params:
@@ -228,56 +222,58 @@ if __name__ == "__main__":
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
-            time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
-            lbs = []
-            bits = []
-            update_ratios = []
+            lbs, test_lbs, test_lls = [], [], []
+            bits, test_bits = [], []
+            time_train = -time.time()
             for t in range(iters):
+                iter = t + 1
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 try:
                     _, lb, bit, update_ratio_ = sess.run(
-                        [infer, lower_bound, bits_per_dim, update_ratio],
+                        [infer, lower_bound, bits_per_dim],
                         feed_dict={x: x_batch,
                                    learning_rate_ph: learning_rate,
                                    n_particles: lb_samples})
-
                 except tf.errors.InvalidArgumentError as error:
                     if ("NaN" in error.message) or ("Inf" in error.message):
                         continue
                     raise
                 lbs.append(lb)
                 bits.append(bit)
-                update_ratios.append(update_ratio_)
-                print('Iter {} ({:.1f}s): Lower bound = {} bits = {}'.format(
-                      t, time.time()+time_epoch, lb, bit))
-            time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Lower bound = {} bits = {}'.format(
-                epoch, time_epoch, np.mean(lbs), np.mean(bits)))
-            print('update ratio = {}'.format(np.mean(update_ratios)))
-            if epoch % test_freq == 0:
-                time_test = -time.time()
-                test_lbs = []
-                test_lls = []
-                test_bits = []
-                for t in range(test_iters):
-                    test_x_batch = x_test[
-                                   t * test_batch_size:
-                                   (t + 1) * test_batch_size]
-                    test_lb, test_bit = sess.run([lower_bound, bits_per_dim],
-                                                 feed_dict={
-                                                     x: test_x_batch,
-                                                     n_particles: lb_samples})
-                    test_ll = sess.run(log_likelihood,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples})
-                    test_lbs.append(test_lb)
-                    test_lls.append(test_ll)
-                    test_bits.append(test_bit)
-                time_test += time.time()
-                print('>>> TEST ({:.1f}s)'.format(time_test))
-                print('>> Test lower bound = {} bits = {}'.format(
-                    np.mean(test_lbs), np.mean(test_bits)))
-                print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
+
+                if iter % print_freq == 0:
+                    print('Epoch={} Iter={} ({:.3f}s/iter): '
+                          'Lower bound = {} bits = {}'.format(
+                          epoch, iter, (time.time() + time_train) / print_freq,
+                          np.mean(lbs), np.mean(bits)))
+                    lbs = []
+                    bits = []
+                    time_train = -time.time()
+
+                if iter % test_freq == 0:
+                    time_test = -time.time()
+                    test_lbs = []
+                    test_lls = []
+                    test_bits = []
+                    for t in range(test_iters):
+                        test_x_batch = x_test[t * test_batch_size:
+                                              (t + 1) * test_batch_size]
+                        test_lb, test_bit = sess.run(
+                            [lower_bound, bits_per_dim],
+                            feed_dict={x: test_x_batch,
+                                       n_particles: lb_samples})
+                        test_ll = sess.run(log_likelihood,
+                                           feed_dict={x: test_x_batch,
+                                                      n_particles: ll_samples})
+                        test_lbs.append(test_lb)
+                        test_lls.append(test_ll)
+                        test_bits.append(test_bit)
+                    time_test += time.time()
+                    print('>>> TEST ({:.1f}s)'.format(time_test))
+                    print('>> Test lower bound = {} bits = {}'.format(
+                        np.mean(test_lbs), np.mean(test_bits)))
+                    print('>> Test log likelihood = {}'.format(
+                        np.mean(test_lls)))
