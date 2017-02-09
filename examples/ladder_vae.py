@@ -232,7 +232,7 @@ if __name__ == "__main__":
                 iter = t + 1
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 try:
-                    _, lb, bit, update_ratio_ = sess.run(
+                    _, lb, bit = sess.run(
                         [infer, lower_bound, bits_per_dim],
                         feed_dict={x: x_batch,
                                    learning_rate_ph: learning_rate,
