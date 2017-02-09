@@ -178,8 +178,6 @@ def load_cifar10(path, normalize=True, dequantify=False, one_hot=True):
 
     train_x = train_x.astype('float32')
     test_x = test_x.astype('float32')
-    print(train_x.min(), train_x.max())
-    print(test_x.min(), test_x.max())
     if dequantify:
         train_x += np.random.uniform(0, 1,
                                      size=train_x.shape).astype('float32')
