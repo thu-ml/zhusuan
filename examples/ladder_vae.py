@@ -157,14 +157,13 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 100
     epoches = 3000
     batch_size = 16
     test_batch_size = 24
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    print_freq = 10
-    test_freq = 500
+    print_freq = 500
+    test_freq = iters
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -205,8 +204,6 @@ if __name__ == "__main__":
     latents = dict(zip(z_names, zs_))
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, latents, axis=0))
-    log_likelihood = tf.reduce_mean(
-        zs.is_loglikelihood(log_joint, {'x': x_obs}, latents, axis=0))
     bits_per_dim = -lower_bound / n_x * 1. / np.log(2.)
     grads = optimizer.compute_gradients(bits_per_dim)
     infer = optimizer.apply_gradients(grads)
@@ -246,34 +243,30 @@ if __name__ == "__main__":
 
                 if iter % print_freq == 0:
                     print('Epoch={} Iter={} ({:.3f}s/iter): '
-                          'Lower bound = {} bits = {}'.format(
-                          epoch, iter, (time.time() + time_train) / print_freq,
-                          np.mean(lbs), np.mean(bits)))
+                          'Lower bound = {} bits = {}'.
+                          format(epoch, iter,
+                                 (time.time() + time_train) / print_freq,
+                                 np.mean(lbs), np.mean(bits)))
                     lbs = []
                     bits = []
-                    time_train = -time.time()
 
                 if iter % test_freq == 0:
                     time_test = -time.time()
                     test_lbs = []
-                    test_lls = []
                     test_bits = []
-                    for t in range(test_iters):
-                        test_x_batch = x_test[t * test_batch_size:
-                                              (t + 1) * test_batch_size]
+                    for tt in range(test_iters):
+                        test_x_batch = x_test[tt * test_batch_size:
+                                              (tt + 1) * test_batch_size]
                         test_lb, test_bit = sess.run(
                             [lower_bound, bits_per_dim],
                             feed_dict={x: test_x_batch,
                                        n_particles: lb_samples})
-                        test_ll = sess.run(log_likelihood,
-                                           feed_dict={x: test_x_batch,
-                                                      n_particles: ll_samples})
                         test_lbs.append(test_lb)
-                        test_lls.append(test_ll)
                         test_bits.append(test_bit)
                     time_test += time.time()
                     print('>>> TEST ({:.1f}s)'.format(time_test))
                     print('>> Test lower bound = {} bits = {}'.format(
                         np.mean(test_lbs), np.mean(test_bits)))
-                    print('>> Test log likelihood = {}'.format(
-                        np.mean(test_lls)))
+
+                if iter % print_freq == 0:
+                    time_train = -time.time()
