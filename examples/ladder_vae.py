@@ -26,12 +26,10 @@ try:
 except:
     raise ImportError()
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-    import utils
-except:
-    raise ImportError()
+import dataset
+import utils
+import multi_gpu
+from multi_gpu import FLAGS
 
 
 @zs.reuse('model')
@@ -50,6 +48,7 @@ def ladder_vae(observed, n, n_particles, groups):
     return model, x, x_logsd
 
 
+@zs.reuse('variational')
 def q_net(x, n_xl, n_particles, groups):
     with zs.StochasticGraph() as variational:
         x = tf.reshape(x, [-1, n_xl, n_xl, 3])
@@ -157,12 +156,12 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    epoches = 3000
-    batch_size = 16
-    test_batch_size = 24
+    epoches = 1000
+    batch_size = 32 * FLAGS.num_gpus
+    test_batch_size = 32 * FLAGS.num_gpus
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    print_freq = 500
+    print_freq = 100
     test_freq = iters
     learning_rate = 0.001
     anneal_lr_freq = 200
@@ -177,35 +176,53 @@ if __name__ == "__main__":
     ]
 
     # Build the computation graph
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
-    n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
-    x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-    n = tf.shape(x)[0]
-    optimizer = utils.AdamaxOptimizer(learning_rate_ph, beta1=0.9, beta2=0.999)
+    n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
+    optimizer = utils.AdamaxOptimizer(learning_rate_ph, beta1=0.9,
+                                      beta2=0.999)
 
-    def log_joint(observed):
-        obs_ = observed.copy()
-        x = obs_.pop('x')
-        model, x_mean, x_logsd = ladder_vae(obs_, n, n_particles, groups)
-        log_pzs = model.local_log_prob(list(six.iterkeys(obs_)))
-        log_pz = sum(tf.reduce_sum(
-            tf.reshape(z, [n_particles, n, -1]), -1) for z in log_pzs)
-        log_px_z = tf.log(logistic.cdf(x + 1. / 256, x_mean, x_logsd) -
-                          logistic.cdf(x, x_mean, x_logsd) + 1e-8)
-        log_px_z = tf.reduce_sum(log_px_z, -1)
-        return log_px_z + log_pz
+    def build_tower_graph(x, id_):
+        x_part = x[id_ * tf.shape(x)[0] // FLAGS.num_gpus:
+                   (id_ + 1) * tf.shape(x)[0] // FLAGS.num_gpus]
+        n = tf.shape(x_part)[0]
+        x_obs = tf.tile(tf.expand_dims(x_part, 0), [n_particles, 1, 1])
 
-    variational, z_names = q_net(x, n_xl, n_particles, groups)
-    qz_outputs = variational.query(z_names, outputs=True, local_log_prob=True)
-    zs_ = [[qz_sample,
-            tf.reduce_sum(tf.reshape(log_qz, [n_particles, n, -1]), -1)]
-           for qz_sample, log_qz in qz_outputs]
-    latents = dict(zip(z_names, zs_))
-    lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_obs}, latents, axis=0))
-    bits_per_dim = -lower_bound / n_x * 1. / np.log(2.)
-    grads = optimizer.compute_gradients(bits_per_dim)
+        def log_joint(observed):
+            obs_ = observed.copy()
+            x = obs_.pop('x')
+            model, x_mean, x_logsd = ladder_vae(obs_, n, n_particles, groups)
+            log_pzs = model.local_log_prob(list(six.iterkeys(obs_)))
+            log_pz = sum(tf.reduce_sum(
+                tf.reshape(z, [n_particles, n, -1]), -1) for z in log_pzs)
+            log_px_z = tf.log(logistic.cdf(x + 1. / 256, x_mean, x_logsd) -
+                              logistic.cdf(x, x_mean, x_logsd) + 1e-8)
+            log_px_z = tf.reduce_sum(log_px_z, -1)
+            return log_px_z + log_pz
+
+        variational, z_names = q_net(x_part, n_xl, n_particles, groups)
+        qz_outputs = variational.query(z_names, outputs=True,
+                                       local_log_prob=True)
+        zs_ = [[qz_sample,
+                tf.reduce_sum(tf.reshape(log_qz, [n_particles, n, -1]), -1)]
+               for qz_sample, log_qz in qz_outputs]
+        latents = dict(zip(z_names, zs_))
+        lower_bound = tf.reduce_mean(
+            zs.advi(log_joint, {'x': x_obs}, latents, axis=0))
+        bits_per_dim = -lower_bound / n_x * 1. / np.log(2.)
+        grads = optimizer.compute_gradients(bits_per_dim)
+        return lower_bound, bits_per_dim, grads
+
+    tower_losses = []
+    tower_grads = []
+    for i in range(FLAGS.num_gpus):
+        with tf.device('/gpu:%d' % i):
+            with tf.name_scope('tower_%d' % i):
+                lower_bound, bits_per_dim, grads = build_tower_graph(x, i)
+                tower_losses.append([lower_bound, bits_per_dim])
+                tower_grads.append(grads)
+    lower_bound, bits_per_dim = multi_gpu.average_losses(tower_losses)
+    grads = multi_gpu.average_gradients(tower_grads)
     infer = optimizer.apply_gradients(grads)
 
     total_size = 0
@@ -216,7 +233,7 @@ if __name__ == "__main__":
     print("Num trainable variables: %d" % total_size)
 
     # Run the inference
-    with tf.Session() as sess:
+    with multi_gpu.create_session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
             if epoch % anneal_lr_freq == 0:

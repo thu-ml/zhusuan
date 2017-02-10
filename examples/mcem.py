@@ -14,13 +14,10 @@ import numpy as np
 import tensorflow as tf
 from six.moves import range
 from tensorflow.contrib import layers
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-except:
-    raise ImportError()
+import dataset
 
 
 def vae(observed, n, n_x, n_z, n_particles):

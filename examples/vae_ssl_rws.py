@@ -12,13 +12,10 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-except:
-    raise ImportError()
+import dataset
 
 
 @zs.reuse('model')

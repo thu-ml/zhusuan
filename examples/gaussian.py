@@ -6,6 +6,7 @@ from __future__ import print_function
 import numpy as np
 import scipy.stats
 import tensorflow as tf
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 tf.set_random_seed(1)

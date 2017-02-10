@@ -8,6 +8,7 @@ from __future__ import division
 from six.moves import range
 import numpy as np
 import tensorflow as tf
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 

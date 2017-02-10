@@ -12,13 +12,10 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-except:
-    raise ImportError()
+import dataset
 
 
 @zs.reuse('model')
@@ -90,6 +87,7 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
+    with tf.device('/gpu:0'):
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
