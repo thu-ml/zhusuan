@@ -87,7 +87,6 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    with tf.device('/gpu:0'):
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
