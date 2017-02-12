@@ -4,6 +4,8 @@
 from __future__ import absolute_import
 from __future__ import division
 
+import os
+
 import tensorflow as tf
 from tensorflow.python.training import optimizer
 import numpy as np
@@ -80,8 +82,9 @@ def save_image_collections(x, filename, shape=(10, 10), scale_each=False,
     :return: uint8 numpy array
         The output image.
     """
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
     n = x.shape[0]
-
     if transpose:
         x = x.transpose(0, 2, 3, 1)
     if scale_each is True:

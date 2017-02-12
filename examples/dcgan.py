@@ -42,7 +42,6 @@ def generator(observed, n, n_z, is_training):
                                        normalizer_params=normalizer_params)
         lx_z = layers.conv2d_transpose(lx_z, 3, 5, stride=2,
                                        activation_fn=tf.nn.sigmoid)
-        print(lx_z.get_shape())
     return generator, lx_z
 
 
@@ -62,7 +61,6 @@ def discriminator(x, is_training):
                          normalizer_params=normalizer_params)
     lc_x = layers.flatten(lc_x)
     class_logits = layers.fully_connected(lc_x, 1, activation_fn=None)
-    print(class_logits.get_shape())
     return class_logits
 
 
@@ -86,7 +84,8 @@ if __name__ == "__main__":
     # Define training/evaluation parameters
     lb_samples = 1
     epoches = 1000
-    batch_size = 20 * FLAGS.num_gpus
+    batch_size = 32 * FLAGS.num_gpus
+    gen_size = 100
     iters = x_train.shape[0] // batch_size
     print_freq = 100
     test_freq = iters
@@ -94,41 +93,63 @@ if __name__ == "__main__":
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
 
+    # Build the computation graph
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     x = tf.placeholder(tf.float32, shape=(None, n_xl, n_xl, n_channels),
                        name='x')
-    gen, x_gen = generator(None, batch_size, n_z, is_training)
-    x_class_logits = discriminator(x, is_training)
-    print(x_gen.get_shape().as_list())
-    x_gen_class_logits = discriminator(x_gen, is_training)
-    gen_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                     scope='generator')
-    disc_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
-                                      scope='discriminator')
-    disc_loss = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=tf.ones_like(x_class_logits), logits=x_class_logits)) + \
-                tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
-                    labels=tf.zeros_like(x_gen_class_logits),
-                    logits=x_gen_class_logits)) / 2.
-    gen_loss = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(
-            labels=tf.ones_like(x_gen_class_logits),
-            logits=x_gen_class_logits))
-
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, beta1=0.5)
-    disc_grads = optimizer.compute_gradients(disc_loss, var_list=disc_var_list)
-    gen_grads = optimizer.compute_gradients(gen_loss, var_list=gen_var_list)
-    grads = disc_grads + gen_grads
+
+    def build_tower_graph(x, id_):
+        tower_x = x[id_ * tf.shape(x)[0] // FLAGS.num_gpus:
+                    (id_ + 1) * tf.shape(x)[0] // FLAGS.num_gpus]
+        n = tf.shape(tower_x)[0]
+        gen, x_gen = generator(None, n, n_z, is_training)
+        x_class_logits = discriminator(tower_x, is_training)
+        x_gen_class_logits = discriminator(x_gen, is_training)
+        gen_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                         scope='generator')
+        disc_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                          scope='discriminator')
+        disc_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=tf.ones_like(x_class_logits),
+                logits=x_class_logits)) + \
+            tf.reduce_mean(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    labels=tf.zeros_like(x_gen_class_logits),
+                    logits=x_gen_class_logits)) / 2.
+        gen_loss = tf.reduce_mean(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                labels=tf.ones_like(x_gen_class_logits),
+                logits=x_gen_class_logits))
+
+        disc_grads = optimizer.compute_gradients(disc_loss,
+                                                 var_list=disc_var_list)
+        gen_grads = optimizer.compute_gradients(gen_loss,
+                                                var_list=gen_var_list)
+        grads = disc_grads + gen_grads
+        return grads, gen_loss, disc_loss
+
+    tower_losses = []
+    tower_grads = []
+    for i in range(FLAGS.num_gpus):
+        with tf.device('/gpu:%d' % i):
+            with tf.name_scope('tower_%d' % i):
+                grads, gen_loss, disc_loss = build_tower_graph(x, i)
+                tower_losses.append([gen_loss, disc_loss])
+                tower_grads.append(grads)
+    gen_loss, disc_loss = multi_gpu.average_losses(tower_losses)
+    grads = multi_gpu.average_gradients(tower_grads)
     infer = optimizer.apply_gradients(grads)
+    _, eval_x_gen = generator(None, gen_size, n_z, is_training)
 
     params = tf.trainable_variables()
     for i in params:
         print(i.name, i.get_shape())
 
     # Run the inference
-    with tf.Session() as sess:
+    with multi_gpu.create_session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
             if epoch % anneal_lr_freq == 0:
@@ -157,8 +178,10 @@ if __name__ == "__main__":
 
                 if iter % test_freq == 0:
                     time_test = -time.time()
-                    images = sess.run(x_gen, feed_dict={is_training: False})
-                    name = "dcgan.epoch.{}.iter.{}.png".format(epoch, iter)
+                    images = sess.run(eval_x_gen,
+                                      feed_dict={is_training: False})
+                    name = "results/dcgan/dcgan.epoch.{}.iter.{}.png".format(
+                        epoch, iter)
                     utils.save_image_collections(images, name, scale_each=True)
                     time_test += time.time()
 
