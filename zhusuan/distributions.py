@@ -11,6 +11,7 @@ from .utils import convert_to_int, add_name_scope
 
 
 __all__ = [
+    'uniform',
     'norm',
     'logistic',
     'bernoulli',
@@ -18,7 +19,150 @@ __all__ = [
 ]
 
 
-class Normal:
+class Uniform(object):
+    """
+    Class of Uniform distribution.
+    """
+
+    def __init__(self):
+        pass
+
+    @add_name_scope
+    def rvs(self,
+            minval=0.,
+            maxval=1.,
+            sample_dim=None,
+            n_samples=1,
+            reparameterized=False):
+        """
+        Generate independent uniform samples which forms a Tensor.
+        The lower bound `minval` is included in the range, while the upper
+        bound `maxval` is excluded.
+
+        :param minval: A Tensor, python value, or numpy array. The lower bound
+            on the range of the uniform distribution.
+        :param maxval: A Tensor, python value, or numpy array. The upper bound
+            on the range of the uniform distribution. Should have the same
+            shape with and element-wise bigger than `minval`.
+        :param sample_dim: A Tensor scalar, int, or None. The sample dimension.
+            If None, this means no new sample dimension is created. In this
+            case `n_samples` must be set to 1, otherwise an Exception is
+            raised.
+        :param n_samples: A Tensor scalar or int. Number of samples to
+            generate.
+        :param reparameterized: Bool. If True, gradients on samples from this
+            Uniform distribution are allowed to propagate into `minval` and
+            `maxval`.
+        :param check_numerics: Bool. Whether to check numeric issues.
+
+        :return: A Tensor. Samples from the Uniform distribution.
+        """
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
+        static_n_samples = convert_to_int(n_samples)
+        minval = tf.convert_to_tensor(minval, dtype=tf.float32)
+        maxval = tf.convert_to_tensor(maxval, dtype=tf.float32)
+        n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
+        try:
+            static_base_shape = minval.get_shape().merge_with(
+                maxval.get_shape())
+        except ValueError:
+            raise ValueError(
+                "minval and maxval must have the same shape (%s vs %s)"
+                % (minval.get_shape(), maxval.get_shape()))
+        static_base_shape = static_base_shape.as_list()
+        _assert_shape_match = tf.assert_equal(
+            tf.shape(minval), tf.shape(maxval),
+            message="minval and maxval must have the same shape")
+        with tf.control_dependencies([_assert_shape_match]):
+            base_shape = tf.shape(minval)
+        if not reparameterized:
+            minval = tf.stop_gradient(minval)
+            maxval = tf.stop_gradient(maxval)
+        if sample_dim is None:
+            _assert_one_sample = tf.assert_equal(
+                n_samples, 1,
+                message="n_samples must be 1 when sample_dim is None")
+            with tf.control_dependencies([_assert_one_sample]):
+                shape = tf.identity(base_shape)
+                static_shape = static_base_shape
+        else:
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="Only support non-negative sample_dim")
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.identity(sample_dim)
+            shape = tf.concat([base_shape[:sample_dim],
+                               tf.stack([n_samples]),
+                               base_shape[sample_dim:]], 0)
+            if static_sample_dim is not None:
+                static_shape = static_base_shape[:static_sample_dim] + \
+                    [static_n_samples] + static_base_shape[static_sample_dim:]
+            else:
+                static_shape = [None] * (len(static_base_shape) + 1)
+            minval = tf.expand_dims(minval, sample_dim)
+            maxval = tf.expand_dims(maxval, sample_dim)
+        samples = tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
+        samples.set_shape(static_shape)
+        return samples
+
+    @add_name_scope
+    def logpdf(self, x, minval=0., maxval=1., sample_dim=None):
+        """
+        Log probability density function of Uniform distribution.
+        The lower bound `minval` is included in the range, while the upper
+        bound `maxval` is excluded.
+
+        :param x: A Tensor, python value, or numpy array. The value at which to
+            evaluate the log density function. Can be broadcast to match
+            `minval` and `maxval`.
+        :param minval: A Tensor, python value, or numpy array. The lower bound
+            on the range of the uniform distribution. Can be broadcast to
+            match `x` and `maxval`.
+        :param maxval: A Tensor, python value, or numpy array. The upper bound
+            on the range of the uniform distribution. Can be broadcast to
+            match `x` and `minval` and should be element-wise bigger than
+            `minval`.
+        :param sample_dim: A Tensor scalar, int, or None. The sample dimension
+            which `x` has more than `minval` and `maxval`. If None, `x` is
+            supposed to be a one-sample result, which remains the same shape
+            with `minval` and `maxval` (after broadcast).
+
+        :return: A Tensor of the same shape as `x` (after broadcast) with
+            function values.
+        """
+        # TODO: check maxval > minval
+        static_sample_dim = convert_to_int(sample_dim)
+        if static_sample_dim and not (static_sample_dim >= 0):
+            raise ValueError("Only support non-negative sample_dim ({})".
+                             format(static_sample_dim))
+        x = tf.convert_to_tensor(x, dtype=tf.float32)
+        minval = tf.convert_to_tensor(minval, dtype=tf.float32)
+        maxval = tf.convert_to_tensor(maxval, dtype=tf.float32)
+        if sample_dim is not None:
+            sample_dim = tf.convert_to_tensor(sample_dim, tf.int32)
+            _assert_positive_dim = tf.assert_greater_equal(
+                sample_dim, 0, message="Only support non-negative sample_dim")
+            with tf.control_dependencies([_assert_positive_dim]):
+                sample_dim = tf.identity(sample_dim)
+            minval_shape = minval.get_shape().as_list()
+            maxval_shape = maxval.get_shape().as_list()
+            minval = tf.expand_dims(minval, sample_dim)
+            maxval = tf.expand_dims(maxval, sample_dim)
+            if static_sample_dim is not None:
+                minval.set_shape(minval_shape[:static_sample_dim] + [1] +
+                                 minval_shape[static_sample_dim:])
+                maxval.set_shape(maxval_shape[:static_sample_dim] + [1] +
+                                 maxval_shape[static_sample_dim:])
+        mask = tf.cast(tf.logical_and(tf.less_equal(minval, x),
+                                      tf.less(x, maxval)),
+                       tf.float32)
+        return tf.log(1. / (maxval - minval) * mask)
+
+
+class Normal(object):
     """
     Class of Normal distribution.
     """
@@ -166,7 +310,7 @@ class Normal:
         return c - logstd - 0.5 * acc * tf.square(x - mean)
 
 
-class Logistic:
+class Logistic(object):
     """
     Class of Logistic distribution.
     """
@@ -234,7 +378,7 @@ class Logistic:
         return tf.sigmoid(x_sd)
 
 
-class Bernoulli:
+class Bernoulli(object):
     """
     Class of Bernoulli distribution.
     """
@@ -347,7 +491,7 @@ class Bernoulli:
                                                         logits=logits)
 
 
-class Discrete:
+class Discrete(object):
     """
     Class of discrete distribution.
     """
@@ -480,6 +624,7 @@ class Discrete:
                                                                logits=logits)
 
 
+uniform = Uniform()
 norm = Normal()
 logistic = Logistic()
 bernoulli = Bernoulli()
