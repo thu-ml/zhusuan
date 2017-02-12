@@ -151,7 +151,7 @@ if __name__ == "__main__":
     x_train = x_train.reshape((-1, n_x))
     x_train -= np.mean(x_train, 0)
     x_test = x_test.reshape((-1, n_x))
-    x_test -= np.mean(x_test, 0)
+    x_test -= np.mean(x_train, 0)
     n_y = t_train.shape[1]
 
     # Define training/evaluation parameters
