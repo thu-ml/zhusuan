@@ -27,9 +27,12 @@ def generator(observed, n, n_z, is_training):
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
         ngf = 64
-        z_min = -tf.ones([n_z])
-        z_max = tf.ones([n_z])
-        z = zs.Uniform('z', z_min, z_max, sample_dim=0, n_samples=n)
+        # z_min = -tf.ones([n_z])
+        # z_max = tf.ones([n_z])
+        # z = zs.Uniform('z', z_min, z_max, sample_dim=0, n_samples=n)
+        z_mean = tf.zeros([n_z])
+        z_logstd = tf.zeros([n_z])
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=0, n_samples=n)
         lx_z = layers.fully_connected(z, num_outputs=ngf*8*4*4,
                                       normalizer_fn=layers.batch_norm,
                                       normalizer_params=normalizer_params)
@@ -89,6 +92,7 @@ if __name__ == "__main__":
     iters = x_train.shape[0] // batch_size
     print_freq = 100
     test_freq = iters
+    save_freq = iters
     learning_rate = 0.0002
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -107,9 +111,9 @@ if __name__ == "__main__":
         gen, x_gen = generator(None, n, n_z, is_training)
         x_class_logits = discriminator(tower_x, is_training)
         x_gen_class_logits = discriminator(x_gen, is_training)
-        gen_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+        gen_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                          scope='generator')
-        disc_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+        disc_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                           scope='discriminator')
         disc_loss = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
@@ -144,9 +148,15 @@ if __name__ == "__main__":
     infer = optimizer.apply_gradients(grads)
     _, eval_x_gen = generator(None, gen_size, n_z, is_training)
 
-    params = tf.trainable_variables()
-    for i in params:
+    # params = tf.trainable_variables()
+    # for i in params:
+    #     print(i.name, i.get_shape())
+
+    gen_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
+                                     scope='generator')
+    for i in gen_var_list:
         print(i.name, i.get_shape())
+    saver = tf.train.Saver(max_to_keep=10, var_list=gen_var_list)
 
     # Run the inference
     with multi_gpu.create_session() as sess:
@@ -184,6 +194,11 @@ if __name__ == "__main__":
                         epoch, iter)
                     utils.save_image_collections(images, name, scale_each=True)
                     time_test += time.time()
+
+                if iter % save_freq == 0:
+                    save_path = "results/dcgan/dcgan.epoch.{}.iter.{}.ckpt". \
+                        format(epoch, iter)
+                    saver.save(sess, save_path)
 
                 if iter % print_freq == 0:
                     time_train = -time.time()
