@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 from __future__ import division
 
+import tensorflow as tf
 import six
 from six.moves import zip, map
 

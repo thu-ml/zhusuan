@@ -35,7 +35,8 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
         lx_z = layers.fully_connected(
             lx_z, 1024, activation_fn=tf.tanh)
         x_mean = layers.fully_connected(lx_z, n_x, activation_fn=tf.sigmoid)
-        x_logstd = tf.Variable(0.)
+        x_logstd = tf.get_variable("x_logstd", [],
+                                   initializer=tf.constant_initializer(0.0))
         x = zs.Normal('x', x_mean, x_logstd * tf.ones_like(x_mean))
     return model
 
