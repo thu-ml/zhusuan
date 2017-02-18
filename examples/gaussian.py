@@ -6,6 +6,7 @@ from __future__ import print_function
 import numpy as np
 import scipy.stats
 import tensorflow as tf
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
@@ -13,9 +14,9 @@ tf.set_random_seed(1)
 
 kernel_width = 0.1
 num_samples = 100
-num_chains = 1000
+num_chains = 5
 burnin = num_samples // 2
-n_dims = 10
+n_dims = 1
 stdev = 1 / (np.array(range(n_dims)) + 1)
 log_stdev = np.log(stdev)
 n_leapfrogs = 5
@@ -61,7 +62,8 @@ for i in range(num_samples):
     q, p, oh, nh, ol, nl, ar, ss = sess.run(
         sampler, feed_dict={adapt_step_size: i < burnin,
                             adapt_mass: i < burnin})
-    print('Acceptance rate = {}, step size = {}'.format(np.mean(ar), ss))
+    #print('Acceptance rate = {}, step size = {}'.format(np.mean(ar), ss))
+    print('q = {}, ol = {}, nl = {}'.format(q, ol, nl))
 
     if i >= burnin:
         samples.append(q[0])
