@@ -73,6 +73,16 @@ if __name__ == "__main__":
         samples = np.vstack(samples)
 
     # Check & plot the results
+    for i in range(n_x):
+        print(stats.normaltest(samples[:, i]))
+
+    print('Expected mean = {}'.format(np.zeros(n_x)))
+    print('Sample mean = {}'.format(np.mean(samples, 0)))
+    print('Expected stdev = {}'.format(stdev))
+    print('Sample stdev = {}'.format(np.std(samples, 0)))
+    print('Relative error of stdev = {}'.format(
+        (np.std(samples, 0) - stdev) / stdev))
+
     def kde(xs, mu, batch_size):
         mu_n = len(mu)
         assert mu_n % batch_size == 0
@@ -87,21 +97,9 @@ if __name__ == "__main__":
         return ys
 
     if n_x == 1:
-       xs = np.linspace(-5, 5, 1000)
-       ys = kde(xs, np.squeeze(samples), n_chains)
-       f, ax = plt.subplots()
-       ax.plot(xs, ys)
-       ax.plot(xs, stats.norm.pdf(xs, scale=stdev[0]))
-
-    for i in range(n_x):
-        print(stats.normaltest(samples[:, i]))
-
-    print('Expected mean = {}'.format(np.zeros(n_x)))
-    print('Sample mean = {}'.format(np.mean(samples, 0)))
-    print('Expected stdev = {}'.format(stdev))
-    print('Sample stdev = {}'.format(np.std(samples, 0)))
-    print('Relative error of stdev = {}'.format(
-        (np.std(samples, 0) - stdev) / stdev))
-
-    if n_x == 1:
+        xs = np.linspace(-5, 5, 1000)
+        ys = kde(xs, np.squeeze(samples), n_chains)
+        f, ax = plt.subplots()
+        ax.plot(xs, ys)
+        ax.plot(xs, stats.norm.pdf(xs, scale=stdev[0]))
         plt.show()
