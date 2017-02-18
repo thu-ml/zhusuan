@@ -103,9 +103,9 @@ if __name__ == "__main__":
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    def hmc_obj(latent, observed, given):
+    def hmc_obj(observed):
         x = tf.expand_dims(observed['x'], 0)
-        z = tf.expand_dims(latent['z'], 0)
+        z = tf.expand_dims(observed['z'], 0)
         model = try_vae({'x': x, 'z': z}, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.squeeze(tf.reduce_sum(log_pz, -1)) + tf.squeeze(
