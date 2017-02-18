@@ -66,9 +66,8 @@ if __name__ == "__main__":
     x_train = np.vstack([x_train, x_valid]).astype('float32')
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
-    # TODO
-    x_test = x_test[:400, :]
-    t_test = t_test[:400]
+    # x_test = x_test[:400, :]
+    # t_test = t_test[:400]
     n_x = x_train.shape[1]
 
     # Define model parameters
@@ -85,7 +84,8 @@ if __name__ == "__main__":
     test_num_chains = 10
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 10
+    test_freq = 3000
+    save_freq = 10
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
@@ -155,10 +155,65 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
+    saver = tf.train.Saver(max_to_keep=10, var_list=tf.all_variables())
+
     # Run the inference
     with tf.Session() as sess:
+        def test():
+            # IS test
+            time_test = -time.time()
+            test_lbs = []
+            test_lls = []
+            for t in range(test_iters):
+                test_x_batch = x_test[
+                               t * test_batch_size:(t + 1) * test_batch_size]
+                test_lb = sess.run(lower_bound,
+                                   feed_dict={x: test_x_batch,
+                                              n_particles: lb_samples,
+                                              is_training: False})
+                test_ll = sess.run(log_likelihood,
+                                   feed_dict={x: test_x_batch,
+                                              n_particles: ll_samples,
+                                              is_training: False})
+                test_lbs.append(test_lb)
+                test_lls.append(test_ll)
+
+            # AIS test
+            test_ll_lbs = []
+            test_ll_ubs = []
+            for t in range(test_iters):
+                test_x_batch = x_test[
+                               t * test_batch_size:(t + 1) * test_batch_size]
+                test_x_batch = np.tile(test_x_batch, [test_num_chains, 1])
+
+                ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
+                                                         n_particles: 1,
+                                                         is_training: False})
+                test_ll_lbs.append(ll_lb)
+                test_ll_ubs.append(ll_ub)
+
+            time_test += time.time()
+            print('>>> TEST ({:.1f}s)'.format(time_test))
+            print('>> Test VAE ELBO = {}, IWAE ELBO = {}'.format(np.mean(test_lbs), np.mean(test_lls)))
+            test_ll_lb = np.mean(test_ll_lbs)
+            test_ll_ub = np.mean(test_ll_ubs)
+            print('>> Test log likelihood lower bound = {}, upper bound = {}, BDMC gap = {}'
+                  .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
+
+        ckpt_file = tf.train.latest_checkpoint(".")
+
+        # Restore
+        begin_epoch = 1
         sess.run(tf.global_variables_initializer())
-        for epoch in range(1, epoches + 1):
+        if ckpt_file is not None:
+            print('Restoring model from {}...'.format(ckpt_file))
+            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
+            saver.restore(sess, ckpt_file)
+            test()
+        else:
+            print('Starting from scratch...')
+
+        for epoch in range(begin_epoch, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
@@ -177,43 +232,11 @@ if __name__ == "__main__":
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
                 epoch, time_epoch, np.mean(lbs)))
 
+            if epoch % save_freq == 0:
+                print('Saving model...')
+                save_path = "vae.epoch.{}.ckpt".format(epoch)
+                saver.save(sess, save_path)
+                print('Done')
+
             if epoch % test_freq == 0:
-                # IS test
-                time_test = -time.time()
-                test_lbs = []
-                test_lls = []
-                for t in range(test_iters):
-                    test_x_batch = x_test[
-                        t * test_batch_size:(t + 1) * test_batch_size]
-                    test_lb = sess.run(lower_bound,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: lb_samples,
-                                                  is_training: False})
-                    test_ll = sess.run(log_likelihood,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples,
-                                                  is_training: False})
-                    test_lbs.append(test_lb)
-                    test_lls.append(test_ll)
-
-                # AIS test
-                test_ll_lbs = []
-                test_ll_ubs = []
-                for t in range(test_iters):
-                    test_x_batch = x_test[
-                                   t * test_batch_size:(t + 1) * test_batch_size]
-                    test_x_batch = np.tile(test_x_batch, [test_num_chains, 1])
-
-                    ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
-                                                             n_particles: 1,
-                                                             is_training: False})
-                    test_ll_lbs.append(ll_lb)
-                    test_ll_ubs.append(ll_ub)
-
-                time_test += time.time()
-                print('>>> TEST ({:.1f}s)'.format(time_test))
-                print('>> Test VAE ELBO = {}, IWAE ELBO = {}'.format(np.mean(test_lbs), np.mean(test_lls)))
-                test_ll_lb = np.mean(test_ll_lbs)
-                test_ll_ub = np.mean(test_ll_ubs)
-                print('>> Test log likelihood lower bound = {}, upper bound = {}, BDMC gap = {}'
-                      .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
+                test()

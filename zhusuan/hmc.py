@@ -115,9 +115,9 @@ class StepsizeTuner:
 class ExponentialWeightedMovingVariance:
     def __init__(self, decay, shape, chain_axis):
         with tf.name_scope("ExponentialWeightedMovingVariance"):
-            self.t = tf.Variable(0.0, name="t")
-            self.mean = [tf.Variable(tf.zeros(s), name="mean") for s in shape]
-            self.var = [tf.Variable(tf.zeros(s), name="var") for s in shape]
+            self.t = tf.Variable(0.0, name="t", trainable=False)
+            self.mean = [tf.Variable(tf.zeros(s), name="mean", trainable=False) for s in shape]
+            self.var = [tf.Variable(tf.zeros(s), name="var", trainable=False) for s in shape]
             self.decay = decay
             self.one = tf.constant(1.0, dtype=tf.float32)
             self.chain_axis = chain_axis
@@ -170,7 +170,7 @@ class HMC:
                 target_acceptance_rate, name="target_acceptance_rate")
 
             self.adapt_step_size = adapt_step_size
-            self.t = tf.Variable(0.0, dtype=tf.float32, name="t")
+            self.t = tf.Variable(0.0, dtype=tf.float32, name="t", trainable=False)
             if adapt_step_size is not None:
                 # TODO make sure adapt_step_size is a placeholder
                 self.step_size_tuner = StepsizeTuner(
@@ -398,6 +398,9 @@ class HMC:
                                                      if_initialize_step_size)
         else:
             update_step_size = self.step_size
+
+        new_log_prob = tf.where(tf.cast(tf.squeeze(if_accept), tf.bool),
+                                new_log_prob, old_log_prob)
 
         with tf.control_dependencies([update_step_size]):
             return update_q, p, tf.squeeze(old_hamiltonian), \
