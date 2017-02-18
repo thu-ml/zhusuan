@@ -187,7 +187,7 @@ class HMC:
         self.scope = scope
 
     @add_name_scope
-    def _adapt_mass(self, new_t, chain_axis):
+    def _adapt_mass(self, t, chain_axis):
         with tf.name_scope(self.scope):
             ewmv = ExponentialWeightedMovingVariance(
                 self.mass_decay, self.data_shape, chain_axis)
@@ -203,7 +203,7 @@ class HMC:
         # print('q={}, NMS={}'.format(self.q[0].get_shape(),
         #                             new_mass[0].get_shape()))
         with tf.control_dependencies(new_mass):
-            current_mass = tf.cond(tf.less(new_t, self.mass_collect_iters),
+            current_mass = tf.cond(tf.less(t, self.mass_collect_iters),
                                    lambda: [tf.ones(shape) for shape in
                                             self.data_shape],
                                    lambda: new_mass)
@@ -255,40 +255,33 @@ class HMC:
         return new_step_size
 
     @add_name_scope
-    def _leapfrog(self, current_q, current_p, new_step_size, get_gradient,
-                  expanded_mass):
-        def loop_cond(i, current_q, current_p):
+    def _leapfrog(self, q, p, step_size, get_gradient, mass):
+        def loop_cond(i, q, p):
             return i < self.n_leapfrogs + 1
 
-        def loop_body(i, current_q, current_p):
+        def loop_body(i, q, p):
             step_size1 = tf.cond(i > 0,
-                                 lambda: new_step_size,
+                                 lambda: step_size,
                                  lambda: tf.constant(0.0, dtype=tf.float32))
 
             step_size2 = tf.cond(tf.logical_and(tf.less(i, self.n_leapfrogs),
                                                 tf.less(0, i)),
-                                 lambda: new_step_size,
-                                 lambda: new_step_size / 2)
+                                 lambda: step_size,
+                                 lambda: step_size / 2)
 
             # [(n_particles, n, n_z)], [(n_particles, n, n_z)]
-            current_q, current_p = leapfrog_integrator(
-                current_q,
-                current_p,
-                step_size1,
-                step_size2,
-                lambda q: get_gradient(q),
-                expanded_mass
-            )
-            return [i + 1, current_q, current_p]
+            q, p = leapfrog_integrator(q, p, step_size1, step_size2,
+                lambda q: get_gradient(q), mass)
+            return [i + 1, q, p]
 
         i = tf.constant(0)
         # [(n_particles, n, n_z)], [(n_particles, n, n_z)]
-        _, current_q, current_p = tf.while_loop(loop_cond,
-                                                loop_body,
-                                                [i, current_q, current_p],
-                                                back_prop=False,
-                                                parallel_iterations=1)
-        return current_q, current_p
+        _, q, p = tf.while_loop(loop_cond,
+                                loop_body,
+                                [i, q, p],
+                                back_prop=False,
+                                parallel_iterations=1)
+        return q, p
 
     @add_name_scope
     def _adapt_step_size(self, acceptance_rate, if_initialize_step_size):
@@ -300,8 +293,7 @@ class HMC:
 
     # Shape = [ChainShape DataShape]
     # Data shape should not change
-    def sample(self, log_joint, observed, latent, given=None,
-               chain_axis=None):
+    def sample(self, log_joint, observed, latent, given=None, chain_axis=None):
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 
@@ -320,14 +312,14 @@ class HMC:
         # print('Data shape = {}'.format(self.data_shape))
 
         if self.adapt_mass is not None:
-            current_mass = self._adapt_mass(new_t, chain_axis)
+            mass = self._adapt_mass(new_t, chain_axis)
         else:
-            current_mass = [tf.ones(shape) for shape in self.data_shape]
-        # current_mass = [tf.Print(current_mass[0], [current_mass[0]],
+            mass = [tf.ones(shape) for shape in self.data_shape]
+        # current_mass = [tf.Prints(current_mass[0], [current_mass[0]],
         #                          "mass", summarize=10)]
 
-        expanded_mass = current_mass if chain_axis is None else \
-            [tf.expand_dims(m, chain_axis) for m in current_mass]
+        expanded_mass = mass if chain_axis is None else \
+            [tf.expand_dims(m, chain_axis) for m in mass]
         # print('Current mass shape={}'.format(current_mass[0].get_shape()))
         # print('Expanded mass shape={}'.format(expanded_mass[0].get_shape()))
 
@@ -342,7 +334,6 @@ class HMC:
 
         def get_gradient(var_list):
             log_p = get_log_posterior(var_list)
-
             # (chain_axis data_axis)
             latent_grads = tf.gradients(log_p, var_list)
             # print('LG = {}'.format(latent_grads))
@@ -358,7 +349,7 @@ class HMC:
             tf.equal(new_t, 1), tf.equal(new_t, self.mass_collect_iters))
 
         def iss():
-            return self._init_step_size(current_q, current_p, current_mass,
+            return self._init_step_size(current_q, current_p, mass,
                                         get_gradient, get_log_posterior)
         new_step_size = tf.cond(if_initialize_step_size,
                                 iss, lambda: self.step_size)
@@ -384,7 +375,7 @@ class HMC:
             old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
                 acceptance_rate = get_acceptance_rate(
                     self.q, p, current_q, current_p,
-                    get_log_posterior, current_mass, self.data_axis)
+                    get_log_posterior, mass, self.data_axis)
 
             # (n_particles, n)
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))

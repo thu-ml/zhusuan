@@ -49,7 +49,7 @@ if __name__ == "__main__":
     adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
                  adapt_step_size=adapt_step_size, adapt_mass=adapt_mass)
-    x = tf.Variable(tf.zeros([n_chains, n_x]), name='x')
+    x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
     sampler = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)
 
     train_writer = tf.summary.FileWriter('/tmp/gaussian',

@@ -77,7 +77,7 @@ if __name__ == "__main__":
         def log_prob(z):
             z1, z2 = z[:, 0], z[:, 1]
             return stats.norm.logpdf(z2, 0, 1.35) + \
-                   stats.norm.logpdf(z1, 0, np.exp(z2))
+                stats.norm.logpdf(z1, 0, np.exp(z2))
 
         plot_isocontours(ax, lambda z: np.exp(log_prob(z)), xlimits, ylimits)
 
