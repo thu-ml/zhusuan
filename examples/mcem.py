@@ -20,6 +20,7 @@ import zhusuan as zs
 import dataset
 
 
+@zs.reuse('model')
 def vae(observed, n, n_x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
@@ -30,15 +31,6 @@ def vae(observed, n, n_x, n_z, n_particles):
         x_mean = layers.fully_connected(lx_z, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_mean)
     return model
-
-
-def try_vae(observed, n, n_x, n_z, n_particles):
-    try:
-        with tf.variable_scope("vae", reuse=True):
-            return vae(observed, n, n_x, n_z, n_particles)
-    except:
-        with tf.variable_scope("vae"):
-            return vae(observed, n, n_x, n_z, n_particles)
 
 
 def q_net(x, n_z, n_particles):
@@ -99,14 +91,14 @@ if __name__ == "__main__":
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
     def log_joint(observed):
-        model = try_vae(observed, n, n_x, n_z, n_particles)
+        model = vae(observed, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    def hmc_obj(latent, observed, given):
+    def hmc_obj(observed):
         x = tf.expand_dims(observed['x'], 0)
-        z = tf.expand_dims(latent['z'], 0)
-        model = try_vae({'x': x, 'z': z}, n, n_x, n_z, n_particles)
+        z = tf.expand_dims(observed['z'], 0)
+        model = vae({'x': x, 'z': z}, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.squeeze(tf.reduce_sum(log_pz, -1)) + tf.squeeze(
             tf.reduce_sum(log_px_z, -1))
