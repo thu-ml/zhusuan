@@ -78,6 +78,8 @@ if __name__ == "__main__":
     ll_samples = 1000
     epoches = 3000
     batch_size = 100
+    train_num_samples = 1
+    train_num_leapfrogs = 10
     test_batch_size = 400
     test_num_temperatures = 100
     test_num_leapfrogs = 10
@@ -99,9 +101,13 @@ if __name__ == "__main__":
                     tf.float32)
     x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-    lz = tf.Variable(tf.zeros([1, test_num_chains * test_batch_size, n_z]), name="z")
+    lz = tf.Variable(tf.zeros([1, test_num_chains * test_batch_size, n_z]),
+                     name="z", trainable=False)
+    lz_train = tf.Variable(tf.zeros([1, batch_size, n_z]),
+                           name="train_z", trainable=False)
     n = tf.shape(x)[0]
 
+    # ==== For optimize q ====
     def log_joint(observed):
         model = vae(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
@@ -118,17 +124,9 @@ if __name__ == "__main__":
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
-    # For BDMC
+    # ==== For BDMC ====
     def joint_obj(observed):
         return tf.squeeze(log_joint(observed))
-
-    # Use p(z) as prior
-    # def prior_obj(observed):
-    #     model = vae(observed, n, n_x, n_z, n_particles, is_training)
-    #     log_pz = model.local_log_prob('z')
-    #     return tf.squeeze(tf.reduce_sum(log_pz, -1))
-    # vae_model = vae({}, n, n_x, n_z, n_particles, is_training)
-    # prior_samples = {'z': vae_model.query('z', outputs=True)[0]}
 
     # Use q(z | x) as prior
     def prior_obj(observed):
@@ -144,16 +142,40 @@ if __name__ == "__main__":
 
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
                    hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
-                   num_chains=test_num_chains, num_temperatures=test_num_temperatures)
+                   num_chains=test_num_chains,
+                   num_temperatures=test_num_temperatures)
+
+    # ==== For optimize p ====
+    initialize_lz_train = tf.assign(lz_train, qz_samples)
+    mcem_model = vae({'x': x_obs, 'z': lz_train}, n, n_x, n_z, n_particles,
+                     is_training)
+    log_px_z = mcem_model.local_log_prob('x')
+    mcem_obj = tf.reduce_mean(tf.reduce_sum(log_px_z, -1))
+
+    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=train_num_leapfrogs,
+                 adapt_step_size=tf.constant(True), target_acceptance_rate=0.65,
+                 adapt_mass=tf.constant(True))
+    train_sampler = hmc.sample(joint_obj, {'x': x_obs}, {'z': lz_train},
+                               chain_axis=1)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
 
-    params = tf.trainable_variables()
-    for i in params:
+    # Gather variables
+    model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                     scope="model")
+    variational_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                           scope="variational")
+    print('Model parameters:')
+    for i in model_params:
         print(i.name, i.get_shape())
+    print('Variational parameters:')
+    for i in variational_params:
+        print(i.name, i.get_shape())
+
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
+    infer_model = optimizer.minimize(-mcem_obj, var_list=model_params)
+    optimizer2 = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
+    infer_variational = optimizer.minimize(-lower_bound, var_list=variational_params)
 
     saver = tf.train.Saver(max_to_keep=10, var_list=tf.all_variables())
 
@@ -167,6 +189,7 @@ if __name__ == "__main__":
             for t in range(test_iters):
                 test_x_batch = x_test[
                                t * test_batch_size:(t + 1) * test_batch_size]
+
                 test_lb = sess.run(lower_bound,
                                    feed_dict={x: test_x_batch,
                                               n_particles: lb_samples,
@@ -200,7 +223,7 @@ if __name__ == "__main__":
             print('>> Test log likelihood lower bound = {}, upper bound = {}, BDMC gap = {}'
                   .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
 
-        ckpt_file = tf.train.latest_checkpoint(".")
+        ckpt_file = tf.train.latest_checkpoint("mcem_results/")
 
         # Restore
         begin_epoch = 1
@@ -222,7 +245,26 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb = sess.run([infer, lower_bound],
+
+                # Optimize model parameters
+                sess.run(initialize_lz_train,
+                                    feed_dict={x: x_batch_bin,
+                                               n_particles: lb_samples,
+                                               is_training: False})
+
+                _, _, _, _, oldp, newp, acc, ss = sess.run(train_sampler,
+                                    feed_dict={x: x_batch_bin,
+                                               n_particles: 1,
+                                               is_training: False})
+
+                _ = sess.run(infer_model,
+                                 feed_dict={x: x_batch_bin,
+                                            learning_rate_ph: learning_rate,
+                                            n_particles: lb_samples,
+                                            is_training: False})
+
+                # Optimize q-net
+                _, lb = sess.run([infer_variational, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples,
@@ -234,7 +276,7 @@ if __name__ == "__main__":
 
             if epoch % save_freq == 0:
                 print('Saving model...')
-                save_path = "vae.epoch.{}.ckpt".format(epoch)
+                save_path = "mcem_results/mcem.epoch.{}.ckpt".format(epoch)
                 saver.save(sess, save_path)
                 print('Done')
 

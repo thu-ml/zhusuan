@@ -19,35 +19,25 @@ import dataset
 
 
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_particles, is_training):
+def vae(observed, n, n_x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as model:
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
+        normalizer_params = {'updates_collections': None}
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
-        lx_z = layers.fully_connected(
-            z, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lx_z = layers.fully_connected(
-            lx_z, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
+        lx_z = layers.fully_connected(z, 500)
+        lx_z = layers.fully_connected(lx_z, 500)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits)
     return model
 
 
 @zs.reuse('variational')
-def q_net(observed, x, n_z, n_particles, is_training):
+def q_net(observed, x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as variational:
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        lz_x = layers.fully_connected(
-            x, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lz_x = layers.fully_connected(
-            lz_x, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
+        normalizer_params = {'updates_collections': None}
+        lz_x = layers.fully_connected(x, 500)
+        lz_x = layers.fully_connected(lz_x, 500)
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
@@ -91,9 +81,7 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
@@ -103,11 +91,11 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = vae(observed, n, n_x, n_z, n_particles, is_training)
+        model = vae(observed, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    variational = q_net({}, x, n_z, n_particles, is_training)
+    variational = q_net({}, x, n_z, n_particles)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
 
@@ -122,17 +110,9 @@ if __name__ == "__main__":
     def joint_obj(observed):
         return tf.squeeze(log_joint(observed))
 
-    # Use p(z) as prior
-    # def prior_obj(observed):
-    #     model = vae(observed, n, n_x, n_z, n_particles, is_training)
-    #     log_pz = model.local_log_prob('z')
-    #     return tf.squeeze(tf.reduce_sum(log_pz, -1))
-    # vae_model = vae({}, n, n_x, n_z, n_particles, is_training)
-    # prior_samples = {'z': vae_model.query('z', outputs=True)[0]}
-
     # Use q(z | x) as prior
     def prior_obj(observed):
-        model = q_net(observed, observed['x'], n_z, n_particles, is_training)
+        model = q_net(observed, observed['x'], n_z, n_particles)
         log_qz = model.local_log_prob('z')
         return tf.squeeze(tf.reduce_sum(log_qz, -1))
 
@@ -144,11 +124,22 @@ if __name__ == "__main__":
 
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
                    hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
-                   num_chains=test_num_chains, num_temperatures=test_num_temperatures)
+                   num_chains=test_num_chains,
+                   num_temperatures=test_num_temperatures)
+
+    # For AISLD
+    def ais_prior_obj(observed):
+        variational = q_net(observed, x, n_z, n_particles)
+        log_pz = variational.local_log_prob('z')
+        return tf.reduce_sum(log_pz, -1)
+
+    ais_obj, op_oo, op_no, op_oh, op_nh, op_acc = \
+        zs.AISLD(ais_prior_obj, log_joint, qz_samples, {'x': x_obs}, 1e-1)
+    print('AIS = {}'.format(ais_obj))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
+    grads = optimizer.compute_gradients(-ais_obj)
     infer = optimizer.apply_gradients(grads)
 
     params = tf.trainable_variables()
@@ -169,12 +160,10 @@ if __name__ == "__main__":
                                t * test_batch_size:(t + 1) * test_batch_size]
                 test_lb = sess.run(lower_bound,
                                    feed_dict={x: test_x_batch,
-                                              n_particles: lb_samples,
-                                              is_training: False})
+                                              n_particles: lb_samples})
                 test_ll = sess.run(log_likelihood,
                                    feed_dict={x: test_x_batch,
-                                              n_particles: ll_samples,
-                                              is_training: False})
+                                              n_particles: ll_samples})
                 test_lbs.append(test_lb)
                 test_lls.append(test_ll)
 
@@ -187,8 +176,7 @@ if __name__ == "__main__":
                 test_x_batch = np.tile(test_x_batch, [test_num_chains, 1])
 
                 ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
-                                                         n_particles: 1,
-                                                         is_training: False})
+                                                         n_particles: 1})
                 test_ll_lbs.append(ll_lb)
                 test_ll_ubs.append(ll_ub)
 
@@ -206,10 +194,11 @@ if __name__ == "__main__":
         begin_epoch = 1
         sess.run(tf.global_variables_initializer())
         if ckpt_file is not None:
-            print('Restoring model from {}...'.format(ckpt_file))
-            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
-            saver.restore(sess, ckpt_file)
-            test()
+            pass
+            # print('Restoring model from {}...'.format(ckpt_file))
+            # begin_epoch = int(ckpt_file.split('.')[-2]) + 1
+            # saver.restore(sess, ckpt_file)
+            # test()
         else:
             print('Starting from scratch...')
 
@@ -219,24 +208,37 @@ if __name__ == "__main__":
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
             lbs = []
+            oos = []
+            nos = []
+            ohs = []
+            nhs = []
+            accs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb = sess.run([infer, lower_bound],
+                _, lb, oo, no, oh, nh, acc = sess.run([infer, lower_bound,
+                    op_oo, op_no, op_oh, op_nh, op_acc],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
-                                            n_particles: lb_samples,
-                                            is_training: False})
+                                            n_particles: lb_samples})
                 lbs.append(lb)
+                oos.append(oo)
+                nos.append(no)
+                ohs.append(oh)
+                nhs.append(nh)
+                accs.append(acc)
             time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
-                epoch, time_epoch, np.mean(lbs)))
+            print('Epoch {} ({:.1f}s): Lower bound = {}, OO = {}, '
+                  'NO = {}, ACC = {}'.format(
+                epoch, time_epoch, np.mean(lbs),
+                np.mean(oos), np.mean(nos), np.mean(accs)))
 
             if epoch % save_freq == 0:
-                print('Saving model...')
-                save_path = "vae.epoch.{}.ckpt".format(epoch)
-                saver.save(sess, save_path)
-                print('Done')
+                # print('Saving model...')
+                # save_path = "vae.epoch.{}.ckpt".format(epoch)
+                # saver.save(sess, save_path)
+                # print('Done')
+                pass
 
             if epoch % test_freq == 0:
                 test()
