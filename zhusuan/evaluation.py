@@ -159,33 +159,38 @@ def LD(obj, latent, step_size):
 
 
 def AISLD(log_prior, log_joint, prior_sampler,
-          observed, step_size):
+          observed, step_size, num_temperature):
     """
     Latent variable shape: chain data n_z
     log_prior, log_joint shape: chain data
     """
+    temperature_gap = 1. / num_temperature
+
     def make_log_fn(temperature):
         def log_fn(latent):
             obs = merge_dicts(observed, {'z': latent})
-            return log_prior(obs) * (1 - temperature) + \
-                   log_joint(obs) * temperature
+            return log_prior(obs) * temperature + \
+                   log_joint(obs) * (1 - temperature)
         return log_fn
 
     def log_weight(observed):
-        return 0.5 * (log_joint(observed) - log_prior(observed))
+        return temperature_gap * (log_joint(observed) - log_prior(observed))
 
-    z1 = prior_sampler
-    w1 = log_weight(merge_dicts(observed, {'z': z1}))
+    z = prior_sampler
+    w = log_weight(merge_dicts(observed, {'z': z}))
 
-    z0, oo, no, oh, nh, acc = LD(make_log_fn(0.5), z1, step_size)
-    acc = tf.expand_dims(acc, dim=2)
-    u01 = tf.random_uniform(shape=tf.shape(acc))
-    if_accept = tf.to_float(u01 < acc)
-    z0 = z0 * if_accept + z1 * (1-if_accept)
+    for i in range(1, num_temperature):
+        current_temperature = 1.0 - temperature_gap * i
+        new_z, oo, no, oh, nh, acc = \
+            LD(make_log_fn(current_temperature), z, step_size)
 
-    w0 = log_weight(merge_dicts(observed, {'z': z0}))
+        u01 = tf.random_uniform(shape=tf.shape(acc))
+        if_accept = tf.to_float(u01 < acc)
+        no = no * if_accept + oo * (1-if_accept)
+        if_accept = tf.expand_dims(if_accept, 2)
+        z = new_z * if_accept + z * (1-if_accept)
+        w += log_weight(merge_dicts(observed, {'z': z}))
 
-    w = w0 + w1
     w = log_mean_exp(w, axis=0)
     return tf.reduce_mean(w), \
            tf.reduce_mean(oo), tf.reduce_mean(no), \

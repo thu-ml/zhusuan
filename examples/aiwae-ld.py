@@ -134,7 +134,8 @@ if __name__ == "__main__":
         return tf.reduce_sum(log_pz, -1)
 
     ais_obj, op_oo, op_no, op_oh, op_nh, op_acc = \
-        zs.AISLD(ais_prior_obj, log_joint, qz_samples, {'x': x_obs}, 1e-1)
+        zs.AISLD(ais_prior_obj, log_joint, qz_samples, {'x': x_obs},
+                 6e-2, 5)
     print('AIS = {}'.format(ais_obj))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
