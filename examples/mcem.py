@@ -2,18 +2,16 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from __future__ import division
 from __future__ import print_function
-
-import os
-import random
+from __future__ import division
 import sys
+import os
 import time
 
-import numpy as np
 import tensorflow as tf
-from six.moves import range
 from tensorflow.contrib import layers
+from six.moves import range
+import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
@@ -21,27 +19,27 @@ import dataset
 
 
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_particles):
+def vae(observed, n, n_x, n_z, n_particles, is_training):
     with zs.StochasticGraph(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)
-        x_mean = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_mean)
+        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_logits)
     return model
 
 
-def q_net(x, n_z, n_particles):
-    with tf.variable_scope("variational"):
-        with zs.StochasticGraph() as variational:
-            lz_x = layers.fully_connected(x, 500)
-            lz_x = layers.fully_connected(lz_x, 500)
-            lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
-                          n_samples=n_particles)
+@zs.reuse('variational')
+def q_net(observed, x, n_z, n_particles, is_training):
+    with zs.StochasticGraph(observed=observed) as variational:
+        lz_x = layers.fully_connected(x, 500)
+        lz_x = layers.fully_connected(lz_x, 500)
+        lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
+                      n_samples=n_particles)
     return variational
 
 
@@ -56,6 +54,8 @@ if __name__ == "__main__":
     x_train = np.vstack([x_train, x_valid]).astype('float32')
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
+    x_test = x_test[:400, :]
+    t_test = t_test[:400]
     n_x = x_train.shape[1]
 
     # Define model parameters
@@ -63,62 +63,48 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 5000
-    mcmc_iters = 1
-    n_leapfrogs = 5
+    ll_samples = 1000
     epoches = 3000
     batch_size = 100
-    test_batch_size = 100
+    train_num_samples = 1
+    train_num_leapfrogs = 10
+    test_batch_size = 400
+    test_num_temperatures = 100
+    test_num_leapfrogs = 10
+    test_num_chains = 10
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
+    save_freq = 10
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
 
-    # restart, qnet, persistent
-    mode = 'qnet'
-
     # Build the computation graph
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
+    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    x_orig = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
+    x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
-    x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
+    x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
+    lz = tf.Variable(tf.zeros([1, test_num_chains * test_batch_size, n_z]),
+                     name="z", trainable=False)
+    lz_train = tf.Variable(tf.zeros([1, batch_size, n_z]),
+                           name="train_z", trainable=False)
     n = tf.shape(x)[0]
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
 
+    # ==== For optimize q ====
     def log_joint(observed):
-        model = vae(observed, n, n_x, n_z, n_particles)
+        model = vae(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    def hmc_obj(observed):
-        x = tf.expand_dims(observed['x'], 0)
-        z = tf.expand_dims(observed['z'], 0)
-        model = vae({'x': x, 'z': z}, n, n_x, n_z, n_particles)
-        log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-        return tf.squeeze(tf.reduce_sum(log_pz, -1)) + tf.squeeze(
-            tf.reduce_sum(log_px_z, -1))
-
-    # HMC
-    z_train = tf.Variable(tf.zeros([batch_size, n_z]), trainable=False)
-    z_train_input = tf.placeholder(tf.float32,
-                                   shape=[mcmc_iters, batch_size, n_z])
-    z_train_input2 = tf.placeholder(tf.float32, shape=[batch_size, n_z])
-    train_hmc = zs.HMC(step_size=1e-2, n_leapfrogs=n_leapfrogs)
-    train_sampler = train_hmc.sample(hmc_obj,
-                                     {'x': x}, {'z': z_train}, chain_axis=0)
-
-    # MCEM
-    obj = tf.reduce_mean(log_joint({'z': z_train_input, 'x': x_obs}))
-
-    # Variational
-    variational = q_net(x, n_z, n_particles)
+    variational = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
+
     log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
@@ -126,16 +112,45 @@ if __name__ == "__main__":
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
-    if mode == 'restart':
-        reset_z_train = tf.assign(z_train, tf.zeros([batch_size, n_z]))
-    else:
-        reset_z_train = tf.assign(z_train, z_train_input2)
+    # ==== For BDMC ====
+    def joint_obj(observed):
+        return tf.squeeze(log_joint(observed))
 
-    lvs = np.zeros((x_train.shape[0], n_z))
+    # Use q(z | x) as prior
+    def prior_obj(observed):
+        model = q_net(observed, observed['x'], n_z, n_particles, is_training)
+        log_qz = model.local_log_prob('z')
+        return tf.squeeze(tf.reduce_sum(log_qz, -1))
+
+    prior_samples = {'z': qz_samples}
+
+    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_num_leapfrogs,
+                 adapt_step_size=tf.constant(True),
+                 target_acceptance_rate=0.65, adapt_mass=tf.constant(True))
+
+    bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
+                   hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
+                   num_chains=test_num_chains,
+                   num_temperatures=test_num_temperatures)
+
+    # ==== For optimize p ====
+    initialize_lz_train = tf.assign(lz_train, qz_samples)
+    mcem_model = vae({'x': x_obs, 'z': lz_train}, n, n_x, n_z, n_particles,
+                     is_training)
+    log_px_z = mcem_model.local_log_prob('x')
+    mcem_obj = tf.reduce_mean(tf.reduce_sum(log_px_z, -1))
+
+    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=train_num_leapfrogs,
+                 adapt_step_size=tf.constant(True),
+                 target_acceptance_rate=0.65, adapt_mass=tf.constant(True))
+    train_sampler = hmc.sample(joint_obj, {'x': x_obs}, {'z': lz_train},
+                               chain_axis=1)
+
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
 
     # Gather variables
     model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                     scope="vae")
+                                     scope="model")
     variational_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                            scope="variational")
     print('Model parameters:')
@@ -145,109 +160,116 @@ if __name__ == "__main__":
     for i in variational_params:
         print(i.name, i.get_shape())
 
-    grads = optimizer.compute_gradients(-obj, var_list=model_params)
-    infer = optimizer.apply_gradients(grads)
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
+    infer_model = optimizer.minimize(-mcem_obj, var_list=model_params)
+    optimizer2 = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
+    infer_variational = optimizer.minimize(-lower_bound,
+                                           var_list=variational_params)
 
-    rgrads = optimizer.compute_gradients(-lower_bound,
-                                         var_list=variational_params)
-    rinfer = optimizer.apply_gradients(rgrads)
-    # rgrads2 = optimizer.compute_gradients(-lower_bound,
-    #                                       var_list=model_params)
-    # rinfer2 = optimizer.apply_gradients(rgrads2)
+    saver = tf.train.Saver(max_to_keep=10, var_list=tf.all_variables())
 
     # Run the inference
     with tf.Session() as sess:
+        def test():
+            # IS test
+            time_test = -time.time()
+            test_lbs = []
+            test_lls = []
+            for t in range(test_iters):
+                test_x_batch = x_test[
+                               t * test_batch_size:(t + 1) * test_batch_size]
+
+                test_lb = sess.run(lower_bound,
+                                   feed_dict={x: test_x_batch,
+                                              n_particles: lb_samples,
+                                              is_training: False})
+                test_ll = sess.run(log_likelihood,
+                                   feed_dict={x: test_x_batch,
+                                              n_particles: ll_samples,
+                                              is_training: False})
+                test_lbs.append(test_lb)
+                test_lls.append(test_ll)
+
+            # AIS test
+            test_ll_lbs = []
+            test_ll_ubs = []
+            for t in range(test_iters):
+                test_x_batch = x_test[
+                               t * test_batch_size:(t + 1) * test_batch_size]
+                test_x_batch = np.tile(test_x_batch, [test_num_chains, 1])
+
+                ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
+                                                         n_particles: 1,
+                                                         is_training: False})
+                test_ll_lbs.append(ll_lb)
+                test_ll_ubs.append(ll_ub)
+
+            time_test += time.time()
+            print('>>> TEST ({:.1f}s)'.format(time_test))
+            print('>> Test VAE ELBO = {}, IWAE ELBO = {}'.format(
+                np.mean(test_lbs), np.mean(test_lls)))
+            test_ll_lb = np.mean(test_ll_lbs)
+            test_ll_ub = np.mean(test_ll_ubs)
+            print('>> Test log likelihood lower bound = {}, '
+                  'upper bound = {}, BDMC gap = {}'
+                  .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
+
+        ckpt_file = tf.train.latest_checkpoint("mcem_results/")
+
+        # Restore
+        begin_epoch = 1
         sess.run(tf.global_variables_initializer())
+        if ckpt_file is not None:
+            print('Restoring model from {}...'.format(ckpt_file))
+            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
+            saver.restore(sess, ckpt_file)
+            test()
+        else:
+            print('Starting from scratch...')
 
-        x_batch = x_train[:batch_size]
-        x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-
-        for epoch in range(1, epoches + 1):
+        for epoch in range(begin_epoch, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
-
-            perm = list(range(x_train.shape[0]))
-            random.shuffle(perm)
-            x_train = x_train[perm]
-            lvs = lvs[perm]
+            np.random.shuffle(x_train)
             lbs = []
-            objs = []
-            accs = []
-            starts = []
-            ends = []
-            step_sizes = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
 
-                # Variational step
-                _, lb, sample_0 = sess.run(
-                    [rinfer, lower_bound, qz_samples],
-                    feed_dict={x: x_batch_bin,
-                               learning_rate_ph: learning_rate,
-                               n_particles: lb_samples})
+                # Optimize model parameters
+                sess.run(initialize_lz_train,
+                         feed_dict={x: x_batch_bin,
+                                    n_particles: lb_samples,
+                                    is_training: False})
 
-                # E-step: HMC
-                sample_input = np.squeeze(sample_0) if mode == 'qnet' else \
-                    lvs[t * batch_size:(t + 1) * batch_size]
-                sess.run(reset_z_train,
-                         feed_dict={x: x_batch_bin, n_particles: 1,
-                                    z_train_input2: sample_input})
-                samples = []
-                inner_objs = []
-                for i in range(mcmc_iters):
-                    sample, _, oh, nh, ol, nl, acc, ss = sess.run(
-                        train_sampler,
-                        feed_dict={x: x_batch_bin,
-                                   n_particles: 1})
-                    mean_acc = np.mean(acc)
-                    samples.append(sample[0])
-                    inner_objs.append(np.mean(ol))
-                    inner_objs.append(np.mean(nl))
-                    accs.append(acc)
-                    step_sizes.append(ss)
-                    # print('Step {}: ll = {}, acceptance = {}'.
-                    #       format(i, mean_ll, mean_acc))
+                _, _, _, _, oldp, newp, acc, ss = sess.run(
+                    train_sampler, feed_dict={x: x_batch_bin,
+                                              n_particles: 1,
+                                              is_training: False})
 
-                lvs[t * batch_size:(t + 1) * batch_size] = samples[-1]
-                samples = np.array(samples)
+                _ = sess.run(infer_model,
+                             feed_dict={x: x_batch_bin,
+                                        learning_rate_ph: learning_rate,
+                                        n_particles: lb_samples,
+                                        is_training: False})
 
-                # M-step
-                _, n_obj = sess.run([infer, obj],
-                                    feed_dict={x: x_batch_bin,
-                                               z_train_input: samples,
-                                               learning_rate_ph: learning_rate,
-                                               n_particles: mcmc_iters})
-
-                objs.append(0)
+                # Optimize q-net
+                _, lb = sess.run([infer_variational, lower_bound],
+                                 feed_dict={x: x_batch_bin,
+                                            learning_rate_ph: learning_rate,
+                                            n_particles: lb_samples,
+                                            is_training: False})
                 lbs.append(lb)
-                starts.append(inner_objs[0])
-                ends.append(inner_objs[-1])
-
             time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Obj = {}, Start = {}, End = {}, '
-                  'Lower Bound = {}, Acceptance = {}, Step Size = {}'.
-                  format(epoch, time_epoch, np.mean(objs), np.mean(starts),
-                         np.mean(ends), np.mean(lbs), np.mean(accs),
-                         np.mean(ss)))
+            print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
+                epoch, time_epoch, np.mean(lbs)))
+
+            if epoch % save_freq == 0:
+                print('Saving model...')
+                save_path = "mcem_results/mcem.epoch.{}.ckpt".format(epoch)
+                saver.save(sess, save_path)
+                print('Done')
 
             if epoch % test_freq == 0:
-                time_test = -time.time()
-                test_lbs = []
-                test_lls = []
-                for t in range(test_iters):
-                    test_x_batch = x_test[
-                        t * test_batch_size:(t + 1) * test_batch_size]
-                    test_lb = sess.run(lower_bound,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: lb_samples})
-                    test_ll = sess.run(log_likelihood,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples})
-                    test_lbs.append(test_lb)
-                    test_lls.append(test_ll)
-                time_test += time.time()
-                print('>>> TEST ({:.1f}s)'.format(time_test))
-                print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
+                test()
