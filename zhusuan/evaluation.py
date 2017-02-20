@@ -49,23 +49,24 @@ def is_loglikelihood(log_joint, observed, latent, axis=0):
 
 class BDMC:
     """
-    Bidirectional Monte Carlo. Estimates a stochastic lower bound and upper
+    Marginal log likelihood estimates using Bidirectional Monte Carlo (Grosse,
+    2015), which estimates a stochastic lower bound and a stochastic upper
     bound of the marginal log likelihood using annealed importance sampling
     (AIS).
     """
     def __init__(self, log_prior, log_joint, prior_sampler,
-                 hmc, observed, latent, chain_axis,
-                 num_chains, num_temperatures):
+                 hmc, observed, latent, chain_axis, n_chains, n_temperatures):
         # Shape of latent: [chain_axis * num_data, data dims]
         # Construct the tempered objective
         self.prior_sampler = prior_sampler
         self.latent = latent
         self.chain_axis = chain_axis
-        self.num_chains = num_chains
-        self.num_temperatures = num_temperatures
+        self.n_chains = n_chains
+        self.n_temperatures = n_temperatures
 
         with tf.name_scope("BDMC"):
-            self.temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
+            self.temperature = tf.placeholder(tf.float32, shape=[],
+                                              name="temperature")
 
             def log_fn(observed):
                 return log_prior(observed) * (1 - self.temperature) + \
@@ -73,66 +74,64 @@ class BDMC:
 
             self.log_fn = log_fn
             self.log_fn_val = log_fn(merge_dicts(observed, latent))
-            self.sampler = hmc.sample(log_fn, observed, latent, chain_axis=chain_axis)
-
+            self.sample_op = hmc.sample(log_fn, observed, latent,
+                                        chain_axis=chain_axis)
             self.init_latent = [tf.assign(z, z_s)
-                                for z, z_s in zip(latent.values(), self.prior_sampler.values())]
+                                for z, z_s in zip(latent.values(),
+                                                  self.prior_sampler.values())]
 
     def run(self, sess, feed_dict):
         # Draw a sample from the prior
         sess.run(self.init_latent, feed_dict=feed_dict)
         prior_density = sess.run(self.log_fn_val,
-                                 feed_dict=merge_dicts(feed_dict, {self.temperature: 0}))
+                                 feed_dict=merge_dicts(
+                                     feed_dict, {self.temperature: 0}))
         log_weights = -self.sum_density(prior_density)
 
         # Forward AIS
-        for num_t in range(self.num_temperatures):
-            current_temperature = 1.0 / self.num_temperatures * (num_t + 1)
+        for num_t in range(self.n_temperatures):
+            current_temperature = 1.0 / self.n_temperatures * (num_t + 1)
             new_feed_dict = feed_dict.copy()
             new_feed_dict[self.temperature] = current_temperature
-            _, _, _, _, oldp, newp, acc, ss = sess.run(self.sampler,
+            _, _, _, _, oldp, newp, acc, ss = sess.run(self.sample_op,
                                                        feed_dict=new_feed_dict)
             oldp = self.sum_density(oldp)
             newp = self.sum_density(newp)
-            if num_t + 1 < self.num_temperatures:
+            if num_t + 1 < self.n_temperatures:
                 log_weights += oldp - newp
             else:
                 log_weights += oldp
-
-            # print('Temperature = {}, OldP = {}, NewP = {}, Acc = {}, SS = {}'
-            #       .format(current_temperature, np.mean(oldp), np.mean(newp), np.mean(acc), np.mean(ss)))
 
         ll_lb = np.mean(self.get_lower_bound(log_weights))
 
         # Backward AIS
         log_weights = -newp
-        for num_t in range(self.num_temperatures):
-            current_temperature = 1.0 - 1.0 / self.num_temperatures * (num_t + 1)
-            _, _, _, _, oldp, newp, acc, ss = sess.run(self.sampler,
-                                   feed_dict=merge_dicts(feed_dict,
-                                                         {self.temperature: current_temperature}))
+        for num_t in range(self.n_temperatures):
+            current_temperature = 1.0 - 1.0 / self.n_temperatures * (num_t + 1)
+            _, _, _, _, oldp, newp, acc, ss = sess.run(
+                self.sample_op,
+                feed_dict=merge_dicts(feed_dict,
+                                      {self.temperature: current_temperature}))
             oldp = self.sum_density(oldp)
             newp = self.sum_density(newp)
-            if num_t + 1 < self.num_temperatures:
+            if num_t + 1 < self.n_temperatures:
                 log_weights += oldp - newp
             else:
                 log_weights += oldp
-
-            # print('Temperature = {}, OldP = {}, NewP = {}, Acc = {}, SS = {}'
-            #       .format(current_temperature, np.mean(oldp), np.mean(newp), np.mean(acc), np.mean(ss)))
 
         ll_ub = -np.mean(self.get_lower_bound(log_weights))
 
         return ll_lb, ll_ub
 
     def sum_density(self, density):
-        return np.reshape(density, [self.num_chains, -1])
+        return np.reshape(density, [self.n_chains, -1])
 
     def get_lower_bound(self, log_weights):
         max_log_weights = np.max(log_weights, axis=0)
-        offset_log_weights = np.sum(np.exp(log_weights - max_log_weights), axis=0)
-        log_weights = np.log(offset_log_weights) + max_log_weights - np.log(self.num_chains)
-
+        offset_log_weights = np.sum(np.exp(log_weights - max_log_weights),
+                                    axis=0)
+        log_weights = np.log(offset_log_weights) + max_log_weights - \
+            np.log(self.n_chains)
         return log_weights
 
 
@@ -148,14 +147,15 @@ def LD(obj, latent, step_size):
     new_grad = tf.gradients(new_obj, new_latent)[0]
     new_momentum = momentum + step_size / 2 * (grad + new_grad)
 
-    old_log_hamiltonian = old_obj - tf.reduce_sum(0.5 * tf.square(momentum), -1)
+    old_log_hamiltonian = old_obj - tf.reduce_sum(0.5 * tf.square(momentum),
+                                                  -1)
     new_log_hamiltonian = new_obj - tf.reduce_sum(0.5 * tf.square(
         new_momentum), -1)
 
     acceptance_rate = tf.minimum(1.0, tf.exp(new_log_hamiltonian -
                                              old_log_hamiltonian))
     return new_latent, old_obj, new_obj, old_log_hamiltonian, \
-           new_log_hamiltonian, tf.stop_gradient(acceptance_rate)
+        new_log_hamiltonian, tf.stop_gradient(acceptance_rate)
 
 
 def AISLD(log_prior, log_joint, prior_sampler,
@@ -170,7 +170,7 @@ def AISLD(log_prior, log_joint, prior_sampler,
         def log_fn(latent):
             obs = merge_dicts(observed, {'z': latent})
             return log_prior(obs) * temperature + \
-                   log_joint(obs) * (1 - temperature)
+                log_joint(obs) * (1 - temperature)
         return log_fn
 
     def log_weight(observed):

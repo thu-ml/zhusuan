@@ -124,8 +124,8 @@ if __name__ == "__main__":
 
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
                    hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
-                   num_chains=test_num_chains,
-                   num_temperatures=test_num_temperatures)
+                   n_chains=test_num_chains,
+                   n_temperatures=test_num_temperatures)
 
     # For AISLD
     def ais_prior_obj(observed):

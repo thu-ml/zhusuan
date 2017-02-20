@@ -3,9 +3,15 @@
 
 from __future__ import absolute_import
 from __future__ import division
+import os
 
 import tensorflow as tf
 from tensorflow.python.training import optimizer
+
+
+def makedirs(filename):
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
 
 
 class AdamaxOptimizer(optimizer.Optimizer):

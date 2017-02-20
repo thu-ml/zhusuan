@@ -19,7 +19,7 @@ import dataset
 
 
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_particles, is_training):
+def vae(observed, n, n_x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
@@ -32,7 +32,7 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
 
 
 @zs.reuse('variational')
-def q_net(observed, x, n_z, n_particles, is_training):
+def q_net(observed, x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as variational:
         lz_x = layers.fully_connected(x, 500)
         lz_x = layers.fully_connected(lz_x, 500)
@@ -69,9 +69,9 @@ if __name__ == "__main__":
     train_num_samples = 1
     train_num_leapfrogs = 10
     test_batch_size = 400
-    test_num_temperatures = 100
-    test_num_leapfrogs = 10
-    test_num_chains = 10
+    test_n_temperatures = 100
+    test_n_leapfrogs = 10
+    test_n_chains = 10
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
@@ -81,7 +81,6 @@ if __name__ == "__main__":
     anneal_lr_rate = 0.75
 
     # Build the computation graph
-    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
@@ -89,7 +88,7 @@ if __name__ == "__main__":
                     tf.float32)
     x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-    lz = tf.Variable(tf.zeros([1, test_num_chains * test_batch_size, n_z]),
+    lz = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
                      name="z", trainable=False)
     lz_train = tf.Variable(tf.zeros([1, batch_size, n_z]),
                            name="train_z", trainable=False)
@@ -97,11 +96,11 @@ if __name__ == "__main__":
 
     # ==== For optimize q ====
     def log_joint(observed):
-        model = vae(observed, n, n_x, n_z, n_particles, is_training)
+        model = vae(observed, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    variational = q_net({}, x, n_z, n_particles, is_training)
+    variational = q_net({}, x, n_z, n_particles)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
 
@@ -118,31 +117,27 @@ if __name__ == "__main__":
 
     # Use q(z | x) as prior
     def prior_obj(observed):
-        model = q_net(observed, observed['x'], n_z, n_particles, is_training)
+        model = q_net(observed, observed['x'], n_z, n_particles)
         log_qz = model.local_log_prob('z')
         return tf.squeeze(tf.reduce_sum(log_qz, -1))
 
     prior_samples = {'z': qz_samples}
-
-    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_num_leapfrogs,
-                 adapt_step_size=tf.constant(True),
-                 target_acceptance_rate=0.65, adapt_mass=tf.constant(True))
-
+    eval_hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
+                      adapt_step_size=True,
+                      target_acceptance_rate=0.65, adapt_mass=True)
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
-                   hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
-                   num_chains=test_num_chains,
-                   num_temperatures=test_num_temperatures)
+                   eval_hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
+                   n_chains=test_n_chains,
+                   n_temperatures=test_n_temperatures)
 
     # ==== For optimize p ====
     initialize_lz_train = tf.assign(lz_train, qz_samples)
-    mcem_model = vae({'x': x_obs, 'z': lz_train}, n, n_x, n_z, n_particles,
-                     is_training)
+    mcem_model = vae({'x': x_obs, 'z': lz_train}, n, n_x, n_z, n_particles)
     log_px_z = mcem_model.local_log_prob('x')
     mcem_obj = tf.reduce_mean(tf.reduce_sum(log_px_z, -1))
-
     hmc = zs.HMC(step_size=1e-6, n_leapfrogs=train_num_leapfrogs,
-                 adapt_step_size=tf.constant(True),
-                 target_acceptance_rate=0.65, adapt_mass=tf.constant(True))
+                 adapt_step_size=True,
+                 target_acceptance_rate=0.65, adapt_mass=True)
     train_sampler = hmc.sample(joint_obj, {'x': x_obs}, {'z': lz_train},
                                chain_axis=1)
 
@@ -166,7 +161,7 @@ if __name__ == "__main__":
     infer_variational = optimizer.minimize(-lower_bound,
                                            var_list=variational_params)
 
-    saver = tf.train.Saver(max_to_keep=10, var_list=tf.all_variables())
+    saver = tf.train.Saver(max_to_keep=10)
 
     # Run the inference
     with tf.Session() as sess:
@@ -181,12 +176,10 @@ if __name__ == "__main__":
 
                 test_lb = sess.run(lower_bound,
                                    feed_dict={x: test_x_batch,
-                                              n_particles: lb_samples,
-                                              is_training: False})
+                                              n_particles: lb_samples})
                 test_ll = sess.run(log_likelihood,
                                    feed_dict={x: test_x_batch,
-                                              n_particles: ll_samples,
-                                              is_training: False})
+                                              n_particles: ll_samples})
                 test_lbs.append(test_lb)
                 test_lls.append(test_ll)
 
@@ -196,11 +189,10 @@ if __name__ == "__main__":
             for t in range(test_iters):
                 test_x_batch = x_test[
                                t * test_batch_size:(t + 1) * test_batch_size]
-                test_x_batch = np.tile(test_x_batch, [test_num_chains, 1])
+                test_x_batch = np.tile(test_x_batch, [test_n_chains, 1])
 
                 ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
-                                                         n_particles: 1,
-                                                         is_training: False})
+                                                         n_particles: 1})
                 test_ll_lbs.append(ll_lb)
                 test_ll_ubs.append(ll_ub)
 
@@ -240,26 +232,22 @@ if __name__ == "__main__":
                 # Optimize model parameters
                 sess.run(initialize_lz_train,
                          feed_dict={x: x_batch_bin,
-                                    n_particles: lb_samples,
-                                    is_training: False})
+                                    n_particles: lb_samples})
 
                 _, _, _, _, oldp, newp, acc, ss = sess.run(
                     train_sampler, feed_dict={x: x_batch_bin,
-                                              n_particles: 1,
-                                              is_training: False})
+                                              n_particles: 1})
 
                 _ = sess.run(infer_model,
                              feed_dict={x: x_batch_bin,
                                         learning_rate_ph: learning_rate,
-                                        n_particles: lb_samples,
-                                        is_training: False})
+                                        n_particles: lb_samples})
 
                 # Optimize q-net
                 _, lb = sess.run([infer_variational, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
-                                            n_particles: lb_samples,
-                                            is_training: False})
+                                            n_particles: lb_samples})
                 lbs.append(lb)
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
