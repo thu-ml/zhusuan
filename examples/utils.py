@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import
 from __future__ import division
+import os
 
 import os
 
@@ -12,6 +13,11 @@ import numpy as np
 from skimage import io, img_as_ubyte
 from skimage.exposure import rescale_intensity
 from six.moves import range
+
+
+def makedirs(filename):
+    if not os.path.exists(os.path.dirname(filename)):
+        os.makedirs(os.path.dirname(filename))
 
 
 class AdamaxOptimizer(optimizer.Optimizer):

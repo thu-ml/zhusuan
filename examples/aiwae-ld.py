@@ -21,6 +21,7 @@ import dataset
 @zs.reuse('model')
 def vae(observed, n, n_x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as model:
+        normalizer_params = {'updates_collections': None}
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
         z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
@@ -34,6 +35,7 @@ def vae(observed, n, n_x, n_z, n_particles):
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_particles):
     with zs.StochasticGraph(observed=observed) as variational:
+        normalizer_params = {'updates_collections': None}
         lz_x = layers.fully_connected(x, 500)
         lz_x = layers.fully_connected(lz_x, 500)
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
@@ -66,12 +68,10 @@ if __name__ == "__main__":
     ll_samples = 1000
     epoches = 3000
     batch_size = 100
-    train_num_samples = 1
-    train_num_leapfrogs = 10
     test_batch_size = 400
-    test_n_temperatures = 100
-    test_n_leapfrogs = 10
-    test_n_chains = 10
+    test_num_temperatures = 100
+    test_num_leapfrogs = 10
+    test_num_chains = 10
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
@@ -82,19 +82,14 @@ if __name__ == "__main__":
 
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.float32)
     x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-    lz = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
-                     name="z", trainable=False)
-    lz_train = tf.Variable(tf.zeros([1, batch_size, n_z]),
-                           name="train_z", trainable=False)
+    lz = tf.Variable(tf.zeros([1, test_num_chains * test_batch_size, n_z]), name="z")
     n = tf.shape(x)[0]
 
-    # ==== For optimize q ====
     def log_joint(observed):
         model = vae(observed, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
@@ -111,7 +106,7 @@ if __name__ == "__main__":
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
-    # ==== For BDMC ====
+    # For BDMC
     def joint_obj(observed):
         return tf.squeeze(log_joint(observed))
 
@@ -122,46 +117,37 @@ if __name__ == "__main__":
         return tf.squeeze(tf.reduce_sum(log_qz, -1))
 
     prior_samples = {'z': qz_samples}
-    eval_hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
-                      adapt_step_size=True,
-                      target_acceptance_rate=0.65, adapt_mass=True)
-    bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
-                   eval_hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
-                   n_chains=test_n_chains,
-                   n_temperatures=test_n_temperatures)
 
-    # ==== For optimize p ====
-    initialize_lz_train = tf.assign(lz_train, qz_samples)
-    mcem_model = vae({'x': x_obs, 'z': lz_train}, n, n_x, n_z, n_particles)
-    log_px_z = mcem_model.local_log_prob('x')
-    mcem_obj = tf.reduce_mean(tf.reduce_sum(log_px_z, -1))
-    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=train_num_leapfrogs,
-                 adapt_step_size=True,
-                 target_acceptance_rate=0.65, adapt_mass=True)
-    train_sampler = hmc.sample(joint_obj, {'x': x_obs}, {'z': lz_train},
-                               chain_axis=1)
+    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_num_leapfrogs,
+                 adapt_step_size=tf.constant(True), target_acceptance_rate=0.65,
+                 adapt_mass=tf.constant(True))
+
+    bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
+                   hmc, {'x': x_obs}, {'z': lz}, chain_axis=1,
+                   n_chains=test_num_chains,
+                   n_temperatures=test_num_temperatures)
+
+    # For AISLD
+    def ais_prior_obj(observed):
+        variational = q_net(observed, x, n_z, n_particles)
+        log_pz = variational.local_log_prob('z')
+        return tf.reduce_sum(log_pz, -1)
+
+    ais_obj, op_oo, op_no, op_oh, op_nh, op_acc = \
+        zs.AISLD(ais_prior_obj, log_joint, qz_samples, {'x': x_obs},
+                 6e-2, 5)
+    print('AIS = {}'.format(ais_obj))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
-
-    # Gather variables
-    model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                     scope="model")
-    variational_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                           scope="variational")
-    print('Model parameters:')
-    for i in model_params:
-        print(i.name, i.get_shape())
-    print('Variational parameters:')
-    for i in variational_params:
-        print(i.name, i.get_shape())
-
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    infer_model = optimizer.minimize(-mcem_obj, var_list=model_params)
-    optimizer2 = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    infer_variational = optimizer.minimize(-lower_bound,
-                                           var_list=variational_params)
+    grads = optimizer.compute_gradients(-ais_obj)
+    infer = optimizer.apply_gradients(grads)
 
-    saver = tf.train.Saver(max_to_keep=10)
+    params = tf.trainable_variables()
+    for i in params:
+        print(i.name, i.get_shape())
+
+    saver = tf.train.Saver(max_to_keep=10, var_list=tf.all_variables())
 
     # Run the inference
     with tf.Session() as sess:
@@ -173,7 +159,6 @@ if __name__ == "__main__":
             for t in range(test_iters):
                 test_x_batch = x_test[
                                t * test_batch_size:(t + 1) * test_batch_size]
-
                 test_lb = sess.run(lower_bound,
                                    feed_dict={x: test_x_batch,
                                               n_particles: lb_samples})
@@ -189,7 +174,7 @@ if __name__ == "__main__":
             for t in range(test_iters):
                 test_x_batch = x_test[
                                t * test_batch_size:(t + 1) * test_batch_size]
-                test_x_batch = np.tile(test_x_batch, [test_n_chains, 1])
+                test_x_batch = np.tile(test_x_batch, [test_num_chains, 1])
 
                 ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
                                                          n_particles: 1})
@@ -198,24 +183,23 @@ if __name__ == "__main__":
 
             time_test += time.time()
             print('>>> TEST ({:.1f}s)'.format(time_test))
-            print('>> Test VAE ELBO = {}, IWAE ELBO = {}'.format(
-                np.mean(test_lbs), np.mean(test_lls)))
+            print('>> Test VAE ELBO = {}, IWAE ELBO = {}'.format(np.mean(test_lbs), np.mean(test_lls)))
             test_ll_lb = np.mean(test_ll_lbs)
             test_ll_ub = np.mean(test_ll_ubs)
-            print('>> Test log likelihood lower bound = {}, '
-                  'upper bound = {}, BDMC gap = {}'
+            print('>> Test log likelihood lower bound = {}, upper bound = {}, BDMC gap = {}'
                   .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
 
-        ckpt_file = tf.train.latest_checkpoint("mcem_results/")
+        ckpt_file = tf.train.latest_checkpoint(".")
 
         # Restore
         begin_epoch = 1
         sess.run(tf.global_variables_initializer())
         if ckpt_file is not None:
-            print('Restoring model from {}...'.format(ckpt_file))
-            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
-            saver.restore(sess, ckpt_file)
-            test()
+            pass
+            # print('Restoring model from {}...'.format(ckpt_file))
+            # begin_epoch = int(ckpt_file.split('.')[-2]) + 1
+            # saver.restore(sess, ckpt_file)
+            # test()
         else:
             print('Starting from scratch...')
 
@@ -225,39 +209,37 @@ if __name__ == "__main__":
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
             lbs = []
+            oos = []
+            nos = []
+            ohs = []
+            nhs = []
+            accs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-
-                # Optimize model parameters
-                sess.run(initialize_lz_train,
-                         feed_dict={x: x_batch_bin,
-                                    n_particles: lb_samples})
-
-                _, _, _, _, oldp, newp, acc, ss = sess.run(
-                    train_sampler, feed_dict={x: x_batch_bin,
-                                              n_particles: 1})
-
-                _ = sess.run(infer_model,
-                             feed_dict={x: x_batch_bin,
-                                        learning_rate_ph: learning_rate,
-                                        n_particles: lb_samples})
-
-                # Optimize q-net
-                _, lb = sess.run([infer_variational, lower_bound],
+                _, lb, oo, no, oh, nh, acc = sess.run([infer, lower_bound,
+                    op_oo, op_no, op_oh, op_nh, op_acc],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples})
                 lbs.append(lb)
+                oos.append(oo)
+                nos.append(no)
+                ohs.append(oh)
+                nhs.append(nh)
+                accs.append(acc)
             time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
-                epoch, time_epoch, np.mean(lbs)))
+            print('Epoch {} ({:.1f}s): Lower bound = {}, OO = {}, '
+                  'NO = {}, ACC = {}'.format(
+                epoch, time_epoch, np.mean(lbs),
+                np.mean(oos), np.mean(nos), np.mean(accs)))
 
             if epoch % save_freq == 0:
-                print('Saving model...')
-                save_path = "mcem_results/mcem.epoch.{}.ckpt".format(epoch)
-                saver.save(sess, save_path)
-                print('Done')
+                # print('Saving model...')
+                # save_path = "vae.epoch.{}.ckpt".format(epoch)
+                # saver.save(sess, save_path)
+                # print('Done')
+                pass
 
             if epoch % test_freq == 0:
                 test()
