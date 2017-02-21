@@ -18,7 +18,8 @@ __all__ = [
     'advi',
     'iwae',
     'rws',
-    'nvil'
+    'nvil',
+    'vimco'
 ]
 
 
@@ -186,3 +187,55 @@ def nvil(log_joint,
     cost += fake_log_joint_cost + fake_variational_cost
     lower_bound = tf.reduce_mean(log_joint_value + entropy, axis)
     return cost, lower_bound
+
+
+def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
+    if not is_particle_larger_one:
+        return advi(log_joint, observed, latent, axis)
+
+    latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
+    latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
+    latent_logpdfs = map(lambda x: x[1], latent_v)
+    joint_obs = merge_dicts(observed, latent_outputs)
+    log_joint_gen = log_joint(joint_obs)    # log p(x,h)
+    entropy = -sum(latent_logpdfs)          # -log q(h|x)
+
+    l_signal = log_joint_gen + entropy
+    mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) - l_signal) /\
+                         tf.to_float(tf.shape(l_signal)[axis] - 1)
+
+    # calculate log_mean_exp_sub
+    x = tf.cast(l_signal, dtype=tf.float32)
+    sub_x = tf.cast(mean_except_signal, dtype=tf.float32)
+    x_shape = x.get_shape()
+    n_dim = x_shape.ndims
+    op_indices = n_dim - 1
+
+    perm = []
+    rep_para = []
+    for i in range(n_dim):
+        perm.append(i)
+        rep_para.append(1)
+    perm[n_dim - 1] = axis
+    perm[axis] = op_indices
+
+    x = tf.transpose(x, perm=perm)
+    sub_x = tf.transpose(sub_x, perm=perm)
+    K = tf.shape(x)[op_indices]
+    rep_para.append(K)
+
+    # extend to another dimension
+    x_ex = tf.tile(tf.expand_dims(x, n_dim), rep_para)
+    x_ex = x_ex - tf.matrix_diag(x) + tf.matrix_diag(sub_x)
+
+    pre_signal = tf.transpose(log_mean_exp(x_ex, op_indices), perm = perm)
+    # end of calculation of log_mean_exp_sub
+
+    l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal
+
+    fake_term = tf.reduce_sum(-entropy * \
+                      tf.stop_gradient(l_signal), axis)
+    lower_bound = log_mean_exp(log_joint_gen + entropy, axis)
+    object_function = fake_term + log_mean_exp(log_joint_gen + entropy, axis)
+
+    return object_function, lower_bound
