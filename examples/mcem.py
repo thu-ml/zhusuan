@@ -64,7 +64,7 @@ if __name__ == "__main__":
     lb_samples = 1
     rws_samples = 10
     ll_samples = 1000
-    epoches = 10
+    epoches = 3000
     batch_size = 1000
     iters = N // batch_size
     train_n_samples = 1
@@ -75,9 +75,9 @@ if __name__ == "__main__":
     test_n_temperatures = 100
     test_n_leapfrogs = 10
     test_n_chains = 10
-    test_freq = 2
+    test_freq = 10
     full_test_freq = 100
-    save_freq = 1
+    save_freq = 100
     learning_rate = 0.003
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
