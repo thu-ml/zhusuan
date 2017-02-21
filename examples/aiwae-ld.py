@@ -56,8 +56,6 @@ if __name__ == "__main__":
     x_train = np.vstack([x_train, x_valid]).astype('float32')
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
-    x_test = x_test[:400, :]
-    t_test = t_test[:400]
     n_x = x_train.shape[1]
 
     # Define model parameters
@@ -67,7 +65,9 @@ if __name__ == "__main__":
     lb_samples = 1
     ll_samples = 1000
     epoches = 3000
-    batch_size = 100
+    batch_size = 1000
+    train_num_leapfrogs = 5
+    train_num_temperatures = 5
     test_batch_size = 400
     test_num_temperatures = 100
     test_num_leapfrogs = 10
@@ -75,8 +75,9 @@ if __name__ == "__main__":
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
     test_freq = 10
+    full_test_freq = 100
     save_freq = 10
-    learning_rate = 0.001
+    learning_rate = 0.003
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
 
@@ -134,8 +135,8 @@ if __name__ == "__main__":
         return tf.reduce_sum(log_pz, -1)
 
     ais_obj, op_oo, op_no, op_oh, op_nh, op_acc = \
-        zs.AISLD(ais_prior_obj, log_joint, qz_samples, {'x': x_obs},
-                 6e-2, 5)
+        zs.ais_hmc(ais_prior_obj, log_joint, qz_samples, {'x': x_obs},
+                 8e-2, train_num_temperatures, train_num_leapfrogs)
     print('AIS = {}'.format(ais_obj))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
@@ -151,7 +152,7 @@ if __name__ == "__main__":
 
     # Run the inference
     with tf.Session() as sess:
-        def test():
+        def test(full_test):
             # IS test
             time_test = -time.time()
             test_lbs = []
@@ -159,7 +160,7 @@ if __name__ == "__main__":
             for t in range(test_iters):
                 test_x_batch = x_test[
                                t * test_batch_size:(t + 1) * test_batch_size]
-                test_lb = sess.run(lower_bound,
+                test_lb = sess.run(ais_obj,
                                    feed_dict={x: test_x_batch,
                                               n_particles: lb_samples})
                 test_ll = sess.run(log_likelihood,
@@ -180,12 +181,16 @@ if __name__ == "__main__":
                                                          n_particles: 1})
                 test_ll_lbs.append(ll_lb)
                 test_ll_ubs.append(ll_ub)
+                if not full_test:
+                    break
 
             time_test += time.time()
             print('>>> TEST ({:.1f}s)'.format(time_test))
             print('>> Test VAE ELBO = {}, IWAE ELBO = {}'.format(np.mean(test_lbs), np.mean(test_lls)))
             test_ll_lb = np.mean(test_ll_lbs)
             test_ll_ub = np.mean(test_ll_ubs)
+            if full_test:
+                print('Full test for BDMC')
             print('>> Test log likelihood lower bound = {}, upper bound = {}, BDMC gap = {}'
                   .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
 
@@ -217,7 +222,7 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb, oo, no, oh, nh, acc = sess.run([infer, lower_bound,
+                _, lb, oo, no, oh, nh, acc = sess.run([infer, ais_obj,
                     op_oo, op_no, op_oh, op_nh, op_acc],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
@@ -242,4 +247,4 @@ if __name__ == "__main__":
                 pass
 
             if epoch % test_freq == 0:
-                test()
+                test(epoch % full_test_freq == 0)

@@ -15,7 +15,7 @@ from .utils import log_mean_exp, merge_dicts
 __all__ = [
     'is_loglikelihood',
     'BDMC',
-    'AISLD'
+    'ais_hmc'
 ]
 
 
@@ -136,30 +136,34 @@ class BDMC:
         return log_weights
 
 
-def LD(obj, latent, step_size):
+def hmc(obj, latent, step_size, num_leapfrogs):
     old_obj = obj(latent)
 
     grad = tf.gradients(old_obj, latent)[0]
     momentum = tf.random_normal(shape=tf.shape(latent))
 
-    new_latent = latent + step_size**2/2 * grad + step_size * momentum
-    new_obj = obj(new_latent)
+    current_momentum = momentum + step_size * grad / 2
+    current_latent = latent
+    for i in range(num_leapfrogs):
+        current_latent = current_latent + step_size * current_momentum
 
-    new_grad = tf.gradients(new_obj, new_latent)[0]
-    new_momentum = momentum + step_size / 2 * (grad + new_grad)
+        current_step_size = step_size if i + 1 < num_leapfrogs else step_size / 2
+        current_obj = obj(current_latent)
+        current_momentum = current_momentum + current_step_size * \
+                                              tf.gradients(current_obj, current_latent)[0]
 
     old_log_hamiltonian = old_obj - tf.reduce_sum(0.5 * tf.square(momentum), -1)
-    new_log_hamiltonian = new_obj - tf.reduce_sum(0.5 * tf.square(
-        new_momentum), -1)
+    new_log_hamiltonian = current_obj - \
+                          tf.reduce_sum(0.5 * tf.square(current_momentum), -1)
 
     acceptance_rate = tf.minimum(1.0, tf.exp(new_log_hamiltonian -
                                              old_log_hamiltonian))
-    return new_latent, old_obj, new_obj, old_log_hamiltonian, \
+    return current_latent, old_obj, current_obj, old_log_hamiltonian, \
            new_log_hamiltonian, tf.stop_gradient(acceptance_rate)
 
 
-def AISLD(log_prior, log_joint, prior_sampler,
-          observed, step_size, num_temperature):
+def ais_hmc(log_prior, log_joint, prior_sampler,
+          observed, step_size, num_temperature, num_leapfrogs):
     """
     Latent variable shape: chain data n_z
     log_prior, log_joint shape: chain data
@@ -182,7 +186,7 @@ def AISLD(log_prior, log_joint, prior_sampler,
     for i in range(1, num_temperature):
         current_temperature = 1.0 - temperature_gap * i
         new_z, oo, no, oh, nh, acc = \
-            LD(make_log_fn(current_temperature), z, step_size)
+            hmc(make_log_fn(current_temperature), z, step_size, num_leapfrogs)
 
         u01 = tf.random_uniform(shape=tf.shape(acc))
         if_accept = tf.to_float(u01 < acc)
