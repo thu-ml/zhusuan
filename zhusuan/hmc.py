@@ -170,19 +170,20 @@ class HMC:
                                                 name="n_leapfrogs")
         self.target_acceptance_rate = tf.convert_to_tensor(
             target_acceptance_rate, name="target_acceptance_rate")
-
-        self.adapt_step_size = adapt_step_size
         self.t = tf.Variable(0.0, dtype=tf.float32, name="t",
                              trainable=False)
+        self.adapt_step_size = adapt_step_size
         if adapt_step_size is not None:
             # TODO make sure adapt_step_size is a placeholder
             self.step_size_tuner = StepsizeTuner(
                 step_size, adapt_step_size, gamma, t0, kappa,
                 target_acceptance_rate)
-        if adapt_mass is None:
+        if adapt_mass is not None:
             mass_collect_iters = 0
-        self.adapt_mass = tf.convert_to_tensor(
-            adapt_mass, dtype=tf.bool, name="adapt_mass")
+            self.adapt_mass = tf.convert_to_tensor(
+                adapt_mass, dtype=tf.bool, name="adapt_mass")
+        else:
+            self.adapt_mass = None
         self.mass_collect_iters = mass_collect_iters
         self.mass_decay = mass_decay
 

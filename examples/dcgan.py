@@ -170,7 +170,8 @@ if __name__ == "__main__":
             for t in range(iters):
                 iter = t + 1
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
-                _, g_loss, d_loss = sess.run([infer, gen_loss, disc_loss],
+                _, g_loss, d_loss = sess.run(
+                    [infer, gen_loss, disc_loss],
                     feed_dict={x: x_batch,
                                learning_rate_ph: learning_rate,
                                is_training: True})

@@ -208,7 +208,8 @@ if __name__ == "__main__":
 
             if epoch % save_freq == 0:
                 print('Saving model...')
-                save_path = "results/vae/vae.epoch.{}.ckpt".format(epoch)
+                save_path = os.path.join(result_path,
+                                         "vae.epoch.{}.ckpt".format(epoch))
                 utils.makedirs(save_path)
                 saver.save(sess, save_path)
                 print('Done')
@@ -230,6 +231,7 @@ if __name__ == "__main__":
         time_bdmc += time.time()
         test_ll_lb = np.mean(test_ll_lbs)
         test_ll_ub = np.mean(test_ll_ubs)
-        print('>> Test log likelihood (BDMC)\n>> lower bound = {}, '
-              'upper bound = {}, BDMC gap = {}'
-              .format(test_ll_lb, test_ll_ub, test_ll_ub - test_ll_lb))
+        print('>> Test log likelihood (BDMC) ({:.1f}s)\n'
+              '>> lower bound = {}, upper bound = {}, BDMC gap = {}'
+              .format(time_bdmc, test_ll_lb, test_ll_ub,
+                      test_ll_ub - test_ll_lb))

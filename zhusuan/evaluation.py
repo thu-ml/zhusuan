@@ -147,23 +147,25 @@ def hmc(obj, latent, step_size, num_leapfrogs):
     for i in range(num_leapfrogs):
         current_latent = current_latent + step_size * current_momentum
 
-        current_step_size = step_size if i + 1 < num_leapfrogs else step_size / 2
+        current_step_size = step_size if i + 1 < num_leapfrogs \
+            else step_size / 2
         current_obj = obj(current_latent)
         current_momentum = current_momentum + current_step_size * \
-                                              tf.gradients(current_obj, current_latent)[0]
+            tf.gradients(current_obj, current_latent)[0]
 
-    old_log_hamiltonian = old_obj - tf.reduce_sum(0.5 * tf.square(momentum), -1)
+    old_log_hamiltonian = old_obj - tf.reduce_sum(0.5 * tf.square(momentum),
+                                                  -1)
     new_log_hamiltonian = current_obj - \
-                          tf.reduce_sum(0.5 * tf.square(current_momentum), -1)
+        tf.reduce_sum(0.5 * tf.square(current_momentum), -1)
 
     acceptance_rate = tf.minimum(1.0, tf.exp(new_log_hamiltonian -
                                              old_log_hamiltonian))
     return current_latent, old_obj, current_obj, old_log_hamiltonian, \
-           new_log_hamiltonian, tf.stop_gradient(acceptance_rate)
+        new_log_hamiltonian, tf.stop_gradient(acceptance_rate)
 
 
 def ais_hmc(log_prior, log_joint, prior_sampler,
-          observed, step_size, num_temperature, num_leapfrogs):
+            observed, step_size, num_temperature, num_leapfrogs):
     """
     Latent variable shape: chain data n_z
     log_prior, log_joint shape: chain data
