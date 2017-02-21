@@ -13,6 +13,180 @@ from .context import zhusuan
 from zhusuan.distributions import *
 
 
+class TestUniform:
+    def test_rvs_check_shape(self):
+        with tf.Session() as sess:
+            with pytest.raises(ValueError):
+                sess.run(uniform.rvs(minval=tf.zeros([3, 2]),
+                                     maxval=tf.ones([1, 3, 2])))
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                minval = tf.placeholder(tf.float32, [None, 2])
+                maxval = tf.placeholder(tf.float32, [None, 2])
+                sess.run(uniform.rvs(minval, maxval),
+                         feed_dict={minval: np.zeros([3, 2]),
+                                    maxval: np.ones([4, 2])})
+
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(uniform.rvs(np.zeros([1, 2]), np.ones([1, 2]),
+                                     sample_dim=None, n_samples=2))
+
+    def test_rvs_shape(self):
+        with tf.Session() as sess:
+            minval = tf.placeholder(tf.float32, [None, 2])
+            maxval = tf.placeholder(tf.float32, [None, 2])
+            a = sess.run(
+                uniform.rvs(minval, maxval, sample_dim=0, n_samples=3),
+                feed_dict={minval: np.zeros([1, 2]), maxval: np.ones([1, 2])})
+            assert a.shape == (3, 1, 2)
+
+            b = sess.run(
+                uniform.rvs(minval, maxval),
+                feed_dict={minval: np.zeros([1, 2]), maxval: np.ones([1, 2])})
+            assert b.shape == (1, 2)
+
+            sample_dim = tf.placeholder(tf.int32, shape=())
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(uniform.rvs(np.zeros([1, 2]), np.ones([1, 2]),
+                                     sample_dim=sample_dim, n_samples=1),
+                         feed_dict={sample_dim: -1})
+
+    def test_rvs_static_shape(self):
+        minval = tf.zeros([2, 3])
+        maxval = tf.ones([2, 3])
+        a = uniform.rvs(minval, maxval)
+        assert a.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a).shape == (2, 3)
+
+        b = uniform.rvs(minval, maxval, sample_dim=0, n_samples=4)
+        assert b.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b).shape == (4, 2, 3)
+
+        c = uniform.rvs(minval, maxval, sample_dim=1, n_samples=4)
+        assert c.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c).shape == (2, 4, 3)
+
+        d = uniform.rvs(minval, maxval, sample_dim=2, n_samples=4)
+        assert d.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d).shape == (2, 3, 4)
+
+        sample_dim = tf.placeholder(tf.int32, shape=())
+        e = uniform.rvs(minval, maxval, sample_dim=sample_dim, n_samples=2)
+        assert e.get_shape().as_list() == [None, None, None]
+
+        with pytest.raises(ValueError):
+            uniform.rvs(minval, maxval, sample_dim=-1, n_samples=4)
+
+    def test_rvs_reparameterized(self):
+        with tf.Session() as sess:
+            minval = tf.zeros([10, 10])
+            maxval = tf.ones([10, 10])
+            a = uniform.rvs(minval, maxval, reparameterized=True)
+            minval_grads, maxval_grads = tf.gradients(tf.reduce_mean(a),
+                                                      [minval, maxval])
+            minval_grads_, maxval_grads_ = sess.run([minval_grads,
+                                                     maxval_grads])
+            assert np.abs(minval_grads_).max() > 1e-6
+            assert np.abs(maxval_grads_).max() > 1e-6
+
+            b = uniform.rvs(minval, maxval)
+            minval_grads, maxval_grads = tf.gradients(tf.reduce_mean(b),
+                                                      [minval, maxval])
+            assert minval_grads is None
+            assert maxval_grads is None
+
+    def test_logpdf_static_shape(self):
+        minval = tf.ones([2, 3])
+        maxval = tf.zeros([2, 3])
+        a = tf.zeros([2, 3])
+        a_logpdf = uniform.logpdf(a, minval, maxval)
+        assert a_logpdf.get_shape().as_list() == [2, 3]
+        with tf.Session() as sess:
+            assert sess.run(a_logpdf).shape == (2, 3)
+
+        b = tf.ones([4, 2, 3])
+        b_logpdf = uniform.logpdf(b, minval, maxval, sample_dim=0)
+        assert b_logpdf.get_shape().as_list() == [4, 2, 3]
+        with tf.Session() as sess:
+            assert sess.run(b_logpdf).shape == (4, 2, 3)
+
+        c = tf.zeros([2, 4, 3])
+        c_logpdf = uniform.logpdf(c, minval, maxval, sample_dim=1)
+        assert c_logpdf.get_shape().as_list() == [2, 4, 3]
+        with tf.Session() as sess:
+            assert sess.run(c_logpdf).shape == (2, 4, 3)
+
+        d = tf.zeros([2, 3, 4])
+        d_logpdf = uniform.logpdf(d, minval, maxval, sample_dim=2)
+        assert d_logpdf.get_shape().as_list() == [2, 3, 4]
+        with tf.Session() as sess:
+            assert sess.run(d_logpdf).shape == (2, 3, 4)
+
+        with pytest.raises(ValueError):
+            uniform.logpdf(d, minval, maxval, sample_dim=-1)
+
+    def test_logpdf_shape(self):
+        with tf.Session() as sess:
+            sample_dim = tf.placeholder(tf.int32, shape=())
+            with pytest.raises(tf.errors.InvalidArgumentError):
+                sess.run(
+                    uniform.logpdf(np.ones([2]), np.zeros([2]), np.ones([2]),
+                                   sample_dim=sample_dim),
+                    feed_dict={sample_dim: -1})
+
+        minval = tf.placeholder(tf.float32, [None, 2])
+        maxval = tf.placeholder(tf.float32, [None, 2])
+        x = tf.placeholder(tf.float32, [None, 10, 2])
+        y = tf.placeholder(tf.float32, [None, 2])
+        with tf.Session() as sess:
+            x_logpdf = sess.run(uniform.logpdf(x, minval, maxval,
+                                               sample_dim=1),
+                                feed_dict={minval: np.zeros([3, 2]),
+                                           maxval: np.ones([3, 2]),
+                                           x: np.random.random([3, 10, 2])})
+            y_logpdf = sess.run(uniform.logpdf(y, minval, maxval),
+                                feed_dict={minval: np.zeros([3, 2]),
+                                           maxval: np.ones([3, 2]),
+                                           y: np.random.random([3, 2])})
+            assert x_logpdf.shape == (3, 10, 2)
+            assert y_logpdf.shape == (3, 2)
+
+    def test_logpdf_value(self):
+        with tf.Session() as sess:
+            assert np.abs(sess.run(uniform.logpdf(0, 0, 1)) - 0.) < 1e-6
+            assert sess.run(uniform.logpdf(1, 0, 1)) == -np.inf
+            assert np.all(sess.run(uniform.logpdf([-1, 2], [-3, 3], [-2, 4]))
+                          == np.array([-np.inf, -np.inf]))
+
+        minval_value = np.array([2, -10, -5], dtype='float32')
+        maxval_value = np.array([4, 4, -1], dtype='float32')
+        x_value = np.array([3, 3.9, -4.9], dtype='float32')
+        minval = tf.constant(minval_value)
+        maxval = tf.constant(maxval_value)
+        x = tf.constant(x_value)
+        with tf.Session() as sess:
+            test_value = sess.run(uniform.logpdf(x, minval, maxval))
+            true_value = stats.uniform.logpdf(x_value, minval_value,
+                                              maxval_value - minval_value)
+            assert np.abs((test_value - true_value) / true_value).max() < 1e-6
+
+        minval = -np.ones([2, 3], dtype='float32') * 2
+        maxval = np.ones([2, 3], dtype='float32') * 2
+        x = np.random.random([2, 4, 3]).astype('float32')
+        with tf.Session() as sess:
+            test_value = sess.run(
+                uniform.logpdf(x, minval, maxval, sample_dim=1))
+            true_value = stats.uniform.logpdf(
+                x, np.expand_dims(minval, 1),
+                np.expand_dims(maxval - minval, 1))
+            assert test_value.shape == (2, 4, 3)
+            assert np.abs(test_value - true_value).max() < 1e-6
+
+
 class TestNormal:
     def test_rvs_check_shape(self):
         with tf.Session() as sess:

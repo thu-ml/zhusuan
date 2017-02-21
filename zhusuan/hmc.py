@@ -66,7 +66,8 @@ class StepsizeTuner:
     def __init__(self, initial_stepsize, adapt_step_size, gamma, t0, kappa,
                  delta):
         with tf.name_scope("StepsizeTuner"):
-            self.adapt_step_size = adapt_step_size
+            self.adapt_step_size = tf.convert_to_tensor(
+                adapt_step_size, dtype=tf.bool, name="adapt_step_size")
             self.initial_stepsize = initial_stepsize
 
             self.gamma = tf.convert_to_tensor(gamma, dtype=tf.float32,
@@ -163,34 +164,32 @@ class HMC:
                  adapt_mass=None, mass_collect_iters=10, mass_decay=0.99):
         # Maintain the variables somewhere else to let the sample be called
         # multiple times
-        with tf.name_scope("HMC") as scope:
-            self.step_size = tf.Variable(step_size, name="step_size",
-                                         trainable=False)
-            self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
-                                                    name="n_leapfrogs")
-            self.target_acceptance_rate = tf.convert_to_tensor(
-                target_acceptance_rate, name="target_acceptance_rate")
+        self.step_size = tf.Variable(step_size, name="step_size",
+                                     trainable=False)
+        self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
+                                                name="n_leapfrogs")
+        self.target_acceptance_rate = tf.convert_to_tensor(
+            target_acceptance_rate, name="target_acceptance_rate")
 
-            self.adapt_step_size = adapt_step_size
-            self.t = tf.Variable(0.0, dtype=tf.float32, name="t",
-                                 trainable=False)
-            if adapt_step_size is not None:
-                # TODO make sure adapt_step_size is a placeholder
-                self.step_size_tuner = StepsizeTuner(
-                    step_size, adapt_step_size, gamma, t0, kappa,
-                    target_acceptance_rate)
-            if adapt_mass is None:
-                mass_collect_iters = 0
-            self.adapt_mass = adapt_mass
-            self.mass_collect_iters = mass_collect_iters
-            self.mass_decay = mass_decay
-        self.scope = scope
+        self.adapt_step_size = adapt_step_size
+        self.t = tf.Variable(0.0, dtype=tf.float32, name="t",
+                             trainable=False)
+        if adapt_step_size is not None:
+            # TODO make sure adapt_step_size is a placeholder
+            self.step_size_tuner = StepsizeTuner(
+                step_size, adapt_step_size, gamma, t0, kappa,
+                target_acceptance_rate)
+        if adapt_mass is None:
+            mass_collect_iters = 0
+        self.adapt_mass = tf.convert_to_tensor(
+            adapt_mass, dtype=tf.bool, name="adapt_mass")
+        self.mass_collect_iters = mass_collect_iters
+        self.mass_decay = mass_decay
 
     @add_name_scope
     def _adapt_mass(self, t, chain_axis):
-        with tf.name_scope(self.scope):
-            ewmv = ExponentialWeightedMovingVariance(
-                self.mass_decay, self.data_shape, chain_axis)
+        ewmv = ExponentialWeightedMovingVariance(
+            self.mass_decay, self.data_shape, chain_axis)
         new_mass = tf.cond(self.adapt_mass,
                            lambda: ewmv.get_updated_precision(self.q),
                            lambda: ewmv.precision())
@@ -293,7 +292,7 @@ class HMC:
 
     # Shape = [ChainShape DataShape]
     # Data shape should not change
-    def sample(self, log_joint, observed, latent, given=None, chain_axis=None):
+    def sample(self, log_joint, observed, latent, chain_axis=None):
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 

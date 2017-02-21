@@ -52,7 +52,7 @@ def download_dataset(url, path):
     urllib.request.urlretrieve(url, path)
 
 
-def load_mnist_realval(path, one_hot=True):
+def load_mnist_realval(path, one_hot=True, dequantify=False):
     """
     Loads the real valued MNIST dataset.
 
@@ -73,6 +73,13 @@ def load_mnist_realval(path, one_hot=True):
     x_train, t_train = train_set[0], train_set[1]
     x_valid, t_valid = valid_set[0], valid_set[1]
     x_test, t_test = test_set[0], test_set[1]
+    if dequantify:
+        x_train += np.random.uniform(0, 1. / 256,
+                                     size=x_train.shape).astype('float32')
+        x_valid += np.random.uniform(0, 1. / 256,
+                                     size=x_valid.shape).astype('float32')
+        x_test += np.random.uniform(0, 1. / 256,
+                                    size=x_test.shape).astype('float32')
     n_y = t_train.max() + 1
     t_transform = (lambda x: to_one_hot(x, n_y)) if one_hot else (lambda x: x)
     return x_train, t_transform(t_train), x_valid, t_transform(t_valid), \
