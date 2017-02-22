@@ -40,7 +40,7 @@ def q_net(observed, x, n_z, n_particles):
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
-                      n_samples=n_particles, reparameterized=False)
+                      n_samples=n_particles)
     return variational
 
 
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     test_freq = 10
     full_test_freq = 100
     save_freq = 100
-    learning_rate = 0.003
+    learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
     result_path = "results/mcem"
@@ -106,9 +106,11 @@ if __name__ == "__main__":
                                            local_log_prob=True)
 
     log_qz = tf.reduce_sum(log_qz, -1)
-    cost, ll_est = zs.rws(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]})
-    cost = tf.reduce_mean(cost, axis=0)
-    ll_est = tf.reduce_mean(ll_est, axis=0)
+    # cost, ll_est = zs.rws(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]})
+    # cost = tf.reduce_mean(cost, axis=0)
+    # ll_est = tf.reduce_mean(ll_est, axis=0)
+    lower_bound = tf.reduce_mean(
+        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
     log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
@@ -120,16 +122,17 @@ if __name__ == "__main__":
 
     # Use q(z | x) as prior
     def prior_obj(observed):
-        model = q_net(observed, observed['x'], n_z, n_particles)
+        z = observed['z']
+        model = q_net({'z': z}, x, n_z, n_particles)
         log_qz = model.local_log_prob('z')
         return tf.squeeze(tf.reduce_sum(log_qz, -1))
 
     prior_samples = {'z': qz_samples}
+    eval_z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
+                         name="eval_z", trainable=False)
     eval_hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
                       adapt_step_size=True, target_acceptance_rate=0.65,
                       adapt_mass=True)
-    eval_z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
-                         name="eval_z", trainable=False)
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples,
                    eval_hmc, {'x': x_obs}, {'z': eval_z}, chain_axis=1,
                    n_chains=test_n_chains, n_temperatures=test_n_temperatures)
@@ -137,20 +140,21 @@ if __name__ == "__main__":
     # ==== For optimize p ====
     z = tf.Variable(tf.zeros([1, batch_size, n_z]), name="z", trainable=False)
     initialize_z = tf.assign(z, qz_samples)
-    z_input = tf.placeholder(tf.float32, shape=z.get_shape())
-    set_z = tf.assign(z, z_input)
+    # z_input = tf.placeholder(tf.float32, shape=z.get_shape())
+    # set_z = tf.assign(z, z_input)
     mcem_model = vae({'x': x_obs, 'z': z}, n, n_x, n_z, n_particles)
     log_px_z = mcem_model.local_log_prob('x')
     mcem_obj = tf.reduce_mean(tf.reduce_sum(log_px_z, -1))
     hmc = zs.HMC(step_size=1e-10, n_leapfrogs=train_n_leapfrogs,
-                 adapt_step_size=True, target_acceptance_rate=0.65)
+                 adapt_step_size=True, target_acceptance_rate=0.65,
+                 adapt_mass=True)
     sample_op = hmc.sample(joint_obj, {'x': x_obs}, {'z': z},
                            chain_axis=1)
 
-    # ==== For MH step with q-net proposal ====
-    mh_ratio = joint_obj({'x': x_obs, 'z': z}) - \
-        prior_obj({'x': x_obs, 'z': z})
-    log_score = joint_obj({'x': x_obs, 'z': z})
+    # # ==== For MH step with q-net proposal ====
+    # mh_ratio = joint_obj({'x': x_obs, 'z': z}) - \
+    #     prior_obj({'x': x_obs, 'z': z})
+    # log_score = joint_obj({'x': x_obs, 'z': z})
 
     # Gather variables
     model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
@@ -168,7 +172,7 @@ if __name__ == "__main__":
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer_model = optimizer.minimize(-mcem_obj, var_list=model_params)
     optimizer2 = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    infer_variational = optimizer2.minimize(cost,
+    infer_variational = optimizer2.minimize(-lower_bound,
                                             var_list=variational_params)
 
     saver = tf.train.Saver(max_to_keep=10)
@@ -213,7 +217,7 @@ if __name__ == "__main__":
                 learning_rate *= anneal_lr_rate
             indices = np.random.permutation(N)
             x_train = x_train[indices, :]
-            last_z_train = last_z_train[indices, :]
+            # last_z_train = last_z_train[indices, :]
 
             lbs = []
             accs = []
@@ -222,43 +226,43 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                z_batch = last_z_train[t * batch_size:(t + 1) * batch_size]
+                # z_batch = last_z_train[t * batch_size:(t + 1) * batch_size]
 
                 # Compute old mh ratio
-                sess.run(set_z, feed_dict={z_input:
-                                           np.expand_dims(z_batch, 0)})
-                old_mh_ratio, old_score = sess.run(
-                    [mh_ratio, log_score],
-                    feed_dict={x: x_batch_bin, n_particles: lb_samples})
+                # sess.run(set_z, feed_dict={z_input:
+                #                            np.expand_dims(z_batch, 0)})
+                # old_mh_ratio, old_score = sess.run(
+                #     [mh_ratio, log_score],
+                #     feed_dict={x: x_batch_bin, n_particles: lb_samples})
 
                 # Compute new mh ratio
                 new_z_batch = np.squeeze(sess.run(
                     initialize_z, feed_dict={x: x_batch_bin,
                                              n_particles: lb_samples}))
-                new_mh_ratio, new_score = sess.run(
-                    [mh_ratio, log_score], {x: x_batch_bin,
-                                            n_particles: lb_samples})
+                # new_mh_ratio, new_score = sess.run(
+                #     [mh_ratio, log_score], {x: x_batch_bin,
+                #                             n_particles: lb_samples})
 
-                olds.append(np.mean(old_score))
-                news.append(np.mean(new_score))
+                # olds.append(np.mean(old_score))
+                # news.append(np.mean(new_score))
 
-                # Accept / reject
-                acceptance_rate = np.exp(
-                    np.minimum(0, new_mh_ratio - old_mh_ratio))
-                mean_acc = np.mean(acceptance_rate)
-                accs.append(mean_acc)
-                if_accept = (np.random.rand(batch_size) <
-                             acceptance_rate).astype(np.float32)
-                if_accept = np.expand_dims(if_accept, 1)
+                # # Accept / reject
+                # acceptance_rate = np.exp(
+                #     np.minimum(0, new_mh_ratio - old_mh_ratio))
+                # mean_acc = np.mean(acceptance_rate)
+                # accs.append(mean_acc)
+                # if_accept = (np.random.rand(batch_size) <
+                #              acceptance_rate).astype(np.float32)
+                # if_accept = np.expand_dims(if_accept, 1)
                 # if_accept = if_accept * 0
                 # accepted_z_batch = if_accept * new_z_batch + \
                 #     (1 - if_accept) * z_batch
                 # accepted_z_batch = new_z_batch
-                accepted_z_batch = z_batch
+                # accepted_z_batch = z_batch
 
-                # Store
-                sess.run(set_z, feed_dict={
-                    z_input: np.expand_dims(accepted_z_batch, 0)})
+                # # Store
+                # sess.run(set_z, feed_dict={
+                #     z_input: np.expand_dims(accepted_z_batch, 0)})
 
                 # Sample z by HMC
                 mcmc_z, _, _, _, oldp, newp, acc, ss = sess.run(
@@ -266,8 +270,8 @@ if __name__ == "__main__":
                                           n_particles: 1})
 
                 # Store z back
-                last_z_train[t * batch_size:(t + 1) * batch_size] = \
-                    np.squeeze(mcmc_z)
+                # last_z_train[t * batch_size:(t + 1) * batch_size] = \
+                #     np.squeeze(mcmc_z)
 
                 # Optimize p-net
                 _ = sess.run(infer_model,
@@ -276,10 +280,10 @@ if __name__ == "__main__":
                                         n_particles: lb_samples})
 
                 # Optimize q-net
-                _, lb = sess.run([infer_variational, ll_est],
+                _, lb = sess.run([infer_variational, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
-                                            n_particles: rws_samples})
+                                            n_particles: lb_samples})
                 lbs.append(lb)
             time_epoch += time.time()
             print(np.mean(olds), np.mean(news))
@@ -295,9 +299,9 @@ if __name__ == "__main__":
                 for t in range(test_iters):
                     test_x_batch = x_test[t * test_batch_size:
                                           (t + 1) * test_batch_size]
-                    test_lb = sess.run(ll_est,
+                    test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: rws_samples})
+                                                  n_particles: lb_samples})
                     test_ll = sess.run(log_likelihood,
                                        feed_dict={x: test_x_batch,
                                                   n_particles: ll_samples})

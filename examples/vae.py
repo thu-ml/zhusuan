@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
     prior_samples = {'z': qz_samples}
     z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
-                    name="z")
+                    name="z", trainable=False)
     hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
                  adapt_step_size=True, target_acceptance_rate=0.65,
                  adapt_mass=True)
