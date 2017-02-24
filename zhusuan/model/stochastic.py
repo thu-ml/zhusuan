@@ -6,8 +6,8 @@ from __future__ import print_function
 from __future__ import division
 
 import tensorflow as tf
+from tensorflow.contrib import distributions
 
-from zhusuan.distributions import *
 from .base import StochasticTensor
 
 
@@ -15,75 +15,169 @@ __all__ = [
     'Uniform',
     'Normal',
     'Bernoulli',
+    'Categorical',
     'Discrete',
+    'OnehotCategorical',
+    'OnehotDiscrete',
 ]
 
 
-class Uniform(StochasticTensor):
+class ContinuousStochasticTensor(StochasticTensor):
     """
-    The class of independent Uniform StochasticTensor.
+    Base class of continuous `StochasticTensor` s.
 
-    :param minval: A Tensor, python value, or numpy array. The lower bound
-        on the range of the uniform distribution.
-    :param maxval: A Tensor, python value, or numpy array. The upper bound
-        on the range of the uniform distribution. Should have the same
-        shape with and element-wise bigger than `minval`.
-    :param sample_dim: A Tensor scalar, int, or None. The sample dimension.
-        If None, this means no new sample dimension is created. In this
-        case `n_samples` must be set to 1, otherwise an Exception is
-        raised.
-    :param n_samples: A Tensor scalar or int. Number of samples to
-        generate.
-    :param reparameterized: Bool. If True, gradients on samples from this
-        Normal distribution are allowed to propagate into inputs in this
-        function, using the reparametrization trick from (Kingma, 2013).
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param dtype: The type of the sampled Tensors.
+    :param dist: A `tf.contrib.distributions.Distribution` instance.
+    :param is_reparameterized: A bool. Whether the gradients of samples are
+        allowed to propagate back into inputs.
+    """
+
+    def __init__(self, name, dtype, dist, is_reparameterized, *args, **kwargs):
+        self._is_reparameterized = is_reparameterized
+        super(ContinuousStochasticTensor, self).__init__(
+            name, dtype, dist, is_continuous=True, *args, **kwargs)
+
+    @property
+    def is_reparameterized(self):
+        """
+        Whether the gradients of samples are allowed to propagate back into
+        inputs.
+        """
+        return self._is_reparameterized
+
+
+class DiscreteStochasticTensor(StochasticTensor):
+    """
+    Base class of discrete `StochasticTensor` s.
+
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param dtype: The type of the sampled Tensors.
+    :param dist: A `tf.contrib.distributions.Distribution` instance.
+    """
+
+    def __init__(self, name, dtype, dist, *args, **kwargs):
+        super(DiscreteStochasticTensor, self).__init__(
+            name, dtype, dist, is_continuous=False, *args, **kwargs)
+
+
+class UnivariateStochasticTensor(StochasticTensor):
+    """
+    Base class of univariate `StochasticTensor` s.
+
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param dtype: The type of the sampled Tensors.
+    :param dist: A `tf.contrib.distributions.Distribution` instance.
+    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
+        single sample. Default is None, which means a univariate distribution.
+    """
+    def __init__(self, name, dtype, dist, event_axis=None, *args, **kwargs):
+        if event_axis is not None:
+            with tf.control_dependencies(
+                    [tf.assert_rank_in(event_axis, [0, 1])]):
+                self._event_axis = tf.identity(event_axis)
+        else:
+            self._event_axis = None
+        super(UnivariateStochasticTensor, self).__init__(
+            name, dtype, dist, *args, **kwargs)
+
+    @property
+    def event_axis(self):
+        return self._event_axis
+
+    def log_prob(self, given):
+        log_p = super(UnivariateStochasticTensor, self).log_prob(given)
+        return tf.reduce_sum(log_p, axis=self._event_axis)
+
+    def prob(self, given):
+        p = super(UnivariateStochasticTensor, self).prob(given)
+        return tf.reduce_prod(p, axis=self._event_axis)
+
+
+class MultivariateStochasticTensor(StochasticTensor):
+    """
+    Base class of multivariate `StochasticTensor` s.
+
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param dtype: The type of the sampled Tensors.
+    :param dist: A `tf.contrib.distributions.Distribution` instance.
+    """
+    def __init__(self, name, dtype, dist, *args, **kwargs):
+        super(MultivariateStochasticTensor, self).__init__(
+            name, dtype, dist, *args, **kwargs)
+
+
+class Uniform(UnivariateStochasticTensor, ContinuousStochasticTensor):
+    """
+    The class of Uniform `StochasticTensor`.
+
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param minval: A Tensor. The lower bound on the range of the uniform
+        distribution.
+    :param maxval: A Tensor. The upper bound on the range of the uniform
+        distribution. Should be element-wise  bigger than `minval`.
+    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
+        single sample. Default is None, which means a univariate distribution.
+    :param sample_shape: A Tensor. The shape of sample dimensions, which
+        indicates how many independent samples to generate.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param validate_args: A Bool. Whether to validate input with asserts.
+        If `validate_args` is `False`, and the inputs are invalid,
+        correct behavior is not guaranteed.
     """
 
     def __init__(self,
                  name,
                  minval,
                  maxval,
-                 sample_dim=None,
-                 n_samples=1,
-                 reparameterized=True):
-        incomings = [minval, maxval, sample_dim, n_samples]
-        self.reparameterized = reparameterized
-        super(Uniform, self).__init__(name, incomings, dtype=tf.float32)
-
-    def sample(self, **kwargs):
-        minval, maxval, sample_dim, n_samples = self.incomings
-        return uniform.rvs(minval=minval,
-                           maxval=maxval,
-                           sample_dim=sample_dim,
-                           n_samples=n_samples,
-                           reparameterized=self.reparameterized)
-
-    def log_prob(self, given):
-        minval, maxval, sample_dim, n_samples = self.incomings
-        return norm.logpdf(given,
-                           mean=minval,
-                           logstd=maxval,
-                           sample_dim=sample_dim)
+                 event_axis=None,
+                 sample_shape=None,
+                 is_reparameterized=True,
+                 validate_args=True):
+        minval = tf.convert_to_tensor(minval)
+        maxval = tf.convert_to_tensor(maxval)
+        if not is_reparameterized:
+            minval = tf.stop_gradient(minval)
+            maxval = tf.stop_gradient(maxval)
+        dist = distributions.Uniform(minval, maxval,
+                                     validate_args=validate_args,
+                                     allow_nan_stats=False)
+        super(Uniform, self).__init__(
+            name=name,
+            dtype=tf.float32,
+            dist=dist,
+            event_axis=event_axis,
+            is_reparameterized=is_reparameterized,
+            sample_shape=sample_shape)
 
 
-class Normal(StochasticTensor):
+class Normal(UnivariateStochasticTensor, ContinuousStochasticTensor):
     """
-    The class of independent Normal StochasticTensor.
+    The class of univariate Normal `StochasticTensor`.
 
-    :param mean: A Tensor, python value, or numpy array. The mean of the
-        Normal distribution.
-    :param logstd: A Tensor, python value, or numpy array. The log
-        standard deviation of the Normal distribution. Should have the same
-        shape with `mean`.
-    :param sample_dim: A Tensor scalar, int, or None. The sample dimension.
-        If None, this means no new sample dimension is created. In this
-        case `n_samples` must be set to 1, otherwise an Exception is
-        raised.
-    :param n_samples: A Tensor scalar or int. Number of samples to
-        generate.
-    :param reparameterized: Bool. If True, gradients on samples from this
-        Normal distribution are allowed to propagate into inputs in this
-        function, using the reparametrization trick from (Kingma, 2013).
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param mean: A Tensor. The mean of the Normal distribution. Should be
+        broadcastable to match `logstd`.
+    :param logstd: A Tensor. The log standard deviation of the Normal
+        distribution. Should be broadcastable to match `mean`.
+    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
+        single sample. Default is None, which means a univariate distribution.
+    :param sample_shape: A Tensor. The shape of sample dimensions, which
+        indicates how many independent samples to generate.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param validate_args: A Bool. Whether to validate input with asserts.
+        If `validate_args` is `False`, and the inputs are invalid,
+        correct behavior is not guaranteed.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -91,94 +185,135 @@ class Normal(StochasticTensor):
                  name,
                  mean,
                  logstd,
-                 sample_dim=None,
-                 n_samples=1,
-                 reparameterized=True,
+                 event_axis=None,
+                 sample_shape=None,
+                 is_reparameterized=True,
+                 validate_args=True,
                  check_numerics=True):
-        incomings = [mean, logstd, sample_dim, n_samples]
-        self.reparameterized = reparameterized
-        self.check_numerics = check_numerics
-        super(Normal, self).__init__(name, incomings, dtype=tf.float32)
-
-    def sample(self, **kwargs):
-        mean, logstd, sample_dim, n_samples = self.incomings
-        return norm.rvs(mean=mean,
-                        logstd=logstd,
-                        sample_dim=sample_dim,
-                        n_samples=n_samples,
-                        reparameterized=self.reparameterized,
-                        check_numerics=self.check_numerics)
-
-    def log_prob(self, given):
-        mean, logstd, sample_dim, n_samples = self.incomings
-        return norm.logpdf(given,
-                           mean=mean,
-                           logstd=logstd,
-                           sample_dim=sample_dim,
-                           check_numerics=self.check_numerics)
+        mean = tf.convert_to_tensor(mean)
+        logstd = tf.convert_to_tensor(logstd)
+        if not is_reparameterized:
+            mean = tf.stop_gradient(mean)
+            logstd = tf.stop_gradient(logstd)
+        # TODO: check_numerics for logstd
+        dist = distributions.Normal(mean, logstd, validate_args=validate_args,
+                                    allow_nan_stats=False)
+        super(Normal, self).__init__(
+            name=name,
+            dtype=tf.float32,
+            dist=dist,
+            event_axis=event_axis,
+            is_reparameterized=is_reparameterized,
+            sample_shape=sample_shape)
 
 
-class Bernoulli(StochasticTensor):
+class Bernoulli(UnivariateStochasticTensor, DiscreteStochasticTensor):
     """
-    The class of independent Bernoulli StochasticTensor.
+    The class of Bernoulli `StochasticTensor`.
 
-    :param logits: A Tensor, python value, or numpy array. The unnormalized
-        log probabilities of being 1.
+    :param name: A string. The name of the StochasticTensor. Must be unique in
+        the graph.
+    :param logits: A Tensor. The unnormalized log probabilities of being 1.
 
         .. math:: \\mathrm{logits}=\\log \\frac{p}{1 - p}
 
-    :param sample_dim: A Tensor scalar, int, or None. The sample dimension.
-        If None, this means no new sample dimension is created. In this
-        case `n_samples` must be set to 1, otherwise an Exception is
-        raised.
-    :param n_samples: A Tensor scalar or int. Number of samples to
-        generate.
+    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
+        single sample. Default is None, which means a univariate distribution.
+    :param sample_shape: A Tensor. The shape of sample dimensions, which
+        indicates how many independent samples to generate.
+    :param validate_args: A Bool. Whether to validate input with asserts.
+        If `validate_args` is `False`, and the inputs are invalid,
+        correct behavior is not guaranteed.
     """
+    def __init__(self,
+                 name,
+                 logits,
+                 event_axis=None,
+                 sample_shape=None,
+                 validate_args=False):
+        logits = tf.convert_to_tensor(logits)
+        dist = distributions.Bernoulli(logits=logits,
+                                       validate_args=validate_args,
+                                       allow_nan_stats=False)
+        super(Bernoulli, self).__init__(
+            name=name,
+            dtype=tf.int32,
+            dist=dist,
+            event_axis=event_axis,
+            sample_shape=sample_shape)
 
-    def __init__(self, name, logits, sample_dim=None, n_samples=1):
-        incomings = [logits, sample_dim, n_samples]
-        super(Bernoulli, self).__init__(name, incomings, tf.float32)
 
-    def sample(self, **kwargs):
-        logits, sample_dim, n_samples = self.incomings
-        return bernoulli.rvs(logits,
-                             sample_dim=sample_dim,
-                             n_samples=n_samples)
-
-    def log_prob(self, given):
-        logits, sample_dim, n_samples = self.incomings
-        return bernoulli.logpmf(given, logits, sample_dim=sample_dim)
-
-
-class Discrete(StochasticTensor):
+class Categorical(UnivariateStochasticTensor, DiscreteStochasticTensor):
     """
-    The class of Discrete StochasticTensor.
+    The class of Categorical StochasticTensor.
 
-    :param logits: A N-D (N >= 1) Tensor, python value, or numpy array of shape
-        (..., n_classes). Each slice `[i, j,..., k, :]`
-        represents the un-normalized log probabilities for all classes.
-    :param sample_dim: A Tensor scalar, int, or None. The sample dimension.
-        If None, this means no new sample dimension is created. In this
-        case `n_samples` must be set to 1, otherwise an Exception is
-        raised.
-    :param n_samples: A Tensor scalar or int. Number of samples to
-        generate.
+    :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
+        Each slice `[i, j,..., k, :]` represents the un-normalized log
+        probabilities for all categories.
+    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
+        single sample. Default is None, which means a univariate distribution.
+    :param sample_shape: A Tensor. The shape of sample dimensions, which
+        indicates how many independent samples to generate.
+    :param validate_args: A Bool. Whether to validate input with asserts.
+        If `validate_args` is `False`, and the inputs are invalid,
+        correct behavior is not guaranteed.
 
-    The sample is a N-D or (N+1)-D Tensor of shape
-    (..., [n_samples,] ..., n_classes). Each slice is a one-hot vector
-    of the sample.
+    A single sample is a `tf.int32` in [0, n_categories).
     """
+    def __init__(self,
+                 name,
+                 logits,
+                 event_axis=None,
+                 sample_shape=None,
+                 validate_args=False):
+        logits = tf.convert_to_tensor(logits)
+        dist = distributions.Categorical(logits=logits,
+                                         validate_args=validate_args,
+                                         allow_nan_stats=False)
+        super(Categorical, self).__init__(
+            name=name,
+            dtype=tf.int32,
+            dist=dist,
+            event_axis=event_axis,
+            sample_shape=sample_shape)
 
-    def __init__(self, name, logits, sample_dim=None, n_samples=1):
-        incomings = [logits, sample_dim, n_samples]
-        super(Discrete, self).__init__(name, incomings, tf.float32)
 
-    def sample(self, **kwargs):
-        logits, sample_dim, n_samples = self.incomings
-        return discrete.rvs(logits,
-                            sample_dim=sample_dim,
-                            n_samples=n_samples)
+class OnehotCategorical(MultivariateStochasticTensor,
+                        ContinuousStochasticTensor):
+    """
+    The class of one hot Categorical StochasticTensor.
 
-    def log_prob(self, given):
-        logits, sample_dim, n_samples = self.incomings
-        return discrete.logpmf(given, logits, sample_dim=sample_dim)
+    :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
+        Each slice `[i, j,..., k, :]` represents the un-normalized log
+        probabilities for all categories.
+    :param sample_shape: A Tensor. The shape of sample dimensions, which
+        indicates how many independent samples to generate.
+    :param validate_args: A Bool. Whether to validate input with asserts.
+        If `validate_args` is `False`, and the inputs are invalid,
+        correct behavior is not guaranteed.
+
+    A single sample is a one-hot vector of shape [n_categories].
+    """
+    def __init__(self,
+                 name,
+                 logits,
+                 event_axis=None,
+                 sample_shape=None,
+                 validate_args=False):
+        logits = tf.convert_to_tensor(logits)
+        dist = distributions.Categorical(logits=logits,
+                                         validate_args=validate_args,
+                                         allow_nan_stats=False)
+        super(OnehotCategorical, self).__init__(
+            name=name,
+            dtype=tf.int32,
+            dist=dist,
+            event_axis=event_axis,
+            sample_shape=sample_shape)
+
+    def
+
+
+# alias
+Discrete = Categorical
+OnehotDiscrete = OnehotCategorical

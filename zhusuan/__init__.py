@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from .distributions import *
+from .distributions_old import *
 from .model import *
 from .variational import *
 from .hmc import *

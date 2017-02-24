@@ -30,56 +30,17 @@ class StochasticTensor(object):
 
     :param name: A string. The name of the StochasticTensor. Must be unique in
         the graph.
-    :param dtype: The type of the StochasticTensor.
-    :param is_continuous: Whether the StochasticTensor is continuous.
-    :param sample_shape: A 1-D Tensor. The shape of dimensions showing how
-        many independent samples to generate from the distribution.
+    :param incomings: A list of Tensors. Parameters needed to specify the
+        distribution.
+    :param dtype: The type of the resulting Tensor.
     """
 
-    def __init__(self,
-                 name,
-                 dtype,
-                 dist,
-                 is_continuous,
-                 sample_shape=None):
-        self._name = name
-        self._dtype = dtype
-        self._dist = dist
-        self._is_continuous = is_continuous
-
-        if sample_shape is None:
-            sample_shape = []
-        with tf.control_dependencies(
-                [tf.assert_rank_in(sample_shape, [0, 1])]):
-            self._sample_shape = tf.identity(sample_shape)
-
+    def __init__(self, name, incomings, dtype=None):
+        self.name = name
+        self.incomings = incomings
+        self.dtype = dtype
         self.s_graph = StochasticGraph.get_context()
         self.s_graph._add_stochastic_tensor(self)
-
-    @property
-    def name(self):
-        """The name of the `StochasticTensor`."""
-        return self._name
-
-    @property
-    def dtype(self):
-        """The type of the `StochasticTensor`."""
-        return self._dtype
-
-    @property
-    def is_continuous(self):
-        """Whether the StochasticTensor is continuous."""
-        return self._is_continuous
-
-    @property
-    def sample_shape(self):
-        """
-        The shape of dimensions showing how many independent samples to
-        generate from the distribution.
-
-        :return: A Tensor.
-        """
-        return self._sample_shape
 
     @property
     def tensor(self):
@@ -102,13 +63,13 @@ class StochasticTensor(object):
                 self._tensor = self.sample()
         return self._tensor
 
-    def sample(self):
+    def sample(self, **kwargs):
         """
         Return samples from the distribution.
 
         :return: A Tensor.
         """
-        return self._dist.sample(self.sample_shape)
+        raise NotImplementedError()
 
     def log_prob(self, given):
         """
@@ -116,19 +77,9 @@ class StochasticTensor(object):
 
         :param given: A Tensor. The value at which to evaluate log probability
             density (mass) function.
-        :return: A Tensor.
+        :return: A Tensor. The log probability density (mass) evaluated.
         """
-        return self._dist.log_prob(given)
-
-    def prob(self, given):
-        """
-        Compute probability density (mass) function at `given` value.
-
-        :param given: A Tensor. The value at which to evaluate probability
-            density (mass) function.
-        :return: A Tensor.
-        """
-        return self._dist.prob(given)
+        raise NotImplementedError()
 
     # overloading arithmetic operations
     def __abs__(self):
