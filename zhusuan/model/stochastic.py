@@ -34,7 +34,7 @@ class ContinuousStochasticTensor(StochasticTensor):
         allowed to propagate back into inputs.
     """
 
-    def __init__(self, name, dtype, dist, is_reparameterized, *args, **kwargs):
+    def __init__(self, name, dtype, is_reparameterized, *args, **kwargs):
         self._is_reparameterized = is_reparameterized
         super(ContinuousStochasticTensor, self).__init__(
             name, dtype, dist, is_continuous=True, *args, **kwargs)
@@ -73,6 +73,10 @@ class UnivariateStochasticTensor(StochasticTensor):
     :param dist: A `tf.contrib.distributions.Distribution` instance.
     :param event_axis: A scalar or 1-D Tensor representing dimensions of a
         single sample. Default is None, which means a univariate distribution.
+        This is for common cases where we put a group of univariate random
+        variables in a single event, so that their probabilities are calculated
+        together. For example, when set to -1, the last dimension is treated
+        as a single sample, the log probabilities should sum over this axis.
     """
     def __init__(self, name, dtype, dist, event_axis=None, *args, **kwargs):
         if event_axis is not None:
@@ -90,11 +94,15 @@ class UnivariateStochasticTensor(StochasticTensor):
 
     def log_prob(self, given):
         log_p = super(UnivariateStochasticTensor, self).log_prob(given)
-        return tf.reduce_sum(log_p, axis=self._event_axis)
+        if self._event_axis is not None:
+            return tf.reduce_sum(log_p, axis=self._event_axis)
+        return log_p
 
     def prob(self, given):
         p = super(UnivariateStochasticTensor, self).prob(given)
-        return tf.reduce_prod(p, axis=self._event_axis)
+        if self._event_axis is not None:
+            return tf.reduce_prod(p, axis=self._event_axis)
+        return p
 
 
 class MultivariateStochasticTensor(StochasticTensor):
@@ -133,14 +141,7 @@ class Uniform(UnivariateStochasticTensor, ContinuousStochasticTensor):
         correct behavior is not guaranteed.
     """
 
-    def __init__(self,
-                 name,
-                 minval,
-                 maxval,
-                 event_axis=None,
-                 sample_shape=None,
-                 is_reparameterized=True,
-                 validate_args=True):
+    def __init__(self, name, dtype, is_reparameterized, *args, **kwargs):
         minval = tf.convert_to_tensor(minval)
         maxval = tf.convert_to_tensor(maxval)
         if not is_reparameterized:
@@ -149,13 +150,11 @@ class Uniform(UnivariateStochasticTensor, ContinuousStochasticTensor):
         dist = distributions.Uniform(minval, maxval,
                                      validate_args=validate_args,
                                      allow_nan_stats=False)
-        super(Uniform, self).__init__(
-            name=name,
-            dtype=tf.float32,
-            dist=dist,
-            event_axis=event_axis,
-            is_reparameterized=is_reparameterized,
-            sample_shape=sample_shape)
+        super(Uniform, self).__init__(name=name, dtype=tf.float32,
+                                      is_reparameterized=is_reparameterized,
+                                      event_axis=event_axis,
+                                      is_reparameterized=is_reparameterized,
+                                      sample_shape=sample_shape)
 
 
 class Normal(UnivariateStochasticTensor, ContinuousStochasticTensor):
@@ -181,15 +180,7 @@ class Normal(UnivariateStochasticTensor, ContinuousStochasticTensor):
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
-    def __init__(self,
-                 name,
-                 mean,
-                 logstd,
-                 event_axis=None,
-                 sample_shape=None,
-                 is_reparameterized=True,
-                 validate_args=True,
-                 check_numerics=True):
+    def __init__(self, name, dtype, is_reparameterized, *args, **kwargs):
         mean = tf.convert_to_tensor(mean)
         logstd = tf.convert_to_tensor(logstd)
         if not is_reparameterized:
@@ -198,13 +189,11 @@ class Normal(UnivariateStochasticTensor, ContinuousStochasticTensor):
         # TODO: check_numerics for logstd
         dist = distributions.Normal(mean, logstd, validate_args=validate_args,
                                     allow_nan_stats=False)
-        super(Normal, self).__init__(
-            name=name,
-            dtype=tf.float32,
-            dist=dist,
-            event_axis=event_axis,
-            is_reparameterized=is_reparameterized,
-            sample_shape=sample_shape)
+        super(Normal, self).__init__(name=name, dtype=tf.float32,
+                                     is_reparameterized=is_reparameterized,
+                                     event_axis=event_axis,
+                                     is_reparameterized=is_reparameterized,
+                                     sample_shape=sample_shape)
 
 
 class Bernoulli(UnivariateStochasticTensor, DiscreteStochasticTensor):
@@ -231,7 +220,6 @@ class Bernoulli(UnivariateStochasticTensor, DiscreteStochasticTensor):
                  event_axis=None,
                  sample_shape=None,
                  validate_args=False):
-        logits = tf.convert_to_tensor(logits)
         dist = distributions.Bernoulli(logits=logits,
                                        validate_args=validate_args,
                                        allow_nan_stats=False)
@@ -258,7 +246,8 @@ class Categorical(UnivariateStochasticTensor, DiscreteStochasticTensor):
         If `validate_args` is `False`, and the inputs are invalid,
         correct behavior is not guaranteed.
 
-    A single sample is a `tf.int32` in [0, n_categories).
+    A single sample is a (N-1)-D Tensor with `tf.int32` values in range
+    [0, n_categories).
     """
     def __init__(self,
                  name,
@@ -266,7 +255,6 @@ class Categorical(UnivariateStochasticTensor, DiscreteStochasticTensor):
                  event_axis=None,
                  sample_shape=None,
                  validate_args=False):
-        logits = tf.convert_to_tensor(logits)
         dist = distributions.Categorical(logits=logits,
                                          validate_args=validate_args,
                                          allow_nan_stats=False)
@@ -292,26 +280,29 @@ class OnehotCategorical(MultivariateStochasticTensor,
         If `validate_args` is `False`, and the inputs are invalid,
         correct behavior is not guaranteed.
 
-    A single sample is a one-hot vector of shape [n_categories].
+    A single sample is a N-D one-hot Tensor of shape (..., n_categories).
     """
-    def __init__(self,
-                 name,
-                 logits,
-                 event_axis=None,
-                 sample_shape=None,
-                 validate_args=False):
-        logits = tf.convert_to_tensor(logits)
-        dist = distributions.Categorical(logits=logits,
-                                         validate_args=validate_args,
-                                         allow_nan_stats=False)
-        super(OnehotCategorical, self).__init__(
-            name=name,
-            dtype=tf.int32,
-            dist=dist,
-            event_axis=event_axis,
-            sample_shape=sample_shape)
+    def __init__(self, name, dtype, is_reparameterized, *args):
+        with tf.control_dependencies([tf.assert_rank_at_least(logits, 1)]):
+            self._logits = tf.identity(logits)
+        self._categorical = distributions.Categorical(
+            logits=self._logits,
+            validate_args=validate_args,
+            allow_nan_stats=False)
+        super(OnehotCategorical, self).__init__(name=name, dtype=tf.int32,
+                                                is_reparameterized=event_axis,
+                                                event_axis=event_axis,
+                                                sample_shape=sample_shape)
 
-    def
+    def _sample(self):
+        return tf.one_hot(self._categorical.sample(self.sample_shape),
+                          tf.shape(self._logits)[-1])
+
+    def _log_prob(self, given):
+        pass
+
+    def _prob(self):
+        pass
 
 
 # alias

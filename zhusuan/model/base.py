@@ -108,17 +108,22 @@ class StochasticTensor(object):
 
         :return: A Tensor.
         """
-        return self._dist.sample(self.sample_shape)
+        if self._dist is not None:
+            return self._dist.sample(self.sample_shape)
+        return self._sample()
 
     def log_prob(self, given):
         """
         Compute log probability density (mass) function at `given` value.
 
         :param given: A Tensor. The value at which to evaluate log probability
-            density (mass) function.
+            density (mass) function. Must be able to broadcast to have a shape
+            of `sample_shape` + `event_shape`
         :return: A Tensor.
         """
-        return self._dist.log_prob(given)
+        if self._dist is not None:
+            return self._dist.log_prob(given)
+        return self._log_prob(given)
 
     def prob(self, given):
         """
@@ -128,7 +133,30 @@ class StochasticTensor(object):
             density (mass) function.
         :return: A Tensor.
         """
-        return self._dist.prob(given)
+        if self._dist is not None:
+            return self._dist.prob(given)
+        return self._prob(given)
+
+    def _sample(self):
+        """
+        Private method for derived classes to rewrite the `sample` method
+        when `self._dist` is None.
+        """
+        raise NotImplementedError()
+
+    def _log_prob(self, given):
+        """
+        Private method for derived classes to rewrite the `log_prob` method
+        when `self._dist` is None.
+        """
+        raise NotImplementedError()
+
+    def _prob(self, given):
+        """
+        Private method for derived classes to rewrite the `prob` method
+        when `self._dist` is None.
+        """
+        raise NotImplementedError()
 
     # overloading arithmetic operations
     def __abs__(self):
