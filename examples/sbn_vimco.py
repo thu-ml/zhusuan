@@ -164,7 +164,7 @@ if __name__ == "__main__":
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()
-                # logTestFile.write('%lf,%lf\n' % (np.mean(test_lb), np.mean(test_ll)))
+                # logTestFile.write('%lf,%lf\n' % (np.mean(test_lbs), np.mean(test_lls)))
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood = {}'.format(np.mean(test_lls)))

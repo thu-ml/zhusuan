@@ -124,8 +124,8 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    # logTrainFile = open('vimco_log_K_2_train.csv', 'w')
-    # logTestFile = open('vimco_log_K_2_test.csv', 'w')
+    # logTrainFile = open('rws_log_K_2_train.csv', 'w')
+    # logTestFile = open('rws_log_K_2_test.csv', 'w')
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -166,7 +166,7 @@ if __name__ == "__main__":
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()
-                # logTestFile.write('%lf,%lf\n' % (np.mean(test_lb), np.mean(test_ll)))
+                # logTestFile.write('%lf,%lf\n' % (np.mean(test_lbs), np.mean(test_lls)))
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
