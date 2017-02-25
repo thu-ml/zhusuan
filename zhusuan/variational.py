@@ -190,6 +190,29 @@ def nvil(log_joint,
 
 
 def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
+    """
+    Implements the variance reduced score function estimator for gradients
+    of the variational lower bound from (Andriy, 2016). This works for both
+    continuous and discrete latent `StochasticTensor` s.
+
+    :param log_joint: A function that accepts a dictionary argument of
+        (str, Tensor) pairs, which are mappings from all `StochasticTensor`
+        names in the model to their observed values. The function should
+        return a Tensor, representing the log joint likelihood of the model.
+    :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
+        of observed `StochasticTensor` s to their values.
+    :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
+        from names of latent `StochasticTensor` s to their samples and log
+        probabilities.
+    :param axis: The sample dimension to reduce when computing the
+        variational lower bound.
+    :param variance_normalization: Whether the number of samples
+        (in the paper, K) is greater than 1. If K = 1, return the results of
+        advi.
+
+    :return: A Tensor. The proxy object function to maximize.
+    :return: A Tensor. The variational lower bound.
+    """
     if not is_particle_larger_one:
         return advi(log_joint, observed, latent, axis)
 
@@ -211,24 +234,17 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
     n_dim = x_shape.ndims
     op_indices = n_dim - 1
 
-    perm = []
-    rep_para = []
-    for i in range(n_dim):
-        perm.append(i)
-        rep_para.append(1)
-    perm[n_dim - 1] = axis
-    perm[axis] = op_indices
+    perm = range(axis) + [op_indices] + range(axis + 1, n_dim - 1) + [axis]
+    rep_para = [1] * n_dim + [tf.shape(x)[axis]]
 
     x = tf.transpose(x, perm=perm)
     sub_x = tf.transpose(sub_x, perm=perm)
-    K = tf.shape(x)[op_indices]
-    rep_para.append(K)
 
     # extend to another dimension
     x_ex = tf.tile(tf.expand_dims(x, n_dim), rep_para)
     x_ex = x_ex - tf.matrix_diag(x) + tf.matrix_diag(sub_x)
 
-    pre_signal = tf.transpose(log_mean_exp(x_ex, op_indices), perm = perm)
+    pre_signal = tf.transpose(log_mean_exp(x_ex, op_indices), perm=perm)
     # end of calculation of log_mean_exp_sub
 
     l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal
