@@ -22,47 +22,6 @@ __all__ = [
 ]
 
 
-class ContinuousStochasticTensor(StochasticTensor):
-    """
-    Base class of continuous `StochasticTensor` s.
-
-    :param name: A string. The name of the StochasticTensor. Must be unique in
-        the graph.
-    :param dtype: The type of the sampled Tensors.
-    :param dist: A `tf.contrib.distributions.Distribution` instance.
-    :param is_reparameterized: A bool. Whether the gradients of samples are
-        allowed to propagate back into inputs.
-    """
-
-    def __init__(self, name, dtype, is_reparameterized, *args, **kwargs):
-        self._is_reparameterized = is_reparameterized
-        super(ContinuousStochasticTensor, self).__init__(
-            name, dtype, dist, is_continuous=True, *args, **kwargs)
-
-    @property
-    def is_reparameterized(self):
-        """
-        Whether the gradients of samples are allowed to propagate back into
-        inputs.
-        """
-        return self._is_reparameterized
-
-
-class DiscreteStochasticTensor(StochasticTensor):
-    """
-    Base class of discrete `StochasticTensor` s.
-
-    :param name: A string. The name of the StochasticTensor. Must be unique in
-        the graph.
-    :param dtype: The type of the sampled Tensors.
-    :param dist: A `tf.contrib.distributions.Distribution` instance.
-    """
-
-    def __init__(self, name, dtype, dist, *args, **kwargs):
-        super(DiscreteStochasticTensor, self).__init__(
-            name, dtype, dist, is_continuous=False, *args, **kwargs)
-
-
 class UnivariateStochasticTensor(StochasticTensor):
     """
     Base class of univariate `StochasticTensor` s.
