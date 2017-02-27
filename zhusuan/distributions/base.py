@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import
 from __future__ import division
+from functools import wraps
 
 import tensorflow as tf
 
@@ -141,7 +142,54 @@ class Distribution(object):
                                                        self.event_shape], 0)),
                 lambda: samples)
 
+    def _sample(self, n_samples):
+        """
+        Private method for subclasses to rewrite the `sample` method.
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def _call_by_input_rank(f):
+        @wraps(f)
+        def _func(*args):
+            given = tf.convert_to_tensor(args[1])
+            static_given_rank = given.get_shape().ndims
+            static_batch_rank = args[0].get_batch_shape().ndims
+            static_event_rank = args[0].get_event_shape().ndims
+            if (static_given_rank is not None) and (
+                    static_batch_rank is not None) and (
+                        static_event_rank is not None):
+                static_sample_rank = static_batch_rank + static_event_rank
+                if static_given_rank == static_sample_rank:
+                    given_1 = tf.expand_dims(given, axis=0)
+                    return tf.squeeze(f(args[0], given_1), axis=0)
+                elif static_given_rank == static_sample_rank + 1:
+                    return f(*args)
+                else:
+                    raise ValueError(
+                        "The 'given' argument should have the same or one "
+                        "more rank than the rank of batch_shape + event_shape "
+                        "(rank {} vs. rank {} + {})".format(
+                            static_given_rank, static_batch_rank,
+                            static_event_rank))
+            else:
+                sample_rank = tf.shape(args[0].batch_shape)[0] + \
+                    tf.shape(args[0].event_shape)[0]
+                assert_rank_op = tf.assert_rank_in(
+                    given, [sample_rank, sample_rank + 1],
+                    message="The 'given' argument should have the same or one "
+                            "more rank than the rank of batch_shape + "
+                            "event_shape")
+                with tf.control_dependencies([assert_rank_op]):
+                    return tf.cond(
+                        tf.equal(tf.rank(given), sample_rank),
+                        lambda: tf.squeeze(
+                            f(args[0], tf.expand_dims(given, 0)), 0),
+                        lambda: f(*args))
+        return _func
+
     @add_name_scope
+    @_call_by_input_rank
     def log_prob(self, given):
         """
         Compute log probability density (mass) function at `given` value.
@@ -151,11 +199,10 @@ class Distribution(object):
             of `[n + ]batch_shape + event_shape`.
         :return: A Tensor of shape `[n + ]batch_shape`.
         """
-        static_given_shape = given.get_shape()
-        if static_given_shape.ndims is None:
-            static_given_rank = static_given_shape.ndims
+        return self._log_prob(given)
 
     @add_name_scope
+    @_call_by_input_rank
     def prob(self, given):
         """
         Compute probability density (mass) function at `given` value.
@@ -164,12 +211,7 @@ class Distribution(object):
             density (mass) function.
         :return: A Tensor.
         """
-
-    def _sample(self, n_samples):
-        """
-        Private method for subclasses to rewrite the `sample` method.
-        """
-        raise NotImplementedError()
+        return self._prob(given)
 
     def _log_prob(self, given):
         """
@@ -247,10 +289,16 @@ class UnivariateDistribution(Distribution):
         b_shape = self._batch_shape()
         return b_shape[(tf.shape(b_shape)[0] - self._event_n_dims):]
 
+    def get_event_shape(self):
+        # TODO
+
     @property
     def batch_shape(self):
         b_shape = self._batch_shape()
         return b_shape[:(tf.shape(b_shape)[0] - self._event_n_dims)]
+
+    def get_batch_shape(self):
+        # TODO
 
 
 class MultivariateDistribution(Distribution):
