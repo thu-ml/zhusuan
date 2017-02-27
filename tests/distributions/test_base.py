@@ -34,7 +34,8 @@ class _Dist(Distribution):
         return tf.reduce_sum(tf.zeros_like(given), -1)
 
     def _prob(self, given):
-        return tf.ones_like(given)
+        return tf.reduce_prod(tf.ones_like(given), -1)
 
 
 def test_distributions():
+    pass

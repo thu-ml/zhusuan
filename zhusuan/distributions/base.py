@@ -291,6 +291,7 @@ class UnivariateDistribution(Distribution):
 
     def get_event_shape(self):
         # TODO
+        pass
 
     @property
     def batch_shape(self):
@@ -299,6 +300,7 @@ class UnivariateDistribution(Distribution):
 
     def get_batch_shape(self):
         # TODO
+        pass
 
 
 class MultivariateDistribution(Distribution):
