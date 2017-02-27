@@ -5,13 +5,16 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-import numpy as np
 
 from zhusuan.utils import convert_to_int, add_name_scope
 
 
 __all__ = [
     'Distribution',
+    'ContinuousDistribution',
+    'DiscreteDistribution',
+    'UnivariateDistribution',
+    'MultivariateDistribution'
 ]
 
 
@@ -68,6 +71,20 @@ class Distribution(object):
         """
         raise NotImplementedError()
 
+    def get_event_shape(self):
+        """
+        Static`event_shape`.
+
+        :return: A `TensorShape` instance.
+        """
+        return self._get_event_shape()
+
+    def _get_event_shape(self):
+        """
+        Private method for subclasses to rewrite the `get_event_shape` method.
+        """
+        raise NotImplementedError()
+
     @property
     def batch_shape(self):
         """
@@ -84,6 +101,21 @@ class Distribution(object):
         """
         raise NotImplementedError()
 
+    def get_batch_shape(self):
+        """
+        Static `batch_shape`.
+
+        :return: A `TensorShape` instance.
+        """
+        return self._get_batch_shape()
+
+    def _get_batch_shape(self):
+        """
+        Private method for subclasses to rewrite the `get_batch_shape` method.
+        """
+        raise NotImplementedError()
+
+    @add_name_scope
     def sample(self, n_samples=1):
         """
         Return samples from the distribution. For `n_samples` larger than 1,
@@ -109,6 +141,7 @@ class Distribution(object):
                                                        self.event_shape], 0)),
                 lambda: samples)
 
+    @add_name_scope
     def log_prob(self, given):
         """
         Compute log probability density (mass) function at `given` value.
@@ -118,8 +151,11 @@ class Distribution(object):
             of `[n + ]batch_shape + event_shape`.
         :return: A Tensor of shape `[n + ]batch_shape`.
         """
+        static_given_shape = given.get_shape()
+        if static_given_shape.ndims is None:
+            static_given_rank = static_given_shape.ndims
 
-
+    @add_name_scope
     def prob(self, given):
         """
         Compute probability density (mass) function at `given` value.
@@ -182,3 +218,46 @@ class DiscreteDistribution(Distribution):
     def __init__(self, dtype, *args, **kwargs):
         super(DiscreteDistribution, self).__init__(
             dtype, is_continuous=False, *args, **kwargs)
+
+
+class UnivariateDistribution(Distribution):
+    """
+    Base class of univariate distributions.
+
+    :param dtype: The value type of samples from the distribution.
+    :param event_n_dims: A 0-D `int32` Tensor representing number of
+        dimensions of a single event. Default is 0, which means a univariate
+        distribution. This is for common cases where we put a group of
+        univariate random variables in a single event, so that their
+        probabilities are calculated together. For example, when set to 1,
+        the last dimension is treated as a single event, the log probabilities
+        should sum over this axis.
+    """
+    def __init__(self, dtype, event_n_dims=0, *args, **kwargs):
+        with tf.control_dependencies([tf.assert_rank(event_n_dims, 0)]):
+            self._event_n_dims = tf.identity(event_n_dims)
+        super(UnivariateDistribution, self).__init__(dtype, *args, **kwargs)
+
+    @property
+    def event_n_dims(self):
+        return self._event_n_dims
+
+    @property
+    def event_shape(self):
+        b_shape = self._batch_shape()
+        return b_shape[(tf.shape(b_shape)[0] - self._event_n_dims):]
+
+    @property
+    def batch_shape(self):
+        b_shape = self._batch_shape()
+        return b_shape[:(tf.shape(b_shape)[0] - self._event_n_dims)]
+
+
+class MultivariateDistribution(Distribution):
+    """
+    Base class of multivariate distributions.
+
+    :param dtype: The value type of samples from the distribution.
+    """
+    def __init__(self, dtype, *args, **kwargs):
+        super(MultivariateDistribution, self).__init__(dtype, *args, **kwargs)
