@@ -141,7 +141,7 @@ class Distribution(object):
                 return tf.squeeze(samples, axis=0)
             return samples
         else:
-            return tf.cond(n_samples > 1,
+            return tf.cond(tf.equal(n_samples, 1),
                            lambda: tf.squeeze(samples, axis=0),
                            lambda: samples)
 
@@ -151,7 +151,6 @@ class Distribution(object):
         """
         raise NotImplementedError()
 
-    @staticmethod
     def _call_by_input_rank(f):
         @wraps(f)
         def _func(*args):
@@ -159,6 +158,8 @@ class Distribution(object):
             static_given_rank = given.get_shape().ndims
             static_batch_rank = args[0].get_batch_shape().ndims
             static_event_rank = args[0].get_event_shape().ndims
+            err_msg = "The 'given' argument should have the same or one " \
+                      "more rank than the rank of batch_shape + event_shape"
             if (static_given_rank is not None) and (
                     static_batch_rank is not None) and (
                         static_event_rank is not None):
@@ -170,19 +171,17 @@ class Distribution(object):
                     return f(*args)
                 else:
                     raise ValueError(
-                        "The 'given' argument should have the same or one "
-                        "more rank than the rank of batch_shape + event_shape "
-                        "(rank {} vs. rank {} + {})".format(
+                        err_msg + " (rank {} vs. rank {} + {})".format(
                             static_given_rank, static_batch_rank,
                             static_event_rank))
             else:
+                given_rank = tf.rank(given)
                 sample_rank = tf.shape(args[0].batch_shape)[0] + \
                     tf.shape(args[0].event_shape)[0]
-                assert_rank_op = tf.assert_rank_in(
-                    given, [sample_rank, sample_rank + 1],
-                    message="The 'given' argument should have the same or one "
-                            "more rank than the rank of batch_shape + "
-                            "event_shape")
+                assert_rank_op = tf.Assert(
+                    tf.logical_or(tf.equal(given_rank, sample_rank),
+                                  tf.equal(given_rank, sample_rank + 1)),
+                    [given_rank, sample_rank])
                 with tf.control_dependencies([assert_rank_op]):
                     return tf.cond(
                         tf.equal(tf.rank(given), sample_rank),
