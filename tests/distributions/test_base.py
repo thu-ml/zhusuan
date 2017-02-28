@@ -37,5 +37,6 @@ class _Dist(Distribution):
         return tf.reduce_prod(tf.ones_like(given), -1)
 
 
-def test_distributions():
-    pass
+class TestDistributions(tf.test.TestCase):
+    def test_distributions(self):
+        dist = _Dist()

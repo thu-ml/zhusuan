@@ -7,7 +7,7 @@ from functools import wraps
 
 import tensorflow as tf
 
-from zhusuan.utils import convert_to_int, add_name_scope
+from zhusuan.utils import convert_to_int, add_name_scope, doc_inherit
 
 
 __all__ = [
@@ -64,6 +64,9 @@ class Distribution(object):
         `batch_shape + event_shape`.
         We borrow this concept from `tf.contrib.distributions`.
         """
+        static_event_shape = self.get_event_shape()
+        if static_event_shape.is_fully_defined():
+            return tf.convert_to_tensor(static_event_shape, dtype=tf.int32)
         return self._event_shape()
 
     def _event_shape(self):
@@ -94,6 +97,9 @@ class Distribution(object):
         generated sample is `batch_shape + event_shape`.
         We borrow this concept from `tf.contrib.distributions`.
         """
+        static_batch_shape = self.get_batch_shape()
+        if static_batch_shape.is_fully_defined():
+            return tf.convert_to_tensor(static_batch_shape, dtype=tf.int32)
         return self._batch_shape()
 
     def _batch_shape(self):
@@ -132,15 +138,12 @@ class Distribution(object):
         samples = self._sample(n_samples)
         if static_n_samples is not None:
             if static_n_samples == 1:
-                return tf.reshape(samples, tf.concat([self.batch_shape,
-                                                      self.event_shape], 0))
+                return tf.squeeze(samples, axis=0)
             return samples
         else:
-            return tf.cond(
-                n_samples > 1,
-                lambda: tf.reshape(samples, tf.concat([self.batch_shape,
-                                                       self.event_shape], 0)),
-                lambda: samples)
+            return tf.cond(n_samples > 1,
+                           lambda: tf.squeeze(samples, axis=0),
+                           lambda: samples)
 
     def _sample(self, n_samples):
         """
@@ -282,25 +285,53 @@ class UnivariateDistribution(Distribution):
 
     @property
     def event_n_dims(self):
+        """
+        The number of dimensions of a single event in a univariate
+        distribution. This is for common cases where we put a group of
+        univariate random variables in a single event, so that their
+        probabilities are calculated together.
+        """
         return self._event_n_dims
 
     @property
+    @doc_inherit
     def event_shape(self):
-        b_shape = self._batch_shape()
+        b_shape = super(UnivariateDistribution, self).event_shape
         return b_shape[(tf.shape(b_shape)[0] - self._event_n_dims):]
 
+    @doc_inherit
     def get_event_shape(self):
-        # TODO
-        pass
+        static_event_shape = super(UnivariateDistribution,
+                                   self).get_event_shape()
+        if static_event_shape:
+            return static_event_shape[(static_event_shape.ndims -
+                                       self._event_n_dims):]
+        return tf.TensorShape(None)
 
     @property
+    @doc_inherit
     def batch_shape(self):
-        b_shape = self._batch_shape()
+        b_shape = super(UnivariateDistribution, self).batch_shape
         return b_shape[:(tf.shape(b_shape)[0] - self._event_n_dims)]
 
+    @doc_inherit
     def get_batch_shape(self):
-        # TODO
-        pass
+        static_batch_shape = super(UnivariateDistribution,
+                                   self).get_batch_shape()
+        if static_batch_shape:
+            return static_batch_shape[:(static_batch_shape.ndims -
+                                        self._event_n_dims)]
+        return tf.TensorShape(None)
+
+    @doc_inherit
+    def log_prob(self, given):
+        log_p = super(UnivariateDistribution, self).log_prob(given)
+        return tf.reduce_sum(log_p, tf.range(-self._event_n_dims, 0))
+
+    @doc_inherit
+    def prob(self, given):
+        p = super(UnivariateDistribution, self).log_prob(given)
+        return tf.reduce_prod(p, tf.range(-self.event_n_dims, 0))
 
 
 class MultivariateDistribution(Distribution):
