@@ -269,7 +269,7 @@ class UnivariateDistribution(Distribution):
     Base class of univariate distributions.
 
     :param dtype: The value type of samples from the distribution.
-    :param event_n_dims: A 0-D `int32` Tensor representing number of
+    :param event_ndims: A 0-D `int32` Tensor representing number of
         dimensions of a single event. Default is 0, which means a univariate
         distribution. This is for common cases where we put a group of
         univariate random variables in a single event, so that their
@@ -277,60 +277,72 @@ class UnivariateDistribution(Distribution):
         the last dimension is treated as a single event, the log probabilities
         should sum over this axis.
     """
-    def __init__(self, dtype, event_n_dims=0, *args, **kwargs):
-        with tf.control_dependencies([tf.assert_rank(event_n_dims, 0)]):
-            self._event_n_dims = tf.identity(event_n_dims)
+    def __init__(self, dtype, event_ndims=0, *args, **kwargs):
+        static_event_ndims = convert_to_int(event_ndims)
+        if static_event_ndims is not None:
+            self._event_ndims = static_event_ndims
+        else:
+            with tf.control_dependencies([tf.assert_rank(event_ndims, 0)]):
+                self._event_ndims = tf.identity(event_ndims)
         super(UnivariateDistribution, self).__init__(dtype, *args, **kwargs)
 
     @property
-    def event_n_dims(self):
+    def event_ndims(self):
         """
         The number of dimensions of a single event in a univariate
         distribution. This is for common cases where we put a group of
         univariate random variables in a single event, so that their
         probabilities are calculated together.
         """
-        return self._event_n_dims
+        return self._event_ndims
 
     @property
     @doc_inherit
     def event_shape(self):
-        b_shape = super(UnivariateDistribution, self).event_shape
-        return b_shape[(tf.shape(b_shape)[0] - self._event_n_dims):]
+        b_shape = super(UnivariateDistribution, self).batch_shape
+        return b_shape[(tf.shape(b_shape)[0] - self._event_ndims):]
 
     @doc_inherit
     def get_event_shape(self):
-        static_event_shape = super(UnivariateDistribution,
-                                   self).get_event_shape()
-        if static_event_shape:
-            return static_event_shape[(static_event_shape.ndims -
-                                       self._event_n_dims):]
+        if isinstance(self._event_ndims, int):
+            static_batch_shape = super(UnivariateDistribution,
+                                       self).get_batch_shape()
+            if static_batch_shape:
+                return static_batch_shape[(static_batch_shape.ndims -
+                                           self._event_ndims):]
         return tf.TensorShape(None)
+
+    def _event_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_event_shape(self):
+        return tf.constant([], dtype=tf.int32)
 
     @property
     @doc_inherit
     def batch_shape(self):
         b_shape = super(UnivariateDistribution, self).batch_shape
-        return b_shape[:(tf.shape(b_shape)[0] - self._event_n_dims)]
+        return b_shape[:(tf.shape(b_shape)[0] - self._event_ndims)]
 
     @doc_inherit
     def get_batch_shape(self):
-        static_batch_shape = super(UnivariateDistribution,
-                                   self).get_batch_shape()
-        if static_batch_shape:
-            return static_batch_shape[:(static_batch_shape.ndims -
-                                        self._event_n_dims)]
+        if isinstance(self._event_ndims, int):
+            static_batch_shape = super(UnivariateDistribution,
+                                       self).get_batch_shape()
+            if static_batch_shape:
+                return static_batch_shape[:(static_batch_shape.ndims -
+                                            self._event_ndims)]
         return tf.TensorShape(None)
 
     @doc_inherit
     def log_prob(self, given):
         log_p = super(UnivariateDistribution, self).log_prob(given)
-        return tf.reduce_sum(log_p, tf.range(-self._event_n_dims, 0))
+        return tf.reduce_sum(log_p, tf.range(-self._event_ndims, 0))
 
     @doc_inherit
     def prob(self, given):
         p = super(UnivariateDistribution, self).log_prob(given)
-        return tf.reduce_prod(p, tf.range(-self.event_n_dims, 0))
+        return tf.reduce_prod(p, tf.range(-self.event_ndims, 0))
 
 
 class MultivariateDistribution(Distribution):

@@ -39,7 +39,24 @@ class Dist(Distribution):
 
 
 class TestDistributions(tf.test.TestCase):
-    def test_distributions(self):
+    def test_baseclass(self):
+        dist = Distribution(tf.float32, is_continuous=True)
+        with self.assertRaises(NotImplementedError):
+            dist._event_shape()
+        with self.assertRaises(NotImplementedError):
+            dist._get_event_shape()
+        with self.assertRaises(NotImplementedError):
+            dist._batch_shape()
+        with self.assertRaises(NotImplementedError):
+            dist._get_batch_shape()
+        with self.assertRaises(NotImplementedError):
+            dist._sample(n_samples=1)
+        with self.assertRaises(NotImplementedError):
+            dist._log_prob(tf.ones([2, 3]))
+        with self.assertRaises(NotImplementedError):
+            dist._prob(tf.ones([2, 3]))
+
+    def test_subclass(self):
         with self.test_session():
             dist = Dist()
             self.assertTrue(dist.is_continuous is True)
@@ -104,3 +121,39 @@ class TestDistributions(tf.test.TestCase):
             self.assertAllEqual(
                 p_3.eval(feed_dict={given_3: np.ones((1, 2, 3))}),
                 np.ones((1, 2)))
+
+
+class TestContinuousDistribution(tf.test.TestCase):
+    def test_baseclass(self):
+        dist = ContinuousDistribution(tf.float32, is_reparameterized=True)
+        self.assertEqual(dist.dtype, tf.float32)
+        self.assertTrue(dist.is_continuous)
+        self.assertTrue(dist.is_reparameterized)
+
+
+class TestDiscreteDistribution(tf.test.TestCase):
+    def test_baseclass(self):
+        dist = DiscreteDistribution(tf.float32)
+        self.assertEqual(dist.dtype, tf.float32)
+        self.assertFalse(dist.is_continuous)
+
+
+class UnivarDist(UnivariateDistribution):
+    def __init__(self):
+        super(UnivarDist, self).__init__(tf.float32, event_n_dims=2,
+                                         is_continuous=True)
+
+    def _event_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+
+
+
+class TestUnivariateDistribution(tf.test.TestCase):
+    def test_baseclass(self):
+        dist = UnivariateDistribution(tf.float32, event_ndims=2,
+                                      is_continuous=True)
+        self.assertEqual(dist.event_ndims, 2)
+
+    def test_subclass(self):
+        pass
