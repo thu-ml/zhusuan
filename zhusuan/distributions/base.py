@@ -302,6 +302,9 @@ class UnivariateDistribution(Distribution):
         b_shape = super(UnivariateDistribution, self).batch_shape
         return b_shape[(tf.shape(b_shape)[0] - self._event_ndims):]
 
+    def _event_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
     @doc_inherit
     def get_event_shape(self):
         if isinstance(self._event_ndims, int):
@@ -312,11 +315,8 @@ class UnivariateDistribution(Distribution):
                                            self._event_ndims):]
         return tf.TensorShape(None)
 
-    def _event_shape(self):
-        return tf.constant([], dtype=tf.int32)
-
     def _get_event_shape(self):
-        return tf.constant([], dtype=tf.int32)
+        return tf.TensorShape([])
 
     @property
     @doc_inherit

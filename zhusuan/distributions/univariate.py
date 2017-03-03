@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 from __future__ import division
 
+import numpy as np
 import tensorflow as tf
 
 from .base import *
@@ -17,8 +18,13 @@ class Normal(UnivariateDistribution, ContinuousDistribution):
         broadcastable to match `logstd`.
     :param logstd: A Tensor. The log standard deviation of the Normal
         distribution. Should be broadcastable to match `mean`.
-    :param event_n_dims: A scalar or 1-D Tensor representing dimensions of a
-        single sample. Default is None, which means a univariate distribution.
+    :param event_n_dims: A 0-D `int32` Tensor representing number of
+        dimensions of a single event. Default is 0, which means a univariate
+        distribution. This is for common cases where we put a group of
+        univariate random variables in a single event, so that their
+        probabilities are calculated together. For example, when set to 1,
+        the last dimension is treated as a single event, the log probabilities
+        should sum over this axis.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -28,69 +34,96 @@ class Normal(UnivariateDistribution, ContinuousDistribution):
     def __init__(self,
                  mean,
                  logstd,
-                 event_n_dims=0,
-                 is_reparameterized=True,
-                 *args, **kwargs):
-        mean = tf.convert_to_tensor(mean)
-        logstd = tf.convert_to_tensor(logstd)
+                 event_ndims=0,
+                 is_reparameterized=True):
+        self.mean = tf.convert_to_tensor(mean)
+        self.logstd = tf.convert_to_tensor(logstd)
         if not is_reparameterized:
-            mean = tf.stop_gradient(mean)
-            logstd = tf.stop_gradient(logstd)
+            self.mean = tf.stop_gradient(self.mean)
+            self.logstd = tf.stop_gradient(self.logstd)
         # TODO: check_numerics for logstd
         super(Normal, self).__init__(dtype=tf.float32,
-                                     event_n_dims=event_n_dims,
+                                     event_ndims=event_ndims,
                                      is_reparameterized=is_reparameterized)
 
+    def _event_shape(self):
+        return tf.constant([], dtype=tf.int32)
 
-class Bernoulli(UnivariateStochasticTensor, DiscreteStochasticTensor):
+    def _get_event_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.broadcast_dynamic_shape(tf.shape(self.mean),
+                                          tf.shape(self.logstd))
+
+    def _get_batch_shape(self):
+        return tf.broadcast_static_shape(self.mean.get_shape(),
+                                         self.logstd.get_shape())
+
+    def _mean_and_logstd(self):
+        try:
+            mean = tf.ones_like(self.logstd) * self.mean
+            logstd = tf.ones_like(self.mean) * self.logstd
+        except ValueError:
+            raise ValueError("mean and logstd cannot be broadcast to have"
+                             "the same shape.")
+        mean = tf.expand_dims(mean, 0)
+        logstd = tf.expand_dims(logstd, 0)
+        return mean, logstd
+
+    def _sample(self, n_samples):
+        mean, logstd = self._mean_and_logstd()
+        shape = tf.concat([[n_samples], self._batch_shape()], 0)
+        return tf.random_normal(shape) * tf.exp(logstd) + mean
+
+    def _log_prob(self, given):
+        mean, logstd = self._mean_and_logstd()
+        c = -0.5 * np.log(2 * np.pi)
+        acc = tf.exp(-2 * logstd)
+        return c - logstd - 0.5 * acc * tf.square(given - mean)
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Bernoulli(UnivariateDistribution, DiscreteDistribution):
     """
-    The class of Bernoulli `StochasticTensor`.
+    The class of univariate Bernoulli distribution.
 
-    :param name: A string. The name of the StochasticTensor. Must be unique in
-        the graph.
+
     :param logits: A Tensor. The unnormalized log probabilities of being 1.
 
         .. math:: \\mathrm{logits}=\\log \\frac{p}{1 - p}
 
-    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
-        single sample. Default is None, which means a univariate distribution.
-    :param sample_shape: A Tensor. The shape of sample dimensions, which
-        indicates how many independent samples to generate.
-    :param validate_args: A Bool. Whether to validate input with asserts.
-        If `validate_args` is `False`, and the inputs are invalid,
-        correct behavior is not guaranteed.
+    :param event_n_dims: A 0-D `int32` Tensor representing number of
+        dimensions of a single event. Default is 0, which means a univariate
+        distribution. This is for common cases where we put a group of
+        univariate random variables in a single event, so that their
+        probabilities are calculated together. For example, when set to 1,
+        the last dimension is treated as a single event, the log probabilities
+        should sum over this axis.
     """
     def __init__(self,
-                 name,
                  logits,
-                 event_axis=None,
-                 sample_shape=None,
-                 validate_args=False):
-        dist = distributions.Bernoulli(logits=logits,
-                                       validate_args=validate_args,
-                                       allow_nan_stats=False)
-        super(Bernoulli, self).__init__(
-            name=name,
-            dtype=tf.int32,
-            dist=dist,
-            event_axis=event_axis,
-            sample_shape=sample_shape)
+                 event_n_dims=0):
+        super(Bernoulli, self).__init__(dtype=tf.int32,
+                                        event_ndims=event_n_dims)
 
 
-class Categorical(UnivariateStochasticTensor, DiscreteStochasticTensor):
+class Categorical(UnivariateDistribution, DiscreteDistribution):
     """
-    The class of Categorical StochasticTensor.
+    The class of univariate Categorical distribution.
 
     :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
         Each slice `[i, j,..., k, :]` represents the un-normalized log
         probabilities for all categories.
-    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
-        single sample. Default is None, which means a univariate distribution.
-    :param sample_shape: A Tensor. The shape of sample dimensions, which
-        indicates how many independent samples to generate.
-    :param validate_args: A Bool. Whether to validate input with asserts.
-        If `validate_args` is `False`, and the inputs are invalid,
-        correct behavior is not guaranteed.
+    :param event_ndims: A 0-D `int32` Tensor representing number of
+        dimensions of a single event. Default is 0, which means a univariate
+        distribution. This is for common cases where we put a group of
+        univariate random variables in a single event, so that their
+        probabilities are calculated together. For example, when set to 1,
+        the last dimension is treated as a single event, the log probabilities
+        should sum over this axis.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
@@ -98,53 +131,36 @@ class Categorical(UnivariateStochasticTensor, DiscreteStochasticTensor):
     def __init__(self,
                  name,
                  logits,
-                 event_axis=None,
-                 sample_shape=None,
-                 validate_args=False):
-        dist = distributions.Categorical(logits=logits,
-                                         validate_args=validate_args,
-                                         allow_nan_stats=False)
-        super(Categorical, self).__init__(
-            name=name,
-            dtype=tf.int32,
-            dist=dist,
-            event_axis=event_axis,
-            sample_shape=sample_shape)
+                 event_ndims=0):
+        super(Categorical, self).__init__(dtype=tf.int32,
+                                          event_ndims=event_ndims)
 
 
-class Uniform(UnivariateStochasticTensor, ContinuousStochasticTensor):
+class Uniform(UnivariateDistribution, ContinuousDistribution):
     """
-    The class of Uniform `StochasticTensor`.
+    The class of univariate Uniform distribution.
 
-    :param name: A string. The name of the StochasticTensor. Must be unique in
-        the graph.
     :param minval: A Tensor. The lower bound on the range of the uniform
         distribution.
     :param maxval: A Tensor. The upper bound on the range of the uniform
         distribution. Should be element-wise  bigger than `minval`.
-    :param event_axis: A scalar or 1-D Tensor representing dimensions of a
-        single sample. Default is None, which means a univariate distribution.
-    :param sample_shape: A Tensor. The shape of sample dimensions, which
-        indicates how many independent samples to generate.
+    :param event_ndims: A 0-D `int32` Tensor representing number of
+        dimensions of a single event. Default is 0, which means a univariate
+        distribution. This is for common cases where we put a group of
+        univariate random variables in a single event, so that their
+        probabilities are calculated together. For example, when set to 1,
+        the last dimension is treated as a single event, the log probabilities
+        should sum over this axis.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
-    :param validate_args: A Bool. Whether to validate input with asserts.
-        If `validate_args` is `False`, and the inputs are invalid,
-        correct behavior is not guaranteed.
     """
 
-    def __init__(self, name, dtype, is_reparameterized, *args, **kwargs):
-        minval = tf.convert_to_tensor(minval)
-        maxval = tf.convert_to_tensor(maxval)
-        if not is_reparameterized:
-            minval = tf.stop_gradient(minval)
-            maxval = tf.stop_gradient(maxval)
-        dist = distributions.Uniform(minval, maxval,
-                                     validate_args=validate_args,
-                                     allow_nan_stats=False)
-        super(Uniform, self).__init__(name=name, dtype=tf.float32,
-                                      is_reparameterized=is_reparameterized,
-                                      event_axis=event_axis,
-                                      is_reparameterized=is_reparameterized,
-                                      sample_shape=sample_shape)
+    def __init__(self,
+                 minval,
+                 maxval,
+                 event_ndims=0,
+                 is_reparameterized=True):
+        super(Uniform, self).__init__(dtype=tf.float32,
+                                      event_ndims=event_ndims,
+                                      is_reparameterized=is_reparameterized)

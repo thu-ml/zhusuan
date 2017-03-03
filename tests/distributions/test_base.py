@@ -57,7 +57,7 @@ class TestDistributions(tf.test.TestCase):
             dist._prob(tf.ones([2, 3]))
 
     def test_subclass(self):
-        with self.test_session():
+        with self.test_session(use_gpu=True):
             dist = Dist()
             self.assertTrue(dist.is_continuous is True)
             self.assertEqual(dist.dtype, tf.float32)
@@ -143,10 +143,20 @@ class UnivarDist(UnivariateDistribution):
         super(UnivarDist, self).__init__(tf.float32, event_n_dims=2,
                                          is_continuous=True)
 
-    def _event_shape(self):
-        return tf.constant([], dtype=tf.int32)
+    def _batch_shape(self):
+        return tf.constant([1, 2, 3], dtype=tf.int32)
 
+    def _get_batch_shape(self):
+        return tf.TensorShape([1, 2, 3])
 
+    def _sample(self, n_samples):
+        return tf.ones([n_samples, 1, 2, 3])
+
+    def _log_prob(self, given):
+        return tf.zeros_like(given, dtype=tf.float32)
+
+    def _prob(self, given):
+        return tf.ones_like(given, dtype=tf.float32)
 
 
 class TestUnivariateDistribution(tf.test.TestCase):
@@ -156,4 +166,11 @@ class TestUnivariateDistribution(tf.test.TestCase):
         self.assertEqual(dist.event_ndims, 2)
 
     def test_subclass(self):
-        pass
+        dist = UnivarDist()
+        with self.test_session(use_gpu=True):
+            self.assertTrue(dist.is_continuous)
+            self.assertEqual(dist.dtype, tf.float32)
+
+            # shape
+            self.assertEqual(dist.get_batch_shape().as_list(), [1])
+            self.assertEqual(dist.get_event_shape().as_list(), [2, 3])
