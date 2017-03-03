@@ -6,9 +6,11 @@ from __future__ import print_function
 from __future__ import division
 import sys
 import os
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 import time
 
 import tensorflow as tf
+import tensorflow.contrib.layers as layers
 from six.moves import range
 import numpy as np
 
@@ -19,45 +21,66 @@ import dataset
 import pdb
 
 @zs.reuse('model')
-def var_dropout(observed, x, n_x, n_class):
+def var_dropout(observed, x, n_x, n_class, is_training, adaptive=None)
+    input = tf.cond(is_training,
+                lambda: x,# * tf.random_normal(tf.shape(x), mean=1., stddev=0.5), 
+                lambda: x)
+    layer_func = correlated_noise_layer
     with zs.StochasticGraph(observed=observed) as model:
         #TODO:add a constant tensor
         with tf.variable_scope('layer1'):
-            h1 = independent_noise_layer(x, n_x, 200)
+            h1 = layer_func(x, n_x, 100, adaptive=adaptive)
         with tf.variable_scope('layer2'):
-            h2 = independent_noise_layer(h1, 200, 200)
+            h2 = layer_func(h1, 100, 100, adaptive=adaptive)
         with tf.variable_scope('layer3'):
-            h3 = independent_noise_layer(h2, 200, 200)
+            h3 = layer_func(h2, 100, 100, adaptive=adaptive)
         with tf.variable_scope('layer4'):
-            h4 = independent_noise_layer(h3, 200, n_class, None)
+            h4 = layer_func(h3, 100, n_class, None, adaptive=adaptive)
         y = zs.Discrete('y', h4)
     return model, y
 
-def independent_noise_layer(x, n_in, n_out, activation=tf.nn.relu):
+def independent_noise_layer(x, n_in, n_out, activation=tf.nn.relu, adaptive=None):
     """variational dropout layer with independent noise"""
     w = tf.get_variable('weights', [n_in, n_out])
-    unnormalized_alpha = tf.get_variable('unnormalized_alpha', [])
-    alpha = 1 - 1. / (1 + tf.exp(unnormalized_alpha))
+    b = tf.get_variable('biases', [n_out])
+    alpha = define_alpha(adaptive, n_in, n_out)    
 
-    epsilon = tf.random_normal(tf.shape(x), 1., alpha**0.5)
-    w = tf.tile(tf.expand_dims(w, 0), [tf.shape(x)[0], 1, 1])
+    w_expanded = tf.tile(tf.expand_dims(w, 0),
+                         [tf.shape(x)[0], 1, 1])
+    h_mean = tf.matmul(x, w) + b
+    h_var = tf.matmul(x**2, alpha*w**2)
+    h = zs.Normal(tf.get_variable_scope().name+'/outputs', h_mean,
+                  0.5*tf.log(h_var + 1e-10))
 
-    h = tf.matmul(x*epsilon, w)
     return h if activation is None else activation(h)
 
-def correlated_noise_layer(x, n_in, n_out, activation=tf.nn.relu):
+def correlated_noise_layer(x, n_in, n_out, activation=tf.nn.relu, adaptive=None):
     """variational dropout layer with correlated noise"""
     w = tf.get_variable('weights', [n_in, n_out])
-    unnormalized_alpha = tf.get_variable('unnormalized_alpha', [])
-    alpha = 1 - 1. / (1 + tf.exp(unnormalized_alpha))
-
-    epsilon = tf.random_normal([tf.shape(x)[0], tf.shape(x)[2]], 1., alpha**0.5)
+    b = tf.get_variable('biases', [n_out])
+    alpha = define_alpha(adaptive, n_in, n_out)
+    eps = alpha * tf.random_normal(shape=[tf.shape(x)[0], n_out])
 
     w = tf.tile(tf.expand_dims(w, 0), [tf.shape(x)[0], 1, 1])
-    epsilon = tf.tile(tf.expand_dims(epsilon, 1), [1, tf.shape(w)[1], 1])
+    eps = tf.tile(tf.expand_dims(eps, 1), [1, tf.shape(w)[1], 1])
 
-    h = tf.matmul(x, w*epsilon)
+    h = tf.matmul(x, w*eps)
     return h if activation is None else activation(h)
+
+def define_alpha(adptive, n_in, n_out):
+    #define alpha
+    if adaptive == None:
+        unnormalized_alpha = float('inf')
+    elif adaptive == 'layer_wise':
+        unnormalized_alpha = tf.get_variable('unnormalized_alpha',
+                                             [])
+    elif adaptive == 'neuron_wise':
+        unnormalized_alpha = tf.get_variable('unnormalized_alpha',
+                                             [n_out])#NOTE:n_in for type A?
+    else:
+        raise NameError('Not a proper name for adaptive')
+    alpha = 1 - 1. / (1 + tf.exp(unnormalized_alpha))
+    return alpha
 
 if __name__ == '__main__':
     tf.set_random_seed(1234)
@@ -78,13 +101,14 @@ if __name__ == '__main__':
     epoches = 500
     batch_size = 1000
     lb_samples = 1
-    ll_samples = 20
+    ll_samples = 100
     iters = int(np.floor(x_train.shape[0] / float(batch_size)))
     test_freq = 3
     learning_rate = 0.001
 
     # Build trainging model
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     x = tf.placeholder(tf.float32, shape=(None, n_x))
     y = tf.placeholder(tf.float32, shape=(None, n_class))
     n = tf.shape(x)[0]
@@ -93,7 +117,8 @@ if __name__ == '__main__':
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1, 1])
 
     with tf.name_scope('cross_entropy'):
-        model, _  = var_dropout({'y': y_obs}, x_obs, n_x, n_class)
+        model, _  = var_dropout({'y': y_obs}, x_obs, n_x, n_class,
+                                is_training, adaptive='neuron_wise')
         log_py_x = model.local_log_prob('y')
 
     with tf.name_scope('KL_divergence'):
@@ -106,13 +131,14 @@ if __name__ == '__main__':
                      if a.name.find('alpha')>=0])
 
     with tf.name_scope('accuracy'):
-        _, y_pred = var_dropout({}, x_obs, n_x, n_class)
+        _, y_pred = var_dropout({}, x_obs, n_x, n_class,
+                                is_training, adaptive='neuron_wise')
         y_pred = tf.reduce_mean(y_pred, 0)
         y_pred = tf.argmax(y_pred, 1)
         y0 = tf.argmax(y, 1)
         acc = tf.reduce_mean(tf.cast(tf.equal(y_pred, y0), tf.float32))
 
-    lower_bound = tf.reduce_mean(log_py_x - KL_div)
+    lower_bound = tf.reduce_mean(log_py_x) - KL_div / x_train.shape[0]
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer = optimizer.minimize(-lower_bound)
@@ -133,6 +159,7 @@ if __name__ == '__main__':
                 _, lb = sess.run(
                     [infer, lower_bound],
                     feed_dict={n_particles: lb_samples,
+                               is_training: True,
                                learning_rate_ph: learning_rate,
                                x: x_batch, y: y_batch})
                 lbs.append(lb)
@@ -145,6 +172,7 @@ if __name__ == '__main__':
                 test_lb, test_acc = sess.run(
                     [lower_bound, acc],
                     feed_dict={n_particles: ll_samples,
+                               is_training: False,
                                x: x_test, y: y_test})
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
