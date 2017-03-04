@@ -14,22 +14,25 @@ from zhusuan.distributions.base import *
 
 class Dist(Distribution):
     def __init__(self):
-        super(Dist, self).__init__(tf.float32, is_continuous=True)
+        super(Dist, self).__init__(tf.float32,
+                                   is_continuous=True,
+                                   is_reparameterized=True,
+                                   group_event_ndims=2)
 
-    def _event_shape(self):
-        return tf.constant([3], dtype=tf.int32)
+    def _value_shape(self):
+        return tf.constant([5], dtype=tf.int32)
 
-    def _get_event_shape(self):
-        return tf.TensorShape([3])
+    def _get_value_shape(self):
+        return tf.TensorShape([5])
 
     def _batch_shape(self):
-        return tf.constant([2], dtype=tf.int32)
+        return tf.constant([2, 3, 4], dtype=tf.int32)
 
     def _get_batch_shape(self):
-        return tf.TensorShape([2])
+        return tf.TensorShape([2, 3, 4])
 
     def _sample(self, n_samples):
-        return tf.ones([n_samples, 2, 3])
+        return tf.ones([n_samples, 2, 3, 4, 5])
 
     def _log_prob(self, given):
         return tf.reduce_sum(tf.zeros_like(given), -1)
@@ -40,11 +43,18 @@ class Dist(Distribution):
 
 class TestDistributions(tf.test.TestCase):
     def test_baseclass(self):
-        dist = Distribution(tf.float32, is_continuous=True)
+        dist = Distribution(tf.float32,
+                            is_continuous=True,
+                            is_reparameterized=True,
+                            group_event_ndims=2)
+        self.assertEqual(dist.dtype, tf.float32)
+        self.assertEqual(dist.is_continuous, True)
+        self.assertEqual(dist.is_reparameterized, True)
+        self.assertEqual(dist.group_event_ndims, 2)
         with self.assertRaises(NotImplementedError):
-            dist._event_shape()
+            dist._value_shape()
         with self.assertRaises(NotImplementedError):
-            dist._get_event_shape()
+            dist._get_value_shape()
         with self.assertRaises(NotImplementedError):
             dist._batch_shape()
         with self.assertRaises(NotImplementedError):
@@ -52,59 +62,61 @@ class TestDistributions(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             dist._sample(n_samples=1)
         with self.assertRaises(NotImplementedError):
-            dist._log_prob(tf.ones([2, 3]))
+            dist._log_prob(tf.ones([2, 3, 4, 5]))
         with self.assertRaises(NotImplementedError):
-            dist._prob(tf.ones([2, 3]))
+            dist._prob(tf.ones([2, 3, 4, 5]))
 
     def test_subclass(self):
         with self.test_session(use_gpu=True):
             dist = Dist()
-            self.assertTrue(dist.is_continuous is True)
             self.assertEqual(dist.dtype, tf.float32)
+            self.assertEqual(dist.is_continuous, True)
+            self.assertEqual(dist.is_reparameterized, True)
+            self.assertEqual(dist.group_event_ndims, 2)
 
             # shape
-            evt_shape = dist.event_shape
-            self.assertAllEqual(evt_shape.eval(), [3])
-            static_evt_shape = dist.get_event_shape()
-            self.assertAllEqual(static_evt_shape.as_list(), [3])
+            v_shape = dist.value_shape
+            self.assertAllEqual(v_shape.eval(), [5])
+            static_v_shape = dist.get_value_shape()
+            self.assertAllEqual(static_v_shape.as_list(), [5])
 
-            btch_shape = dist.batch_shape
-            self.assertAllEqual(btch_shape.eval(), [2])
-            static_btch_shape = dist.get_batch_shape()
-            self.assertAllEqual(static_btch_shape.as_list(), [2])
+            b_shape = dist.batch_shape
+            self.assertAllEqual(b_shape.eval(), [2, 3, 4])
+            static_b_shape = dist.get_batch_shape()
+            self.assertAllEqual(static_b_shape.as_list(), [2, 3, 4])
 
             # sample
             # static n_samples
             samples_1 = dist.sample()
             self.assertAllEqual(samples_1.eval(),
-                                np.ones((2, 3), dtype=np.int32))
+                                np.ones((2, 3, 4, 5), dtype=np.int32))
             samples_2 = dist.sample(n_samples=2)
             self.assertAllEqual(samples_2.eval(),
-                                np.ones((2, 2, 3), dtype=np.int32))
+                                np.ones((2, 2, 3, 4, 5), dtype=np.int32))
             # dynamic n_samples
             n_samples = tf.placeholder(tf.int32, shape=[])
             samples_3 = dist.sample(n_samples=n_samples)
             self.assertAllEqual(samples_3.eval(feed_dict={n_samples: 1}),
-                                np.ones((2, 3), dtype=np.int32))
+                                np.ones((2, 3, 4, 5), dtype=np.int32))
             self.assertAllEqual(samples_3.eval(feed_dict={n_samples: 2}),
-                                np.ones((2, 2, 3), dtype=np.int32))
+                                np.ones((2, 2, 3, 4, 5), dtype=np.int32))
 
             # log_prob
-            given_1 = tf.ones([2, 3])
+            given_1 = tf.ones([2, 3, 4, 5])
             log_p_1 = dist.log_prob(given_1)
             self.assertAllEqual(log_p_1.eval(), np.zeros((2)))
 
-            given_2 = tf.ones([1, 2, 3])
+            given_2 = tf.ones([1, 2, 3, 4, 5])
             log_p_2 = dist.log_prob(given_2)
             self.assertAllEqual(log_p_2.eval(), np.zeros((1, 2)))
 
             given_3 = tf.placeholder(tf.float32, shape=None)
             log_p_3 = dist.log_prob(given_3)
             self.assertAllEqual(
-                log_p_3.eval(feed_dict={given_3: np.ones((2, 3))}),
+                log_p_3.eval(feed_dict={given_3: np.ones((2, 3, 4, 5))}),
                 np.zeros((2)))
             self.assertAllEqual(
-                log_p_3.eval(feed_dict={given_3: np.ones((1, 2, 3))}),
+                log_p_3.eval(feed_dict={given_3: np.ones((1, 2, 3, 4, 5))}),
                 np.zeros((1, 2)))
 
             # prob
@@ -116,61 +128,8 @@ class TestDistributions(tf.test.TestCase):
 
             p_3 = dist.prob(given_3)
             self.assertAllEqual(
-                p_3.eval(feed_dict={given_3: np.ones((2, 3))}),
+                p_3.eval(feed_dict={given_3: np.ones((2, 3, 4, 5))}),
                 np.ones((2)))
             self.assertAllEqual(
-                p_3.eval(feed_dict={given_3: np.ones((1, 2, 3))}),
+                p_3.eval(feed_dict={given_3: np.ones((1, 2, 3, 4, 5))}),
                 np.ones((1, 2)))
-
-
-class TestContinuousDistribution(tf.test.TestCase):
-    def test_baseclass(self):
-        dist = ContinuousDistribution(tf.float32, is_reparameterized=True)
-        self.assertEqual(dist.dtype, tf.float32)
-        self.assertTrue(dist.is_continuous)
-        self.assertTrue(dist.is_reparameterized)
-
-
-class TestDiscreteDistribution(tf.test.TestCase):
-    def test_baseclass(self):
-        dist = DiscreteDistribution(tf.float32)
-        self.assertEqual(dist.dtype, tf.float32)
-        self.assertFalse(dist.is_continuous)
-
-
-class UnivarDist(UnivariateDistribution):
-    def __init__(self):
-        super(UnivarDist, self).__init__(tf.float32, event_n_dims=2,
-                                         is_continuous=True)
-
-    def _batch_shape(self):
-        return tf.constant([1, 2, 3], dtype=tf.int32)
-
-    def _get_batch_shape(self):
-        return tf.TensorShape([1, 2, 3])
-
-    def _sample(self, n_samples):
-        return tf.ones([n_samples, 1, 2, 3])
-
-    def _log_prob(self, given):
-        return tf.zeros_like(given, dtype=tf.float32)
-
-    def _prob(self, given):
-        return tf.ones_like(given, dtype=tf.float32)
-
-
-class TestUnivariateDistribution(tf.test.TestCase):
-    def test_baseclass(self):
-        dist = UnivariateDistribution(tf.float32, event_ndims=2,
-                                      is_continuous=True)
-        self.assertEqual(dist.event_ndims, 2)
-
-    def test_subclass(self):
-        dist = UnivarDist()
-        with self.test_session(use_gpu=True):
-            self.assertTrue(dist.is_continuous)
-            self.assertEqual(dist.dtype, tf.float32)
-
-            # shape
-            self.assertEqual(dist.get_batch_shape().as_list(), [1])
-            self.assertEqual(dist.get_event_shape().as_list(), [2, 3])

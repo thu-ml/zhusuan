@@ -7,15 +7,11 @@ from functools import wraps
 
 import tensorflow as tf
 
-from zhusuan.utils import convert_to_int, add_name_scope, doc_inherit
+from zhusuan.utils import convert_to_int, add_name_scope
 
 
 __all__ = [
     'Distribution',
-    'ContinuousDistribution',
-    'DiscreteDistribution',
-    'UnivariateDistribution',
-    'MultivariateDistribution'
 ]
 
 
@@ -26,25 +22,53 @@ class Distribution(object):
     evaluate probabilities at batches of given values.
 
     The typical input shapes for a `Distribution` is like
-    `batch_shape + event_shape`. We borrow this terminology from
-    `tf.contrib.distributions`, where `event_shape` represents the shape
+    `batch_shape + input_shape`. where `input_shape` represents the shape
     of non-batch input parameter, `batch_shape` represents how many independent
     inputs are fed into the distribution.
 
-    Samples generated are of shape `[n + ]batch_shape + event_shape`. For
-    `n=1`, the first additional axis is omitted.
+    Samples generated are of shape `(n + )batch_shape + value_shape`. For
+    `n=1`, the first additional axis is omitted. `value_shape` is the non-batch
+    value shape of the distribution. For a univariate distribution,
+    `value_shape` is [].
+
+    There are cases where batch of random variables are grouped into a
+    single event so that their probabilities can be computed together. This
+    is achieved by setting `group_event_ndims` argument, which defaults to 0.
+    The last `group_event_ndims` number of axes in `batch_shape` are grouped
+    into a single event. For example, a `Normal(..., group_event_ndims=1) will
+    set the last axis of `batch_shape` to a single event, i.e. a multivariate
+    Normal with identity covariance matrix.
 
     When evaluating probabilities at given values, the given Tensor can be of
-    shape `[n + ]batch_shape + event_shape`. The returned Tensor has shape
-    `[n + ]batch_shape`.
+    shape `(n + )batch_shape + value_shape`. The returned Tensor has shape
+    `(n + )batch_shape[:-group_event_ndims]`.
 
     :param dtype: The value type of samples from the distribution.
     :param is_continuous: Whether the distribution is continuous.
+    :param is_reparameterized: A bool. Whether the gradients of samples can
+        and are allowed to propagate back into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is a event.
+        See above for more detailed explanation.
     """
 
-    def __init__(self, dtype, is_continuous, *args, **kwargs):
+    def __init__(self, dtype, is_continuous, is_reparameterized,
+                 group_event_ndims=0):
         self._dtype = dtype
         self._is_continuous = is_continuous
+        self._is_reparameterized = is_reparameterized
+        static_group_event_ndims = convert_to_int(group_event_ndims)
+        if static_group_event_ndims is not None:
+            self._group_event_ndims = static_group_event_ndims
+        else:
+            group_event_ndims = tf.convert_to_tensor(
+                group_event_ndims, tf.int32)
+            with tf.control_dependencies(
+                    [tf.assert_rank(group_event_ndims, 0)]):
+                self._group_event_ndims = tf.identity(group_event_ndims)
 
     @property
     def dtype(self):
@@ -57,35 +81,50 @@ class Distribution(object):
         return self._is_continuous
 
     @property
-    def event_shape(self):
+    def is_reparameterized(self):
         """
-        The shape of a single sample from the distribution with non-batch
-        input. For batch inputs, the shape of a generated sample is
-        `batch_shape + event_shape`.
-        We borrow this concept from `tf.contrib.distributions`.
+        Whether the gradients of samples can and are allowed to propagate back
+        into inputs, using the reparametrization trick from (Kingma, 2013).
         """
-        static_event_shape = self.get_event_shape()
-        if static_event_shape.is_fully_defined():
-            return tf.convert_to_tensor(static_event_shape, dtype=tf.int32)
-        return self._event_shape()
+        return self._is_reparameterized
 
-    def _event_shape(self):
+    @property
+    def group_event_ndims(self):
         """
-        Private method for subclasses to rewrite the `event_shape` property.
+        The number of dimensions in `batch_shape` (counted from the end)
+        that are grouped into a single event, so that their probabilities are
+        calculated together. See `Distribution` for more detailed explanation.
+        """
+        return self._group_event_ndims
+
+    @property
+    def value_shape(self):
+        """
+        The non-batch value shape of a distribution. For batch inputs, the
+        shape of a generated sample is `batch_shape + value_shape`.
+        """
+        static_value_shape = self.get_value_shape()
+        if static_value_shape.is_fully_defined():
+            return tf.convert_to_tensor(static_value_shape, dtype=tf.int32)
+        return self._value_shape()
+
+    def _value_shape(self):
+        """
+        Private method for subclasses to rewrite the `value_shape` property.
         """
         raise NotImplementedError()
 
-    def get_event_shape(self):
+    def get_value_shape(self):
         """
-        Static`event_shape`.
+        Static `value_shape`.
 
         :return: A `TensorShape` instance.
         """
-        return self._get_event_shape()
+        return self._get_value_shape()
 
-    def _get_event_shape(self):
+    def _get_value_shape(self):
         """
-        Private method for subclasses to rewrite the `get_event_shape` method.
+        Private method for subclasses to rewrite the `get_value_shape` method.
         """
         raise NotImplementedError()
 
@@ -94,7 +133,7 @@ class Distribution(object):
         """
         The shape showing how many independent inputs (which we call batches)
         are fed into the distribution. For batch inputs, the shape of a
-        generated sample is `batch_shape + event_shape`.
+        generated sample is `batch_shape + value_shape`.
         We borrow this concept from `tf.contrib.distributions`.
         """
         static_batch_shape = self.get_batch_shape()
@@ -157,13 +196,13 @@ class Distribution(object):
             given = tf.convert_to_tensor(args[1])
             static_given_rank = given.get_shape().ndims
             static_batch_rank = args[0].get_batch_shape().ndims
-            static_event_rank = args[0].get_event_shape().ndims
+            static_value_rank = args[0].get_value_shape().ndims
             err_msg = "The 'given' argument should have the same or one " \
-                      "more rank than the rank of batch_shape + event_shape"
+                      "more rank than the rank of batch_shape + value_shape"
             if (static_given_rank is not None) and (
                     static_batch_rank is not None) and (
-                        static_event_rank is not None):
-                static_sample_rank = static_batch_rank + static_event_rank
+                        static_value_rank is not None):
+                static_sample_rank = static_batch_rank + static_value_rank
                 if static_given_rank == static_sample_rank:
                     given_1 = tf.expand_dims(given, axis=0)
                     return tf.squeeze(f(args[0], given_1), axis=0)
@@ -173,11 +212,11 @@ class Distribution(object):
                     raise ValueError(
                         err_msg + " (rank {} vs. rank {} + {})".format(
                             static_given_rank, static_batch_rank,
-                            static_event_rank))
+                            static_value_rank))
             else:
                 given_rank = tf.rank(given)
                 sample_rank = tf.shape(args[0].batch_shape)[0] + \
-                    tf.shape(args[0].event_shape)[0]
+                    tf.shape(args[0].value_shape)[0]
                 assert_rank_op = tf.Assert(
                     tf.logical_or(tf.equal(given_rank, sample_rank),
                                   tf.equal(given_rank, sample_rank + 1)),
@@ -198,10 +237,11 @@ class Distribution(object):
 
         :param given: A Tensor. The value at which to evaluate log probability
             density (mass) function. Must be able to broadcast to have a shape
-            of `[n + ]batch_shape + event_shape`.
-        :return: A Tensor of shape `[n + ]batch_shape`.
+            of `(n + )batch_shape + value_shape`.
+        :return: A Tensor of shape `(n + )batch_shape[:-group_event_ndims]`.
         """
-        return self._log_prob(given)
+        log_p = self._log_prob(given)
+        return tf.reduce_sum(log_p, tf.range(-self._group_event_ndims, 0))
 
     @add_name_scope
     @_call_by_input_rank
@@ -210,10 +250,12 @@ class Distribution(object):
         Compute probability density (mass) function at `given` value.
 
         :param given: A Tensor. The value at which to evaluate probability
-            density (mass) function.
-        :return: A Tensor.
+            density (mass) function. Must be able to broadcast to have a shape
+            of `(n + )batch_shape + value_shape`.
+        :return: A Tensor of shape `(n + )batch_shape[:-group_event_ndims]`.
         """
-        return self._prob(given)
+        p = self._prob(given)
+        return tf.reduce_prod(p, tf.range(-self._group_event_ndims, 0))
 
     def _log_prob(self, given):
         """
@@ -226,130 +268,3 @@ class Distribution(object):
         Private method for subclasses to rewrite the `prob` method.
         """
         raise NotImplementedError()
-
-
-class ContinuousDistribution(Distribution):
-    """
-    Base class of continuous distributions.
-
-    :param dtype: The value type of samples from the distribution.
-    :param is_reparameterized: A bool. Whether the gradients of samples can
-        and are allowed to propagate back into inputs, using the
-        reparametrization trick from (Kingma, 2013).
-    """
-
-    def __init__(self, dtype, is_reparameterized, *args, **kwargs):
-        self._is_reparameterized = is_reparameterized
-        super(ContinuousDistribution, self).__init__(
-            dtype, is_continuous=True, *args, **kwargs)
-
-    @property
-    def is_reparameterized(self):
-        """
-        Whether the gradients of samples can and are allowed to propagate back
-        into inputs, using the reparametrization trick from (Kingma, 2013).
-        """
-        return self._is_reparameterized
-
-
-class DiscreteDistribution(Distribution):
-    """
-    Base class of discrete distributions.
-
-    :param dtype: The value type of samples from the distribution.
-    """
-
-    def __init__(self, dtype, *args, **kwargs):
-        super(DiscreteDistribution, self).__init__(
-            dtype, is_continuous=False, *args, **kwargs)
-
-
-class UnivariateDistribution(Distribution):
-    """
-    Base class of univariate distributions.
-
-    :param dtype: The value type of samples from the distribution.
-    :param event_ndims: A 0-D `int32` Tensor representing number of
-        dimensions of a single event. Default is 0, which means a univariate
-        distribution. This is for common cases where we put a group of
-        univariate random variables in a single event, so that their
-        probabilities are calculated together. For example, when set to 1,
-        the last dimension is treated as a single event, the log probabilities
-        should sum over this axis.
-    """
-    def __init__(self, dtype, event_ndims=0, *args, **kwargs):
-        static_event_ndims = convert_to_int(event_ndims)
-        if static_event_ndims is not None:
-            self._event_ndims = static_event_ndims
-        else:
-            with tf.control_dependencies([tf.assert_rank(event_ndims, 0)]):
-                self._event_ndims = tf.identity(event_ndims)
-        super(UnivariateDistribution, self).__init__(dtype, *args, **kwargs)
-
-    @property
-    def event_ndims(self):
-        """
-        The number of dimensions of a single event in a univariate
-        distribution. This is for common cases where we put a group of
-        univariate random variables in a single event, so that their
-        probabilities are calculated together.
-        """
-        return self._event_ndims
-
-    @property
-    @doc_inherit
-    def event_shape(self):
-        b_shape = super(UnivariateDistribution, self).batch_shape
-        return b_shape[(tf.shape(b_shape)[0] - self._event_ndims):]
-
-    def _event_shape(self):
-        return tf.constant([], dtype=tf.int32)
-
-    @doc_inherit
-    def get_event_shape(self):
-        if isinstance(self._event_ndims, int):
-            static_batch_shape = super(UnivariateDistribution,
-                                       self).get_batch_shape()
-            if static_batch_shape:
-                return static_batch_shape[(static_batch_shape.ndims -
-                                           self._event_ndims):]
-        return tf.TensorShape(None)
-
-    def _get_event_shape(self):
-        return tf.TensorShape([])
-
-    @property
-    @doc_inherit
-    def batch_shape(self):
-        b_shape = super(UnivariateDistribution, self).batch_shape
-        return b_shape[:(tf.shape(b_shape)[0] - self._event_ndims)]
-
-    @doc_inherit
-    def get_batch_shape(self):
-        if isinstance(self._event_ndims, int):
-            static_batch_shape = super(UnivariateDistribution,
-                                       self).get_batch_shape()
-            if static_batch_shape:
-                return static_batch_shape[:(static_batch_shape.ndims -
-                                            self._event_ndims)]
-        return tf.TensorShape(None)
-
-    @doc_inherit
-    def log_prob(self, given):
-        log_p = super(UnivariateDistribution, self).log_prob(given)
-        return tf.reduce_sum(log_p, tf.range(-self._event_ndims, 0))
-
-    @doc_inherit
-    def prob(self, given):
-        p = super(UnivariateDistribution, self).log_prob(given)
-        return tf.reduce_prod(p, tf.range(-self.event_ndims, 0))
-
-
-class MultivariateDistribution(Distribution):
-    """
-    Base class of multivariate distributions.
-
-    :param dtype: The value type of samples from the distribution.
-    """
-    def __init__(self, dtype, *args, **kwargs):
-        super(MultivariateDistribution, self).__init__(dtype, *args, **kwargs)
