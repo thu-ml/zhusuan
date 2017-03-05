@@ -9,55 +9,52 @@ import os
 import time
 
 import tensorflow as tf
+import tensorflow.contrib.layers as layers
 from six.moves import range
 import numpy as np
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 import dataset
-import pdb
+
 
 @zs.reuse('model')
-def var_dropout(observed, x, n_x, n_class):
+def var_dropout(observed, x, n, net_size, n_particles, is_training):
     with zs.StochasticGraph(observed=observed) as model:
-        #TODO:add a constant tensor
-        with tf.variable_scope('layer1'):
-            h1 = independent_noise_layer(x, n_x, 200)
-        with tf.variable_scope('layer2'):
-            h2 = independent_noise_layer(h1, 200, 200)
-        with tf.variable_scope('layer3'):
-            h3 = independent_noise_layer(h2, 200, 200)
-        with tf.variable_scope('layer4'):
-            h4 = independent_noise_layer(h3, 200, n_class, None)
-        y = zs.Discrete('y', h4)
+        h = x
+        normalizer_params = {'is_training': is_training,
+                             'updates_collections': None}
+        for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
+
+            eps_mean = tf.ones([n_particles, n_in])
+            eps_logstd = tf.zeros([n_particles, n_in])
+            eps = zs.Normal('layer'+str(i)+'/eps', eps_mean, eps_logstd,
+                            sample_dim=1, n_samples=n)
+
+            h = layers.fully_connected(
+                h*eps, n_out, normalizer_fn=layers.batch_norm,
+                normalizer_params=normalizer_params)
+
+            if i < len(net_size) - 2:
+                h = tf.nn.relu(h)
+
+        y = zs.Discrete('y', h)
     return model, y
 
-def independent_noise_layer(x, n_in, n_out, activation=tf.nn.relu):
-    """variational dropout layer with independent noise"""
-    w = tf.get_variable('weights', [n_in, n_out])
-    unnormalized_alpha = tf.get_variable('unnormalized_alpha', [])
-    alpha = 1 - 1. / (1 + tf.exp(unnormalized_alpha))
 
-    epsilon = tf.random_normal(tf.shape(x), 1., alpha**0.5)
-    w = tf.tile(tf.expand_dims(w, 0), [tf.shape(x)[0], 1, 1])
+@zs.reuse('variational')
+def q(observed, n, net_size, n_particles):
+    with zs.StochasticGraph(observed=observed) as variational:
+        for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
+            with tf.variable_scope('layer'+str(i)):
+                logit_alpha = tf.get_variable('logit_alpha', [n_in])
 
-    h = tf.matmul(x*epsilon, w)
-    return h if activation is None else activation(h)
-
-def correlated_noise_layer(x, n_in, n_out, activation=tf.nn.relu):
-    """variational dropout layer with correlated noise"""
-    w = tf.get_variable('weights', [n_in, n_out])
-    unnormalized_alpha = tf.get_variable('unnormalized_alpha', [])
-    alpha = 1 - 1. / (1 + tf.exp(unnormalized_alpha))
-
-    epsilon = tf.random_normal([tf.shape(x)[0], tf.shape(x)[2]], 1., alpha**0.5)
-
-    w = tf.tile(tf.expand_dims(w, 0), [tf.shape(x)[0], 1, 1])
-    epsilon = tf.tile(tf.expand_dims(epsilon, 1), [1, tf.shape(w)[1], 1])
-
-    h = tf.matmul(x, w*epsilon)
-    return h if activation is None else activation(h)
+            alpha = tf.nn.sigmoid(logit_alpha)
+            alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
+            eps = zs.Normal('layer'+str(i)+'/eps',
+                            tf.ones_like(alpha), 0.5*tf.log(alpha+1e-10),
+                            sample_dim=0, n_samples=n_particles)
+    return variational
 
 if __name__ == '__main__':
     tf.set_random_seed(1234)
@@ -78,53 +75,64 @@ if __name__ == '__main__':
     epoches = 500
     batch_size = 1000
     lb_samples = 1
-    ll_samples = 20
+    ll_samples = 100
     iters = int(np.floor(x_train.shape[0] / float(batch_size)))
     test_freq = 3
     learning_rate = 0.001
+    anneal_lr_freq = 100
+    anneal_lr_rate = 0.75
 
-    # Build trainging model
+    # placeholders
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     x = tf.placeholder(tf.float32, shape=(None, n_x))
     y = tf.placeholder(tf.float32, shape=(None, n_class))
     n = tf.shape(x)[0]
 
+    net_size = [n_x, 1060, 1060, 1060, n_class]
+    es_name = ['layer'+str(i)+'/eps' for i in range(len(net_size)-1)]
+
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1, 1])
 
-    with tf.name_scope('cross_entropy'):
-        model, _  = var_dropout({'y': y_obs}, x_obs, n_x, n_class)
-        log_py_x = model.local_log_prob('y')
+    def log_joint(observed):
+        model, _ = var_dropout(observed, x_obs, n, net_size,
+                               n_particles, is_training)
+        log_ps = model.local_log_prob(es_name + ['y'])
+        log_pes = log_ps[:-1]
+        log_py_xe = log_ps[-1]
+        return sum([tf.reduce_sum(log_pe, -1) for log_pe in log_pes])\
+            / x_train.shape[0] + log_py_xe
 
-    with tf.name_scope('KL_divergence'):
-        def KL(unnormalized_alpha):
-            alpha = 1 - 1. / (1 + tf.exp(unnormalized_alpha))
-            c1, c2, c3 = (1.16145124, -1.16145124, 1.16145124)
-            return -tf.reduce_sum(0.5 * tf.log(alpha) \
-                + c1*alpha + c2*alpha**2 + c3*alpha**3)
-        KL_div = sum([KL(a) for a in tf.trainable_variables() \
-                     if a.name.find('alpha')>=0])
+    variational = q({}, n, net_size, n_particles)
+    qe_queries = variational.query(es_name, outputs=True,
+                                   local_log_prob=True)
+    qe_samples, log_qes = zip(*qe_queries)
+    log_qes = [tf.reduce_sum(log_qe, -1) / x_train.shape[0]
+               for log_qe in log_qes]
+    e_dict = dict(zip(es_name, zip(qe_samples, log_qes)))
+
+    lower_bound = tf.reduce_mean(
+        zs.advi(log_joint, {'y': y_obs}, e_dict, axis=0))
 
     with tf.name_scope('accuracy'):
-        _, y_pred = var_dropout({}, x_obs, n_x, n_class)
+        _, y_pred = var_dropout({}, x_obs, n, net_size,
+                                n_particles, is_training)
         y_pred = tf.reduce_mean(y_pred, 0)
         y_pred = tf.argmax(y_pred, 1)
-        y0 = tf.argmax(y, 1)
-        acc = tf.reduce_mean(tf.cast(tf.equal(y_pred, y0), tf.float32))
+        sparse_y = tf.argmax(y, 1)
+        acc = tf.reduce_mean(tf.cast(tf.equal(y_pred, sparse_y), tf.float32))
 
-    lower_bound = tf.reduce_mean(log_py_x - KL_div)
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer = optimizer.minimize(-lower_bound)
-
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epoches + 1):
+            if epoch % anneal_lr_freq == 0:
+                learning_rate *= anneal_lr_rate
             time_epoch = -time.time()
             lbs = []
             for t in range(iters):
@@ -133,6 +141,7 @@ if __name__ == '__main__':
                 _, lb = sess.run(
                     [infer, lower_bound],
                     feed_dict={n_particles: lb_samples,
+                               is_training: True,
                                learning_rate_ph: learning_rate,
                                x: x_batch, y: y_batch})
                 lbs.append(lb)
@@ -142,11 +151,19 @@ if __name__ == '__main__':
 
             if epoch % test_freq == 0:
                 time_test = -time.time()
-                test_lb, test_acc = sess.run(
-                    [lower_bound, acc],
-                    feed_dict={n_particles: ll_samples,
-                               x: x_test, y: y_test})
+                test_lbs = []
+                test_accs = []
+                for t in range(10):
+                    x_batch = x_test[t*1000:(t+1)*1000]
+                    y_batch = y_test[t*1000:(t+1)*1000]
+                    lb, acc1 = sess.run(
+                        [lower_bound, acc],
+                        feed_dict={n_particles: ll_samples,
+                                   is_training: False,
+                                   x: x_batch, y: y_batch})
+                    test_lbs.append(lb)
+                    test_accs.append(acc1)
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
-                print('>> Test lower bound = {}'.format(test_lb))
-                print('>> Test accuaracy = {}'.format(test_acc))
+                print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
+                print('>> Test accuaracy = {}'.format(np.mean(test_accs)))
