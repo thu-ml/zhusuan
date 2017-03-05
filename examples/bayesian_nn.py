@@ -112,7 +112,7 @@ if __name__ == '__main__':
         log_pws = model.local_log_prob(w_names)
         log_py_xw = model.local_log_prob('y')
         return sum([tf.reduce_sum(log_pw, [-1, -2]) for log_pw in log_pws]) + \
-            tf.reduce_mean(log_py_xw, 1) * N
+            tf.reduce_mean(log_py_xw, 1, keep_dims=True) * N
 
     variational = mean_field_variational(layer_sizes, n_particles)
     qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)

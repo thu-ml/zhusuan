@@ -18,7 +18,8 @@ __all__ = [
     'advi',
     'iwae',
     'rws',
-    'nvil'
+    'nvil',
+    'vimco'
 ]
 
 
@@ -186,3 +187,71 @@ def nvil(log_joint,
     cost += fake_log_joint_cost + fake_variational_cost
     lower_bound = tf.reduce_mean(log_joint_value + entropy, axis)
     return cost, lower_bound
+
+
+def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
+    """
+    Implements the variance reduced score function estimator for gradients
+    of the variational lower bound from (Andriy, 2016). This works for both
+    continuous and discrete latent `StochasticTensor` s.
+
+    :param log_joint: A function that accepts a dictionary argument of
+        (str, Tensor) pairs, which are mappings from all `StochasticTensor`
+        names in the model to their observed values. The function should
+        return a Tensor, representing the log joint likelihood of the model.
+    :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
+        of observed `StochasticTensor` s to their values.
+    :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
+        from names of latent `StochasticTensor` s to their samples and log
+        probabilities.
+    :param axis: The sample dimension to reduce when computing the
+        variational lower bound.
+    :param variance_normalization: Whether the number of samples
+        (in the paper, K) is greater than 1. If K = 1, return the results of
+        advi.
+
+    :return: A Tensor. The proxy object function to maximize.
+    :return: A Tensor. The variational lower bound.
+    """
+    if not is_particle_larger_one:
+        return advi(log_joint, observed, latent, axis)
+
+    latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
+    latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
+    latent_logpdfs = map(lambda x: x[1], latent_v)
+    joint_obs = merge_dicts(observed, latent_outputs)
+    log_joint_gen = log_joint(joint_obs)    # log p(x,h)
+    entropy = -sum(latent_logpdfs)          # -log q(h|x)
+
+    l_signal = log_joint_gen + entropy
+    mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) - l_signal) /\
+                         tf.to_float(tf.shape(l_signal)[axis] - 1)
+
+    # calculate log_mean_exp_sub
+    x = tf.cast(l_signal, dtype=tf.float32)
+    sub_x = tf.cast(mean_except_signal, dtype=tf.float32)
+    x_shape = x.get_shape()
+    n_dim = x_shape.ndims
+    op_indices = n_dim - 1
+
+    perm = range(axis) + [op_indices] + range(axis + 1, n_dim - 1) + [axis]
+    rep_para = [1] * n_dim + [tf.shape(x)[axis]]
+
+    x = tf.transpose(x, perm=perm)
+    sub_x = tf.transpose(sub_x, perm=perm)
+
+    # extend to another dimension
+    x_ex = tf.tile(tf.expand_dims(x, n_dim), rep_para)
+    x_ex = x_ex - tf.matrix_diag(x) + tf.matrix_diag(sub_x)
+
+    pre_signal = tf.transpose(log_mean_exp(x_ex, op_indices), perm=perm)
+    # end of calculation of log_mean_exp_sub
+
+    l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal
+
+    fake_term = tf.reduce_sum(-entropy * \
+                      tf.stop_gradient(l_signal), axis)
+    lower_bound = log_mean_exp(log_joint_gen + entropy, axis)
+    object_function = fake_term + log_mean_exp(log_joint_gen + entropy, axis)
+
+    return object_function, lower_bound

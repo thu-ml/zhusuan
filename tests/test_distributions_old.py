@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from .context import zhusuan
-from zhusuan.distributions import *
+from zhusuan.distributions_old import *
 
 
 class TestUniform:
