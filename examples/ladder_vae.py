@@ -22,7 +22,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     import zhusuan as zs
-    from zhusuan.distributions import logistic
+    from zhusuan.distributions_old import logistic
 except:
     raise ImportError()
 
