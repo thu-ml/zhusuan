@@ -62,12 +62,20 @@ class Distribution(object):
         self._is_reparameterized = is_reparameterized
         static_group_event_ndims = convert_to_int(group_event_ndims)
         if static_group_event_ndims is not None:
+            if static_group_event_ndims < 0:
+                raise ValueError("group_event_ndims must be non-negative.")
             self._group_event_ndims = static_group_event_ndims
         else:
             group_event_ndims = tf.convert_to_tensor(
                 group_event_ndims, tf.int32)
-            with tf.control_dependencies(
-                    [tf.assert_rank(group_event_ndims, 0)]):
+            _assert_rank_op = tf.assert_rank(
+                group_event_ndims, 0,
+                message="group_event_ndims should be a scalar (0-D Tensor).")
+            _assert_nonnegative_op = tf.assert_greater_equal(
+                group_event_ndims, 0,
+                message="group_event_ndims must be non-negative.")
+            with tf.control_dependencies([_assert_rank_op,
+                                          _assert_nonnegative_op]):
                 self._group_event_ndims = tf.identity(group_event_ndims)
 
     @property
@@ -173,13 +181,18 @@ class Distribution(object):
         :return: A Tensor of samples.
         """
         static_n_samples = convert_to_int(n_samples)
-        n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
-        samples = self._sample(n_samples)
         if static_n_samples is not None:
+            samples = self._sample(n_samples)
             if static_n_samples == 1:
                 return tf.squeeze(samples, axis=0)
             return samples
         else:
+            n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
+            _assert_rank_op = tf.assert_rank(
+                n_samples, 0,
+                message="n_samples should be a scalar (0-D Tensor).")
+            with tf.control_dependencies([_assert_rank_op]):
+                samples = self._sample(n_samples)
             return tf.cond(tf.equal(n_samples, 1),
                            lambda: tf.squeeze(samples, axis=0),
                            lambda: samples)
