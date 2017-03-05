@@ -89,7 +89,7 @@ if __name__ == '__main__':
     y = tf.placeholder(tf.float32, shape=(None, n_class))
     n = tf.shape(x)[0]
 
-    net_size = [n_x, 1060, 1060, 1060, n_class]
+    net_size = [n_x, 100, 100, 100, n_class]
     es_name = ['layer'+str(i)+'/eps' for i in range(len(net_size)-1)]
 
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
