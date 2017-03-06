@@ -79,8 +79,7 @@ class Normal(Distribution):
                                          self.logstd.get_shape())
 
     def _sample(self, n_samples):
-        mean = tf.expand_dims(self.mean, 0)
-        logstd = tf.expand_dims(self.logstd, 0)
+        mean, logstd = self.mean, self.logstd
         if self.is_reparameterized:
             mean = tf.stop_gradient(mean)
             logstd = tf.stop_gradient(logstd)
@@ -88,15 +87,13 @@ class Normal(Distribution):
         return tf.random_normal(shape) * tf.exp(logstd) + mean
 
     def _log_prob(self, given):
-        mean = tf.expand_dims(self.mean, 0)
-        logstd = tf.expand_dims(self.logstd, 0)
         c = -0.5 * np.log(2 * np.pi)
-        precision = tf.exp(-2 * logstd)
+        precision = tf.exp(-2 * self.logstd)
         if self._check_numerics:
             with tf.control_dependencies(
                     [tf.check_numerics(precision, "precision")]):
                 precision = tf.identity(precision)
-        return c - logstd - 0.5 * precision * tf.square(given - mean)
+        return c - self.logstd - 0.5 * precision * tf.square(given - self.mean)
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -143,23 +140,22 @@ class Bernoulli(Distribution):
         return self.logits.get_shape()
 
     def _sample(self, n_samples):
-        logits = tf.expand_dims(self.logits, 0)
-        p = tf.sigmoid(logits)
+        p = tf.sigmoid(self.logits)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         alpha = tf.random_uniform(shape, minval=0, maxval=1)
         samples = tf.cast(tf.less(alpha, p), dtype=tf.float32)
         return samples
 
     def _log_prob(self, given):
-        logits = tf.expand_dims(self.logits, 0)
         # TODO: check static/dynamic shape to avoid broadcasting
         try:
-            logits = tf.ones_like(given) * logits
-            given = tf.ones_like(logits) * given
+            logits = tf.ones_like(given) * self.logits
+            given = tf.ones_like(self.logits) * given
         except ValueError:
-            raise ValueError("given and logits cannot broadcast to have"
-                             "the same shape. ({} vs. {})"
-                             .format(given.get_shape(), logits.get_shape()))
+            raise ValueError(
+                "given and logits cannot broadcast to have the same shape. ("
+                "{} vs. {})".format(given.get_shape(),
+                                    self.logits.get_shape()))
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -241,13 +237,10 @@ class Categorical(Distribution):
         return samples
 
     def _log_prob(self, given):
-        logits = tf.expand_dims(self.logits, 0)
         static_given_shape = given.get_shape()
         if static_given_shape and static_given_shape[0]:
             if static_given_shape[0] > 1:
-                multiples = np.ones(static_given_shape.ndims)
-                multiples[0] = static_given_shape[0]
-                logits = tf.tile(logits, multiples)
+
         else:
             multiples = tf.sparse_to_dense(
                 0, [tf.rank(logits)], tf.shape(given)[0], 1)

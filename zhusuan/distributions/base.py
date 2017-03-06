@@ -203,23 +203,27 @@ class Distribution(object):
         """
         raise NotImplementedError()
 
-    def _call_by_input_rank(f):
+    def _check_shape_and_call(f):
         @wraps(f)
         def _func(*args):
             given = tf.convert_to_tensor(args[1])
+            static_given_shape = given.get_shape()
+            static_batch_shape = args[0].get_batch_shape()
+            static_value_shape = args[0].get_value_shape()
+
+            if static_given_shape:
+
+
             static_given_rank = given.get_shape().ndims
             static_batch_rank = args[0].get_batch_shape().ndims
             static_value_rank = args[0].get_value_shape().ndims
-            err_msg = "The 'given' argument should have the same or one " \
+            err_msg = "The 'given' argument should have the same or " \
                       "more rank than the rank of batch_shape + value_shape"
             if (static_given_rank is not None) and (
                     static_batch_rank is not None) and (
                         static_value_rank is not None):
                 static_sample_rank = static_batch_rank + static_value_rank
                 if static_given_rank == static_sample_rank:
-                    given_1 = tf.expand_dims(given, axis=0)
-                    return tf.squeeze(f(args[0], given_1), axis=0)
-                elif static_given_rank == static_sample_rank + 1:
                     return f(*args)
                 else:
                     raise ValueError(
@@ -243,7 +247,7 @@ class Distribution(object):
         return _func
 
     @add_name_scope
-    @_call_by_input_rank
+    @_check_rank_and_call
     def log_prob(self, given):
         """
         Compute log probability density (mass) function at `given` value.
@@ -257,7 +261,7 @@ class Distribution(object):
         return tf.reduce_sum(log_p, tf.range(-self._group_event_ndims, 0))
 
     @add_name_scope
-    @_call_by_input_rank
+    @_check_rank_and_call
     def prob(self, given):
         """
         Compute probability density (mass) function at `given` value.
