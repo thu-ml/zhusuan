@@ -15,7 +15,6 @@ __all__ = [
     'Bernoulli',
     'Categorical',
     'Discrete',
-    'Multinomial',
     'Uniform',
 ]
 
