@@ -7,7 +7,7 @@ from functools import wraps
 
 import tensorflow as tf
 
-from zhusuan.utils import convert_to_int, add_name_scope
+from zhusuan.utils import add_name_scope, convert_to_int
 
 
 __all__ = [
@@ -40,8 +40,8 @@ class Distribution(object):
     Normal with identity covariance matrix.
 
     When evaluating probabilities at given values, the given Tensor can be of
-    shape `(n + )batch_shape + value_shape`. The returned Tensor has shape
-    `(n + )batch_shape[:-group_event_ndims]`.
+    shape `(... + )batch_shape + value_shape`. The returned Tensor has shape
+    `(... + )batch_shape[:-group_event_ndims]`.
 
     :param dtype: The value type of samples from the distribution.
     :param is_continuous: Whether the distribution is continuous.
@@ -60,11 +60,10 @@ class Distribution(object):
         self._dtype = dtype
         self._is_continuous = is_continuous
         self._is_reparameterized = is_reparameterized
-        static_group_event_ndims = convert_to_int(group_event_ndims)
-        if static_group_event_ndims is not None:
-            if static_group_event_ndims < 0:
+        if isinstance(group_event_ndims, int):
+            if group_event_ndims < 0:
                 raise ValueError("group_event_ndims must be non-negative.")
-            self._group_event_ndims = static_group_event_ndims
+            self._group_event_ndims = group_event_ndims
         else:
             group_event_ndims = tf.convert_to_tensor(
                 group_event_ndims, tf.int32)
@@ -180,10 +179,9 @@ class Distribution(object):
             to draw from the distribution.
         :return: A Tensor of samples.
         """
-        static_n_samples = convert_to_int(n_samples)
-        if static_n_samples is not None:
+        if isinstance(n_samples, int):
             samples = self._sample(n_samples)
-            if static_n_samples == 1:
+            if n_samples == 1:
                 return tf.squeeze(samples, axis=0)
             return samples
         else:
@@ -203,74 +201,64 @@ class Distribution(object):
         """
         raise NotImplementedError()
 
-    def _check_shape_and_call(f):
-        @wraps(f)
-        def _func(*args):
-            given = tf.convert_to_tensor(args[1])
-            static_given_shape = given.get_shape()
-            static_batch_shape = args[0].get_batch_shape()
-            static_value_shape = args[0].get_value_shape()
+    def _explicit_broadcast(self, **kwargs):
+        if len(kwargs) != 2:
+            raise ValueError("Only accepts two Tensors to be broadcast.")
+        [x_name, x], [y_name, y] = kwargs.items()
+        try:
+            x *= tf.ones_like(y)
+            y *= tf.ones_like(x)
+        except ValueError:
+            raise ValueError(
+                "{} and {} cannot broadcast to have the same shape. ("
+                "{} vs. {})".format(x_name, y_name,
+                                    x.get_shape(), y.get_shape()))
+        return x, y
 
-            if static_given_shape:
-
-
-            static_given_rank = given.get_shape().ndims
-            static_batch_rank = args[0].get_batch_shape().ndims
-            static_value_rank = args[0].get_value_shape().ndims
-            err_msg = "The 'given' argument should have the same or " \
-                      "more rank than the rank of batch_shape + value_shape"
-            if (static_given_rank is not None) and (
-                    static_batch_rank is not None) and (
-                        static_value_rank is not None):
-                static_sample_rank = static_batch_rank + static_value_rank
-                if static_given_rank == static_sample_rank:
-                    return f(*args)
-                else:
-                    raise ValueError(
-                        err_msg + " (rank {} vs. rank {} + {})".format(
-                            static_given_rank, static_batch_rank,
-                            static_value_rank))
-            else:
-                given_rank = tf.rank(given)
-                sample_rank = tf.shape(args[0].batch_shape)[0] + \
-                    tf.shape(args[0].value_shape)[0]
-                assert_rank_op = tf.Assert(
-                    tf.logical_or(tf.equal(given_rank, sample_rank),
-                                  tf.equal(given_rank, sample_rank + 1)),
-                    [given_rank, sample_rank])
-                with tf.control_dependencies([assert_rank_op]):
-                    return tf.cond(
-                        tf.equal(tf.rank(given), sample_rank),
-                        lambda: tf.squeeze(
-                            f(args[0], tf.expand_dims(given, 0)), 0),
-                        lambda: f(*args))
-        return _func
+    def _check_input_shape(self, given):
+        given = tf.convert_to_tensor(given)
+        err_msg = "The given argument should be able to broadcast to " \
+                  "match batch_shape + value_shape of the distribution."
+        if (given.get_shape() and self.get_batch_shape() and
+                self.get_value_shape()):
+            static_sample_shape = tf.TensorShape(
+                self.get_batch_shape().as_list() +
+                self.get_value_shape().as_list())
+            try:
+                tf.broadcast_static_shape(given.get_shape(),
+                                          static_sample_shape)
+            except ValueError:
+                raise ValueError(
+                    err_msg + " ({} vs. {} + {})".format(
+                        given.get_shape(), self.get_batch_shape(),
+                        self.get_value_shape()))
+        return given
 
     @add_name_scope
-    @_check_rank_and_call
     def log_prob(self, given):
         """
         Compute log probability density (mass) function at `given` value.
 
         :param given: A Tensor. The value at which to evaluate log probability
             density (mass) function. Must be able to broadcast to have a shape
-            of `(n + )batch_shape + value_shape`.
-        :return: A Tensor of shape `(n + )batch_shape[:-group_event_ndims]`.
+            of `(... + )batch_shape + value_shape`.
+        :return: A Tensor of shape `(... + )batch_shape[:-group_event_ndims]`.
         """
+        given = self._check_input_shape(given)
         log_p = self._log_prob(given)
         return tf.reduce_sum(log_p, tf.range(-self._group_event_ndims, 0))
 
     @add_name_scope
-    @_check_rank_and_call
     def prob(self, given):
         """
         Compute probability density (mass) function at `given` value.
 
         :param given: A Tensor. The value at which to evaluate probability
             density (mass) function. Must be able to broadcast to have a shape
-            of `(n + )batch_shape + value_shape`.
-        :return: A Tensor of shape `(n + )batch_shape[:-group_event_ndims]`.
+            of `(... + )batch_shape + value_shape`.
+        :return: A Tensor of shape `(... + )batch_shape[:-group_event_ndims]`.
         """
+        given = self._check_input_shape(given)
         p = self._prob(given)
         return tf.reduce_prod(p, tf.range(-self._group_event_ndims, 0))
 

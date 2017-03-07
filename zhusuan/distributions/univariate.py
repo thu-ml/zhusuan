@@ -47,6 +47,14 @@ class Normal(Distribution):
                  check_numerics=True):
         self._mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         self._logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
+        try:
+            tf.broadcast_static_shape(self._mean.get_shape(),
+                                      self._logstd.get_shape())
+        except ValueError:
+            raise ValueError(
+                "mean and logstd should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._mean.get_shape(), self._logstd.get_shape()))
         self._check_numerics = check_numerics
         super(Normal, self).__init__(
             dtype=tf.float32,
@@ -147,15 +155,17 @@ class Bernoulli(Distribution):
         return samples
 
     def _log_prob(self, given):
-        # TODO: check static/dynamic shape to avoid broadcasting
-        try:
-            logits = tf.ones_like(given) * self.logits
-            given = tf.ones_like(self.logits) * given
-        except ValueError:
-            raise ValueError(
-                "given and logits cannot broadcast to have the same shape. ("
-                "{} vs. {})".format(given.get_shape(),
-                                    self.logits.get_shape()))
+        logits = self.logits
+        if given.get_shape().is_fully_defined() and \
+                logits.get_shape().is_fully_defined():
+            if given.get_shape() != self.logits.get_shape():
+                given, logits = self._explicit_broadcast(given=given,
+                                                         logits=logits)
+        else:
+            given, logits = tf.cond(
+                tf.equal(tf.shape(given), tf.shape(logits)),
+                lambda: (given, logits),
+                lambda: self._explicit_broadcast(given=given, logits=logits))
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -224,9 +234,8 @@ class Categorical(Distribution):
         return tf.shape(self.logits)[:-1]
 
     def _get_batch_shape(self):
-        static_logits_shape = self.logits.get_shape()
-        if static_logits_shape:
-            return static_logits_shape[:-1]
+        if self.logits.get_shape():
+            return self.logits.get_shape()[:-1]
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
@@ -237,16 +246,27 @@ class Categorical(Distribution):
         return samples
 
     def _log_prob(self, given):
-        static_given_shape = given.get_shape()
-        if static_given_shape and static_given_shape[0]:
-            if static_given_shape[0] > 1:
+        logits = self.logits
 
+        def _broadcast(given, logits):
+            try:
+                given *= tf.ones_like(logits[:-1])
+                logits *= tf.ones_like(tf.expand_dims(given, -1))
+            except ValueError:
+                raise ValueError(
+                    "given and logits[:-1] cannot broadcast to match. ("
+                    "{} vs. {}[:-1])".format(given.get_shape(),
+                                             logits.get_shape()))
+
+        if given.get_shape().is_fully_defined() and \
+                logits.get_shape().is_fully_defined():
+            if given.get_shape() != self.logits.get_shape()[:-1]:
+                given, logits = _broadcast(given, logits)
         else:
-            multiples = tf.sparse_to_dense(
-                0, [tf.rank(logits)], tf.shape(given)[0], 1)
-            logits = tf.cond(tf.shape(given)[0] > 1,
-                             lambda: tf.tile(logits, multiples),
-                             lambda: logits)
+            given, logits = tf.cond(
+                tf.equal(tf.shape(given), tf.shape(logits)[:-1]),
+                lambda: (given, logits),
+                lambda: _broadcast(given, logits))
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                logits=logits)
 
@@ -279,9 +299,19 @@ class Uniform(Distribution):
                  minval=0.,
                  maxval=1.,
                  group_event_ndims=0,
-                 is_reparameterized=True):
+                 is_reparameterized=True,
+                 check_numerics=True):
         self._minval = tf.convert_to_tensor(minval, dtype=tf.float32)
         self._maxval = tf.convert_to_tensor(maxval, dtype=tf.float32)
+        try:
+            tf.broadcast_static_shape(self._minval.get_shape(),
+                                      self._maxval.get_shape())
+        except ValueError:
+            raise ValueError(
+                "minval and maxval should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._minval.get_shape(), self._maxval.get_shape()))
+        self._check_numerics = check_numerics
         super(Uniform, self).__init__(
             dtype=tf.float32,
             is_continuous=True,
@@ -313,17 +343,28 @@ class Uniform(Distribution):
                                          self.maxval.get_shape())
 
     def _sample(self, n_samples):
-        # TODO: remove expand_dims if broadcast is able to achieve this, else add explicit broadcast first
-        minval = tf.expand_dims(self.minval, 0)
-        maxval = tf.expand_dims(self.maxval, 0)
+        minval, maxval = self.minval, self.maxval
         if self.is_reparameterized:
-            mean = tf.stop_gradient(minval)
-            logstd = tf.stop_gradient(maxval)
+            minval = tf.stop_gradient(minval)
+            maxval = tf.stop_gradient(maxval)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.random_normal(shape) * tf.exp(logstd) + mean
+        return tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
 
     def _log_prob(self, given):
-        pass
+        log_p = tf.log(self._prob(given))
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_p, message="log_p")]):
+                log_p = tf.identity(log_p)
+        return log_p
 
     def _prob(self, given):
-        pass
+        mask = tf.cast(tf.logical_and(tf.less_equal(self.minval, given),
+                                      tf.less(given, self.maxval)),
+                       tf.float32)
+        p = 1. / (self.maxval - self.minval)
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(p, message="p")]):
+                p = tf.identity(p)
+        return p * mask

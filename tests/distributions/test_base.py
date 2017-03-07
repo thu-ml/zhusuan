@@ -116,14 +116,14 @@ class TestDistributions(tf.test.TestCase):
             given_1 = tf.ones([2, 3, 4, 5])
             log_p_1 = dist.log_prob(given_1)
             self.assertAllEqual(log_p_1.eval(), np.zeros((2)))
+            with self.assertRaisesRegexp(
+                    ValueError,
+                    r"broadcast to match batch_shape \+ value_shape"):
+                dist.log_prob(tf.ones([3, 3, 4, 5]))
 
             given_2 = tf.ones([1, 2, 3, 4, 5])
             log_p_2 = dist.log_prob(given_2)
             self.assertAllEqual(log_p_2.eval(), np.zeros((1, 2)))
-            with self.assertRaisesRegexp(
-                    ValueError,
-                    "argument should have the same or one more rank"):
-                dist.log_prob(tf.ones([1, 1, 2, 3, 4, 5]))
 
             given_3 = tf.placeholder(tf.float32, shape=None)
             log_p_3 = dist.log_prob(given_3)
@@ -131,8 +131,8 @@ class TestDistributions(tf.test.TestCase):
                 log_p_3.eval(feed_dict={given_3: np.ones((2, 3, 4, 5))}),
                 np.zeros((2)))
             self.assertAllEqual(
-                log_p_3.eval(feed_dict={given_3: np.ones((1, 2, 3, 4, 5))}),
-                np.zeros((1, 2)))
+                log_p_3.eval(feed_dict={given_3: np.ones((1, 1, 2, 3, 4, 5))}),
+                np.zeros((1, 1, 2)))
 
             # prob
             p_1 = dist.prob(given_1)
@@ -146,8 +146,8 @@ class TestDistributions(tf.test.TestCase):
                 p_3.eval(feed_dict={given_3: np.ones((2, 3, 4, 5))}),
                 np.ones((2)))
             self.assertAllEqual(
-                p_3.eval(feed_dict={given_3: np.ones((1, 2, 3, 4, 5))}),
-                np.ones((1, 2)))
+                p_3.eval(feed_dict={given_3: np.ones((1, 1, 2, 3, 4, 5))}),
+                np.ones((1, 1, 2)))
 
             group_event_ndims = tf.placeholder(tf.int32)
             dist2 = Dist(group_event_ndims=group_event_ndims)
@@ -171,3 +171,6 @@ class TestDistributions(tf.test.TestCase):
             self.assertAllEqual(static_b_shape.as_list(), [None, 3, 4])
             b_shape = dist3.batch_shape
             self.assertAllEqual(b_shape.eval(), [2, 3, 4])
+
+    def test_explicit_broadcast(self):
+        pass

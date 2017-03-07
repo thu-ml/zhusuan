@@ -82,10 +82,9 @@ def convert_to_int(x):
     :param x: The input instance.
     :return: A int if succeed, else None.
     """
-    try:
-        return int(x)
-    except TypeError:
-        return None
+    if isinstance(x, int):
+        return x
+    return None
 
 
 def ensure_dim_match(inputs, dim):
