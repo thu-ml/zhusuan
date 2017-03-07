@@ -238,11 +238,15 @@ class Categorical(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
-        samples_flat = tf.multinomial(logits_flat, n_samples)
+        if self.logits.get_shape().ndims == 2:
+            logits_flat = self.logits
+        else:
+            logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
+        samples_flat = tf.transpose(tf.multinomial(logits_flat, n_samples))
+        if self.logits.get_shape().ndims == 2:
+            return samples_flat
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.reshape(tf.transpose(samples_flat), shape)
-        return samples
+        return tf.reshape(samples_flat, shape)
 
     def _log_prob(self, given):
         logits = self.logits

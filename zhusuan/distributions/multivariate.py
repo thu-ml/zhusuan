@@ -173,10 +173,12 @@ class OnehotCategorical(Distribution):
         return self._n_categories
 
     def _value_shape(self):
-        return tf.constant([], dtype=tf.int32)
+        return tf.convert_to_tensor(self.n_categories, tf.int32)
 
     def _get_value_shape(self):
-        return tf.TensorShape([])
+        if isinstance(self.n_categories, int):
+            return tf.TensorShape([self.n_categories])
+        return tf.TensorShape([None])
 
     def _batch_shape(self):
         return tf.shape(self.logits)[:-1]
@@ -187,36 +189,42 @@ class OnehotCategorical(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
-        samples_flat = tf.multinomial(logits_flat, n_samples)
-        shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.reshape(tf.transpose(samples_flat), shape)
+        if self.logits.get_shape().ndims == 2:
+            logits_flat = self.logits
+        else:
+            logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
+        samples_flat = tf.transpose(tf.multinomial(logits_flat, n_samples))
+        if self.logits.get_shape().ndims == 2:
+            samples = samples_flat
+        else:
+            shape = tf.concat([[n_samples], self.batch_shape], 0)
+            samples = tf.reshape(samples_flat, shape)
+        samples = tf.one_hot(samples, self.n_categories, dtype=tf.int32)
         return samples
 
     def _log_prob(self, given):
         logits = self.logits
-
-        def _broadcast(given, logits):
-            try:
-                given *= tf.ones_like(logits[:-1])
-                logits *= tf.ones_like(tf.expand_dims(given, -1))
-            except ValueError:
-                raise ValueError(
-                    "given and logits[:-1] cannot broadcast to match. ("
-                    "{} vs. {}[:-1])".format(given.get_shape(),
-                                             logits.get_shape()))
-
         if given.get_shape().is_fully_defined() and \
                 logits.get_shape().is_fully_defined():
-            if given.get_shape() != self.logits.get_shape()[:-1]:
-                given, logits = _broadcast(given, logits)
+            if given.get_shape() != self.logits.get_shape():
+                given, logits = self._explicit_broadcast(given=given,
+                                                         logits=logits)
         else:
             given, logits = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(logits)[:-1]),
+                tf.equal(tf.shape(given), tf.shape(logits)),
                 lambda: (given, logits),
-                lambda: _broadcast(given, logits))
-        return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
-                                                               logits=logits)
+                lambda: self._explicit_broadcast(given=given, logits=logits))
+        if (logits.get_shape().ndims == 2) or (given.get_shape().ndims == 2):
+            logits_flat = logits
+            given_flat = given
+        else:
+            logits_flat = tf.reshape(logits, [-1, self.n_categories])
+            given_flat = tf.reshape(given, [-1, self.n_categories])
+        log_p_flat = -tf.nn.softmax_cross_entropy_with_logits(
+            labels=given_flat, logits=logits_flat)
+        if (logits.get_shape().ndims == 2) or (given.get_shape().ndims == 2):
+            return log_p_flat
+        return tf.reshape(log_p_flat, tf.shape(logits))
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
