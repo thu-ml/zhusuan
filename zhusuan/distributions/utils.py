@@ -1,0 +1,61 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import absolute_import
+from __future__ import division
+
+import tensorflow as tf
+
+
+__all__ = [
+    'log_factorial',
+    'log_combination',
+    'explicit_broadcast',
+]
+
+
+def log_factorial(n):
+    """
+    Compute the log factorial function.
+
+    .. math:: \\log n!
+
+    :param n: A Tensor of type `int32`.
+
+    :return: A `float32` Tensor of the same shape as `n`.
+    """
+    return tf.lgamma(tf.to_float(n + 1))
+
+
+def log_combination(n, ks):
+    """
+    Compute the log combination function.
+
+    .. math::
+
+    \\log \binom{n}{k_1, k_2, \dots} = \\log n! - \sum_{i}\\log k_i!
+
+    :param n: A N-D Tensor of type `int32`. Can broadcast to match `ks`[:-1].
+    :param ks: A (N + 1)-D Tensor of type `int32`. Each slice
+        [i, j, ..., k, :] is a vector of [k_1, k_2, ...].
+
+    :return: A N-D Tensor of type `float32`.
+    """
+    return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1)
+
+
+def explicit_broadcast(x, y, x_name, y_name):
+    """
+    Explicit broadcast two Tensors to have the same shape.
+
+    :return: x, y after broadcast.
+    """
+    try:
+        x *= tf.ones_like(y)
+        y *= tf.ones_like(x)
+    except ValueError:
+        raise ValueError(
+            "{} and {} cannot broadcast to have the same shape. ("
+            "{} vs. {})".format(x_name, y_name,
+                                x.get_shape(), y.get_shape()))
+    return x, y

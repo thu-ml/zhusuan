@@ -3,7 +3,6 @@
 
 from __future__ import absolute_import
 from __future__ import division
-from functools import wraps
 
 import tensorflow as tf
 
@@ -200,20 +199,6 @@ class Distribution(object):
         Private method for subclasses to rewrite the `sample` method.
         """
         raise NotImplementedError()
-
-    def _explicit_broadcast(self, **kwargs):
-        if len(kwargs) != 2:
-            raise ValueError("Only accepts two Tensors to be broadcast.")
-        [x_name, x], [y_name, y] = kwargs.items()
-        try:
-            x *= tf.ones_like(y)
-            y *= tf.ones_like(x)
-        except ValueError:
-            raise ValueError(
-                "{} and {} cannot broadcast to have the same shape. ("
-                "{} vs. {})".format(x_name, y_name,
-                                    x.get_shape(), y.get_shape()))
-        return x, y
 
     def _check_input_shape(self, given):
         given = tf.convert_to_tensor(given)

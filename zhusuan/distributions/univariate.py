@@ -8,6 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from .base import *
+from .utils import explicit_broadcast
 
 
 __all__ = [
@@ -158,13 +159,13 @@ class Bernoulli(Distribution):
         if given.get_shape().is_fully_defined() and \
                 logits.get_shape().is_fully_defined():
             if given.get_shape() != self.logits.get_shape():
-                given, logits = self._explicit_broadcast(given=given,
-                                                         logits=logits)
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         else:
             given, logits = tf.cond(
                 tf.equal(tf.shape(given), tf.shape(logits)),
                 lambda: (given, logits),
-                lambda: self._explicit_broadcast(given=given, logits=logits))
+                lambda: explicit_broadcast(given, logits, 'given', 'logits'))
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -180,7 +181,7 @@ class Categorical(Distribution):
         Each slice `[i, j,..., k, :]` represents the un-normalized log
         probabilities for all categories.
 
-        .. math:: \\mathrm{logits} \\propto \\log \\frac{p}
+        .. math:: \\mathrm{logits} \\propto \\log p
 
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped

@@ -7,6 +7,7 @@ from __future__ import division
 import tensorflow as tf
 
 from .base import *
+from .utils import explicit_broadcast, log_combination
 
 
 __all__ = [
@@ -24,10 +25,10 @@ class Multinomial(Distribution):
         Each slice `[i, j, ..., k, :]` represents the un-normalized log
         probabilities for all categories.
 
-        .. math:: \\mathrm{logits} \\propto \\log \\frac{p}
+        .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param n: A Tensor that can be broadcast to match `logits[:-1]`. The
-        number of experiments for each sample.
+    :param n_experiments: A Tensor that can be broadcast to match
+        `logits[:-1]`. The number of experiments for each sample.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -38,7 +39,7 @@ class Multinomial(Distribution):
     `[i, j, ..., k, :]` is a vector of counts for all categories.
     """
 
-    def __init__(self, logits, group_event_ndims=0):
+    def __init__(self, logits, n_experiments, group_event_ndims=0):
         self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
@@ -52,6 +53,16 @@ class Multinomial(Distribution):
             with tf.control_dependencies([_assert_shape_op]):
                 self._logits = tf.identity(self._logits)
             self._n_categories = tf.shape(self._logits)[-1]
+        self._n_experiments = tf.convert_to_tensor(n_experiments,
+                                                   dtype=tf.int32)
+        try:
+            tf.broadcast_static_shape(self._logits[:-1].get_shape(),
+                                      self._n_experiments.get_shape())
+        except ValueError:
+            raise ValueError(
+                "n_experiments should be broadcastable to match logits[:-1]. "
+                "({} vs. {}[:-1])".format(
+                    self._n_experiments.get_shape(), self._logits.get_shape()))
 
         super(Multinomial, self).__init__(
             dtype=tf.int32,
@@ -68,6 +79,11 @@ class Multinomial(Distribution):
     def n_categories(self):
         """The number of categories in the distribution."""
         return self._n_categories
+
+    @property
+    def n_experiments(self):
+        """The number of experiments for each sample."""
+        return self._n_experiments
 
     def _value_shape(self):
         return tf.convert_to_tensor(self.n_categories, tf.int32)
@@ -86,36 +102,33 @@ class Multinomial(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
-        samples_flat = tf.multinomial(logits_flat, n_samples)
-        shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.reshape(tf.transpose(samples_flat), shape)
+        if self.logits.get_shape().ndims == 2:
+            logits_flat = self.logits
+        else:
+            logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
+        samples_flat = tf.transpose(
+            tf.multinomial(logits_flat, n_samples * self.n_experiments))
+        shape = tf.concat([[n_samples, self.n_experiments],
+                           self.batch_shape], 0)
+        samples = tf.reduce_sum(tf.reshape(samples_flat, shape), axis=1)
         return samples
 
     def _log_prob(self, given):
         logits = self.logits
-
-        def _broadcast(given, logits):
-            try:
-                given *= tf.ones_like(logits[:-1])
-                logits *= tf.ones_like(tf.expand_dims(given, -1))
-            except ValueError:
-                raise ValueError(
-                    "given and logits[:-1] cannot broadcast to match. ("
-                    "{} vs. {}[:-1])".format(given.get_shape(),
-                                             logits.get_shape()))
-
         if given.get_shape().is_fully_defined() and \
                 logits.get_shape().is_fully_defined():
-            if given.get_shape() != self.logits.get_shape()[:-1]:
-                given, logits = _broadcast(given, logits)
+            if given.get_shape() != self.logits.get_shape():
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         else:
             given, logits = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(logits)[:-1]),
+                tf.equal(tf.shape(given), tf.shape(logits)),
                 lambda: (given, logits),
-                lambda: _broadcast(given, logits))
-        return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
-                                                               logits=logits)
+                lambda: explicit_broadcast(given, logits, 'given', 'logits'))
+        normalized_logits = logits - tf.reduce_logsumexp(logits, axis=-1)
+        log_p = log_combination(self.n_experiments, given) + \
+            given * normalized_logits
+        return log_p
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -129,7 +142,7 @@ class OnehotCategorical(Distribution):
         Each slice `[i, j, ..., k, :]` represents the un-normalized log
         probabilities for all categories.
 
-        .. math:: \\mathrm{logits} \\propto \\log \\frac{p}
+        .. math:: \\mathrm{logits} \\propto \\log p
 
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -207,13 +220,13 @@ class OnehotCategorical(Distribution):
         if given.get_shape().is_fully_defined() and \
                 logits.get_shape().is_fully_defined():
             if given.get_shape() != self.logits.get_shape():
-                given, logits = self._explicit_broadcast(given=given,
-                                                         logits=logits)
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         else:
             given, logits = tf.cond(
                 tf.equal(tf.shape(given), tf.shape(logits)),
                 lambda: (given, logits),
-                lambda: self._explicit_broadcast(given=given, logits=logits))
+                lambda: explicit_broadcast(given, logits, 'given', 'logits'))
         if (logits.get_shape().ndims == 2) or (given.get_shape().ndims == 2):
             logits_flat = logits
             given_flat = given
