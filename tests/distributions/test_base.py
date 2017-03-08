@@ -171,6 +171,3 @@ class TestDistributions(tf.test.TestCase):
             self.assertAllEqual(static_b_shape.as_list(), [None, 3, 4])
             b_shape = dist3.batch_shape
             self.assertAllEqual(b_shape.eval(), [2, 3, 4])
-
-    def test_explicit_broadcast(self):
-        pass
