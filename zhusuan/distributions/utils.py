@@ -24,6 +24,7 @@ def log_factorial(n):
 
     :return: A `float32` Tensor of the same shape as `n`.
     """
+    n = tf.convert_to_tensor(n, tf.int32)
     return tf.lgamma(tf.to_float(n + 1))
 
 
@@ -41,6 +42,8 @@ def log_combination(n, ks):
 
     :return: A N-D Tensor of type `float32`.
     """
+    n = tf.convert_to_tensor(n, tf.int32)
+    ks = tf.convert_to_tensor(ks, tf.int32)
     return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1)
 
 
