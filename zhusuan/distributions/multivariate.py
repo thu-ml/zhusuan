@@ -14,6 +14,7 @@ __all__ = [
     'Multinomial',
     'OnehotCategorical',
     'OnehotDiscrete',
+    'Dirichlet',
 ]
 
 
@@ -244,3 +245,102 @@ class OnehotCategorical(Distribution):
 
 
 OnehotDiscrete = OnehotCategorical
+
+
+class Dirichlet(Distribution):
+    """
+    The class of Dirichlet distribution.
+
+    :param alpha: A N-D (N >= 1) Tensor of shape (..., n_categories).
+        Each slice `[i, j, ..., k, :]` represents the concentration parameter
+        of a Dirichlet distribution.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is a event.
+        See :class:`Distribution` for more detailed explanation.
+
+    A single sample is a N-D Tensor with the same shape as alpha. Each slice
+    `[i, j, ..., k, :]` of the sample is a vector of probabilities of a
+    Categorical distribution `[x_1, x_2, ... ]`, which lies on the simplex
+
+    .. math:: \\sum_{i} x_i = 1, 0 < x_i < 1
+
+    """
+
+    def __init__(self, alpha, group_event_ndims=0, check_numerics=False):
+        self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
+        static_alpha_shape = self._alpha.get_shape()
+        shape_err_msg = "alpha should have rank >= 1."
+        if static_alpha_shape and (static_alpha_shape.ndims < 1):
+            raise ValueError(shape_err_msg)
+        elif static_alpha_shape and (static_alpha_shape[-1]):
+            self._n_categories = static_alpha_shape[-1]
+        else:
+            _assert_shape_op = tf.assert_rank_at_least(
+                self._alpha, 1, message=shape_err_msg)
+            with tf.control_dependencies([_assert_shape_op]):
+                self._alpha = tf.identity(self._alpha)
+            self._n_categories = tf.shape(self._alpha)[-1]
+        self._check_numerics = check_numerics
+
+        super(Dirichlet, self).__init__(
+            dtype=tf.float32,
+            is_continuous=True,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def alpha(self):
+        """The concentration parameter of the Dirichlet distribution."""
+        return self._alpha
+
+    @property
+    def n_categories(self):
+        """The number of categories in the distribution."""
+        return self._n_categories
+
+    def _value_shape(self):
+        return tf.convert_to_tensor(self.n_categories, tf.int32)
+
+    def _get_value_shape(self):
+        if isinstance(self.n_categories, int):
+            return tf.TensorShape([self.n_categories])
+        return tf.TensorShape([None])
+
+    def _batch_shape(self):
+        return tf.shape(self.alpha)[:-1]
+
+    def _get_batch_shape(self):
+        if self.alpha.get_shape():
+            return self.alpha.get_shape()[:-1]
+        return tf.TensorShape(None)
+
+    def _sample(self, n_samples):
+        samples = tf.random_gamma([n_samples], self.alpha, beta=1)
+        return samples / tf.reduce_sum(samples, -1, keep_dims=True)
+
+    def _log_prob(self, given):
+        alpha = self.alpha
+        if given.get_shape().is_fully_defined() and \
+                alpha.get_shape().is_fully_defined():
+            if given.get_shape() != self.alpha.get_shape():
+                given, alpha = explicit_broadcast(given, alpha,
+                                                  'given', 'alpha')
+        else:
+            given, alpha = tf.cond(
+                tf.equal(tf.shape(given), tf.shape(alpha)),
+                lambda: (given, alpha),
+                lambda: explicit_broadcast(given, alpha, 'given', 'alpha'))
+        log_Beta_alpha = tf.lbeta(alpha)
+        log_given = tf.log(given)
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_Beta_alpha, "log_Beta_alpha"),
+                     tf.check_numerics(log_given, "log_given")]):
+                log_given = tf.identity(log_given)
+        log_p = -log_Beta_alpha + tf.reduce_sum((alpha - 1) * log_given, -1)
+        return log_p
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))

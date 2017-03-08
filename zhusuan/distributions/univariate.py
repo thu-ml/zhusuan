@@ -17,6 +17,7 @@ __all__ = [
     'Categorical',
     'Discrete',
     'Uniform',
+    'Gamma',
 ]
 
 
@@ -44,7 +45,7 @@ class Normal(Distribution):
                  logstd=0.,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=True):
+                 check_numerics=False):
         self._mean = tf.convert_to_tensor(mean, dtype=tf.float32)
         self._logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
         try:
@@ -372,3 +373,87 @@ class Uniform(Distribution):
                     [tf.check_numerics(p, message="p")]):
                 p = tf.identity(p)
         return p * mask
+
+
+class Gamma(Distribution):
+    """
+    The class of univariate Gamma distribution.
+
+    :param alpha: A Tensor. The shape parameter of the Gamma distribution.
+        Should be broadcastable to match `beta`.
+    :param beta: A Tensor. The inverse scale parameter of the Gamma
+        distribution. Should be broadcastable to match `alpha`.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is a event.
+        See :class:`Distribution` for more detailed explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 alpha,
+                 beta,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
+        self._beta = tf.convert_to_tensor(beta, dtype=tf.float32)
+        try:
+            tf.broadcast_static_shape(self._alpha.get_shape(),
+                                      self._beta.get_shape())
+        except ValueError:
+            raise ValueError(
+                "alpha and beta should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._alpha.get_shape(), self._beta.get_shape()))
+        self._check_numerics = check_numerics
+        super(Gamma, self).__init__(
+            dtype=tf.float32,
+            is_continuous=True,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def alpha(self):
+        """The shape parameter of the Gamma distribution."""
+        return self._alpha
+
+    @property
+    def beta(self):
+        """The inverse scale parameter of the Gamma distribution."""
+        return self._beta
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.broadcast_dynamic_shape(tf.shape(self.alpha),
+                                          tf.shape(self.beta))
+
+    def _get_batch_shape(self):
+        return tf.broadcast_static_shape(self.alpha.get_shape(),
+                                         self.beta.get_shape())
+
+    def _sample(self, n_samples):
+        return tf.random_gamma([n_samples], self.alpha, beta=self.beta)
+
+    def _log_prob(self, given):
+        alpha, beta = self.alpha, self.beta
+        log_given = tf.log(given)
+        log_alpha, log_beta = tf.log(alpha), tf.log(beta)
+        log_Gamma_alpha = tf.lgamma(alpha)
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_given, "log_beta"),
+                     tf.check_numerics(log_alpha, "log_alpha"),
+                     tf.check_numerics(log_beta, "log_beta"),
+                     tf.check_numerics(log_Gamma_alpha, "log_Gamma_alpha")]):
+                log_given = tf.identity(log_given)
+        return alpha * log_beta - log_Gamma_alpha + (alpha - 1) * log_given - \
+            beta * given
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
