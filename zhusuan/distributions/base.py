@@ -6,7 +6,7 @@ from __future__ import division
 
 import tensorflow as tf
 
-from zhusuan.utils import add_name_scope, convert_to_int
+from zhusuan.utils import add_name_scope
 
 
 __all__ = [

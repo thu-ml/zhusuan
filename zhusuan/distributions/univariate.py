@@ -18,6 +18,7 @@ __all__ = [
     'Discrete',
     'Uniform',
     'Gamma',
+    'Beta',
 ]
 
 
@@ -380,9 +381,9 @@ class Gamma(Distribution):
     The class of univariate Gamma distribution.
 
     :param alpha: A Tensor. The shape parameter of the Gamma distribution.
-        Should be broadcastable to match `beta`.
+        Should be positive and broadcastable to match `beta`.
     :param beta: A Tensor. The inverse scale parameter of the Gamma
-        distribution. Should be broadcastable to match `alpha`.
+        distribution. Should be positive and broadcastable to match `alpha`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -444,16 +445,115 @@ class Gamma(Distribution):
         alpha, beta = self.alpha, self.beta
         log_given = tf.log(given)
         log_alpha, log_beta = tf.log(alpha), tf.log(beta)
-        log_Gamma_alpha = tf.lgamma(alpha)
+        lgamma_alpha = tf.lgamma(alpha)
         if self._check_numerics:
             with tf.control_dependencies(
-                    [tf.check_numerics(log_given, "log_beta"),
-                     tf.check_numerics(log_alpha, "log_alpha"),
-                     tf.check_numerics(log_beta, "log_beta"),
-                     tf.check_numerics(log_Gamma_alpha, "log_Gamma_alpha")]):
+                    [tf.check_numerics(log_given, "log(given)"),
+                     tf.check_numerics(log_alpha, "log(alpha)"),
+                     tf.check_numerics(log_beta, "log(beta)"),
+                     tf.check_numerics(lgamma_alpha, "lgamma(alpha))")]):
                 log_given = tf.identity(log_given)
-        return alpha * log_beta - log_Gamma_alpha + (alpha - 1) * log_given - \
+        return alpha * log_beta - lgamma_alpha + (alpha - 1) * log_given - \
             beta * given
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Beta(Distribution):
+    """
+    The class of univariate Beta distribution.
+
+    :param alpha: A Tensor. One of the two shape parameters of the Beta
+        distribution. Should be positive and broadcastable to match `beta`.
+    :param beta: A Tensor. One of the two shape parameters of the Beta
+        distribution. Should be positive and broadcastable to match `alpha`.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is a event.
+        See :class:`Distribution` for more detailed explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 alpha,
+                 beta,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
+        self._beta = tf.convert_to_tensor(beta, dtype=tf.float32)
+        try:
+            tf.broadcast_static_shape(self._alpha.get_shape(),
+                                      self._beta.get_shape())
+        except ValueError:
+            raise ValueError(
+                "alpha and beta should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._alpha.get_shape(), self._beta.get_shape()))
+        self._check_numerics = check_numerics
+        super(Beta, self).__init__(
+            dtype=tf.float32,
+            is_continuous=True,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def alpha(self):
+        """One of the two shape parameters of the Beta distribution."""
+        return self._alpha
+
+    @property
+    def beta(self):
+        """One of the two shape parameters of the Beta distribution."""
+        return self._beta
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.broadcast_dynamic_shape(tf.shape(self.alpha),
+                                          tf.shape(self.beta))
+
+    def _get_batch_shape(self):
+        return tf.broadcast_static_shape(self.alpha.get_shape(),
+                                         self.beta.get_shape())
+
+    def _sample(self, n_samples):
+        alpha, beta = self.alpha, self.beta
+        if alpha.get_shape().is_fully_defined() and \
+                beta.get_shape().is_fully_defined():
+            if alpha.get_shape() != beta.get_shape():
+                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
+        else:
+            alpha, beta = tf.cond(
+                tf.equal(tf.shape(alpha), tf.shape(beta)),
+                lambda: (alpha, beta),
+                lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
+        x = tf.random_gamma([n_samples], alpha, beta=1)
+        y = tf.random_gamma([n_samples], beta, beta=1)
+        return x / (x + y)
+
+    def _log_prob(self, given):
+        alpha, beta = self.alpha, self.beta
+        log_given = tf.log(given)
+        log_1_minus_given = tf.log(1 - given)
+        lgamma_alpha, lgamma_beta = tf.lgamma(alpha), tf.lgamma(beta)
+        lgamma_alpha_plus_beta = tf.lgamma(alpha + beta)
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_given, "log(given)"),
+                     tf.check_numerics(log_1_minus_given, "log(1 - given)"),
+                     tf.check_numerics(lgamma_alpha, "lgamma(alpha)"),
+                     tf.check_numerics(lgamma_beta, "lgamma(beta)"),
+                     tf.check_numerics(lgamma_alpha_plus_beta,
+                                       "lgamma(alpha + beta)")]):
+                log_given = tf.identity(log_given)
+        return (alpha - 1) * log_given + (beta - 1) * log_1_minus_given - (
+            lgamma_alpha + lgamma_beta - lgamma_alpha_plus_beta)
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))

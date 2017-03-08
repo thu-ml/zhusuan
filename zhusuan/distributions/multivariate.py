@@ -253,7 +253,7 @@ class Dirichlet(Distribution):
 
     :param alpha: A N-D (N >= 1) Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
-        of a Dirichlet distribution.
+        of a Dirichlet distribution. Should be positive.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
