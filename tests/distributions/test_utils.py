@@ -20,7 +20,7 @@ class TestLogFactorial(tf.test.TestCase):
                 self.assertNear(np.log(misc.factorial(i)),
                                 log_factorial(i).eval(), 1e-6)
 
-            for i in  [[2], [[1, 2], [3, 4]]]:
+            for i in [[2], [[1, 2], [3, 4]]]:
                 self.assertAllClose(np.log(misc.factorial(i)),
                                     log_factorial(i).eval())
 
@@ -42,7 +42,7 @@ class TestLogCombination(tf.test.TestCase):
 
 class TestExplicitBroadcast(tf.test.TestCase):
     def test_explicit_broadcast(self):
-        with self.test_session():
+        with self.test_session(use_gpu=True):
             def _test_func(a_shape, b_shape, target_shape):
                 a = tf.ones(a_shape)
                 b = tf.ones(b_shape)
