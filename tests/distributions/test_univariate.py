@@ -127,10 +127,50 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(mean_grads, None)
         self.assertEqual(logstd_grads, None)
 
-    def test_log_prob(self):
+    def test_log_prob_shape(self):
+        def _test_static(mean_shape, logstd_shape, given_shape, target_shape):
+            mean = tf.placeholder(tf.float32, mean_shape)
+            logstd = tf.placeholder(tf.float32, logstd_shape)
+            given = tf.placeholder(tf.float32, given_shape)
+            norm = Normal(mean, logstd)
+            log_p = norm.log_prob(given)
+            if log_p.get_shape():
+                self.assertEqual(log_p.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], [2, 3], [2, 3])
+        _test_static([5], [5], [2, 1], [2, 5])
+        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
+        _test_static(None, [1, 2], [2, 2], None)
+        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(mean_shape, logstd_shape, given_shape,
+                              target_shape):
+                mean = tf.placeholder(tf.float32, None)
+                logstd = tf.placeholder(tf.float32, None)
+                norm = Normal(mean, logstd)
+                given = tf.placeholder(tf.float32, None)
+                log_p = norm.log_prob(given)
+                self.assertEqual(
+                    tf.shape(log_p).eval(
+                        feed_dict={mean: np.zeros(mean_shape),
+                                   logstd: np.zeros(logstd_shape),
+                                   given: np.zeros(given_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
+            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
+            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+
+    def test_log_prob_value(self):
         pass
 
-    def test_prob(self):
+    def test_prob_value(self):
         pass
 
 
