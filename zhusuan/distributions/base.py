@@ -35,7 +35,7 @@ class Distribution(object):
     is achieved by setting `group_event_ndims` argument, which defaults to 0.
     The last `group_event_ndims` number of axes in `batch_shape` are grouped
     into a single event. For example, a `Normal(..., group_event_ndims=1) will
-    set the last axis of `batch_shape` to a single event, i.e. a multivariate
+    set the last axis of `batch_shape` to a single event, i.e., a multivariate
     Normal with identity covariance matrix.
 
     When evaluating probabilities at given values, the given Tensor can be of
@@ -50,7 +50,7 @@ class Distribution(object):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See above for more detailed explanation.
     """
 
