@@ -25,19 +25,15 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
-
             eps_mean = tf.ones([n_particles, n_in])
             eps_logstd = tf.zeros([n_particles, n_in])
-            eps = zs.Normal('layer'+str(i)+'/eps', eps_mean, eps_logstd,
+            eps = zs.Normal('layer' + str(i) + '/eps', eps_mean, eps_logstd,
                             sample_dim=1, n_samples=n)
-
             h = layers.fully_connected(
-                h*eps, n_out, normalizer_fn=layers.batch_norm,
+                h * eps, n_out, normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params)
-
             if i < len(net_size) - 2:
                 h = tf.nn.relu(h)
-
         y = zs.Discrete('y', h)
     return model, y
 
@@ -46,15 +42,16 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
 def q(observed, n, net_size, n_particles):
     with zs.StochasticGraph(observed=observed) as variational:
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
-            with tf.variable_scope('layer'+str(i)):
+            with tf.variable_scope('layer' + str(i)):
                 logit_alpha = tf.get_variable('logit_alpha', [n_in])
 
             alpha = tf.nn.sigmoid(logit_alpha)
             alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
-            eps = zs.Normal('layer'+str(i)+'/eps',
-                            tf.ones_like(alpha), 0.5*tf.log(alpha+1e-10),
+            eps = zs.Normal('layer' + str(i) + '/eps',
+                            tf.ones_like(alpha), 0.5 * tf.log(alpha + 1e-10),
                             sample_dim=0, n_samples=n_particles)
     return variational
+
 
 if __name__ == '__main__':
     tf.set_random_seed(1234)
@@ -90,7 +87,7 @@ if __name__ == '__main__':
     n = tf.shape(x)[0]
 
     net_size = [n_x, 100, 100, 100, n_class]
-    es_name = ['layer'+str(i)+'/eps' for i in range(len(net_size)-1)]
+    es_name = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
 
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1, 1])
@@ -101,7 +98,7 @@ if __name__ == '__main__':
         log_ps = model.local_log_prob(es_name + ['y'])
         log_pes = log_ps[:-1]
         log_py_xe = log_ps[-1]
-        return sum([tf.reduce_sum(log_pe, -1) for log_pe in log_pes])\
+        return sum([tf.reduce_sum(log_pe, -1) for log_pe in log_pes]) \
             / x_train.shape[0] + log_py_xe
 
     variational = q({}, n, net_size, n_particles)
@@ -154,8 +151,8 @@ if __name__ == '__main__':
                 test_lbs = []
                 test_accs = []
                 for t in range(10):
-                    x_batch = x_test[t*1000:(t+1)*1000]
-                    y_batch = y_test[t*1000:(t+1)*1000]
+                    x_batch = x_test[t * 1000:(t + 1) * 1000]
+                    y_batch = y_test[t * 1000:(t + 1) * 1000]
                     lb, acc1 = sess.run(
                         [lower_bound, acc],
                         feed_dict={n_particles: ll_samples,

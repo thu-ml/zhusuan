@@ -33,7 +33,7 @@ class Multinomial(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
@@ -148,7 +148,7 @@ class OnehotCategorical(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
@@ -257,7 +257,7 @@ class Dirichlet(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
 
     A single sample is a N-D Tensor with the same shape as alpha. Each slice

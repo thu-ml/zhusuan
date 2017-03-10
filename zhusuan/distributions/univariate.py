@@ -33,7 +33,7 @@ class Normal(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
@@ -90,7 +90,7 @@ class Normal(Distribution):
 
     def _sample(self, n_samples):
         mean, logstd = self.mean, self.logstd
-        if self.is_reparameterized:
+        if not self.is_reparameterized:
             mean = tf.stop_gradient(mean)
             logstd = tf.stop_gradient(logstd)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
@@ -120,7 +120,7 @@ class Bernoulli(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
     """
 
@@ -188,7 +188,7 @@ class Categorical(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
@@ -294,7 +294,7 @@ class Uniform(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
@@ -306,7 +306,7 @@ class Uniform(Distribution):
                  maxval=1.,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=True):
+                 check_numerics=False):
         self._minval = tf.convert_to_tensor(minval, dtype=tf.float32)
         self._maxval = tf.convert_to_tensor(maxval, dtype=tf.float32)
         try:
@@ -350,7 +350,7 @@ class Uniform(Distribution):
 
     def _sample(self, n_samples):
         minval, maxval = self.minval, self.maxval
-        if self.is_reparameterized:
+        if not self.is_reparameterized:
             minval = tf.stop_gradient(minval)
             maxval = tf.stop_gradient(maxval)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
@@ -387,7 +387,7 @@ class Gamma(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
@@ -471,7 +471,7 @@ class Beta(Distribution):
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is a event.
+        together. Default is 0, which means a single value is an event.
         See :class:`Distribution` for more detailed explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
