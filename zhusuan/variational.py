@@ -206,7 +206,7 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
         probabilities.
     :param axis: The sample dimension to reduce when computing the
         variational lower bound.
-    :param variance_normalization: Whether the number of samples
+    :param is_particle_larger_one: Whether the number of samples
         (in the paper, K) is greater than 1. If K = 1, return the results of
         advi.
 
