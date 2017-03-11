@@ -28,9 +28,9 @@ class Distribution(object):
     Samples generated are of shape `(n + )batch_shape + value_shape`. For
     `n=1`, the first additional axis is omitted. `value_shape` is the non-batch
     value shape of the distribution. For a univariate distribution,
-    `value_shape` is [].
+    its `value_shape` is [].
 
-    There are cases where batch of random variables are grouped into a
+    There are cases where a batch of random variables are grouped into a
     single event so that their probabilities can be computed together. This
     is achieved by setting `group_event_ndims` argument, which defaults to 0.
     The last `group_event_ndims` number of axes in `batch_shape` are grouped
