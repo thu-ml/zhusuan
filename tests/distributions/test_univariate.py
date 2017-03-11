@@ -285,6 +285,8 @@ class TestBernoulli(tf.test.TestCase):
         _test_static([None, 2], [None, 1, 1], [None, None, 2])
         _test_static(None, [2, 2], None)
         _test_static([3, None], [3, 2, 1, 1], [3, 2, 3, None])
+        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
+            _test_static([2, 3, 5], [1, 2, 1], None)
 
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape, given_shape, target_shape):
@@ -314,20 +316,163 @@ class TestBernoulli(tf.test.TestCase):
                 bernoulli = Bernoulli(logits)
                 log_p = bernoulli.log_prob(given)
                 target_log_p = stats.bernoulli.logpmf(
-                    given, 1. / (1 + np.exp(-logits)))
+                    given, 1. / (1. + np.exp(-logits)))
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = bernoulli.prob(given)
                 target_p = stats.bernoulli.pmf(
-                    given, 1. / (1 + np.exp(-logits)))
+                    given, 1. / (1. + np.exp(-logits)))
                 self.assertAllClose(p.eval(), target_p)
 
             _test_value(0., [0, 1])
-            _test_value([-100., -10., 10., 100.], [1, 1, 0, 0])
-            _test_value([0., 4.], [[0, 1], [0, 5]])
+            _test_value([-50., -10., -50.], [1, 1, 0])
+            _test_value([0., 4.], [[0, 1], [0, 1]])
 
 
 class TestCategorical(tf.test.TestCase):
-    pass
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError, "should have rank"):
+                Categorical(logits=tf.zeros([]))
+
+    def test_init_n_categories(self):
+        cat = Categorical(tf.ones([10]))
+        self.assertTrue(isinstance(cat.n_categories, int))
+        self.assertEqual(cat.n_categories, 10)
+
+        with self.test_session(use_gpu=True):
+            logits = tf.placeholder(tf.float32, None)
+            cat2 = Categorical(logits)
+            self.assertEqual(
+                cat2.n_categories.eval(feed_dict={logits: np.ones([10])}), 10)
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "should have rank"):
+                cat2.n_categories.eval(feed_dict={logits: 1.})
+
+    def test_batch_shape(self):
+        # static
+        def _test_static(logits_shape):
+            logits = tf.placeholder(tf.float32, logits_shape)
+            cat = Categorical(logits)
+            if cat.get_batch_shape():
+                self.assertEqual(cat.get_batch_shape().as_list(),
+                                 logits_shape[:-1])
+            else:
+                self.assertEqual(None, logits_shape)
+
+        _test_static([2])
+        _test_static([2, 3])
+        _test_static([2, 1, 4])
+        _test_static([None])
+        _test_static([None, 3, 5])
+        _test_static([1, None, 3])
+        _test_static(None)
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(logits_shape):
+                logits = tf.placeholder(tf.float32, logits_shape)
+                cat = Categorical(logits)
+                self.assertEqual(
+                    cat.batch_shape.eval(
+                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
+                    logits_shape[:-1])
+
+            _test_dynamic([2])
+            _test_dynamic([2, 3])
+            _test_dynamic([2, 1, 4])
+
+    def test_sample_shape(self):
+        def _test_static(logits_shape, n_samples, target_shape):
+            logits = tf.placeholder(tf.float32, logits_shape)
+            cat = Categorical(logits)
+            samples = cat.sample(n_samples)
+            if samples.get_shape():
+                self.assertEqual(samples.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2], 1, [])
+        _test_static([2, 3], 1, [2])
+        _test_static([5], 2, [2])
+        _test_static([1, 2, 4], 1, [1, 2])
+        _test_static([None, 2], tf.placeholder(tf.int32, []), None)
+        _test_static(None, 1, None)
+        _test_static([3, None], 2, [2, 3])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(logits_shape, n_samples, target_shape):
+                logits = tf.placeholder(tf.float32, None)
+                cat = Categorical(logits)
+                samples = cat.sample(n_samples)
+                self.assertEqual(
+                    tf.shape(samples).eval(
+                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2], 1, [])
+            _test_dynamic([2, 3], 1, [2])
+            _test_dynamic([1, 3], 2, [2, 1])
+            _test_dynamic([2, 1, 5], 3, [3, 2, 1])
+
+    def test_log_prob_shape(self):
+        def _test_static(logits_shape, given_shape, target_shape):
+            logits = tf.placeholder(tf.float32, logits_shape)
+            given = tf.placeholder(tf.int32, given_shape)
+            cat = Categorical(logits)
+            log_p = cat.log_prob(given)
+            if log_p.get_shape():
+                self.assertEqual(log_p.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [2], [2])
+        _test_static([5], [], [])
+        _test_static([1, 2, 4], [1], [1, 2])
+        _test_static([3, 1, 5], [1, 4], [3, 4])
+        _test_static([None, 2], [None, 1, 1], [None, 1, None])
+        _test_static(None, [2, 2], None)
+        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
+        with self.assertRaisesRegexp(ValueError, "hhh"):
+            _test_static([2, 3, 5], [1, 2], None)
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(logits_shape, given_shape, target_shape):
+                logits = tf.placeholder(tf.float32, None)
+                bernoulli = Bernoulli(logits)
+                given = tf.placeholder(tf.int32, None)
+                log_p = bernoulli.log_prob(given)
+                self.assertEqual(
+                    tf.shape(log_p).eval(
+                        feed_dict={logits: np.zeros(logits_shape),
+                                   given: np.zeros(given_shape,
+                                                   np.int32)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [1, 3], [2, 3])
+            _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
+            _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [1, 2, 1], None)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(logits, given):
+                logits = np.array(logits, np.float32)
+                given = np.array(given, np.float32)
+                bernoulli = Bernoulli(logits)
+                log_p = bernoulli.log_prob(given)
+                target_log_p = stats.bernoulli.logpmf(
+                    given, 1. / (1. + np.exp(-logits)))
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = bernoulli.prob(given)
+                target_p = stats.bernoulli.pmf(
+                    given, 1. / (1. + np.exp(-logits)))
+                self.assertAllClose(p.eval(), target_p)
+
+            _test_value(0., [0, 1])
+            _test_value([-50., -10., -50.], [1, 1, 0])
+            _test_value([0., 4.], [[0, 1], [0, 1]])
 
 
 class TestUniform(tf.test.TestCase):

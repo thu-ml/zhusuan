@@ -201,7 +201,7 @@ class Distribution(object):
         raise NotImplementedError()
 
     def _check_input_shape(self, given):
-        given = tf.convert_to_tensor(given)
+        given = tf.convert_to_tensor(given, dtype=self.dtype)
         err_msg = "The given argument should be able to broadcast to " \
                   "match batch_shape + value_shape of the distribution."
         if (given.get_shape() and self.get_batch_shape() and

@@ -47,7 +47,7 @@ class Multinomial(Distribution):
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
         elif static_logits_shape and (static_logits_shape[-1]):
-            self._n_categories = static_logits_shape[-1]
+            self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
                 self._logits, 1, message=shape_err_msg)
@@ -162,7 +162,7 @@ class OnehotCategorical(Distribution):
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
         elif static_logits_shape and (static_logits_shape[-1]):
-            self._n_categories = static_logits_shape[-1]
+            self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
                 self._logits, 1, message=shape_err_msg)

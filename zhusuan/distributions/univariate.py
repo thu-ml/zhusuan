@@ -211,7 +211,7 @@ class Categorical(Distribution):
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
         elif static_logits_shape and (static_logits_shape[-1]):
-            self._n_categories = static_logits_shape[-1]
+            self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
                 self._logits, 1, message=shape_err_msg)
@@ -265,9 +265,10 @@ class Categorical(Distribution):
 
         def _broadcast(given, logits):
             try:
-                given *= tf.ones_like(logits[:-1])
-                logits *= tf.ones_like(tf.expand_dims(given, -1))
+                given *= tf.ones_like(logits[:-1], tf.int32)
+                logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
             except ValueError:
+                raise
                 raise ValueError(
                     "given and logits[:-1] cannot broadcast to match. ("
                     "{} vs. {}[:-1])".format(given.get_shape(),

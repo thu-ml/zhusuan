@@ -55,13 +55,12 @@ def explicit_broadcast(x, y, x_name, y_name):
     :return: x, y after broadcast.
     """
     try:
-        x *= tf.ones_like(y)
-        y *= tf.ones_like(x)
+        x *= tf.ones_like(y, dtype=x.dtype)
+        y *= tf.ones_like(x, dtype=y.dtype)
     except ValueError:
         raise ValueError(
-            "{} and {} cannot broadcast to have the same shape. ("
-            "{} vs. {})".format(x_name, y_name,
-                                x.get_shape(), y.get_shape()))
+            "{} and {} cannot broadcast to match. ({} vs. {})".format(
+                x_name, y_name, x.get_shape(), y.get_shape()))
     return x, y
 
 
