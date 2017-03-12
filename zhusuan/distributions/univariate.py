@@ -569,6 +569,7 @@ class Beta(Distribution):
         return x / (x + y)
 
     def _log_prob(self, given):
+        # TODO: not right when given=0 or 1
         alpha, beta = self.alpha, self.beta
         log_given = tf.log(given)
         log_1_minus_given = tf.log(1 - given)
