@@ -431,8 +431,8 @@ class TestCategorical(tf.test.TestCase):
         _test_static([3, 1, 5], [1, 4], [3, 4])
         _test_static([None, 2], [None, 1, 1], [None, 1, None])
         _test_static(None, [2, 2], None)
-        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
-        with self.assertRaisesRegexp(ValueError, "hhh"):
+        _test_static([3, None], [3, 2, 1, 1], [3, 2, 1, 3])
+        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
             _test_static([2, 3, 5], [1, 2], None)
 
         with self.test_session(use_gpu=True):

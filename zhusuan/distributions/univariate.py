@@ -265,14 +265,25 @@ class Categorical(Distribution):
 
         def _broadcast(given, logits):
             try:
-                given *= tf.ones_like(logits[:-1], tf.int32)
+                ones_ = tf.ones(tf.shape(logits)[:-1], tf.int32)
+                if logits.get_shape():
+                    ones_.set_shape(logits.get_shape()[:-1])
+                given *= ones_
                 logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
             except ValueError:
-                raise
                 raise ValueError(
-                    "given and logits[:-1] cannot broadcast to match. ("
+                    "given and logits cannot broadcast to match. ("
                     "{} vs. {}[:-1])".format(given.get_shape(),
                                              logits.get_shape()))
+            return given, logits
+
+        def _is_same_dynamic_shape(given, logits):
+            return tf.cond(
+                tf.equal(tf.rank(given), tf.rank(logits) - 1),
+                lambda: tf.reduce_all(tf.equal(
+                    tf.concat([tf.shape(given), tf.shape(logits)[:-1]], 0),
+                    tf.concat([tf.shape(logits)[:-1], tf.shape(given)], 0))),
+                lambda: tf.convert_to_tensor(False, tf.bool))
 
         if not (given.get_shape() and logits.get_shape()):
             given, logits = _broadcast(given, logits)
@@ -280,12 +291,12 @@ class Categorical(Distribution):
             if given.get_shape().ndims != logits.get_shape().ndims - 1:
                 given, logits = _broadcast(given, logits)
             elif given.get_shape().is_fully_defined() and \
-                    logits[:-1].get_shape().is_fully_defined():
+                    logits.get_shape()[:-1].is_fully_defined():
                 if given.get_shape() != logits.get_shape()[:-1]:
                     given, logits = _broadcast(given, logits)
             else:
                 given, logits = tf.cond(
-                    is_same_dynamic_shape(given, logits[:-1]),
+                    _is_same_dynamic_shape(given, logits),
                     lambda: (given, logits),
                     lambda: _broadcast(given, logits))
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
