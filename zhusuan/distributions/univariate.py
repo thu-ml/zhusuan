@@ -264,17 +264,12 @@ class Categorical(Distribution):
         logits = self.logits
 
         def _broadcast(given, logits):
-            try:
-                ones_ = tf.ones(tf.shape(logits)[:-1], tf.int32)
-                if logits.get_shape():
-                    ones_.set_shape(logits.get_shape()[:-1])
-                given *= ones_
-                logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
-            except ValueError:
-                raise ValueError(
-                    "given and logits cannot broadcast to match. ("
-                    "{} vs. {}[:-1])".format(given.get_shape(),
-                                             logits.get_shape()))
+            # static shape has been checked in base class.
+            ones_ = tf.ones(tf.shape(logits)[:-1], tf.int32)
+            if logits.get_shape():
+                ones_.set_shape(logits.get_shape()[:-1])
+            given *= ones_
+            logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
             return given, logits
 
         def _is_same_dynamic_shape(given, logits):
@@ -299,8 +294,12 @@ class Categorical(Distribution):
                     _is_same_dynamic_shape(given, logits),
                     lambda: (given, logits),
                     lambda: _broadcast(given, logits))
-        return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
-                                                               logits=logits)
+        log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
+                                                                logits=logits)
+        if given.get_shape() and logits.get_shape():
+            log_p.set_shape(tf.broadcast_static_shape(given.get_shape(),
+                                                      logits.get_shape()[:-1]))
+        return log_p
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
