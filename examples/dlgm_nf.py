@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 import dataset
-import utils
+#import utils
 
 HIDDEN_UNITS = 500
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 200
+    ll_samples = 1000
     epoches = 3000
     batch_size = 100
     iters = x_train.shape[0] // batch_size
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     log_qz = tf.reduce_sum(log_qz, -1)
-    qz_samples, log_qz = zs.normalizing_planar_flow(qz_samples, log_qz, iters=1)
+    qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=10)
     
     #log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(

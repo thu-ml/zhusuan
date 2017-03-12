@@ -6,7 +6,9 @@ from __future__ import division
 
 import tensorflow as tf
 
-__all__ = ['normalizing_planar_flow']
+__all__ = [
+    'planar_nf',
+]
 
 
 # utils
@@ -28,7 +30,7 @@ def semi_broadcast(x, base):
     base_ndim = base_shape.ndims
     x_shape = x.get_shape()
     x_ndim = int(x_shape.ndims)
-    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1] * x_dim, dtype=tf.int32)], 0)
+    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1] * x_ndim, dtype=tf.int32)], 0)
 
     while x.get_shape().ndims < base_ndim:
         x = tf.expand_dims(x, 0)
@@ -36,7 +38,7 @@ def semi_broadcast(x, base):
     return tx
     
 
-def normalizing_planar_flow(sample, log_prob, iters):
+def planar_nf(sample, log_prob, iters):
     '''
     Perform Normalizing Planar Flow for the last dimension of input
         f(z_t) = z_{t-1} + h(z_{t-1} * w_t + b_t) * u_t
@@ -101,3 +103,4 @@ def normalizing_planar_flow(sample, log_prob, iters):
         z = z + tf.matmul(activation, para_u, name='update_calc')
 
     return (z, log_prob - sum(log_det_ja))
+
