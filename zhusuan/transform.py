@@ -11,15 +11,24 @@ __all__ = ['normalizing_planar_flow']
 
 # utils
 def random_value(shape, mean=0, sd=0.05):
+    '''
+    Return a random tensor
+    '''
     return tf.random_normal(shape=shape, mean=mean, stddev=sd, dtype=tf.float32)
 
 
 def semi_broadcast(x, base):
+    '''
+    shape(base) =  [i, ..., k, p, ..., q]
+    shape(x)    =  [         , w, ..., z]
+    return semi_broadcast of x
+    shape(tx)   =  [i, ..., k, w, ..., z]
+    '''
     base_shape = base.get_shape()
     base_ndim = base_shape.ndims
     x_shape = x.get_shape()
     x_ndim = int(x_shape.ndims)
-    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1, 1], dtype=tf.int32)], 0)
+    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1] * x_dim, dtype=tf.int32)], 0)
 
     while x.get_shape().ndims < base_ndim:
         x = tf.expand_dims(x, 0)
@@ -29,15 +38,31 @@ def semi_broadcast(x, base):
 
 def normalizing_planar_flow(sample, log_prob, iters):
     '''
-        Perform Normalizing Planar Flow for the last dimension of input
-            f(z) = z + h(z * w + b) * u
-        with activation function tanh as well as the invertibility trick
-        in (Danilo 2016)
+    Perform Normalizing Planar Flow for the last dimension of input
+        f(z_t) = z_{t-1} + h(z_{t-1} * w_t + b_t) * u_t
+    with activation function tanh as well as the invertibility trick
+    in (Danilo 2016)
+    :para sample: A N-D Tensor (N>=2) of shape (..., D), and normalizing 
+    planar flow will perform flow on the last dimension.
+    :para log_prob: A (N-1)-D Tensor of shape (...), which means 
+    shape(log_prob)=shape(sample)[:-1].
+    :para iters: A Int, which represents the number of successive flows
+    (in the experiments of paper, K)
 
-        some shape example:
-            z: [S, N, M, D]
-            w: [D, 1]
-            u: [1, D]
+    :return: A N-D Tensor, the transformed sample of the origin input
+    tensor
+    :return: A (N-1)-D Tensor, the joint-prob of the transformed sample 
+
+    Example:
+    [input]
+        sample(z0): [S, N, M, D]
+        logpdf(q0): [S, N, M]
+    [weight]
+         weight(w): [D, 1]
+         weight(u): [1, D]
+    [output]
+        sample(zk): [S, N, M, D]
+        logpdf(qk): [S, N, M]
     '''
     input_x = sample
 
@@ -72,7 +97,7 @@ def normalizing_planar_flow(sample, log_prob, iters):
         para_u = semi_broadcast(para_us[iter], activation)
 
         reduce_act = tf.reduce_sum(activation, axis=-1)
-        log_det_ja.append(scalar * (tf.constant(1.0, dtype=tf.float32) - reduce_act * reduce_act) + tf.constant(1.0, dtype=tf.float32))
+        log_det_ja.append(tf.log(scalar * (tf.constant(1.0, dtype=tf.float32) - reduce_act * reduce_act) + tf.constant(1.0, dtype=tf.float32)))
         z = z + tf.matmul(activation, para_u, name='update_calc')
 
     return (z, log_prob - sum(log_det_ja))

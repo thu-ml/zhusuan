@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 import dataset
-#import utils
+import utils
 
 HIDDEN_UNITS = 500
 
