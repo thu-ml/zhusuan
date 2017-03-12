@@ -476,7 +476,7 @@ class Gamma(Distribution):
                     [tf.check_numerics(log_given, "log(given)"),
                      tf.check_numerics(log_alpha, "log(alpha)"),
                      tf.check_numerics(log_beta, "log(beta)"),
-                     tf.check_numerics(lgamma_alpha, "lgamma(alpha))")]):
+                     tf.check_numerics(lgamma_alpha, "lgamma(alpha)")]):
                 log_given = tf.identity(log_given)
         return alpha * log_beta - lgamma_alpha + (alpha - 1) * log_given - \
             beta * given
