@@ -28,9 +28,9 @@ class Distribution(object):
     Samples generated are of shape `(n + )batch_shape + value_shape`. For
     `n=1`, the first additional axis is omitted. `value_shape` is the non-batch
     value shape of the distribution. For a univariate distribution,
-    `value_shape` is [].
+    its `value_shape` is [].
 
-    There are cases where batch of random variables are grouped into a
+    There are cases where a batch of random variables are grouped into a
     single event so that their probabilities can be computed together. This
     is achieved by setting `group_event_ndims` argument, which defaults to 0.
     The last `group_event_ndims` number of axes in `batch_shape` are grouped
@@ -201,7 +201,7 @@ class Distribution(object):
         raise NotImplementedError()
 
     def _check_input_shape(self, given):
-        given = tf.convert_to_tensor(given)
+        given = tf.convert_to_tensor(given, dtype=self.dtype)
         err_msg = "The given argument should be able to broadcast to " \
                   "match batch_shape + value_shape of the distribution."
         if (given.get_shape() and self.get_batch_shape() and

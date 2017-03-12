@@ -60,3 +60,20 @@ class TestExplicitBroadcast(tf.test.TestCase):
                 _test_func((3,), (4,), None)
             with self.assertRaisesRegexp(ValueError, "cannot broadcast"):
                 _test_func((2, 1), (2, 4, 3), None)
+
+
+class TestIsSameDynamicShape(tf.test.TestCase):
+    def test_is_same_dynamic_shape(self):
+        with self.test_session(use_gpu=True):
+            def _test(x_shape, y_shape, is_same):
+                x = tf.ones(x_shape)
+                y = tf.ones(y_shape)
+                test_value = is_same_dynamic_shape(x, y)
+                self.assertEqual(test_value.eval(), is_same)
+
+            _test([1, 2], [1, 2], True)
+            _test([2], [2, 2], False)
+            _test([], [1], False)
+            _test([1, 2], [2, 2], False)
+            _test([], [], True)
+            _test([3], [2], False)

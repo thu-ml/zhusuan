@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from .base import *
-from .utils import explicit_broadcast
+from .utils import explicit_broadcast, is_same_dynamic_shape
 
 
 __all__ = [
@@ -26,9 +26,9 @@ class Normal(Distribution):
     """
     The class of univariate Normal distribution.
 
-    :param mean: A Tensor. The mean of the Normal distribution. Should be
-        broadcastable to match `logstd`.
-    :param logstd: A Tensor. The log standard deviation of the Normal
+    :param mean: A `float32` Tensor. The mean of the Normal distribution.
+        Should be broadcastable to match `logstd`.
+    :param logstd: A `float32` Tensor. The log standard deviation of the Normal
         distribution. Should be broadcastable to match `mean`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -157,17 +157,26 @@ class Bernoulli(Distribution):
         return samples
 
     def _log_prob(self, given):
+        given = tf.to_float(given)
         logits = self.logits
-        if given.get_shape().is_fully_defined() and \
-                logits.get_shape().is_fully_defined():
-            if given.get_shape() != self.logits.get_shape():
+        if not (given.get_shape() and logits.get_shape()):
+            given, logits = explicit_broadcast(given, logits,
+                                               'given', 'logits')
+        else:
+            if given.get_shape().ndims != logits.get_shape().ndims:
                 given, logits = explicit_broadcast(given, logits,
                                                    'given', 'logits')
-        else:
-            given, logits = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(logits)),
-                lambda: (given, logits),
-                lambda: explicit_broadcast(given, logits, 'given', 'logits'))
+            elif given.get_shape().is_fully_defined() and \
+                    logits.get_shape().is_fully_defined():
+                if given.get_shape() != logits.get_shape():
+                    given, logits = explicit_broadcast(given, logits,
+                                                       'given', 'logits')
+            else:
+                given, logits = tf.cond(
+                    is_same_dynamic_shape(given, logits),
+                    lambda: (given, logits),
+                    lambda: explicit_broadcast(given, logits,
+                                               'given', 'logits'))
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -202,7 +211,7 @@ class Categorical(Distribution):
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
         elif static_logits_shape and (static_logits_shape[-1]):
-            self._n_categories = static_logits_shape[-1]
+            self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
                 self._logits, 1, message=shape_err_msg)
@@ -256,23 +265,29 @@ class Categorical(Distribution):
 
         def _broadcast(given, logits):
             try:
-                given *= tf.ones_like(logits[:-1])
-                logits *= tf.ones_like(tf.expand_dims(given, -1))
+                given *= tf.ones_like(logits[:-1], tf.int32)
+                logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
             except ValueError:
+                raise
                 raise ValueError(
                     "given and logits[:-1] cannot broadcast to match. ("
                     "{} vs. {}[:-1])".format(given.get_shape(),
                                              logits.get_shape()))
 
-        if given.get_shape().is_fully_defined() and \
-                logits.get_shape().is_fully_defined():
-            if given.get_shape() != self.logits.get_shape()[:-1]:
-                given, logits = _broadcast(given, logits)
+        if not (given.get_shape() and logits.get_shape()):
+            given, logits = _broadcast(given, logits)
         else:
-            given, logits = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(logits)[:-1]),
-                lambda: (given, logits),
-                lambda: _broadcast(given, logits))
+            if given.get_shape().ndims != logits.get_shape().ndims - 1:
+                given, logits = _broadcast(given, logits)
+            elif given.get_shape().is_fully_defined() and \
+                    logits[:-1].get_shape().is_fully_defined():
+                if given.get_shape() != logits.get_shape()[:-1]:
+                    given, logits = _broadcast(given, logits)
+            else:
+                given, logits = tf.cond(
+                    is_same_dynamic_shape(given, logits[:-1]),
+                    lambda: (given, logits),
+                    lambda: _broadcast(given, logits))
         return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                logits=logits)
 
@@ -524,15 +539,21 @@ class Beta(Distribution):
 
     def _sample(self, n_samples):
         alpha, beta = self.alpha, self.beta
-        if alpha.get_shape().is_fully_defined() and \
-                beta.get_shape().is_fully_defined():
-            if alpha.get_shape() != beta.get_shape():
-                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
+        if not (alpha.get_shape() and beta.get_shape()):
+            alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
         else:
-            alpha, beta = tf.cond(
-                tf.equal(tf.shape(alpha), tf.shape(beta)),
-                lambda: (alpha, beta),
-                lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
+            if alpha.get_shape().ndims != beta.get_shape().ndims:
+                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
+            elif alpha.get_shape().is_fully_defined() and \
+                    beta.get_shape().is_fully_defined():
+                if alpha.get_shape() != beta.get_shape():
+                    alpha, beta = explicit_broadcast(alpha, beta,
+                                                     'alpha', 'beta')
+            else:
+                alpha, beta = tf.cond(
+                    is_same_dynamic_shape(alpha, beta),
+                    lambda: (alpha, beta),
+                    lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
         x = tf.random_gamma([n_samples], alpha, beta=1)
         y = tf.random_gamma([n_samples], beta, beta=1)
         return x / (x + y)

@@ -11,6 +11,7 @@ __all__ = [
     'log_factorial',
     'log_combination',
     'explicit_broadcast',
+    'is_same_dynamic_shape',
 ]
 
 
@@ -54,11 +55,29 @@ def explicit_broadcast(x, y, x_name, y_name):
     :return: x, y after broadcast.
     """
     try:
-        x *= tf.ones_like(y)
-        y *= tf.ones_like(x)
+        x *= tf.ones_like(y, dtype=x.dtype)
+        y *= tf.ones_like(x, dtype=y.dtype)
     except ValueError:
         raise ValueError(
-            "{} and {} cannot broadcast to have the same shape. ("
-            "{} vs. {})".format(x_name, y_name,
-                                x.get_shape(), y.get_shape()))
+            "{} and {} cannot broadcast to match. ({} vs. {})".format(
+                x_name, y_name, x.get_shape(), y.get_shape()))
     return x, y
+
+
+def is_same_dynamic_shape(x, y):
+    """
+    Whether `x` and `y` has the same dynamic shape.
+
+    :param x: A Tensor.
+    :param y: A Tensor.
+    :return: A scalar Tensor of `bool`.
+    """
+    # There is a BUG of Tensorflow for not doing static shape inference
+    # right in nested tf.cond()'s, so we are not comparing x and y's
+    # shape directly but working with their concatenations.
+    return tf.cond(
+        tf.equal(tf.rank(x), tf.rank(y)),
+        lambda: tf.reduce_all(tf.equal(
+            tf.concat([tf.shape(x), tf.shape(y)], 0),
+            tf.concat([tf.shape(y), tf.shape(x)], 0))),
+        lambda: tf.convert_to_tensor(False, tf.bool))
