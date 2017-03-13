@@ -1042,7 +1042,7 @@ class TestBeta(tf.test.TestCase):
                 log_p.eval(feed_dict={alpha: 1., beta: 1., given: 1.})
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "lgamma\(beta\).*Tensor had Inf"):
-                log_p.eval(feed_dict={alpha: 1., beta: -1., given: 0.5})
+                log_p.eval(feed_dict={alpha: 2., beta: -1., given: 0.5})
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "lgamma\(alpha\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 0., beta: 1., given: 0.5})

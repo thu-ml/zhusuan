@@ -7,7 +7,7 @@ from __future__ import division
 import tensorflow as tf
 
 from .base import *
-from .utils import explicit_broadcast, log_combination
+from .utils import explicit_broadcast, log_combination, is_same_dynamic_shape
 
 
 __all__ = [
@@ -217,17 +217,26 @@ class OnehotCategorical(Distribution):
         return samples
 
     def _log_prob(self, given):
+        given = tf.to_float(given)
         logits = self.logits
-        if given.get_shape().is_fully_defined() and \
-                logits.get_shape().is_fully_defined():
-            if given.get_shape() != self.logits.get_shape():
+        if not (given.get_shape() and logits.get_shape()):
+            given, logits = explicit_broadcast(given, logits,
+                                               'given', 'logits')
+        else:
+            if given.get_shape().ndims != logits.get_shape().ndims:
                 given, logits = explicit_broadcast(given, logits,
                                                    'given', 'logits')
-        else:
-            given, logits = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(logits)),
-                lambda: (given, logits),
-                lambda: explicit_broadcast(given, logits, 'given', 'logits'))
+            elif given.get_shape().is_fully_defined() and \
+                    logits.get_shape().is_fully_defined():
+                if given.get_shape() != logits.get_shape():
+                    given, logits = explicit_broadcast(given, logits,
+                                                       'given', 'logits')
+            else:
+                given, logits = tf.cond(
+                    is_same_dynamic_shape(given, logits),
+                    lambda: (given, logits),
+                    lambda: explicit_broadcast(given, logits,
+                                               'given', 'logits'))
         if (logits.get_shape().ndims == 2) or (given.get_shape().ndims == 2):
             logits_flat = logits
             given_flat = given
