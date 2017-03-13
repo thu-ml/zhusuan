@@ -56,14 +56,6 @@ class Multinomial(Distribution):
             self._n_categories = tf.shape(self._logits)[-1]
         self._n_experiments = tf.convert_to_tensor(n_experiments,
                                                    dtype=tf.int32)
-        try:
-            tf.broadcast_static_shape(self._logits[:-1].get_shape(),
-                                      self._n_experiments.get_shape())
-        except ValueError:
-            raise ValueError(
-                "n_experiments should be broadcastable to match logits[:-1]. "
-                "({} vs. {}[:-1])".format(
-                    self._n_experiments.get_shape(), self._logits.get_shape()))
 
         super(Multinomial, self).__init__(
             dtype=tf.int32,
@@ -115,17 +107,26 @@ class Multinomial(Distribution):
         return samples
 
     def _log_prob(self, given):
+        given = tf.to_float(given)
         logits = self.logits
-        if given.get_shape().is_fully_defined() and \
-                logits.get_shape().is_fully_defined():
-            if given.get_shape() != self.logits.get_shape():
+        if not (given.get_shape() and logits.get_shape()):
+            given, logits = explicit_broadcast(given, logits,
+                                               'given', 'logits')
+        else:
+            if given.get_shape().ndims != logits.get_shape().ndims:
                 given, logits = explicit_broadcast(given, logits,
                                                    'given', 'logits')
-        else:
-            given, logits = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(logits)),
-                lambda: (given, logits),
-                lambda: explicit_broadcast(given, logits, 'given', 'logits'))
+            elif given.get_shape().is_fully_defined() and \
+                    logits.get_shape().is_fully_defined():
+                if given.get_shape() != logits.get_shape():
+                    given, logits = explicit_broadcast(given, logits,
+                                                       'given', 'logits')
+            else:
+                given, logits = tf.cond(
+                    is_same_dynamic_shape(given, logits),
+                    lambda: (given, logits),
+                    lambda: explicit_broadcast(given, logits,
+                                               'given', 'logits'))
         normalized_logits = logits - tf.reduce_logsumexp(logits, axis=-1)
         log_p = log_combination(self.n_experiments, given) + \
             given * normalized_logits
