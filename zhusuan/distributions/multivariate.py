@@ -28,8 +28,8 @@ class Multinomial(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param n_experiments: A Tensor that can be broadcast to match
-        `logits[:-1]`. The number of experiments for each sample.
+    :param n_experiments: A 0-D `int32` Tensor. The number of experiments
+        for each sample.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -54,8 +54,22 @@ class Multinomial(Distribution):
             with tf.control_dependencies([_assert_shape_op]):
                 self._logits = tf.identity(self._logits)
             self._n_categories = tf.shape(self._logits)[-1]
-        self._n_experiments = tf.convert_to_tensor(n_experiments,
-                                                   dtype=tf.int32)
+
+        sign_err_msg = "n_experiments must be positive"
+        if isinstance(n_experiments, int):
+            if n_experiments <= 0:
+                raise ValueError(sign_err_msg)
+            self._n_experiments = n_experiments
+        else:
+            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            _assert_rank_op = tf.assert_rank(
+                n_experiments, 0,
+                message="n_experiments should be a scalar (0-D Tensor).")
+            _assert_positive_op = tf.assert_greater(
+                n_experiments, 0, message=sign_err_msg)
+            with tf.control_dependencies([_assert_rank_op,
+                                          _assert_positive_op]):
+                self._n_experiments = tf.identity(n_experiments)
 
         super(Multinomial, self).__init__(
             dtype=tf.int32,
@@ -103,7 +117,10 @@ class Multinomial(Distribution):
             tf.multinomial(logits_flat, n_samples * self.n_experiments))
         shape = tf.concat([[n_samples, self.n_experiments],
                            self.batch_shape], 0)
-        samples = tf.reduce_sum(tf.reshape(samples_flat, shape), axis=1)
+        samples = tf.reshape(samples_flat, shape)
+        print(self.n_categories)
+        samples = tf.reduce_sum(
+            tf.one_hot(samples, self.n_categories, dtype=tf.int32), axis=1)
         return samples
 
     def _log_prob(self, given):
@@ -127,7 +144,8 @@ class Multinomial(Distribution):
                     lambda: (given, logits),
                     lambda: explicit_broadcast(given, logits,
                                                'given', 'logits'))
-        normalized_logits = logits - tf.reduce_logsumexp(logits, axis=-1)
+        normalized_logits = logits - tf.reduce_logsumexp(
+            logits, axis=-1, keep_dims=True)
         log_p = log_combination(self.n_experiments, given) + \
             given * normalized_logits
         return log_p

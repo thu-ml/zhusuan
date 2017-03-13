@@ -21,12 +21,12 @@ def log_factorial(n):
 
     .. math:: \\log n!
 
-    :param n: A Tensor of type `int32`.
+    :param n: A Tensor.
 
     :return: A `float32` Tensor of the same shape as `n`.
     """
-    n = tf.convert_to_tensor(n, tf.int32)
-    return tf.lgamma(tf.to_float(n + 1))
+    n = tf.convert_to_tensor(n, tf.float32)
+    return tf.lgamma(n + 1)
 
 
 def log_combination(n, ks):
@@ -37,15 +37,16 @@ def log_combination(n, ks):
 
     \\log \binom{n}{k_1, k_2, \dots} = \\log n! - \sum_{i}\\log k_i!
 
-    :param n: A N-D Tensor of type `int32`. Can broadcast to match `ks`[:-1].
-    :param ks: A (N + 1)-D Tensor of type `int32`. Each slice
-        [i, j, ..., k, :] is a vector of [k_1, k_2, ...].
+    :param n: A N-D Tensor. Can broadcast to match `ks`[:-1].
+    :param ks: A (N + 1)-D Tensor. Each slice [i, j, ..., k, :] is a vector
+        of [k_1, k_2, ...].
 
     :return: A N-D Tensor of type `float32`.
     """
-    n = tf.convert_to_tensor(n, tf.int32)
-    ks = tf.convert_to_tensor(ks, tf.int32)
-    return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1)
+    n = tf.convert_to_tensor(n, tf.float32)
+    ks = tf.convert_to_tensor(ks, tf.float32)
+    return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1,
+                                            keep_dims=True)
 
 
 def explicit_broadcast(x, y, x_name, y_name):
