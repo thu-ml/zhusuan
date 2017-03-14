@@ -1029,7 +1029,6 @@ class TestBeta(tf.test.TestCase):
             _test_value([[1e-8], [1e8]], [[1., 1e8], [1e-8, 1.]], [0.7])
 
     def test_check_numerics(self):
-        from tensorflow.contrib import distributions
         alpha = tf.placeholder(tf.float32, [])
         beta = tf.placeholder(tf.float32, [])
         given = tf.placeholder(tf.float32, [])

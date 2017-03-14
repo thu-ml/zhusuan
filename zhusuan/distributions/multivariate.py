@@ -306,17 +306,26 @@ class Dirichlet(Distribution):
         self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
         static_alpha_shape = self._alpha.get_shape()
         shape_err_msg = "alpha should have rank >= 1."
+        cat_err_msg = "n_categories (length of the last axis " \
+                      "of alpha) should be at least 2."
         if static_alpha_shape and (static_alpha_shape.ndims < 1):
             raise ValueError(shape_err_msg)
         elif static_alpha_shape and (
                 static_alpha_shape[-1].value is not None):
             self._n_categories = static_alpha_shape[-1].value
+            if self._n_categories < 2:
+                raise ValueError(cat_err_msg)
         else:
             _assert_shape_op = tf.assert_rank_at_least(
                 self._alpha, 1, message=shape_err_msg)
             with tf.control_dependencies([_assert_shape_op]):
                 self._alpha = tf.identity(self._alpha)
             self._n_categories = tf.shape(self._alpha)[-1]
+
+            _assert_cat_op = tf.assert_greater_equal(
+                self._n_categories, 2, message=cat_err_msg)
+            with tf.control_dependencies([_assert_cat_op]):
+                self._alpha = tf.identity(self._alpha)
         self._check_numerics = check_numerics
 
         super(Dirichlet, self).__init__(
@@ -336,7 +345,7 @@ class Dirichlet(Distribution):
         return self._n_categories
 
     def _value_shape(self):
-        return tf.convert_to_tensor(self.n_categories, tf.int32)
+        return tf.convert_to_tensor([self.n_categories], tf.int32)
 
     def _get_value_shape(self):
         if isinstance(self.n_categories, int):
@@ -359,11 +368,11 @@ class Dirichlet(Distribution):
         alpha = self.alpha
         if not (given.get_shape() and alpha.get_shape()):
             given, alpha = explicit_broadcast(given, alpha,
-                                               'given', 'alpha')
+                                              'given', 'alpha')
         else:
             if given.get_shape().ndims != alpha.get_shape().ndims:
                 given, alpha = explicit_broadcast(given, alpha,
-                                                   'given', 'alpha')
+                                                  'given', 'alpha')
             elif given.get_shape().is_fully_defined() and \
                     alpha.get_shape().is_fully_defined():
                 if given.get_shape() != alpha.get_shape():
@@ -376,11 +385,14 @@ class Dirichlet(Distribution):
                     lambda: explicit_broadcast(given, alpha,
                                                'given', 'alpha'))
         log_Beta_alpha = tf.lbeta(alpha)
+        # fix of no static shape inference for tf.lbeta
+        if alpha.get_shape():
+            log_Beta_alpha.set_shape(alpha.get_shape()[:-1])
         log_given = tf.log(given)
         if self._check_numerics:
             with tf.control_dependencies(
-                    [tf.check_numerics(log_Beta_alpha, "log_Beta_alpha"),
-                     tf.check_numerics(log_given, "log_given")]):
+                    [tf.check_numerics(log_Beta_alpha, "lbeta(alpha)"),
+                     tf.check_numerics(log_given, "log(given)")]):
                 log_given = tf.identity(log_given)
         log_p = -log_Beta_alpha + tf.reduce_sum((alpha - 1) * log_given, -1)
         return log_p
