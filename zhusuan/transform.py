@@ -4,10 +4,13 @@
 from __future__ import absolute_import
 from __future__ import division
 
+import numpy as np
 import tensorflow as tf
 
 __all__ = [
+    'linear_ar',
     'planar_nf',
+    'iaf'
 ]
 
 
@@ -36,7 +39,57 @@ def semi_broadcast(x, base):
         x = tf.expand_dims(x, 0)
     tx = tf.tile(x, multiples=tx_shape, name='semi_broadcast')
     return tx
-    
+
+
+# autoregressive neural network
+def linear_ar(name, id, z, hidden=None):
+    '''
+    Implement the linear autoregressive network for inverse autoregressive 
+    flow from (Kingma 2016).
+    :name: A string, to define the 
+    :id: Int
+    :z: A N-D Tensor, the original sample
+    :hidden: Linear autoregressive flow don't need hidden layer.
+    '''
+    # reshape z
+    dynamic_z_shape = tf.shape(z)
+    static_z_shape = z.get_shape()
+    ndim = static_z_shape.ndims
+    D = int(static_z_shape[ndim - 1])
+    z_in = tf.reshape(z, [-1, D])
+
+    # calculate diagonal mask
+    mask = []
+    for i in range(D):
+        maski = [0] * D
+        for j in range(D):
+            maski[j] = int(i < j) * 1.0
+        mask.append(maski)
+    tfmask = tf.constant(mask, dtype=tf.float32)
+
+    with tf.name_scope(name + '%d' % id):
+        mW = tf.Variable(random_value([D, D]), name='mW')
+        sW = tf.Variable(random_value([D, D]), name='mW')
+
+        mW = tfmask * mW
+        sW = tfmask * sW
+
+        '''mW = semi_broadcast(mW, z)
+        sW = semi_broadcast(sW, z)'''
+
+        m = tf.matmul(z_in, mW)
+        s = tf.matmul(z_in, sW)
+
+        m = tf.reshape(m, dynamic_z_shape)
+        s = tf.reshape(s, dynamic_z_shape)
+        s = tf.exp(s)
+
+    return (m, s)
+
+
+def MADE(name, id, z, hidden):
+    return None
+
 
 def planar_nf(sample, log_prob, iters):
     '''
@@ -103,4 +156,23 @@ def planar_nf(sample, log_prob, iters):
         z = z + tf.matmul(activation, para_u, name='update_calc')
 
     return (z, log_prob - sum(log_det_ja))
+
+
+def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
+    joint_prob = log_prob
+    z = sample
+    for iter in range(iters):
+        m, s = autoregressiveNN('iaf', iter, sample, hidden)
+
+        if update == 'gru':
+            sigma = tf.sigmoid(s)
+            z = sigma * z + (1 - sigma) * m
+            joint_prob = joint_prob - tf.reduce_sum(tf.log(sigma), axis=-1)
+
+        if update == 'normal':
+            z = s * z + m
+            joint_prob = joint_prob - tf.reduce_sum(tf.log(s), axis=-1)
+
+    return (z, joint_prob)
+
 
