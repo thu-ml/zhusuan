@@ -276,7 +276,7 @@ class Dirichlet(Distribution):
         if static_alpha_shape and (static_alpha_shape.ndims < 1):
             raise ValueError(shape_err_msg)
         elif static_alpha_shape and (static_alpha_shape[-1]):
-            self._n_categories = static_alpha_shape[-1]
+            self._n_categories = static_alpha_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
                 self._alpha, 1, message=shape_err_msg)
@@ -323,16 +323,24 @@ class Dirichlet(Distribution):
 
     def _log_prob(self, given):
         alpha = self.alpha
-        if given.get_shape().is_fully_defined() and \
-                alpha.get_shape().is_fully_defined():
-            if given.get_shape() != self.alpha.get_shape():
-                given, alpha = explicit_broadcast(given, alpha,
-                                                  'given', 'alpha')
+        if not (given.get_shape() and alpha.get_shape()):
+            given, alpha = explicit_broadcast(given, alpha,
+                                               'given', 'alpha')
         else:
-            given, alpha = tf.cond(
-                tf.equal(tf.shape(given), tf.shape(alpha)),
-                lambda: (given, alpha),
-                lambda: explicit_broadcast(given, alpha, 'given', 'alpha'))
+            if given.get_shape().ndims != alpha.get_shape().ndims:
+                given, alpha = explicit_broadcast(given, alpha,
+                                                   'given', 'alpha')
+            elif given.get_shape().is_fully_defined() and \
+                    alpha.get_shape().is_fully_defined():
+                if given.get_shape() != alpha.get_shape():
+                    given, alpha = explicit_broadcast(given, alpha,
+                                                      'given', 'alpha')
+            else:
+                given, alpha = tf.cond(
+                    is_same_dynamic_shape(given, alpha),
+                    lambda: (given, alpha),
+                    lambda: explicit_broadcast(given, alpha,
+                                               'given', 'alpha'))
         log_Beta_alpha = tf.lbeta(alpha)
         log_given = tf.log(given)
         if self._check_numerics:
