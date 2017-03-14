@@ -63,7 +63,7 @@ class StochasticTensor(object):
                 self._tensor = self.sample()
         return self._tensor
 
-    def sample(self, **kwargs):
+    def sample(self):
         """
         Return samples from the distribution.
 
@@ -77,7 +77,17 @@ class StochasticTensor(object):
 
         :param given: A Tensor. The value at which to evaluate log probability
             density (mass) function.
-        :return: A Tensor. The log probability density (mass) evaluated.
+        :return: A Tensor. The log probability density (mass) value.
+        """
+        raise NotImplementedError()
+
+    def prob(self, given):
+        """
+        Compute probability density (mass) function at `given` value.
+
+        :param given: A Tensor. The value at which to evaluate probability
+            density (mass) function.
+        :return: A Tensor. The probability density (mass) value.
         """
         raise NotImplementedError()
 

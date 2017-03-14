@@ -5,8 +5,6 @@ from __future__ import absolute_import
 from __future__ import division
 import os
 
-import os
-
 import tensorflow as tf
 from tensorflow.python.training import optimizer
 import numpy as np

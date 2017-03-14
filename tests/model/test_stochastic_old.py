@@ -10,7 +10,7 @@ import tensorflow as tf
 
 from tests.context import zhusuan
 from zhusuan.model.stochastic_old import *
-from zhusuan.model.base_old import StochasticGraph
+from zhusuan.model.base import StochasticGraph
 from zhusuan.model.utils import get_backward_ops
 
 

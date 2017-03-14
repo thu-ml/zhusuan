@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 import dataset
-import utils
 
 
 @zs.reuse('model')
@@ -210,7 +209,8 @@ if __name__ == "__main__":
                 print('Saving model...')
                 save_path = os.path.join(result_path,
                                          "vae.epoch.{}.ckpt".format(epoch))
-                utils.makedirs(save_path)
+                if not os.path.exists(os.path.dirname(save_path)):
+                    os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
                 print('Done')
 
