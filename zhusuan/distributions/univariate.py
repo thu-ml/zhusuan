@@ -210,7 +210,8 @@ class Categorical(Distribution):
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
-        elif static_logits_shape and (static_logits_shape[-1]):
+        elif static_logits_shape and (
+                static_logits_shape[-1].value is not None):
             self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(

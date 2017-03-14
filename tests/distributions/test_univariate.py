@@ -344,15 +344,17 @@ class TestCategorical(tf.test.TestCase):
         cat = Categorical(tf.ones([10]))
         self.assertTrue(isinstance(cat.n_categories, int))
         self.assertEqual(cat.n_categories, 10)
+        cat2 = Categorical(tf.placeholder(tf.float32, [3, None]))
+        self.assertTrue(cat2.n_categories is not None)
 
         with self.test_session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
-            cat2 = Categorical(logits)
+            cat3 = Categorical(logits)
             self.assertEqual(
-                cat2.n_categories.eval(feed_dict={logits: np.ones([10])}), 10)
+                cat3.n_categories.eval(feed_dict={logits: np.ones([10])}), 10)
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "should have rank"):
-                cat2.n_categories.eval(feed_dict={logits: 1.})
+                cat3.n_categories.eval(feed_dict={logits: 1.})
 
     def test_value_shape(self):
         # static

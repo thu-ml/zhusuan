@@ -45,8 +45,7 @@ def log_combination(n, ks):
     """
     n = tf.convert_to_tensor(n, tf.float32)
     ks = tf.convert_to_tensor(ks, tf.float32)
-    return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1,
-                                            keep_dims=True)
+    return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1)
 
 
 def explicit_broadcast(x, y, x_name, y_name):

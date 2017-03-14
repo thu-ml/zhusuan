@@ -46,7 +46,8 @@ class Multinomial(Distribution):
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
-        elif static_logits_shape and (static_logits_shape[-1]):
+        elif static_logits_shape and (
+                static_logits_shape[-1].value is not None):
             self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
@@ -93,7 +94,7 @@ class Multinomial(Distribution):
         return self._n_experiments
 
     def _value_shape(self):
-        return tf.convert_to_tensor(self.n_categories, tf.int32)
+        return tf.convert_to_tensor([self.n_categories], tf.int32)
 
     def _get_value_shape(self):
         if isinstance(self.n_categories, int):
@@ -118,7 +119,6 @@ class Multinomial(Distribution):
         shape = tf.concat([[n_samples, self.n_experiments],
                            self.batch_shape], 0)
         samples = tf.reshape(samples_flat, shape)
-        print(self.n_categories)
         samples = tf.reduce_sum(
             tf.one_hot(samples, self.n_categories, dtype=tf.int32), axis=1)
         return samples
@@ -147,7 +147,7 @@ class Multinomial(Distribution):
         normalized_logits = logits - tf.reduce_logsumexp(
             logits, axis=-1, keep_dims=True)
         log_p = log_combination(self.n_experiments, given) + \
-            given * normalized_logits
+            tf.reduce_sum(given * normalized_logits, -1)
         return log_p
 
     def _prob(self, given):
@@ -180,7 +180,8 @@ class OnehotCategorical(Distribution):
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
-        elif static_logits_shape and (static_logits_shape[-1]):
+        elif static_logits_shape and (
+                static_logits_shape[-1].value is not None):
             self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
@@ -206,7 +207,7 @@ class OnehotCategorical(Distribution):
         return self._n_categories
 
     def _value_shape(self):
-        return tf.convert_to_tensor(self.n_categories, tf.int32)
+        return tf.convert_to_tensor([self.n_categories], tf.int32)
 
     def _get_value_shape(self):
         if isinstance(self.n_categories, int):
@@ -256,17 +257,22 @@ class OnehotCategorical(Distribution):
                     lambda: (given, logits),
                     lambda: explicit_broadcast(given, logits,
                                                'given', 'logits'))
-        if (logits.get_shape().ndims == 2) or (given.get_shape().ndims == 2):
-            logits_flat = logits
+        if (given.get_shape().ndims == 2) or (logits.get_shape().ndims == 2):
             given_flat = given
+            logits_flat = logits
         else:
-            logits_flat = tf.reshape(logits, [-1, self.n_categories])
             given_flat = tf.reshape(given, [-1, self.n_categories])
+            logits_flat = tf.reshape(logits, [-1, self.n_categories])
         log_p_flat = -tf.nn.softmax_cross_entropy_with_logits(
             labels=given_flat, logits=logits_flat)
-        if (logits.get_shape().ndims == 2) or (given.get_shape().ndims == 2):
-            return log_p_flat
-        return tf.reshape(log_p_flat, tf.shape(logits))
+        if (given.get_shape().ndims == 2) or (logits.get_shape().ndims == 2):
+            log_p = log_p_flat
+        else:
+            log_p = tf.reshape(log_p_flat, tf.shape(logits)[:-1])
+            if given.get_shape() and logits.get_shape():
+                log_p.set_shape(tf.broadcast_static_shape(
+                    given.get_shape(), logits.get_shape())[:-1])
+        return log_p
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -302,7 +308,8 @@ class Dirichlet(Distribution):
         shape_err_msg = "alpha should have rank >= 1."
         if static_alpha_shape and (static_alpha_shape.ndims < 1):
             raise ValueError(shape_err_msg)
-        elif static_alpha_shape and (static_alpha_shape[-1]):
+        elif static_alpha_shape and (
+                static_alpha_shape[-1].value is not None):
             self._n_categories = static_alpha_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
