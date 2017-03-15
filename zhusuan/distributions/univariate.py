@@ -220,6 +220,7 @@ class Categorical(Distribution):
                 self._logits = tf.identity(self._logits)
             self._n_categories = tf.shape(self._logits)[-1]
 
+        # TODO: add type argument for distributions
         super(Categorical, self).__init__(
             dtype=tf.int32,
             is_continuous=False,

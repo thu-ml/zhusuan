@@ -118,7 +118,7 @@ class StochasticTensor(object):
             density (mass) function.
         :return: A Tensor. The probability density (mass) value.
         """
-        raise self._distribution.prob(given)
+        return self._distribution.prob(given)
 
     # overloading arithmetic operations
     def __abs__(self):
@@ -212,7 +212,7 @@ class StochasticTensor(object):
                              "'{}' for variable of type '{}'".
                              format(dtype.name, value.dtype.name))
         if as_ref:
-            raise ValueError("{}: Ref type is not supported.".format(value))
+            raise ValueError("{}: Ref type not supported.".format(value))
         return value.tensor
 
 
