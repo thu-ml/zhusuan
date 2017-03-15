@@ -325,6 +325,7 @@ class Uniform(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,

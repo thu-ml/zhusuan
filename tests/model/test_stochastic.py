@@ -9,13 +9,13 @@ import numpy as np
 import tensorflow as tf
 
 from tests.context import zhusuan
-from zhusuan.model.stochastic_old import *
-from zhusuan.model.base_old import StochasticGraph
+from zhusuan.model.stochastic import *
+from zhusuan.model.base import BayesianNet
 from zhusuan.model.utils import get_backward_ops
 
 
 def test_Uniform():
-    with StochasticGraph() as model:
+    with BayesianNet() as model:
         minval = tf.zeros([2, 3])
         maxval = tf.ones([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
@@ -28,7 +28,7 @@ def test_Uniform():
 
 
 def test_Normal():
-    with StochasticGraph() as model:
+    with BayesianNet() as model:
         mean = tf.zeros([2, 3])
         logstd = tf.zeros([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
@@ -41,7 +41,7 @@ def test_Normal():
 
 
 def test_Bernoulli():
-    with StochasticGraph() as model:
+    with BayesianNet() as model:
         logits = tf.zeros([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
         n_samples = tf.placeholder(tf.int32, shape=())
@@ -53,7 +53,7 @@ def test_Bernoulli():
 
 
 def test_Discrete():
-    with StochasticGraph() as model:
+    with BayesianNet() as model:
         logits = tf.zeros([2, 3])
         sample_dim = tf.placeholder(tf.int32, shape=())
         n_samples = tf.placeholder(tf.int32, shape=())

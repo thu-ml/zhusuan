@@ -4,17 +4,19 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+from itertools import permutations
 
+import pytest
 from mock import Mock
 import numpy as np
 import tensorflow as tf
 
 from tests.context import zhusuan
-from zhusuan.model.base import *
-from zhusuan.model.stochastic import *
+from zhusuan.model.base_old import *
+from zhusuan.model.stochastic_old import *
 
 
-class TestStochasticTensor(tf.test.TestCase):
+class TestStochasticTensor:
     def test_init(self):
         _sample = Mock()
 
@@ -22,14 +24,14 @@ class TestStochasticTensor(tf.test.TestCase):
             def sample(self):
                 return _sample
         incomings = [Mock()]
-        with BayesianNet() as m1:
+        with StochasticGraph() as m1:
             s_tensor = _Dist('a', incomings)
         assert s_tensor.incomings is incomings
         assert s_tensor.tensor is _sample
         assert s_tensor.s_graph is m1
 
         _observed = tf.ones(2)
-        with BayesianNet(observed={'a': _observed, 'b': _observed}):
+        with StochasticGraph(observed={'a': _observed, 'b': _observed}):
             a = _Dist('a', incomings, dtype=tf.float32)
             b = _Dist('b', incomings, dtype=tf.int32)
         assert a.tensor is _observed
@@ -37,7 +39,7 @@ class TestStochasticTensor(tf.test.TestCase):
             _ = b.tensor
 
     def test_sample(self):
-        mock_graph = BayesianNet()
+        mock_graph = StochasticGraph()
         mock_graph.add_stochastic_tensor = Mock(return_value=None)
         with mock_graph:
             s_tensor = StochasticTensor('a', [Mock()])
@@ -45,7 +47,7 @@ class TestStochasticTensor(tf.test.TestCase):
             s_tensor.sample()
 
     def test_log_p(self):
-        mock_graph = BayesianNet()
+        mock_graph = StochasticGraph()
         mock_graph.add_stochastic_tensor = Mock(return_value=None)
         with mock_graph:
             s_tensor = StochasticTensor('a', [Mock()])
@@ -53,7 +55,7 @@ class TestStochasticTensor(tf.test.TestCase):
             s_tensor.log_prob(Mock())
 
     def test_tensor_conversion(self):
-        with BayesianNet(observed={'a': 1., 'c': tf.ones([])}) as model:
+        with StochasticGraph(observed={'a': 1., 'c': tf.ones([])}) as model:
             a = StochasticTensor('a', [], dtype=tf.float32)
             b = tf.add(1., a)
             c = StochasticTensor('c', [], dtype=tf.int32)
@@ -65,7 +67,7 @@ class TestStochasticTensor(tf.test.TestCase):
             StochasticTensor._to_tensor(a, as_ref=True)
 
     def test_overload_operator(self):
-        with BayesianNet(observed={'a': 1.}) as model:
+        with StochasticGraph(observed={'a': 1.}) as model:
             a = StochasticTensor('a', [], dtype=tf.float32)
             b = a + 1
             # TODO: test all operators
@@ -73,23 +75,23 @@ class TestStochasticTensor(tf.test.TestCase):
             assert np.abs(sess.run(b) - 2) < 1e-6
 
 
-class TestBayesianNet(tf.test.TestCase):
+class TestStochasticGraph:
     def test_init(self):
-        with BayesianNet() as model:
-            assert BayesianNet.get_context() == model
+        with StochasticGraph() as model:
+            assert StochasticGraph.get_context() == model
         with pytest.raises(RuntimeError):
-            BayesianNet.get_context()
+            StochasticGraph.get_context()
 
     def test_add_stochastic_tensor(self):
         s_tensor = Mock(name=Mock())
-        model = BayesianNet()
+        model = StochasticGraph()
         model._add_stochastic_tensor(s_tensor)
         assert model.stochastic_tensors[s_tensor.name] == s_tensor
 
     def test_query(self):
         # outputs
         a_observed = tf.zeros([])
-        with BayesianNet({'a': a_observed}) as model:
+        with StochasticGraph({'a': a_observed}) as model:
             a = Normal('a', 0, 1)
             b = Normal('b', 0, 1)
             c = Normal('c', b, 1)
@@ -130,15 +132,14 @@ class TestBayesianNet(tf.test.TestCase):
             assert np.abs(log_pc_out - log_pc_t_out) < 1e-6
 
 
-class TestReuse(tf.test.TestCase):
-    def test_reuse():
-        @reuse("test")
-        def f():
-            w = tf.get_variable("w", shape=[])
-            return w
+def test_reuse():
+    @reuse("test")
+    def f():
+        w = tf.get_variable("w", shape=[])
+        return w
 
-        w1 = f()
-        w2 = f()
-        w3 = f()
-        assert w1 is w2
-        assert w2 is w3
+    w1 = f()
+    w2 = f()
+    w3 = f()
+    assert w1 is w2
+    assert w2 is w3
