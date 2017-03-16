@@ -2,18 +2,16 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from __future__ import print_function
 from __future__ import division
-from itertools import permutations
+from __future__ import print_function
 
-import pytest
-from mock import Mock
 import numpy as np
+import pytest
 import tensorflow as tf
+from mock import Mock
 
-from tests.context import zhusuan
-from zhusuan.model.base_old import *
-from zhusuan.model.stochastic_old import *
+from zhusuan.model_old.base_old import *
+from zhusuan.model_old.stochastic_old import *
 
 
 class TestStochasticTensor:

@@ -8,7 +8,7 @@ from __future__ import division
 import tensorflow as tf
 
 from zhusuan.distributions_old import *
-from .base import StochasticTensor
+from .base_old import StochasticTensor
 
 
 __all__ = [

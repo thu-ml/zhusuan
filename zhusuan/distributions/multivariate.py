@@ -124,7 +124,6 @@ class Multinomial(Distribution):
         return samples
 
     def _log_prob(self, given):
-        given = tf.to_float(given)
         logits = self.logits
         if not (given.get_shape() and logits.get_shape()):
             given, logits = explicit_broadcast(given, logits,
@@ -147,7 +146,7 @@ class Multinomial(Distribution):
         normalized_logits = logits - tf.reduce_logsumexp(
             logits, axis=-1, keep_dims=True)
         log_p = log_combination(self.n_experiments, given) + \
-            tf.reduce_sum(given * normalized_logits, -1)
+            tf.reduce_sum(tf.to_float(given) * normalized_logits, -1)
         return log_p
 
     def _prob(self, given):

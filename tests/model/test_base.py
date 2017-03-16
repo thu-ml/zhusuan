@@ -6,7 +6,6 @@ from __future__ import print_function
 from __future__ import division
 
 from mock import Mock
-import numpy as np
 import tensorflow as tf
 
 from tests.context import zhusuan

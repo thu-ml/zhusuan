@@ -11,7 +11,7 @@ import re
 from six.moves import zip
 import tensorflow as tf
 
-from .utils import Context
+from .utils_old import Context
 
 
 __all__ = [

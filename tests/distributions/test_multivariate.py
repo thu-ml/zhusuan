@@ -153,7 +153,8 @@ class TestMultinomial(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape, given_shape, target_shape):
                 logits = tf.placeholder(tf.float32, None)
-                dist = Multinomial(logits, 1)
+                n_experiments = tf.placeholder(tf.int32, [])
+                dist = Multinomial(logits, n_experiments)
                 given = tf.placeholder(tf.int32, None)
                 log_p = dist.log_prob(given)
 
@@ -168,6 +169,7 @@ class TestMultinomial(tf.test.TestCase):
                 self.assertEqual(
                     tf.shape(log_p).eval(
                         feed_dict={logits: logits_,
+                                   n_experiments: 1,
                                    given: given_}).tolist(),
                     target_shape)
 

@@ -2,16 +2,15 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from __future__ import print_function
 from __future__ import division
+from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
 
-from tests.context import zhusuan
-from zhusuan.model.stochastic_old import *
-from zhusuan.model.base_old import StochasticGraph
-from zhusuan.model.utils import get_backward_ops
+from zhusuan.model_old.utils_old import get_backward_ops
+from zhusuan.model_old.base_old import StochasticGraph
+from zhusuan.model_old.stochastic_old import *
 
 
 def test_Uniform():
