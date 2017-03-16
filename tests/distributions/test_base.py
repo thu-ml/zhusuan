@@ -98,16 +98,16 @@ class TestDistributions(tf.test.TestCase):
             samples_1 = dist.sample()
             self.assertAllEqual(samples_1.eval(),
                                 np.ones((2, 3, 4, 5), dtype=np.int32))
-            samples_2 = dist.sample(n_samples=2)
-            self.assertAllEqual(samples_2.eval(),
-                                np.ones((2, 2, 3, 4, 5), dtype=np.int32))
+            for n in [1, 2]:
+                samples_2 = dist.sample(n_samples=n)
+                self.assertAllEqual(samples_2.eval(),
+                                    np.ones((n, 2, 3, 4, 5), dtype=np.int32))
             # dynamic n_samples
             n_samples = tf.placeholder(tf.int32)
             samples_3 = dist.sample(n_samples=n_samples)
-            self.assertAllEqual(samples_3.eval(feed_dict={n_samples: 1}),
-                                np.ones((2, 3, 4, 5), dtype=np.int32))
-            self.assertAllEqual(samples_3.eval(feed_dict={n_samples: 2}),
-                                np.ones((2, 2, 3, 4, 5), dtype=np.int32))
+            for n in [1, 2]:
+                self.assertAllEqual(samples_3.eval(feed_dict={n_samples: n}),
+                                    np.ones((n, 2, 3, 4, 5), dtype=np.int32))
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "should be a scalar"):
                 samples_3.eval(feed_dict={n_samples: [1, 2]})

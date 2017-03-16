@@ -89,10 +89,12 @@ class TestNormal(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2, 3], [], 1, [2, 3])
+        _test_static([2, 3], [], None, [2, 3])
+        _test_static([2, 3], [], 1, [1, 2, 3])
         _test_static([5], [5], 2, [2, 5])
         _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     None)
+                     [None, 3, 2])
+        _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
@@ -109,7 +111,7 @@ class TestNormal(tf.test.TestCase):
                                    logstd: np.zeros(logstd_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2, 3], [2, 1], 1, [2, 3])
+            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
             _test_dynamic([1, 3], [], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
@@ -252,10 +254,12 @@ class TestBernoulli(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2, 3], 1, [2, 3])
+        _test_static([2, 3], None, [2, 3])
+        _test_static([2, 3], 1, [1, 2, 3])
         _test_static([5], 2, [2, 5])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), None)
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
         _test_static(None, 1, None)
+        _test_static(None, None, None)
         _test_static([3, None], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
@@ -268,7 +272,7 @@ class TestBernoulli(tf.test.TestCase):
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2, 3], 1, [2, 3])
+            _test_dynamic([2, 3], 1, [1, 2, 3])
             _test_dynamic([1, 3], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
@@ -408,11 +412,15 @@ class TestCategorical(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2], 1, [])
-        _test_static([2, 3], 1, [2])
+        _test_static([2], None, [])
+        _test_static([2], 1, [1])
+        _test_static([2, 3], None, [2])
+        _test_static([2, 3], 1, [1, 2])
         _test_static([5], 2, [2])
-        _test_static([1, 2, 4], 1, [1, 2])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), None)
+        _test_static([1, 2, 4], None, [1, 2])
+        _test_static([1, 2, 4], 1, [1, 1, 2])
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None])
+        _test_static(None, None, None)
         _test_static(None, 1, None)
         _test_static([3, None], 2, [2, 3])
 
@@ -426,8 +434,8 @@ class TestCategorical(tf.test.TestCase):
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2], 1, [])
-            _test_dynamic([2, 3], 1, [2])
+            _test_dynamic([2], 1, [1])
+            _test_dynamic([2, 3], 1, [1, 2])
             _test_dynamic([1, 3], 2, [2, 1])
             _test_dynamic([2, 1, 5], 3, [3, 2, 1])
 
@@ -577,9 +585,12 @@ class TestUniform(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2, 3], [], 1, [2, 3])
+        _test_static([2, 3], [], None, [2, 3])
+        _test_static([2, 3], [], 1, [1, 2, 3])
         _test_static([5], [5], 2, [2, 5])
-        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []), None)
+        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
+                     [None, 3, 2])
+        _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
@@ -596,7 +607,7 @@ class TestUniform(tf.test.TestCase):
                                    maxval: np.ones(maxval_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2, 3], [2, 1], 1, [2, 3])
+            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
             _test_dynamic([1, 3], [], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
@@ -761,10 +772,12 @@ class TestGamma(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2, 3], [], 1, [2, 3])
+        _test_static([2, 3], [], None, [2, 3])
+        _test_static([2, 3], [], 1, [1, 2, 3])
         _test_static([5], [5], 2, [2, 5])
         _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     None)
+                     [None, 3, 2])
+        _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
@@ -781,7 +794,7 @@ class TestGamma(tf.test.TestCase):
                                    beta: np.ones(beta_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2, 3], [2, 1], 1, [2, 3])
+            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
             _test_dynamic([1, 3], [], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
@@ -940,11 +953,13 @@ class TestBeta(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2, 3], [], 1, [2, 3])
+        _test_static([2, 3], [], None, [2, 3])
+        _test_static([2, 3], [], 1, [1, 2, 3])
         _test_static([5], [5], 2, [2, 5])
         _test_static([2, 1, 4], [1, 2, 4], 3, [3, 2, 2, 4])
         _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     None)
+                     [None, 3, 2])
+        _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
@@ -961,7 +976,7 @@ class TestBeta(tf.test.TestCase):
                                    beta: np.ones(beta_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2, 3], [2, 1], 1, [2, 3])
+            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
             _test_dynamic([1, 3], [], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,

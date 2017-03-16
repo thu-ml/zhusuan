@@ -104,11 +104,14 @@ class TestMultinomial(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2], 1, [2])
-        _test_static([2, 3], 1, [2, 3])
+        _test_static([2], None, [2])
+        _test_static([2], 1, [1, 2])
+        _test_static([2, 3], None, [2, 3])
+        _test_static([2, 3], 1, [1, 2, 3])
         _test_static([5], 2, [2, 5])
         _test_static([1, 2, 4], 3, [3, 1, 2, 4])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), None)
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+        _test_static(None, None, None)
         _test_static(None, 1, None)
         _test_static([3, None], 2, [2, 3, None])
 
@@ -122,8 +125,8 @@ class TestMultinomial(tf.test.TestCase):
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2], 1, [2])
-            _test_dynamic([2, 3], 1, [2, 3])
+            _test_dynamic([2], 1, [1, 2])
+            _test_dynamic([2, 3], 1, [1, 2, 3])
             _test_dynamic([1, 3], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
@@ -280,11 +283,14 @@ class TestOnehotCategorical(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2], 1, [2])
-        _test_static([2, 3], 1, [2, 3])
+        _test_static([2], None, [2])
+        _test_static([2], 1, [1, 2])
+        _test_static([2, 3], None, [2, 3])
+        _test_static([2, 3], 1, [1, 2, 3])
         _test_static([5], 2, [2, 5])
         _test_static([1, 2, 4], 3, [3, 1, 2, 4])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), None)
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+        _test_static(None, None, None)
         _test_static(None, 1, None)
         _test_static([3, None], 2, [2, 3, None])
 
@@ -298,8 +304,8 @@ class TestOnehotCategorical(tf.test.TestCase):
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2], 1, [2])
-            _test_dynamic([2, 3], 1, [2, 3])
+            _test_dynamic([2], 1, [1, 2])
+            _test_dynamic([2, 3], 1, [1, 2, 3])
             _test_dynamic([1, 3], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
@@ -468,11 +474,14 @@ class TestDirichlet(tf.test.TestCase):
             else:
                 self.assertEqual(None, target_shape)
 
-        _test_static([2], 1, [2])
-        _test_static([2, 3], 1, [2, 3])
+        _test_static([2], None, [2])
+        _test_static([2], 1, [1, 2])
+        _test_static([2, 3], None, [2, 3])
+        _test_static([2, 3], 1, [1, 2, 3])
         _test_static([5], 2, [2, 5])
         _test_static([1, 2, 4], 3, [3, 1, 2, 4])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), None)
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+        _test_static(None, None, None)
         _test_static(None, 1, None)
         _test_static([3, None], 2, [2, 3, None])
 
@@ -486,8 +495,8 @@ class TestDirichlet(tf.test.TestCase):
                         feed_dict={alpha: np.zeros(alpha_shape)}).tolist(),
                     target_shape)
 
-            _test_dynamic([2], 1, [2])
-            _test_dynamic([2, 3], 1, [2, 3])
+            _test_dynamic([2], 1, [1, 2])
+            _test_dynamic([2, 3], 1, [1, 2, 3])
             _test_dynamic([1, 3], 2, [2, 1, 3])
             _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 

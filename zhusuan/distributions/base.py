@@ -25,9 +25,10 @@ class Distribution(object):
     of non-batch input parameter, `batch_shape` represents how many independent
     inputs are fed into the distribution.
 
-    Samples generated are of shape `(n + )batch_shape + value_shape`. For
-    `n=1`, the first additional axis is omitted. `value_shape` is the non-batch
-    value shape of the distribution. For a univariate distribution,
+    Samples generated are of shape `(n_samples + )batch_shape + value_shape`.
+    The first additional axis is omitted only when passed `n_samples` is None (
+    by default), in which case one sample is generated. `value_shape` is the
+    non-batch value shape of the distribution. For a univariate distribution,
     its `value_shape` is [].
 
     There are cases where a batch of random variables are grouped into a
@@ -168,21 +169,23 @@ class Distribution(object):
         raise NotImplementedError()
 
     @add_name_scope
-    def sample(self, n_samples=1):
+    def sample(self, n_samples=None):
         """
-        Return samples from the distribution. For `n_samples` larger than 1,
-        the returned Tensor has a new sample dimension with size `n_samples`
-        inserted at `axis=0`.
+        Return samples from the distribution. When `n_samples` is None (by
+        default), one sample of shape `batch_shape + value_shape` is generated.
+        For a scalar `n_samples`, the returned Tensor has a new sample
+        dimension with size `n_samples` inserted at `axis=0`, i.e., the shape
+        of samples is `[n_samples] + batch_shape + value_shape`.
 
-        :param n_samples: A 0-D `int32` Tensor. How many independent samples
-            to draw from the distribution.
+        :param n_samples: A 0-D `int32` Tensor or None. How many independent
+            samples to draw from the distribution.
         :return: A Tensor of samples.
         """
+        if n_samples is None:
+            samples = self._sample(n_samples=1)
+            return tf.squeeze(samples, axis=0)
         if isinstance(n_samples, int):
-            samples = self._sample(n_samples)
-            if n_samples == 1:
-                return tf.squeeze(samples, axis=0)
-            return samples
+            return self._sample(n_samples)
         else:
             n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
             _assert_rank_op = tf.assert_rank(
@@ -190,9 +193,7 @@ class Distribution(object):
                 message="n_samples should be a scalar (0-D Tensor).")
             with tf.control_dependencies([_assert_rank_op]):
                 samples = self._sample(n_samples)
-            return tf.cond(tf.equal(n_samples, 1),
-                           lambda: tf.squeeze(samples, axis=0),
-                           lambda: samples)
+            return samples
 
     def _sample(self, n_samples):
         """
