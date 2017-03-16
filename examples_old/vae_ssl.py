@@ -20,54 +20,37 @@ import dataset
 
 @zs.reuse('model')
 def M2(observed, n, n_x, n_y, n_z, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
-        z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
-        y_logits = tf.zeros([n, n_y])
-        y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
-        lx_zy = layers.fully_connected(tf.concat([z, tf.to_float(y)], 2), 500)
+    with zs.StochasticGraph(observed=observed) as model:
+        z_mean = tf.zeros([n_particles, n_z])
+        z_logstd = tf.zeros([n_particles, n_z])
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+        y_logits = tf.zeros([n_particles, n_y])
+        y = zs.Discrete('y', y_logits, sample_dim=1, n_samples=n)
+        lx_zy = layers.fully_connected(tf.concat([z, y], 2), 500)
         lx_zy = layers.fully_connected(lx_zy, 500)
         x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits)
     return model
 
 
-@zs.reuse('qz_xy')
-def qz_xy(x, y, n_z):
-    lz_xy = layers.fully_connected(tf.to_float(tf.concat([x, y], -1)), 500)
-    lz_xy = layers.fully_connected(lz_xy, 500)
-    z_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-    z_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-    return z_mean, z_logstd
+@zs.reuse('variational')
+def qz_xy(x, y, n_z, n_particles):
+    with zs.StochasticGraph() as variational:
+        lz_xy = layers.fully_connected(tf.concat([x, y], 1), 500)
+        lz_xy = layers.fully_connected(lz_xy, 500)
+        lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
+        lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
+        z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
+                      n_samples=n_particles)
+    return variational
 
 
-@zs.reuse('qy_x')
+@zs.reuse('classifier')
 def qy_x(x, n_y):
-    ly_x = layers.fully_connected(tf.to_float(x), 500)
+    ly_x = layers.fully_connected(x, 500)
     ly_x = layers.fully_connected(ly_x, 500)
-    y_logits = layers.fully_connected(ly_x, n_y, activation_fn=None)
-    return y_logits
-
-
-def labeled_proposal(x, y, n_z, n_particles):
-    with zs.BayesianNet() as proposal:
-        z_mean, z_logstd = qz_xy(x, y, n_z)
-        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
-                      group_event_ndims=1, is_reparameterized=False)
-    return proposal
-
-
-def unlabeled_proposal(x, n_y, n_z, n_particles):
-    with zs.BayesianNet() as proposal:
-        y_logits = qy_x(x, n_y)
-        y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
-        x_tiled = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
-        z_mean, z_logstd = qz_xy(x_tiled, y, n_z)
-        z = zs.Normal('z', z_mean, z_logstd, group_event_ndims=1,
-                      is_reparameterized=False)
-    return proposal
+    ly_x = layers.fully_connected(ly_x, n_y, activation_fn=None)
+    return ly_x
 
 
 if __name__ == "__main__":
@@ -87,7 +70,7 @@ if __name__ == "__main__":
     n_z = 100
 
     # Define training/evaluation parameters
-    ll_samples = 10
+    lb_samples = 10
     beta = 1200.
     epoches = 3000
     batch_size = 100
@@ -103,41 +86,54 @@ if __name__ == "__main__":
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
-                    tf.int32)
+                    tf.float32)
 
     def log_joint(observed):
         n = tf.shape(observed['x'])[1]
         model = M2(observed, n, n_x, n_y, n_z, n_particles)
-        log_px_zy, log_py, log_pz = model.local_log_prob(['x', 'y', 'z'])
-        return log_px_zy + log_pz + log_py
+        log_px_zy, log_pz, log_py = model.local_log_prob(['x', 'z', 'y'])
+        return tf.reduce_sum(log_px_zy, -1) + tf.reduce_sum(log_pz, -1) + \
+            log_py
 
     # Labeled
-    x_labeled_ph = tf.placeholder(tf.int32, shape=(None, n_x), name='x_l')
+    x_labeled_ph = tf.placeholder(tf.float32, shape=[None, n_x], name='x_l')
     x_labeled_obs = tf.tile(tf.expand_dims(x_labeled_ph, 0),
                             [n_particles, 1, 1])
-    y_labeled_ph = tf.placeholder(tf.int32, shape=(None, n_y), name='y_l')
+    y_labeled_ph = tf.placeholder(tf.float32, shape=[None, n_y], name='y_l')
     y_labeled_obs = tf.tile(tf.expand_dims(y_labeled_ph, 0),
                             [n_particles, 1, 1])
-    proposal = labeled_proposal(x_labeled_ph, y_labeled_ph, n_z, n_particles)
-    qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
-    labeled_cost, labeled_log_likelihood = zs.rws(
-        log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
-        {'z': [qz_samples, log_qz]}, axis=0)
-    labeled_cost = tf.reduce_mean(labeled_cost)
-    labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
+    variational = qz_xy(x_labeled_ph, y_labeled_ph, n_z, n_particles)
+    qz_samples, log_qz = variational.query('z', outputs=True,
+                                           local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
+    labeled_lower_bound = tf.reduce_mean(
+        zs.advi(log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
+                {'z': [qz_samples, log_qz]}, axis=0))
 
     # Unlabeled
-    x_unlabeled_ph = tf.placeholder(tf.int32, shape=(None, n_x), name='x_u')
-    x_unlabeled_obs = tf.tile(tf.expand_dims(x_unlabeled_ph, 0),
-                              [n_particles, 1, 1])
-    proposal = unlabeled_proposal(x_unlabeled_ph, n_y, n_z, n_particles)
-    qy_samples, log_qy = proposal.query('y', outputs=True, local_log_prob=True)
-    qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
-    unlabeled_cost, unlabeled_log_likelihood = zs.rws(
-        log_joint, {'x': x_unlabeled_obs},
-        {'y': [qy_samples, log_qy], 'z': [qz_samples, log_qz]}, axis=0)
-    unlabeled_cost = tf.reduce_mean(unlabeled_cost)
-    unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
+    x_unlabeled_ph = tf.placeholder(tf.float32, shape=[None, n_x], name='x_u')
+    n = tf.shape(x_unlabeled_ph)[0]
+    y_diag = tf.diag(tf.ones(n_y))
+    y_u = tf.reshape(tf.tile(tf.expand_dims(y_diag, 0), [n, 1, 1]), [-1, n_y])
+    x_u = tf.reshape(tf.tile(tf.expand_dims(x_unlabeled_ph, 1), [1, n_y, 1]),
+                     [-1, n_x])
+    x_unlabeled_obs = tf.tile(tf.expand_dims(x_u, 0), [n_particles, 1, 1])
+    y_unlabeled_obs = tf.tile(tf.expand_dims(y_u, 0), [n_particles, 1, 1])
+    variational = qz_xy(x_u, y_u, n_z, n_particles)
+    qz_samples, log_qz = variational.query('z', outputs=True,
+                                           local_log_prob=True)
+    log_qz = tf.reduce_sum(log_qz, -1)
+    lb_z = zs.advi(log_joint, {'x': x_unlabeled_obs, 'y': y_unlabeled_obs},
+                   {'z': [qz_samples, log_qz]}, axis=0)
+    # sum over y
+    lb_z = tf.reshape(lb_z, [-1, n_y])
+    qy_logits_u = qy_x(x_unlabeled_ph, n_y)
+    qy_u = tf.reshape(tf.nn.softmax(qy_logits_u), [-1, n_y])
+    qy_u += 1e-8
+    qy_u /= tf.reduce_sum(qy_u, 1, keep_dims=True)
+    log_qy_u = tf.log(qy_u)
+    unlabeled_lower_bound = tf.reduce_mean(
+        tf.reduce_sum(qy_u * (lb_z - log_qy_u), 1))
 
     # Build classifier
     qy_logits_l = qy_x(x_labeled_ph, n_y)
@@ -146,12 +142,12 @@ if __name__ == "__main__":
     acc = tf.reduce_sum(
         tf.cast(tf.equal(pred_y, tf.argmax(y_labeled_ph, 1)), tf.float32) /
         tf.cast(tf.shape(x_labeled_ph)[0], tf.float32))
-    onehot_cat = zs.distributions.OnehotCategorical(qy_logits_l)
-    log_qy_x = onehot_cat.log_prob(y_labeled_ph)
+    log_qy_x = zs.discrete.logpmf(y_labeled_ph, qy_logits_l)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
 
     # Gather gradients
-    cost = (labeled_cost + unlabeled_cost + classifier_cost) / 2.
+    cost = -(labeled_lower_bound + unlabeled_lower_bound -
+             classifier_cost) / 2.
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
     grads = optimizer.compute_gradients(cost)
@@ -179,20 +175,17 @@ if __name__ == "__main__":
                 y_labeled_batch = t_labeled[labeled_indices]
                 x_unlabeled_batch = x_unlabeled[t * batch_size:
                                                 (t + 1) * batch_size]
-                x_unlabeled_batch = x_unlabeled[t * batch_size:
-                                                (t + 1) * batch_size]
                 x_labeled_batch_bin = sess.run(
                     x_bin, feed_dict={x_orig: x_labeled_batch})
                 x_unlabeled_batch_bin = sess.run(
                     x_bin, feed_dict={x_orig: x_unlabeled_batch})
                 _, lb_labeled, lb_unlabeled, train_acc = sess.run(
-                    [infer, labeled_log_likelihood, unlabeled_log_likelihood,
-                     acc],
+                    [infer, labeled_lower_bound, unlabeled_lower_bound, acc],
                     feed_dict={x_labeled_ph: x_labeled_batch_bin,
                                y_labeled_ph: y_labeled_batch,
                                x_unlabeled_ph: x_unlabeled_batch_bin,
                                learning_rate_ph: learning_rate,
-                               n_particles: ll_samples})
+                               n_particles: lb_samples})
                 lbs_labeled.append(lb_labeled)
                 lbs_unlabeled.append(lb_unlabeled)
                 train_accs.append(train_acc)
@@ -212,12 +205,11 @@ if __name__ == "__main__":
                     test_y_batch = t_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
-                        [labeled_log_likelihood, unlabeled_log_likelihood,
-                         acc],
+                        [labeled_lower_bound, unlabeled_lower_bound, acc],
                         feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
                                    x_unlabeled_ph: test_x_batch,
-                                   n_particles: ll_samples})
+                                   n_particles: lb_samples})
                     test_lls_labeled.append(test_ll_labeled)
                     test_lls_unlabeled.append(test_ll_unlabeled)
                     test_accs.append(test_acc)

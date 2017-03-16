@@ -86,7 +86,7 @@ class TestBayesianNet(tf.test.TestCase):
         s_tensor = Mock(name=Mock())
         model = BayesianNet()
         model._add_stochastic_tensor(s_tensor)
-        self.assertTrue(model.stochastic_tensors[s_tensor.name] is s_tensor)
+        self.assertTrue(model._stochastic_tensors[s_tensor.name] is s_tensor)
 
     def test_query(self):
         # outputs

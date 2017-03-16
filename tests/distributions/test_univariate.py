@@ -13,7 +13,8 @@ from tests.context import zhusuan
 from zhusuan.distributions.univariate import *
 
 
-# TODO: test samples
+# TODO: test sample value
+# TODO: test sample type
 
 
 class TestNormal(tf.test.TestCase):

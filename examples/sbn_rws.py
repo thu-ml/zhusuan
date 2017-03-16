@@ -20,7 +20,7 @@ import dataset
 
 @zs.reuse('model')
 def sbn(observed, n, n_x, n_z, n_particles, is_training):
-    with zs.StochasticGraph(observed=observed) as model:
+    with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n_particles, n_z])
         z = zs.Bernoulli('z', z_mean, sample_dim=1, n_samples=n)
         lh_z = layers.fully_connected(z, n_z, activation_fn=None)
@@ -35,7 +35,7 @@ def sbn(observed, n, n_x, n_z, n_particles, is_training):
 
 
 def q_net(x, n_z, n_particles, is_training):
-    with zs.StochasticGraph() as variational:
+    with zs.BayesianNet() as variational:
         lh_x = layers.fully_connected(x, n_z, activation_fn=None)
         h1 = zs.Bernoulli('h1', lh_x, sample_dim=0, n_samples=n_particles)
         lh_h = layers.fully_connected(h1, n_z, activation_fn=None)

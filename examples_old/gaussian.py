@@ -16,7 +16,7 @@ import zhusuan as zs
 
 
 def gaussian(observed, n_x, log_stdev, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         x_mean = tf.zeros([n_particles, n_x])
         x_logstd = log_stdev * tf.ones([n_particles, n_x])
         lx = zs.Normal('x', x_mean, x_logstd)

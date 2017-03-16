@@ -153,7 +153,7 @@ class Bernoulli(Distribution):
         p = tf.sigmoid(self.logits)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         alpha = tf.random_uniform(shape, minval=0, maxval=1)
-        samples = tf.cast(tf.less(alpha, p), dtype=tf.float32)
+        samples = tf.cast(tf.less(alpha, p), dtype=self.dtype)
         return samples
 
     def _log_prob(self, given):

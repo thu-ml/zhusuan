@@ -20,7 +20,7 @@ import dataset
 
 @zs.reuse('model')
 def var_dropout(observed, x, n, net_size, n_particles, is_training):
-    with zs.BayesianNet(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         h = x
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
@@ -40,7 +40,7 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
 
 @zs.reuse('variational')
 def q(observed, n, net_size, n_particles):
-    with zs.BayesianNet(observed=observed) as variational:
+    with zs.StochasticGraph(observed=observed) as variational:
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             with tf.variable_scope('layer' + str(i)):
                 logit_alpha = tf.get_variable('logit_alpha', [n_in])

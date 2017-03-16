@@ -19,7 +19,7 @@ import dataset
 
 @zs.reuse('model')
 def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         ws = []
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
@@ -48,7 +48,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
 
 
 def mean_field_variational(layer_sizes, n_particles):
-    with zs.BayesianNet() as variational:
+    with zs.StochasticGraph() as variational:
         ws = []
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):

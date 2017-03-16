@@ -27,7 +27,7 @@ log_delta = 10.0
 
 @zs.reuse('model')
 def lntm(observed, D, K, V):
-    with zs.BayesianNet(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         log_alpha = zs.Normal('log_alpha', tf.zeros([]), tf.zeros([]))
         beta = zs.Normal('beta', tf.zeros([K, V]),
                          tf.ones([K, V])*log_delta)

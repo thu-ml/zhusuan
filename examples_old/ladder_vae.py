@@ -34,7 +34,7 @@ from multi_gpu import FLAGS
 
 @zs.reuse('model')
 def ladder_vae(observed, n, n_particles, groups):
-    with zs.BayesianNet(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         h_top = tf.get_variable(name='h_top_p',
                                 shape=[1, 1, 1, groups[-1].num_filters],
                                 initializer=tf.constant_initializer(0.0))
@@ -50,7 +50,7 @@ def ladder_vae(observed, n, n_particles, groups):
 
 @zs.reuse('variational')
 def q_net(x, n_xl, n_particles, groups):
-    with zs.BayesianNet() as variational:
+    with zs.StochasticGraph() as variational:
         x = tf.reshape(x, [-1, n_xl, n_xl, 3])
         n = tf.shape(x)[0]
         h = layers.conv2d(x, groups[0].num_filters, 5, 2, activation_fn=None)

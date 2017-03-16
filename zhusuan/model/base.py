@@ -8,6 +8,7 @@ from collections import OrderedDict
 from functools import wraps
 import re
 
+import six
 from six.moves import zip
 import tensorflow as tf
 
@@ -229,7 +230,7 @@ class BayesianNet(Context):
     * Deterministic nodes, made up of any tensorflow operations.
     * Stochastic nodes, constructed by :class:`StochasticTensor`.
 
-    To start a BayesianNet context::
+    To start a `BayesianNet` context::
 
         import zhusuan as zs
         with zs.BayesianNet() as model:
@@ -273,7 +274,7 @@ class BayesianNet(Context):
 
     def __init__(self, observed=None):
         self.observed = observed if observed else {}
-        self.stochastic_tensors = OrderedDict()
+        self._stochastic_tensors = OrderedDict()
 
     def _add_stochastic_tensor(self, s_tensor):
         """
@@ -282,12 +283,12 @@ class BayesianNet(Context):
 
         :param s_tensor: A :class:`StochasticTensor` instance.
         """
-        if s_tensor.name in self.stochastic_tensors:
+        if s_tensor.name in self._stochastic_tensors:
             raise ValueError("There has been a StochasticTensor with name "
                              "'{}' in the network. Names should be unique".
                              format(s_tensor.name))
         else:
-            self.stochastic_tensors[s_tensor.name] = s_tensor
+            self._stochastic_tensors[s_tensor.name] = s_tensor
 
     def outputs(self, name_or_names):
         """
@@ -301,45 +302,45 @@ class BayesianNet(Context):
         :return: A Tensor or a list of Tensors.
         """
         if isinstance(name_or_names, (tuple, list)):
-            return [self.stochastic_tensors[name].tensor
+            return [self._stochastic_tensors[name].tensor
                     for name in name_or_names]
         else:
-            return self.stochastic_tensors[name_or_names].tensor
+            return self._stochastic_tensors[name_or_names].tensor
 
     def local_log_prob(self, name_or_names):
         """
-        Get local probability density (mass) values of StochasticTensors by
+        Get local probability density (mass) values of `StochasticTensor` s by
         their names. For observed variables, the probability is evaluated at
         their observed values; for latent variables, the probability is
         evaluated at their sampled values.
 
         :param name_or_names: A string or a list of strings. Names of
-            StochasticTensors in the network.
+            `StochasticTensor` s in the network.
         :return: A Tensor or a list of Tensors.
         """
         if isinstance(name_or_names, (tuple, list)):
             ret = []
             for name in name_or_names:
-                s_tensor = self.stochastic_tensors[name]
+                s_tensor = self._stochastic_tensors[name]
                 ret.append(s_tensor.log_prob(s_tensor.tensor))
         else:
-            s_tensor = self.stochastic_tensors[name_or_names]
+            s_tensor = self._stochastic_tensors[name_or_names]
             ret = s_tensor.log_prob(s_tensor.tensor)
         return ret
 
     def query(self, name_or_names, outputs=False, local_log_prob=False):
         """
-        Make probabilistic queries on the BayesianNet. Various options
+        Make probabilistic queries on the `BayesianNet`. Various options
         are available:
 
         * outputs: See `BayesianNet.outputs()`.
         * local_log_prob: See `BayesianNet.local_log_prob()`.
 
-        For each queried StochasticTensor, a tuple containing results of
+        For each queried `StochasticTensor`, a tuple containing results of
         selected options is returned.
 
         :param name_or_names: A string or a list of strings. Names of
-            StochasticTensors in the network.
+            `StochasticTensor` s in the network.
         :param outputs: A bool. Whether to query outputs.
         :param local_log_prob: A bool. Whether to query local log probability
             density (mass) values.
@@ -357,6 +358,22 @@ class BayesianNet(Context):
             return list(zip(*ret))
         else:
             return tuple(ret)
+
+    def log_joint(self):
+        """
+        Built-in log joint probability function for this Bayesian Network,
+        which automatically sums over all local log probabilities in the
+        network.
+
+        This is called when `BayesianNet` instance is passed to ZhuSuan's
+        inference objectives (e.g., `advi`). However, they may do things wrong
+        when the network has data sub-sampling. In that case, users should pass
+        `log_joint` function written by themselves to the inference objectives
+        instead of directly passing a `BayesianNet` instance.
+        """
+        return tf.add_n(
+            self.local_log_prob(list(six.iterkeys(self._stochastic_tensors))),
+            name='log_joint')
 
 
 def reuse(scope):

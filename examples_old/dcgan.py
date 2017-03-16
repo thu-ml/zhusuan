@@ -23,13 +23,16 @@ from multi_gpu import FLAGS
 
 @zs.reuse('generator')
 def generator(observed, n, n_z, is_training):
-    with zs.BayesianNet(observed=observed) as generator:
+    with zs.StochasticGraph(observed=observed) as generator:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
         ngf = 64
-        z_min = -tf.ones([n, n_z])
-        z_max = tf.ones([n, n_z])
-        z = zs.Uniform('z', z_min, z_max)
+        # z_min = -tf.ones([n_z])
+        # z_max = tf.ones([n_z])
+        # z = zs.Uniform('z', z_min, z_max, sample_dim=0, n_samples=n)
+        z_mean = tf.zeros([n_z])
+        z_logstd = tf.zeros([n_z])
+        z = zs.Normal('z', z_mean, z_logstd, sample_dim=0, n_samples=n)
         lx_z = layers.fully_connected(z, num_outputs=ngf*8*4*4,
                                       normalizer_fn=layers.batch_norm,
                                       normalizer_params=normalizer_params)
@@ -74,6 +77,8 @@ if __name__ == "__main__":
     x_train, t_train, x_test, t_test = \
         dataset.load_cifar10(data_path, normalize=True, one_hot=True)
     _, n_xl, _, n_channels = x_train.shape
+    # x_train -= np.mean(x_train, 0)
+    # x_test -= np.mean(x_train, 0)
     n_y = t_train.shape[1]
 
     # Define model parameters
@@ -110,14 +115,14 @@ if __name__ == "__main__":
                                          scope='generator')
         disc_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
                                           scope='discriminator')
-        disc_loss = (tf.reduce_mean(
+        disc_loss = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.ones_like(x_class_logits),
-                logits=x_class_logits)) +
+                logits=x_class_logits)) + \
             tf.reduce_mean(
                 tf.nn.sigmoid_cross_entropy_with_logits(
                     labels=tf.zeros_like(x_gen_class_logits),
-                    logits=x_gen_class_logits))) / 2.
+                    logits=x_gen_class_logits)) / 2.
         gen_loss = tf.reduce_mean(
             tf.nn.sigmoid_cross_entropy_with_logits(
                 labels=tf.ones_like(x_gen_class_logits),
@@ -143,8 +148,14 @@ if __name__ == "__main__":
     infer = optimizer.apply_gradients(grads)
     _, eval_x_gen = generator(None, gen_size, n_z, is_training)
 
+    # params = tf.trainable_variables()
+    # for i in params:
+    #     print(i.name, i.get_shape())
+
     gen_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,
                                      scope='generator')
+    for i in gen_var_list:
+        print(i.name, i.get_shape())
     saver = tf.train.Saver(max_to_keep=10, var_list=gen_var_list)
 
     # Run the inference

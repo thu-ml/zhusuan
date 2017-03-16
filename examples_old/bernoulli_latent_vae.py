@@ -19,59 +19,42 @@ import dataset
 
 
 @zs.reuse('model')
-def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
-    with zs.BayesianNet(observed=observed) as model:
+def vae(observed, n, n_x, n_z, n_particles, is_training):
+    with zs.StochasticGraph(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
-        z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
-        lx_z = tf.reshape(z, [-1, 1, 1, n_z])
-        lx_z = layers.conv2d_transpose(
-            lx_z, 128, kernel_size=3, padding='VALID',
-            normalizer_fn=layers.batch_norm,
+        z_logits = tf.zeros([n_particles, n_z])
+        z = zs.Bernoulli('z', z_logits, sample_dim=1, n_samples=n)
+        lx_z = layers.fully_connected(
+            z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lx_z = layers.conv2d_transpose(
-            lx_z, 64, kernel_size=5, padding='VALID',
-            normalizer_fn=layers.batch_norm,
+        lx_z = layers.fully_connected(
+            lx_z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lx_z = layers.conv2d_transpose(
-            lx_z, 32, kernel_size=5, stride=2,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lx_z = layers.conv2d_transpose(
-            lx_z, 1, kernel_size=5, stride=2,
-            activation_fn=None)
-        x_logits = tf.reshape(lx_z, [n_particles, n, -1])
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_logits)
     return model
 
 
-def q_net(x, n_xl, n_z, n_particles, is_training):
-    with zs.BayesianNet() as variational:
+def q_net(x, n_z, n_particles, is_training):
+    with zs.StochasticGraph() as variational:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
-        lz_x = tf.reshape(tf.to_float(x), [-1, n_xl, n_xl, 1])
-        lz_x = layers.conv2d(
-            lz_x, 32, kernel_size=5, stride=2,
-            normalizer_fn=layers.batch_norm,
+        lz_x = layers.fully_connected(
+            x, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lz_x = layers.conv2d(
-            lz_x, 64, kernel_size=5, stride=2,
-            normalizer_fn=layers.batch_norm,
+        lz_x = layers.fully_connected(
+            lz_x, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lz_x = layers.conv2d(
-            lz_x, 128, kernel_size=5, padding='VALID',
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lz_x = layers.dropout(lz_x, keep_prob=0.9, is_training=is_training)
-        lz_x = tf.reshape(lz_x, [-1, 128 * 3 * 3])
-        lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
+        z_logits = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        z = zs.Bernoulli('z', z_logits, sample_dim=0, n_samples=n_particles)
     return variational
+
+
+def baseline_net(x):
+    lc_x = layers.fully_connected(x, 100)
+    lc_x = layers.fully_connected(lc_x, 1, activation_fn=None)
+    return lc_x
 
 
 if __name__ == "__main__":
@@ -86,14 +69,13 @@ if __name__ == "__main__":
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_x = x_train.shape[1]
-    n_xl = int(np.sqrt(n_x))
 
     # Define model parameters
     n_z = 40
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 100
+    ll_samples = 50
     epoches = 3000
     batch_size = 100
     test_batch_size = 100
@@ -109,28 +91,33 @@ if __name__ == "__main__":
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
-                    tf.int32)
-    x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
+                    tf.float32)
+    x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = vae_conv(observed, n, n_x, n_z, n_particles, is_training)
+        model = vae(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-        return log_pz + log_px_z
+        return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
 
-    variational = q_net(x, n_xl, n_z, n_particles, is_training)
+    variational = q_net(x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+    log_qz = tf.reduce_sum(log_qz, -1)
+    cx = baseline_net(x)
+    cost, lower_bound = zs.nvil(
+        log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, baseline=cx,
+        axis=0, variance_normalization=False)
+    cost = tf.reduce_mean(cost)
+    lower_bound = tf.reduce_mean(lower_bound)
     log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
+    grads = optimizer.compute_gradients(cost)
     infer = optimizer.apply_gradients(grads)
 
     params = tf.trainable_variables()

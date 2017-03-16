@@ -20,7 +20,7 @@ import dataset
 
 @zs.reuse('model')
 def vae(observed, n, n_x, n_z, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
+    with zs.StochasticGraph(observed=observed) as model:
         normalizer_params = {'updates_collections': None}
         z_mean = tf.zeros([n_particles, n_z])
         z_logstd = tf.zeros([n_particles, n_z])
@@ -34,7 +34,7 @@ def vae(observed, n, n_x, n_z, n_particles):
 
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_particles):
-    with zs.BayesianNet(observed=observed) as variational:
+    with zs.StochasticGraph(observed=observed) as variational:
         normalizer_params = {'updates_collections': None}
         lz_x = layers.fully_connected(x, 500)
         lz_x = layers.fully_connected(lz_x, 500)
