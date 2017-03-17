@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from .distributions_old import *
-from .model_old import *
 import distributions
-# from .model import *
+from .model import *
 from .variational import *
 from .hmc import *
 from .evaluation import *

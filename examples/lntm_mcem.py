@@ -9,10 +9,8 @@ from __future__ import division
 import sys
 import os
 import time
-import random
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,27 +18,26 @@ import zhusuan as zs
 
 import dataset
 
+
 # corresponding to eta in LDA. Larger log_delta leads to sparser topic.
 # If we place a Gamma prior on precision, we should be able to sample it
 # analytically.
 log_delta = 10.0
 
+
 @zs.reuse('model')
 def lntm(observed, D, K, V):
     with zs.BayesianNet(observed=observed) as model:
-        log_alpha = zs.Normal('log_alpha', tf.zeros([]), tf.zeros([]))
-        beta = zs.Normal('beta', tf.zeros([K, V]),
-                         tf.ones([K, V])*log_delta)
-        eta = zs.Normal('eta', tf.zeros([D, K]),
-                        tf.ones([D, K])*log_alpha)
-
+        log_alpha = zs.Normal('log_alpha', 0., 0.)
+        beta = zs.Normal('beta', tf.zeros([K, V]), tf.ones([K, V]) * log_delta)
+        eta = zs.Normal('eta', tf.zeros([D, K]), tf.ones([D, K]) * log_alpha)
     return model
 
 
 if __name__ == "__main__":
     tf.set_random_seed(1237)
 
-    # Load MNIST
+    # Load nips dataset
     data_name = 'nips'
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              'data', data_name + '.pkl.gz')
@@ -54,8 +51,8 @@ if __name__ == "__main__":
     V = X.shape[1]
     current_log_alpha = 0.0
     num_e_steps = 5
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20,
-                 adapt_step_size=tf.constant(True), target_acceptance_rate=0.6)
+    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
+                 target_acceptance_rate=0.6)
     epoches = 100
     learning_rate_0 = 0.1
     t0 = 50
@@ -74,12 +71,13 @@ if __name__ == "__main__":
     # Build the computation graph
     x = tf.placeholder(tf.float32, shape=[D, V], name='x')
     log_alpha = tf.placeholder(tf.float32, name='log_alpha')
-    eta = tf.Variable(tf.zeros((D, K)), name='eta')
-    eta_ph = tf.Variable(tf.zeros((D, K)), name='eta_ph')
-    beta = tf.Variable(tf.zeros((K, V)), name='beta')
+    eta = tf.Variable(tf.zeros([D, K]), name='eta')
+    eta_ph = tf.Variable(tf.zeros([D, K]), name='eta_ph')
+    beta = tf.Variable(tf.zeros([K, V]), name='beta')
     phi = tf.nn.softmax(beta)
-    init_eta = tf.assign(eta, tf.zeros((D, K)))
+    init_eta = tf.assign(eta, tf.zeros([D, K]))
     init_eta_ph = tf.assign(eta, eta_ph)
+
 
     def joint_obj(observed):
         model = lntm(observed, D, K, V)
@@ -96,9 +94,11 @@ if __name__ == "__main__":
 
         return log_p_eta, log_p_beta, log_px, log_p_alpha
 
+
     def e_obj(observed):
         log_p_eta, _, log_px, _ = joint_obj(observed)
         return tf.reduce_sum(log_p_eta, -1) + log_px
+
 
     lp_eta, lp_beta, lp_x, lp_alpha = \
         joint_obj({'x': x, 'eta': eta, 'beta': beta,
@@ -108,11 +108,11 @@ if __name__ == "__main__":
     log_hyper_post = lp_alpha + tf.reduce_sum(lp_eta)
 
     # Optimize
-    sample = hmc.sample(e_obj, {'x': x, 'beta': beta, 'log_alpha': log_alpha},
-                        {'eta': eta}, chain_axis=0)
+    sample_op = hmc.sample(e_obj, {'x': x, 'beta': beta,
+                                   'log_alpha': log_alpha},
+                           {'eta': eta}, chain_axis=0)
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    #optimizer = tf.train.MomentumOptimizer(learning_rate_ph, 0.9)
     infer = optimizer.minimize(-log_joint, var_list=[beta])
 
     params = tf.trainable_variables()
@@ -128,24 +128,24 @@ if __name__ == "__main__":
 
             time_epoch = -time.time()
             perm = list(range(X.shape[0]))
-            random.shuffle(perm)
+            np.random.shuffle(perm)
             X = X[perm, :]
             Eta = Eta[perm, :]
             lls = []
             accs = []
             for t in range(iters):
-                x_batch = X[t*D : (t+1)*D]
-                old_eta = Eta[t*D:(t+1)*D, :]
+                x_batch = X[t * D: (t + 1) * D]
+                old_eta = Eta[t * D:(t + 1) * D, :]
                 # E step
                 sess.run(init_eta_ph, feed_dict={eta_ph: old_eta})
                 for j in range(num_e_steps):
-                    new_eta, _, _, _, _, _, acc, _ = \
-                        sess.run(sample, feed_dict={x: x_batch,
-                            log_alpha: current_log_alpha})
+                    new_eta, _, _, _, _, _, acc, _ = sess.run(
+                        sample_op, feed_dict={x: x_batch,
+                                              log_alpha: current_log_alpha})
                     accs.append(acc)
                     # Store eta for the persistent chain
-                    if j+1 == num_e_steps:
-                        Eta[t*D:(t+1)*D, :] = new_eta[0]
+                    if j + 1 == num_e_steps:
+                        Eta[t * D:(t + 1) * D, :] = new_eta[0]
 
                 # M step
                 _, ll = sess.run([infer, log_likelihood],
@@ -156,9 +156,10 @@ if __name__ == "__main__":
 
             # MH step for alpha
             current_lp = sess.run(log_hyper_post,
-                                 feed_dict={log_alpha: current_log_alpha})
+                                  feed_dict={log_alpha: current_log_alpha})
             for m in range(num_mh):
-                new_log_alpha = current_log_alpha + np.random.randn() * mh_stdev
+                new_log_alpha = current_log_alpha + np.random.randn() * \
+                    mh_stdev
                 new_lp = sess.run(log_hyper_post,
                                   feed_dict={log_alpha: new_log_alpha})
                 if np.random.rand() < np.exp(min(new_lp - current_lp, 0)):
@@ -175,11 +176,10 @@ if __name__ == "__main__":
         # Output topics
         p = sess.run(phi)
         for k in range(K):
-            rank = zip(list(p[k,:]), range(V))
+            rank = zip(list(p[k, :]), range(V))
             rank.sort()
             rank.reverse()
             sys.stdout.write('Topic {}: '.format(k))
             for i in range(10):
                 sys.stdout.write(vocab[rank[i][1]] + ' ')
             sys.stdout.write('\n')
-

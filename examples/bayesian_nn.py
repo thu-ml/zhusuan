@@ -23,9 +23,10 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
         ws = []
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
-            w_mu = tf.zeros([n_particles, 1, n_out, n_in + 1])
-            w_logstd = tf.zeros([n_particles, 1, n_out, n_in + 1])
-            ws.append(zs.Normal('w' + str(i), w_mu, w_logstd))
+            w_mu = tf.zeros([1, n_out, n_in + 1])
+            w_logstd = tf.zeros([1, n_out, n_in + 1])
+            ws.append(zs.Normal('w' + str(i), w_mu, w_logstd,
+                                n_samples=n_particles, group_event_ndims=2))
 
         # forward
         ly_x = tf.expand_dims(
@@ -42,7 +43,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
         y_mean = tf.squeeze(ly_x, [2, 3])
         y_logstd = tf.get_variable('y_logstd', shape=[],
                                    initializer=tf.constant_initializer(0.))
-        y = zs.Normal('y', y_mean, y_logstd * tf.ones_like(y_mean))
+        y = zs.Normal('y', y_mean, y_logstd)
 
     return model, y_mean
 
@@ -59,8 +60,8 @@ def mean_field_variational(layer_sizes, n_particles):
                 'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
                 initializer=tf.constant_initializer(0.))
             ws.append(
-                zs.Normal('w' + str(i), w_mean, w_logstd, sample_dim=0,
-                          n_samples=n_particles))
+                zs.Normal('w' + str(i), w_mean, w_logstd,
+                          n_samples=n_particles, group_event_ndims=2))
     return variational
 
 
@@ -111,13 +112,11 @@ if __name__ == '__main__':
         model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
         log_pws = model.local_log_prob(w_names)
         log_py_xw = model.local_log_prob('y')
-        return sum([tf.reduce_sum(log_pw, [-1, -2]) for log_pw in log_pws]) + \
-            tf.reduce_mean(log_py_xw, 1, keep_dims=True) * N
+        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1,
+                                                  keep_dims=True) * N
 
     variational = mean_field_variational(layer_sizes, n_particles)
     qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
-    qw_outputs = [[qw_samples, tf.reduce_sum(log_qw, [-1, -2])] for
-                  qw_samples, log_qw in qw_outputs]
     latent = dict(zip(w_names, qw_outputs))
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'y': y_obs}, latent, axis=0))

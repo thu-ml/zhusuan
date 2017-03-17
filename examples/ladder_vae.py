@@ -20,11 +20,8 @@ from six.moves import range
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    import zhusuan as zs
-    from zhusuan.distributions_old import logistic
-except:
-    raise ImportError()
+import zhusuan as zs
+from zhusuan.distributions_old import logistic
 
 import dataset
 import utils
@@ -118,9 +115,11 @@ def downward(h_top, n, n_particles, groups, lateral_inputs=None):
                     tf.reshape(x, [-1, group.map_size, group.map_size,
                                    group.n_z])
                     for x in [post_z_mean, post_z_logstd]]
-                z_i = zs.Normal(name, post_z_mean, post_z_logstd)
+                z_i = zs.Normal(name, post_z_mean, post_z_logstd,
+                                group_event_ndims=3)
             else:
-                z_i = zs.Normal(name, pz_mean, pz_logstd)
+                z_i = zs.Normal(name, pz_mean, pz_logstd,
+                                group_event_ndims=3)
 
             z_i = tf.reshape(z_i, [-1, group.map_size, group.map_size,
                                    group.n_z])
@@ -192,21 +191,16 @@ if __name__ == "__main__":
             obs_ = observed.copy()
             x = obs_.pop('x')
             model, x_mean, x_logsd = ladder_vae(obs_, n, n_particles, groups)
-            log_pzs = model.local_log_prob(list(six.iterkeys(obs_)))
-            log_pz = sum(tf.reduce_sum(
-                tf.reshape(z, [n_particles, n, -1]), -1) for z in log_pzs)
+            log_pz = model.local_log_prob(list(six.iterkeys(obs_)))
             log_px_z = tf.log(logistic.cdf(x + 1. / 256, x_mean, x_logsd) -
                               logistic.cdf(x, x_mean, x_logsd) + 1e-8)
             log_px_z = tf.reduce_sum(log_px_z, -1)
-            return log_px_z + log_pz
+            return log_px_z + tf.add_n(log_pz)
 
         variational, z_names = q_net(x_part, n_xl, n_particles, groups)
         qz_outputs = variational.query(z_names, outputs=True,
                                        local_log_prob=True)
-        zs_ = [[qz_sample,
-                tf.reduce_sum(tf.reshape(log_qz, [n_particles, n, -1]), -1)]
-               for qz_sample, log_qz in qz_outputs]
-        latents = dict(zip(z_names, zs_))
+        latents = dict(zip(z_names, qz_outputs))
         lower_bound = tf.reduce_mean(
             zs.advi(log_joint, {'x': x_obs}, latents, axis=0))
         bits_per_dim = -lower_bound / n_x * 1. / np.log(2.)
