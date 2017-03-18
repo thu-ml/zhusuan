@@ -6,4 +6,5 @@ from .model import *
 from .variational import *
 from .hmc import *
 from .evaluation import *
+from .transform import *
 from .utils import log_mean_exp
