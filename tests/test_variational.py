@@ -5,13 +5,12 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-import numpy as np
-import pytest
 
 from .context import zhusuan
 from zhusuan.variational import *
 
 
-def test_advi():
-    # TODO: advi test
-    pass
+class TestAdvi(tf.test.TestCase):
+    def test_advi(self):
+        # TODO: advi test
+        pass

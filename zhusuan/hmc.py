@@ -179,10 +179,10 @@ class HMC:
                 step_size, adapt_step_size, gamma, t0, kappa,
                 target_acceptance_rate)
         if adapt_mass is not None:
-            mass_collect_iters = 0
             self.adapt_mass = tf.convert_to_tensor(
                 adapt_mass, dtype=tf.bool, name="adapt_mass")
         else:
+            mass_collect_iters = 0
             self.adapt_mass = None
         self.mass_collect_iters = mass_collect_iters
         self.mass_decay = mass_decay

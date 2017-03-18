@@ -15,22 +15,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 
-def toy_2d_intractable_posterior(observed, n_particles):
-    with zs.StochasticGraph(observed=observed) as model:
-        z2_mean = tf.zeros([n_particles])
-        z2_logstd = tf.ones([n_particles]) * tf.log(1.35)
-        z2 = zs.Normal('z2', z2_mean, z2_logstd)
-        z1_mean = tf.zeros([n_particles])
-        z1 = zs.Normal('z1', z1_mean, z2)
+def toy2d_intractable_posterior(observed, n_particles):
+    with zs.BayesianNet(observed=observed) as model:
+        z2 = zs.Normal('z2', 0., tf.log(1.35), n_samples=n_particles)
+        z1 = zs.Normal('z1', 0., z2)
     return model
 
 
 def mean_field_variational(n_particles):
-    with zs.StochasticGraph() as variational:
-        z_mean = tf.Variable(np.array([-2, -2], dtype='float32'))
-        z_logstd = tf.Variable(np.array([-5, -5], dtype='float32'))
-        z = zs.Normal('z', z_mean, z_logstd, sample_dim=0,
-                      n_samples=n_particles)
+    with zs.BayesianNet() as variational:
+        z_mean, z_logstd = [], []
+        for i in range(2):
+            z_mean.append(tf.Variable(-2.))
+            z_logstd.append(tf.Variable(-5.))
+            _ = zs.Normal('z' + str(i + 1), z_mean[i], z_logstd[i],
+                          n_samples=n_particles)
     return variational, z_mean, z_logstd
 
 
@@ -39,16 +38,15 @@ if __name__ == "__main__":
     n_particles = tf.placeholder(tf.int32, shape=[])
 
     def log_joint(observed):
-        z1, z2 = tf.unstack(observed['z'], axis=1)
-        model = toy_2d_intractable_posterior({'z1': z1, 'z2': z2}, n_particles)
+        model = toy2d_intractable_posterior(observed, n_particles)
         log_pz1, log_pz2 = model.local_log_prob(['z1', 'z2'])
         return log_pz1 + log_pz2
 
     variational, z_mean, z_logstd = mean_field_variational(n_particles)
-    qz_samples, log_qz = variational.query('z', outputs=True,
-                                           local_log_prob=True)
-    log_qz = tf.reduce_sum(log_qz, -1)
-    lower_bound = zs.advi(log_joint, {}, {'z': [qz_samples, log_qz]})
+    [qz1_samples, log_qz1], [qz2_samples, log_qz2] = variational.query(
+        ['z1', 'z2'], outputs=True, local_log_prob=True)
+    lower_bound = zs.advi(log_joint, {}, {'z1': [qz1_samples, log_qz1],
+                                          'z2': [qz2_samples, log_qz2]})
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer = optimizer.minimize(-lower_bound)
 
@@ -88,6 +86,9 @@ if __name__ == "__main__":
         plot_isocontours(ax, variational_contour, xlimits, ylimits)
         plt.draw()
         plt.pause(1.0 / 30.0)
+
+    z_mean = tf.stack(z_mean)
+    z_logstd = tf.stack(z_logstd)
 
     # Run the inference
     iters = 1000

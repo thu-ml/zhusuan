@@ -21,26 +21,27 @@ import utils
 
 @zs.reuse('model')
 def vae(observed, n, n_x, n_z, n_particles):
-    with zs.StochasticGraph(observed=observed) as model:
-        z_mean = tf.zeros([n_particles, n_z])
-        z_logstd = tf.zeros([n_particles, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, sample_dim=1, n_samples=n)
+    with zs.BayesianNet(observed=observed) as model:
+        z_mean = tf.zeros([n, n_z])
+        z_logstd = tf.zeros([n, n_z])
+        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
+                      group_event_ndims=1)
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits)
+        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
     return model
 
 
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_particles):
-    with zs.StochasticGraph(observed=observed) as variational:
-        lz_x = layers.fully_connected(x, 500)
+    with zs.BayesianNet(observed=observed) as variational:
+        lz_x = layers.fully_connected(tf.to_float(x), 500)
         lz_x = layers.fully_connected(lz_x, 500)
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Normal('z', lz_mean, lz_logstd, sample_dim=0,
-                      n_samples=n_particles)
+        z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
+                      group_event_ndims=1)
     return variational
 
 
@@ -80,23 +81,21 @@ if __name__ == "__main__":
 
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
-                    tf.float32)
-    x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
+                    tf.int32)
+    x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
 
     def log_joint(observed):
         model = vae(observed, n, n_x, n_z, n_particles)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-        return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_px_z, -1)
+        return log_pz + log_px_z
 
     variational = q_net({}, x, n_z, n_particles)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(
         zs.iwae(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
@@ -110,7 +109,7 @@ if __name__ == "__main__":
         z = observed['z']
         model = q_net({'z': z}, x, n_z, n_particles)
         log_qz = model.local_log_prob('z')
-        return tf.squeeze(tf.reduce_sum(log_qz, -1))
+        return tf.squeeze(log_qz)
 
     prior_samples = {'z': qz_samples}
     z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
@@ -118,6 +117,7 @@ if __name__ == "__main__":
     hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
                  adapt_step_size=True, target_acceptance_rate=0.65,
                  adapt_mass=True)
+    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples, hmc,
                    {'x': x_obs}, {'z': z}, chain_axis=1,
                    n_chains=test_n_chains, n_temperatures=test_n_temperatures)

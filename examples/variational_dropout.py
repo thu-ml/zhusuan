@@ -20,27 +20,29 @@ import dataset
 
 @zs.reuse('model')
 def var_dropout(observed, x, n, net_size, n_particles, is_training):
-    with zs.StochasticGraph(observed=observed) as model:
+    with zs.BayesianNet(observed=observed) as model:
         h = x
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
-            eps_mean = tf.ones([n_particles, n_in])
-            eps_logstd = tf.zeros([n_particles, n_in])
+            eps_mean = tf.ones([n, n_in])
+            eps_logstd = tf.zeros([n, n_in])
             eps = zs.Normal('layer' + str(i) + '/eps', eps_mean, eps_logstd,
-                            sample_dim=1, n_samples=n)
+                            n_samples=n_particles, group_event_ndims=1)
+            # TODO: there seems to be a bug because h are using relu already
             h = layers.fully_connected(
                 h * eps, n_out, normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params)
             if i < len(net_size) - 2:
                 h = tf.nn.relu(h)
-        y = zs.Discrete('y', h)
+        # TODO: why sampling here?
+        y = zs.OnehotCategorical('y', h)
     return model, y
 
 
 @zs.reuse('variational')
 def q(observed, n, net_size, n_particles):
-    with zs.StochasticGraph(observed=observed) as variational:
+    with zs.BayesianNet(observed=observed) as variational:
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             with tf.variable_scope('layer' + str(i)):
                 logit_alpha = tf.get_variable('logit_alpha', [n_in])
@@ -48,8 +50,8 @@ def q(observed, n, net_size, n_particles):
             alpha = tf.nn.sigmoid(logit_alpha)
             alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
             eps = zs.Normal('layer' + str(i) + '/eps',
-                            tf.ones_like(alpha), 0.5 * tf.log(alpha + 1e-10),
-                            sample_dim=0, n_samples=n_particles)
+                            1., 0.5 * tf.log(alpha + 1e-10),
+                            n_samples=n_particles, group_event_ndims=1)
     return variational
 
 
@@ -63,7 +65,7 @@ if __name__ == '__main__':
     x_train, y_train, x_valid, y_valid, x_test, y_test = \
         dataset.load_mnist_realval(data_path)
     x_train = np.vstack([x_train, x_valid]).astype('float32')
-    y_train = np.vstack([y_train, y_valid]).astype('float32')
+    y_train = np.vstack([y_train, y_valid])
     x_train, x_test, _, _ = dataset.standardize(x_train, x_test)
     n_x = x_train.shape[1]
     n_class = 10
@@ -83,11 +85,11 @@ if __name__ == '__main__':
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     x = tf.placeholder(tf.float32, shape=(None, n_x))
-    y = tf.placeholder(tf.float32, shape=(None, n_class))
+    y = tf.placeholder(tf.int32, shape=(None, n_class))
     n = tf.shape(x)[0]
 
     net_size = [n_x, 100, 100, 100, n_class]
-    es_name = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
+    e_names = ['layer' + str(i) + '/eps' for i in range(len(net_size) - 1)]
 
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1, 1])
@@ -95,20 +97,15 @@ if __name__ == '__main__':
     def log_joint(observed):
         model, _ = var_dropout(observed, x_obs, n, net_size,
                                n_particles, is_training)
-        log_ps = model.local_log_prob(es_name + ['y'])
-        log_pes = log_ps[:-1]
-        log_py_xe = log_ps[-1]
-        return sum([tf.reduce_sum(log_pe, -1) for log_pe in log_pes]) \
-            / x_train.shape[0] + log_py_xe
+        log_pe = model.local_log_prob(e_names)
+        log_py_xe = model.local_log_prob('y')
+        return tf.add_n(log_pe) / x_train.shape[0] + log_py_xe
 
     variational = q({}, n, net_size, n_particles)
-    qe_queries = variational.query(es_name, outputs=True,
-                                   local_log_prob=True)
+    qe_queries = variational.query(e_names, outputs=True, local_log_prob=True)
     qe_samples, log_qes = zip(*qe_queries)
-    log_qes = [tf.reduce_sum(log_qe, -1) / x_train.shape[0]
-               for log_qe in log_qes]
-    e_dict = dict(zip(es_name, zip(qe_samples, log_qes)))
-
+    log_qes = [log_qe / x_train.shape[0] for log_qe in log_qes]
+    e_dict = dict(zip(e_names, zip(qe_samples, log_qes)))
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'y': y_obs}, e_dict, axis=0))
 

@@ -19,31 +19,37 @@ import dataset
 
 
 @zs.reuse('model')
-def sbn(observed, n, n_x, n_z, n_particles, is_training):
-    with zs.StochasticGraph(observed=observed) as model:
-        z_mean = tf.zeros([n_particles, n_z])
-        z = zs.Bernoulli('z', z_mean, sample_dim=1, n_samples=n)
-        lh_z = layers.fully_connected(z, n_z, activation_fn=None)
-        h2 = zs.Bernoulli('h2', lh_z)
-
-        lh_h = layers.fully_connected(h2, n_z, activation_fn=None)
-        h1 = zs.Bernoulli('h1', lh_h)
-
-        lx_h = layers.fully_connected(h1, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', lx_h)
+def sbn(observed, n, n_x, n_h, n_particles, is_training):
+    with zs.BayesianNet(observed=observed) as model:
+        h3_logits = tf.zeros([n, n_h])
+        h3 = zs.Bernoulli('h3', h3_logits, n_samples=n_particles,
+                          group_event_ndims=1)
+        h2_logits = layers.fully_connected(
+            tf.to_float(h3), n_h, activation_fn=None)
+        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1)
+        h1_logits = layers.fully_connected(
+            tf.to_float(h2), n_h, activation_fn=None)
+        h1 = zs.Bernoulli('h1', h1_logits, group_event_ndims=1)
+        x_logits = layers.fully_connected(
+            tf.to_float(h1), n_x, activation_fn=None)
+        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
     return model
 
 
-def q_net(x, n_z, n_particles, is_training):
-    with zs.StochasticGraph() as variational:
-        lh_x = layers.fully_connected(x, n_z, activation_fn=None)
-        h1 = zs.Bernoulli('h1', lh_x, sample_dim=0, n_samples=n_particles)
-        lh_h = layers.fully_connected(h1, n_z, activation_fn=None)
-        h2 = zs.Bernoulli('h2', lh_h)
-        lz_h = layers.fully_connected(h2, n_z, activation_fn=None)
-        z = zs.Bernoulli('z', lz_h)
-
+def q_net(x, n_h, n_particles, is_training):
+    with zs.BayesianNet() as variational:
+        h1_logits = layers.fully_connected(
+            tf.to_float(x), n_h, activation_fn=None)
+        h1 = zs.Bernoulli('h1', h1_logits, n_samples=n_particles,
+                          group_event_ndims=1)
+        h2_logits = layers.fully_connected(
+            tf.to_float(h1), n_h, activation_fn=None)
+        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1)
+        h3_logits = layers.fully_connected(
+            tf.to_float(h2), n_h, activation_fn=None)
+        h3 = zs.Bernoulli('h3', h3_logits, group_event_ndims=1)
     return variational
+
 
 if __name__ == "__main__":
     tf.set_random_seed(1237)
@@ -59,7 +65,7 @@ if __name__ == "__main__":
     n_x = x_train.shape[1]
 
     # Define model parameters
-    n_z = 200
+    n_h = 200
 
     # Define training/evaluation parameters
     lb_samples = 2
@@ -80,52 +86,44 @@ if __name__ == "__main__":
 
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
-                    tf.float32)
-    x = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
+                    tf.int32)
+    x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = sbn(observed, n, n_x, n_z, n_particles, is_training)
-        log_pz, log_ph2_z, log_ph1_h2, log_px_h1 = model.local_log_prob(['z', 'h2', 'h1', 'x'])
-        return tf.reduce_sum(log_pz, -1) + tf.reduce_sum(log_ph2_z, -1) + tf.reduce_sum(log_ph1_h2, -1) \
-                + tf.reduce_sum(log_px_h1, -1)
+        model = sbn(observed, n, n_x, n_h, n_particles, is_training)
+        log_ph3, log_ph2_h3, log_ph1_h2, log_px_h1 = model.local_log_prob(
+            ['h3', 'h2', 'h1', 'x'])
+        return log_ph3 + log_ph2_h3 + log_ph1_h2 + log_px_h1
 
-    variational = q_net(x, n_z, n_particles, is_training)
-    qz_samples, log_qz = variational.query('z', outputs=True,
-                                           local_log_prob=True)
-    qh1_samples, log_qh1 = variational.query('h1', outputs=True,
-                                           local_log_prob=True)
+    variational = q_net(x, n_h, n_particles, is_training)
+    qh3_samples, log_qh3 = variational.query('h3', outputs=True,
+                                             local_log_prob=True)
     qh2_samples, log_qh2 = variational.query('h2', outputs=True,
-                                           local_log_prob=True)
-    log_qz = tf.reduce_sum(log_qz, -1)
-    log_qh1 = tf.reduce_sum(log_qh1, -1)
-    log_qh2 = tf.reduce_sum(log_qh2, -1)
-
+                                             local_log_prob=True)
+    qh1_samples, log_qh1 = variational.query('h1', outputs=True,
+                                             local_log_prob=True)
     cost, lower_bound = zs.rws(
-        log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz], 'h1': [qh1_samples, log_qh1],
-                          'h2': [qh2_samples, log_qh2]}, axis=0)
+        log_joint, {'x': x_obs}, {'h3': [qh3_samples, log_qh3],
+                                  'h2': [qh2_samples, log_qh2],
+                                  'h1': [qh1_samples, log_qh1]}, axis=0)
     lower_bound = tf.reduce_mean(lower_bound)
     cost = tf.reduce_mean(cost)
     log_likelihood = tf.reduce_mean(zs.is_loglikelihood(
-        log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz], 'h1': [qh1_samples, log_qh1],
-                          'h2': [qh2_samples, log_qh2]}, axis=0))
+        log_joint, {'x': x_obs}, {'h3': [qh3_samples, log_qh3],
+                                  'h2': [qh2_samples, log_qh2],
+                                  'h1': [qh1_samples, log_qh1]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     grads = optimizer.compute_gradients(cost)
     infer = optimizer.apply_gradients(grads)
 
-    # train_writer = tf.train.SummaryWriter('/tmp/zhusuan',
-    #                                       tf.get_default_graph())
-    # train_writer.close()
-
     params = tf.trainable_variables()
     for i in params:
         print(i.name, i.get_shape())
 
-    # logTrainFile = open('rws_log_K_2_train.csv', 'w')
-    # logTestFile = open('rws_log_K_2_test.csv', 'w')
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -145,7 +143,6 @@ if __name__ == "__main__":
                                             is_training: True})
                 lbs.append(lb)
             time_epoch += time.time()
-            # logTrainFile.write('%d,%lf\n' % (epoch, np.mean(lbs)))
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
                 epoch, time_epoch, np.mean(lbs)))
             if epoch % test_freq == 0:
@@ -166,10 +163,6 @@ if __name__ == "__main__":
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()
-                # logTestFile.write('%lf,%lf\n' % (np.mean(test_lbs), np.mean(test_lls)))
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
-
-    # logTestFile.close()
-    # logTrainFile.close()

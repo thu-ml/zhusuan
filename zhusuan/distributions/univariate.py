@@ -153,7 +153,7 @@ class Bernoulli(Distribution):
         p = tf.sigmoid(self.logits)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         alpha = tf.random_uniform(shape, minval=0, maxval=1)
-        samples = tf.cast(tf.less(alpha, p), dtype=tf.float32)
+        samples = tf.cast(tf.less(alpha, p), dtype=self.dtype)
         return samples
 
     def _log_prob(self, given):
@@ -210,7 +210,8 @@ class Categorical(Distribution):
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
             raise ValueError(shape_err_msg)
-        elif static_logits_shape and (static_logits_shape[-1]):
+        elif static_logits_shape and (
+                static_logits_shape[-1].value is not None):
             self._n_categories = static_logits_shape[-1].value
         else:
             _assert_shape_op = tf.assert_rank_at_least(
@@ -219,6 +220,7 @@ class Categorical(Distribution):
                 self._logits = tf.identity(self._logits)
             self._n_categories = tf.shape(self._logits)[-1]
 
+        # TODO: add type argument for distributions
         super(Categorical, self).__init__(
             dtype=tf.int32,
             is_continuous=False,
@@ -264,15 +266,21 @@ class Categorical(Distribution):
         logits = self.logits
 
         def _broadcast(given, logits):
-            try:
-                given *= tf.ones_like(logits[:-1], tf.int32)
-                logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
-            except ValueError:
-                raise
-                raise ValueError(
-                    "given and logits[:-1] cannot broadcast to match. ("
-                    "{} vs. {}[:-1])".format(given.get_shape(),
-                                             logits.get_shape()))
+            # static shape has been checked in base class.
+            ones_ = tf.ones(tf.shape(logits)[:-1], tf.int32)
+            if logits.get_shape():
+                ones_.set_shape(logits.get_shape()[:-1])
+            given *= ones_
+            logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
+            return given, logits
+
+        def _is_same_dynamic_shape(given, logits):
+            return tf.cond(
+                tf.equal(tf.rank(given), tf.rank(logits) - 1),
+                lambda: tf.reduce_all(tf.equal(
+                    tf.concat([tf.shape(given), tf.shape(logits)[:-1]], 0),
+                    tf.concat([tf.shape(logits)[:-1], tf.shape(given)], 0))),
+                lambda: tf.convert_to_tensor(False, tf.bool))
 
         if not (given.get_shape() and logits.get_shape()):
             given, logits = _broadcast(given, logits)
@@ -280,16 +288,20 @@ class Categorical(Distribution):
             if given.get_shape().ndims != logits.get_shape().ndims - 1:
                 given, logits = _broadcast(given, logits)
             elif given.get_shape().is_fully_defined() and \
-                    logits[:-1].get_shape().is_fully_defined():
+                    logits.get_shape()[:-1].is_fully_defined():
                 if given.get_shape() != logits.get_shape()[:-1]:
                     given, logits = _broadcast(given, logits)
             else:
                 given, logits = tf.cond(
-                    is_same_dynamic_shape(given, logits[:-1]),
+                    _is_same_dynamic_shape(given, logits),
                     lambda: (given, logits),
                     lambda: _broadcast(given, logits))
-        return -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
-                                                               logits=logits)
+        log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
+                                                                logits=logits)
+        if given.get_shape() and logits.get_shape():
+            log_p.set_shape(tf.broadcast_static_shape(given.get_shape(),
+                                                      logits.get_shape()[:-1]))
+        return log_p
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -314,6 +326,7 @@ class Uniform(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
@@ -466,7 +479,7 @@ class Gamma(Distribution):
                     [tf.check_numerics(log_given, "log(given)"),
                      tf.check_numerics(log_alpha, "log(alpha)"),
                      tf.check_numerics(log_beta, "log(beta)"),
-                     tf.check_numerics(lgamma_alpha, "lgamma(alpha))")]):
+                     tf.check_numerics(lgamma_alpha, "lgamma(alpha)")]):
                 log_given = tf.identity(log_given)
         return alpha * log_beta - lgamma_alpha + (alpha - 1) * log_given - \
             beta * given
@@ -559,6 +572,7 @@ class Beta(Distribution):
         return x / (x + y)
 
     def _log_prob(self, given):
+        # TODO: not right when given=0 or 1
         alpha, beta = self.alpha, self.beta
         log_given = tf.log(given)
         log_1_minus_given = tf.log(1 - given)

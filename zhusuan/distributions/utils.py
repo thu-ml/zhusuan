@@ -21,7 +21,7 @@ def log_factorial(n):
 
     .. math:: \\log n!
 
-    :param n: A Tensor of type `int32`.
+    :param n: A `int32` Tensor.
 
     :return: A `float32` Tensor of the same shape as `n`.
     """
@@ -37,9 +37,9 @@ def log_combination(n, ks):
 
     \\log \binom{n}{k_1, k_2, \dots} = \\log n! - \sum_{i}\\log k_i!
 
-    :param n: A N-D Tensor of type `int32`. Can broadcast to match `ks`[:-1].
-    :param ks: A (N + 1)-D Tensor of type `int32`. Each slice
-        [i, j, ..., k, :] is a vector of [k_1, k_2, ...].
+    :param n: A N-D `int32` Tensor. Can broadcast to match `ks`[:-1].
+    :param ks: A (N + 1)-D `int32` Tensor. Each slice [i, j, ..., k, :] is a
+        vector of [k_1, k_2, ...].
 
     :return: A N-D Tensor of type `float32`.
     """

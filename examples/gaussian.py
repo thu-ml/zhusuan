@@ -16,10 +16,10 @@ import zhusuan as zs
 
 
 def gaussian(observed, n_x, log_stdev, n_particles):
-    with zs.StochasticGraph(observed=observed) as model:
-        x_mean = tf.zeros([n_particles, n_x])
-        x_logstd = log_stdev * tf.ones([n_particles, n_x])
-        lx = zs.Normal('x', x_mean, x_logstd)
+    with zs.BayesianNet(observed=observed) as model:
+        x_mean = tf.zeros([n_x])
+        x = zs.Normal('x', x_mean, log_stdev, n_samples=n_particles,
+                      group_event_ndims=1)
     return model
 
 
@@ -42,8 +42,7 @@ if __name__ == "__main__":
     # Build the computation graph
     def log_joint(observed):
         model = gaussian(observed, n_x, log_stdev, n_chains)
-        log_p = model.local_log_prob('x')
-        return tf.reduce_sum(log_p, -1)
+        return model.local_log_prob('x')
 
     adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")
     adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
@@ -51,10 +50,6 @@ if __name__ == "__main__":
                  adapt_step_size=adapt_step_size, adapt_mass=adapt_mass)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
     sample_op = hmc.sample(log_joint, {}, {'x': x}, chain_axis=0)
-
-    train_writer = tf.summary.FileWriter('/tmp/gaussian',
-                                         tf.get_default_graph())
-    train_writer.close()
 
     # Run the inference
     with tf.Session() as sess:
