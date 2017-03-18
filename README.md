@@ -39,7 +39,7 @@ A Library for Generative Models.
 [RWS](examples/sbn_rws.py),
 [VIMCO](examples/sbn_vimco.py)
 * Logistic Normal Topic Model: 
-[HMC](examples/lntm_.py)
+[HMC](examples/lntm_mcem.py)
 
 ## Developments
 
