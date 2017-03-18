@@ -12,7 +12,7 @@ A Library for Generative Models.
   * __ADVI__: Automatic Differentiation Variational Inference
   * __IWAE__: Importance weighted objectives
   * __NVIL__: Score function estimator with variance reduction
-  * __VIMCO__: Importance weighted score function estimator with variance reduction
+  * __VIMCO__: Multi-sample score function estimator with variance reduction
 
 ### Adaptive Importance Sampling
 * Reweighted Wake-sleep (__RWS__): With user specified adaptive proposal.
