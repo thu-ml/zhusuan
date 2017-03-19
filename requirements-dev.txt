@@ -1,7 +1,7 @@
 -r requirements.txt
-pytest
-pytest-pep8
-pytest-cov
+coverage
+pep8
 scipy
 matplotlib
 mock
+skimage

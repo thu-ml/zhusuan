@@ -1,6 +1,6 @@
 # ZhuSuan
 
-A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Models.
+A Library for Generative Models.
 
 ## Supported Inference
 ### (Stochastic) Variational Inference (VI & SVI)
@@ -9,43 +9,56 @@ A Framework of Probabilistic Inference, Bayesian Modeling and Deep Generative Mo
   * __Structured__ posterior: With user specified dependencies.
 
 * Variational objectives we support:
-  * Automatic Differentiation Variational Inference (__ADVI__)
-  * Importance weighted objectives (__IWAE__)
+  * __ADVI__: Automatic Differentiation Variational Inference
+  * __IWAE__: Importance weighted objectives
+  * __NVIL__: Score function estimator with variance reduction
+  * __VIMCO__: Multi-sample score function estimator with variance reduction
 
-### Importance Sampling
+### Adaptive Importance Sampling
 * Reweighted Wake-sleep (__RWS__): With user specified adaptive proposal.
 
 ### Markov Chain Monte Carlo (MCMC)
-* Hamiltonian Monte Carlo (__HMC__)
-* No-U-Turn Sampler (__NUTS__)
+* Hamiltonian Monte Carlo (__HMC__): With step size and mass adaptation.
 
 ## Examples
-* Toy intractable posterior: [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/toy.py)
-* Bayesian logistic regression: [NUTS](https://github.com/thu-ml/ZhuSuan/blob/master/examples/blr.py)
-* Bayesian Multinomial logistic regression: [NUTS](https://github.com/thu-ml/ZhuSuan/blob/master/examples/bmlr.py)
-* Beyesian neural networks: [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/bayesian_nn.py), NUTS
-
-### Deep Generative Models
-* Variational autoencoder (VAE): [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae.py)
-* Convolutional VAE: [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae_conv.py)
+* Gaussian: 
+[HMC](examples/gaussian.py)
+* Toy 2D Intractable Posterior: 
+[ADVI](examples/toy2d.py)
+* Beyesian Neural Networks: 
+[ADVI](examples/bayesian_nn.py)
+* Variational Autoencoder (VAE): 
+[ADVI](examples/vae.py), 
+[IWAE](examples/iwae.py)
+* Convolutional VAE: 
+[ADVI](examples/vae_conv.py)
 * Semi-supervised VAE (Kingma, 2014): 
-  [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae_ssl.py),
-  [RWS](https://github.com/thu-ml/ZhuSuan/blob/master/examples/vae_ssl_rws.py)
-* DRAW (Gregor, 2015): [ADVI](https://github.com/thu-ml/ZhuSuan/blob/master/examples/draw.py)
+[ADVI](examples/vae_ssl.py),
+[RWS](examples/vae_ssl_rws.py)
+* Deep Sigmoid Belief Networks
+[RWS](examples/sbn_rws.py),
+[VIMCO](examples/sbn_vimco.py)
+* Logistic Normal Topic Model: 
+[HMC](examples/lntm_mcem.py)
 
 ## Developments
 
 ### Tests
-This command will run automatic tests in the tests/ directory.
 
-`py.test`
+First install requirements for developments.
+
+`pip install -r requirements-dev.txt`
+
+This command will run automatic tests in the main directory.
+
+`python -m unittest discover -v`
 
 ##### Test Coverage
-To ensure test coverage keeping 100% over the developments, run
+After running tests, to ensure test coverage keeping 100% over the developments, run
 
-`py.test --cov zhusuan/ --cov-report term-missing`
+`coverage report --include="zhusuan/*"`
 
 ##### PEP8 Code Style Check
-We follow PEP8 python code style. To check, run
+We follow PEP8 python code style. To check, in the main directory, run
 
-`py.test --pep8`
+`pep8 .`

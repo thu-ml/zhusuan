@@ -6,13 +6,12 @@ from __future__ import print_function
 from __future__ import division
 from collections import deque, OrderedDict
 
-import tensorflow as tf
-
 
 class Context(object):
     """
     Context stack.
     """
+
     def __enter__(self):
         type(self).get_contexts().append(self)
         return self
@@ -32,26 +31,6 @@ class Context(object):
             return cls.get_contexts()[-1]
         except:
             raise RuntimeError("No contexts on the stack.")
-
-
-def get_unique_graph(tensor_or_tensors):
-    """
-    Check input tensors share a unique graph and return it.
-
-    :param tensor_or_tensors: A Tensor or a list of Tensors.
-    :return: A tf.Graph instance. The unique graph shared by inputs.
-    """
-    if not isinstance(tensor_or_tensors, (list, tuple)):
-        tensor_or_tensors = [tensor_or_tensors]
-    graph = None
-    for tensor in tensor_or_tensors:
-        if not hasattr(tensor, 'graph'):
-            raise TypeError("Inputs to get_unique_graph() are not Tensors.")
-        if graph is None:
-            graph = tensor.graph
-        elif graph is not tensor.graph:
-            raise ValueError("Tensors do not come from the same graph.")
-    return graph
 
 
 def get_backward_ops(seed_tensors, treat_as_inputs=None):

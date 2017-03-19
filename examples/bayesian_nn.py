@@ -9,143 +9,85 @@ import os
 import time
 
 import tensorflow as tf
-from six.moves import range
+from six.moves import range, zip
 import numpy as np
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-try:
-    from zhusuan.model import *
-    from zhusuan.variational import advi
-except:
-    raise ImportError()
+import zhusuan as zs
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import dataset
-except:
-    raise ImportError()
+import dataset
 
 
-class BayesianNN:
-    """
-    A Bayesian neural network.
+@zs.reuse('model')
+def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
+    with zs.BayesianNet(observed=observed) as model:
+        ws = []
+        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
+                                              layer_sizes[1:])):
+            w_mu = tf.zeros([1, n_out, n_in + 1])
+            w_logstd = tf.zeros([1, n_out, n_in + 1])
+            ws.append(zs.Normal('w' + str(i), w_mu, w_logstd,
+                                n_samples=n_particles, group_event_ndims=2))
 
-    :param x: A Tensor. The data, or mini-batch of data.
-    :param layer_sizes: A list of Int. The dimensions of all layers.
-    :param n_particles: A Tensor or int. The number of particles per node.
-    :param N: Int. The total number of training data.
-    """
-    def __init__(self, x, layer_sizes, n_particles, N):
-        self.N = N
-
-        with StochasticGraph() as model:
-            ws = []
-            for n_in, n_out in zip(layer_sizes[:-1], layer_sizes[1:]):
-                w_mu = tf.zeros([n_particles, n_out, n_in + 1])
-                w_logstd = tf.zeros([n_particles, n_out, n_in + 1])
-                ws.append(Normal(w_mu, w_logstd))
-            ly_x = self._forward([w.value for w in ws], x)
-            y_logstd = tf.Variable(0.)
-            y = Normal(ly_x, y_logstd * tf.ones_like(ly_x))
-
-        self.model = model
-        self.ws = ws
-        self.ly_x = ly_x
-        self.y = y
-        self.y_logstd = y_logstd
-
-        self.n_particles = n_particles
-        self.layer_sizes = layer_sizes
-
-    def log_prob(self, latent, observed, given):
-        """
-        The log joint probability function.
-
-        :param latent: A dictionary of pairs: (string, Tensor). Each of the
-            Tensor has shape (n_particles, ...).
-        :param observed: A dictionary of pairs: (string, Tensor). Each of
-            the Tensor has shape (n, n_observed).
-
-        :return: A Tensor of shape (n_particles,). The joint log likelihoods.
-        """
-        y = tf.squeeze(observed['y'], [1])
-        y = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1])
-        ws = [latent['w' + str(i)] for i in range(len(self.layer_sizes) - 1)]
-
-        w_dict = dict(zip(self.ws, ws))
-        inputs = {self.y: y}
-        inputs.update(w_dict)
-        out = self.model.get_output([self.y] + self.ws, inputs=inputs)
-        y_out = out[0]
-        w_outs = out[1:]
-
-        log_py_xw = tf.reduce_mean(y_out[1], 1) * self.N
-        log_pw = sum([tf.reduce_sum(w_logp, [-1, -2]) for _, w_logp in w_outs])
-        return log_py_xw + log_pw
-
-    def _forward(self, ws, x):
-        """
-        Get the network output of x with latent variables.
-        :param ws: Tensors of weights that has shape (n_particles, ...).
-        :param x: A Tensor of shape (n, n_x)
-
-        :return: A Tensor of shape (n_particles, n)
-        """
-        ws = [tf.tile(tf.expand_dims(w, 1), [1, tf.shape(x)[0], 1, 1])
-              for w in ws]
-        x = tf.tile(tf.expand_dims(tf.expand_dims(x, 2), 0),
-                    [tf.shape(ws[0])[0], 1, 1, 1])
+        # forward
+        ly_x = tf.expand_dims(
+            tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
         for i in range(len(ws)):
-            x = tf.concat_v2(
-                [x, tf.ones([tf.shape(x)[0], tf.shape(x)[1], 1, 1])], 2)
-            x = tf.matmul(ws[i], x) / \
-                tf.sqrt(tf.cast(tf.shape(x)[2], tf.float32))
+            w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
+            ly_x = tf.concat(
+                [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
+            ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.cast(tf.shape(ly_x)[2],
+                                                        tf.float32))
             if i < len(ws) - 1:
-                x = tf.nn.relu(x)
+                ly_x = tf.nn.relu(ly_x)
 
-        return tf.squeeze(x, [2, 3])
+        y_mean = tf.squeeze(ly_x, [2, 3])
+        y_logstd = tf.get_variable('y_logstd', shape=[],
+                                   initializer=tf.constant_initializer(0.))
+        y = zs.Normal('y', y_mean, y_logstd)
 
-    def evaluate(self, latent, observed, std_y_train):
-        """
-        Calculate the rmse and log likelihood.
-        """
-        y = tf.squeeze(observed['y'], [1])
-        ws = [latent['w' + str(i)] for i in range(len(self.layer_sizes) - 1)]
+    return model, y_mean
 
-        inputs = dict(zip(self.ws, ws))
-        y_out, _ = self.model.get_output(self.ly_x, inputs=inputs)
-        y_pred = tf.reduce_mean(y_out, 0)
-        rmse = tf.sqrt(tf.reduce_mean((y_pred - y)**2)) * std_y_train
 
-        mean = tf.reduce_mean(y_out, 0, keep_dims=True)
-        variance = tf.reduce_mean((y_out - mean)**2, 0)
-        variance = variance + tf.exp(self.y_logstd)**2
-        ll = tf.reduce_mean(-0.5 *
-                            tf.log(2 * np.pi * variance * std_y_train**2) -
-                            0.5 * (y - y_pred)**2 / variance)
-        return rmse, ll
+def mean_field_variational(layer_sizes, n_particles):
+    with zs.BayesianNet() as variational:
+        ws = []
+        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
+                                              layer_sizes[1:])):
+            w_mean = tf.get_variable(
+                'w_mean_' + str(i), shape=[1, n_out, n_in + 1],
+                initializer=tf.constant_initializer(0.))
+            w_logstd = tf.get_variable(
+                'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
+                initializer=tf.constant_initializer(0.))
+            ws.append(
+                zs.Normal('w' + str(i), w_mean, w_logstd,
+                          n_samples=n_particles, group_event_ndims=2))
+    return variational
 
 
 if __name__ == '__main__':
     tf.set_random_seed(1237)
     np.random.seed(1234)
 
+    # Load UCI Boston housing data
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              'data', 'housing.data')
     x_train, y_train, x_valid, y_valid, x_test, y_test = \
         dataset.load_uci_boston_housing(data_path)
     x_train = np.vstack([x_train, x_valid]).astype('float32')
-    y_train = np.hstack((y_train, y_valid)).astype('float32')
-    y_train = y_train.reshape((len(y_train), 1))
-
+    y_train = np.hstack([y_train, y_valid]).astype('float32')
     x_test = x_test.astype('float32')
-    y_test = y_test.reshape((len(y_test), 1))
-    n_x = x_train.shape[1]
+    N, n_x = x_train.shape
 
+    # Standardize data
     x_train, x_test, _, _ = dataset.standardize(x_train, x_test)
     y_train, y_test, mean_y_train, std_y_train = dataset.standardize(
-        y_train, y_test)
-    std_y_train = np.squeeze(std_y_train)
+        y_train.reshape((-1, 1)), y_test.reshape((-1, 1)))
+    y_train, y_test = y_train.squeeze(), y_test.squeeze()
+    std_y_train = std_y_train.squeeze()
+
+    # Define model parameters
+    n_hiddens = [50]
 
     # Define training/evaluation parameters
     lb_samples = 10
@@ -156,38 +98,43 @@ if __name__ == '__main__':
     test_freq = 10
     learning_rate = 0.01
     anneal_lr_freq = 100
-    anneal_lr_rate = 1.
+    anneal_lr_rate = 0.75
 
-    # Build training model
-    learning_rate_ph = tf.placeholder(tf.float32, shape=())
+    # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    x = tf.placeholder(tf.float32, shape=(None, n_x))
-    layer_sizes = [n_x, 50, 1]
-    bnn = BayesianNN(x, layer_sizes, n_particles, x_train.shape[0])
-    y = tf.placeholder(tf.float32, shape=(None, 1))
-    observed = {'y': y}
+    x = tf.placeholder(tf.float32, shape=[None, n_x])
+    y = tf.placeholder(tf.float32, shape=[None])
+    y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
+    layer_sizes = [n_x] + n_hiddens + [1]
+    w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
+
+    def log_joint(observed):
+        model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+        log_pws = model.local_log_prob(w_names)
+        log_py_xw = model.local_log_prob('y')
+        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1,
+                                                  keep_dims=True) * N
+
+    variational = mean_field_variational(layer_sizes, n_particles)
+    qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
+    latent = dict(zip(w_names, qw_outputs))
+    lower_bound = tf.reduce_mean(
+        zs.advi(log_joint, {'y': y_obs}, latent, axis=0))
+
+    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-
-    # Build variational posterior
-    with StochasticGraph() as variational:
-        w = []
-        for n_in, n_out in zip(layer_sizes[:-1], layer_sizes[1:]):
-            mu = tf.Variable(tf.zeros([n_out, n_in + 1]))
-            logstd = tf.Variable(tf.zeros([n_out, n_in + 1]))
-            w.append(Normal(mu, logstd, sample_dim=0, n_samples=n_particles))
-
-    w_outputs = variational.get_output(w)
-    w_outputs = [[qw, tf.reduce_sum(qw_logpdf, [-1, -2])]
-                 for qw, qw_logpdf in w_outputs]
-    latent = {'w' + str(i): w_outputs[i] for i in range(len(w_outputs))}
-    lower_bound = tf.reduce_mean(advi(
-        bnn, observed, latent, reduction_indices=0))
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 
-    latent_outputs = {'w' + str(i): w_outputs[i][0]
-                      for i in range(len(w_outputs))}
-    rmse, ll = bnn.evaluate(latent_outputs, observed, std_y_train)
+    # prediction: rmse & log likelihood
+    observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
+    observed.update({'y': y_obs})
+    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+    y_pred = tf.reduce_mean(y_mean, 0)
+    rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
+    log_py_xw = model.local_log_prob('y')
+    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - \
+        tf.log(std_y_train)
 
     params = tf.trainable_variables()
     for i in params:
@@ -217,7 +164,7 @@ if __name__ == '__main__':
             if epoch % test_freq == 0:
                 time_test = -time.time()
                 test_lb, test_rmse, test_ll = sess.run(
-                    [lower_bound, rmse, ll],
+                    [lower_bound, rmse, log_likelihood],
                     feed_dict={n_particles: ll_samples,
                                x: x_test, y: y_test})
                 time_test += time.time()
