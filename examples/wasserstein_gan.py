@@ -41,7 +41,7 @@ def generator(observed, n, n_z, is_training):
                                        normalizer_fn=layers.batch_norm,
                                        normalizer_params=normalizer_params)
         lx_z = layers.conv2d_transpose(lx_z, 1, 5, stride=2,
-                                       activation_fn=None)
+                                       activation_fn=tf.nn.sigmoid)
     return generator, lx_z
 
 
