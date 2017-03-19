@@ -42,8 +42,7 @@ def generator(observed, n, n_z, is_training):
                                        normalizer_params=normalizer_params)
         lx_z = layers.conv2d_transpose(lx_z, 1, 5, stride=2,
                                        activation_fn=None)
-        x = zs.Bernoulli('x', lx_z, group_event_ndims=3)
-    return generator, x
+    return generator, lx_z
 
 
 @zs.reuse('discriminator')
