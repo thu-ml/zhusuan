@@ -172,11 +172,18 @@ class Bernoulli(Distribution):
                     given, logits = explicit_broadcast(given, logits,
                                                        'given', 'logits')
             else:
-                given, logits = tf.cond(
-                    is_same_dynamic_shape(given, logits),
-                    lambda: (given, logits),
-                    lambda: explicit_broadcast(given, logits,
-                                               'given', 'logits'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, logits = tf.cond(
+                #     is_same_dynamic_shape(given, logits),
+                #     lambda: (given, logits),
+                #     lambda: explicit_broadcast(given, logits,
+                #                                'given', 'logits'))
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -292,10 +299,16 @@ class Categorical(Distribution):
                 if given.get_shape() != logits.get_shape()[:-1]:
                     given, logits = _broadcast(given, logits)
             else:
-                given, logits = tf.cond(
-                    _is_same_dynamic_shape(given, logits),
-                    lambda: (given, logits),
-                    lambda: _broadcast(given, logits))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, logits = tf.cond(
+                #     is_same_dynamic_shape(given, logits),
+                #     lambda: (given, logits),
+                #     lambda: _broadcast(given, logits, 'given', 'logits'))
+                given, logits = _broadcast(given, logits)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
         if given.get_shape() and logits.get_shape():
@@ -563,10 +576,16 @@ class Beta(Distribution):
                     alpha, beta = explicit_broadcast(alpha, beta,
                                                      'alpha', 'beta')
             else:
-                alpha, beta = tf.cond(
-                    is_same_dynamic_shape(alpha, beta),
-                    lambda: (alpha, beta),
-                    lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # alpha, beta = tf.cond(
+                #     is_same_dynamic_shape(alpha, beta),
+                #     lambda: (alpha, beta),
+                #     lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
+                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
         x = tf.random_gamma([n_samples], alpha, beta=1)
         y = tf.random_gamma([n_samples], beta, beta=1)
         return x / (x + y)

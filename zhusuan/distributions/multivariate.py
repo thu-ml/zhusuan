@@ -138,11 +138,18 @@ class Multinomial(Distribution):
                     given, logits = explicit_broadcast(given, logits,
                                                        'given', 'logits')
             else:
-                given, logits = tf.cond(
-                    is_same_dynamic_shape(given, logits),
-                    lambda: (given, logits),
-                    lambda: explicit_broadcast(given, logits,
-                                               'given', 'logits'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, logits = tf.cond(
+                #     is_same_dynamic_shape(given, logits),
+                #     lambda: (given, logits),
+                #     lambda: explicit_broadcast(given, logits,
+                #                                'given', 'logits'))
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         normalized_logits = logits - tf.reduce_logsumexp(
             logits, axis=-1, keep_dims=True)
         log_p = log_combination(self.n_experiments, given) + \
@@ -251,11 +258,18 @@ class OnehotCategorical(Distribution):
                     given, logits = explicit_broadcast(given, logits,
                                                        'given', 'logits')
             else:
-                given, logits = tf.cond(
-                    is_same_dynamic_shape(given, logits),
-                    lambda: (given, logits),
-                    lambda: explicit_broadcast(given, logits,
-                                               'given', 'logits'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, logits = tf.cond(
+                #     is_same_dynamic_shape(given, logits),
+                #     lambda: (given, logits),
+                #     lambda: explicit_broadcast(given, logits,
+                #                                'given', 'logits'))
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         if (given.get_shape().ndims == 2) or (logits.get_shape().ndims == 2):
             given_flat = given
             logits_flat = logits
@@ -378,11 +392,18 @@ class Dirichlet(Distribution):
                     given, alpha = explicit_broadcast(given, alpha,
                                                       'given', 'alpha')
             else:
-                given, alpha = tf.cond(
-                    is_same_dynamic_shape(given, alpha),
-                    lambda: (given, alpha),
-                    lambda: explicit_broadcast(given, alpha,
-                                               'given', 'alpha'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, alpha = tf.cond(
+                #     is_same_dynamic_shape(given, alpha),
+                #     lambda: (given, alpha),
+                #     lambda: explicit_broadcast(given, alpha,
+                #                                'given', 'alpha'))
+                given, alpha = explicit_broadcast(given, alpha,
+                                                  'given', 'alpha')
         log_Beta_alpha = tf.lbeta(alpha)
         # fix of no static shape inference for tf.lbeta
         if alpha.get_shape():

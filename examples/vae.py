@@ -135,7 +135,6 @@ if __name__ == "__main__":
     hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
                  adapt_step_size=True, target_acceptance_rate=0.65,
                  adapt_mass=True)
-    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
     bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples, hmc,
                    {'x': x_obs}, {'z': z}, chain_axis=1,
                    n_chains=test_n_chains, n_temperatures=test_n_temperatures)
