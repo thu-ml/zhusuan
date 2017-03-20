@@ -165,12 +165,12 @@ def nvil(log_joint,
     if variance_normalization is True:
         bc = tf.reduce_mean(l_signal)
         bv = tf.reduce_mean(tf.square(l_signal - bc))
-        moving_mean = tf.get_variable('moving_mean', shape=[],
-                                      initializer=tf.zeros_initializer,
-                                      trainable=False)
-        moving_variance = tf.get_variable('moving_variance', shape=[],
-                                          initializer=tf.ones_initializer,
-                                          trainable=False)
+        moving_mean = tf.get_variable(
+            'moving_mean', shape=[], initializer=tf.constant_initializer(0.),
+            trainable=False)
+        moving_variance = tf.get_variable(
+            'moving_variance', shape=[],
+            initializer=tf.constant_initializer(1.), trainable=False)
 
         update_mean = moving_averages.assign_moving_average(
             moving_mean, bc, decay=decay)
@@ -189,10 +189,10 @@ def nvil(log_joint,
     return cost, lower_bound
 
 
-def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
+def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one=False):
     """
     Implements the variance reduced score function estimator for gradients
-    of the variational lower bound from (Andriy, 2016). This works for both
+    of the variational lower bound from (Minh, 2016). This works for both
     continuous and discrete latent `StochasticTensor` s.
 
     :param log_joint: A function that accepts a dictionary argument of
@@ -206,7 +206,7 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
         probabilities.
     :param axis: The sample dimension to reduce when computing the
         variational lower bound.
-    :param variance_normalization: Whether the number of samples
+    :param is_particle_larger_one: Whether the number of samples
         (in the paper, K) is greater than 1. If K = 1, return the results of
         advi.
 
@@ -220,12 +220,12 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
     joint_obs = merge_dicts(observed, latent_outputs)
-    log_joint_gen = log_joint(joint_obs)    # log p(x,h)
-    entropy = -sum(latent_logpdfs)          # -log q(h|x)
+    log_joint_value = log_joint(joint_obs)
+    entropy = -sum(latent_logpdfs)
 
-    l_signal = log_joint_gen + entropy
-    mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) - l_signal) /\
-                         tf.to_float(tf.shape(l_signal)[axis] - 1)
+    l_signal = log_joint_value + entropy
+    mean_except_signal = tf.reduce_sum(l_signal, axis, keep_dims=True) - \
+        l_signal / tf.to_float(tf.shape(l_signal)[axis] - 1)
 
     # calculate log_mean_exp_sub
     x = tf.cast(l_signal, dtype=tf.float32)
@@ -249,9 +249,8 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one = False):
 
     l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal
 
-    fake_term = tf.reduce_sum(-entropy * \
-                      tf.stop_gradient(l_signal), axis)
-    lower_bound = log_mean_exp(log_joint_gen + entropy, axis)
-    object_function = fake_term + log_mean_exp(log_joint_gen + entropy, axis)
+    fake_term = tf.reduce_sum(-entropy * tf.stop_gradient(l_signal), axis)
+    lower_bound = log_mean_exp(log_joint_value + entropy, axis)
+    object_function = fake_term + log_mean_exp(log_joint_value + entropy, axis)
 
     return object_function, lower_bound
