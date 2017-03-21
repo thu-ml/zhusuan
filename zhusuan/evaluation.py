@@ -56,12 +56,11 @@ class BDMC:
     (AIS).
     """
     def __init__(self, log_prior, log_joint, prior_sampler,
-                 hmc, observed, latent, chain_axis, n_chains, n_temperatures):
+                 hmc, observed, latent, n_chains, n_temperatures):
         # Shape of latent: [chain_axis * num_data, data dims]
         # Construct the tempered objective
         self.prior_sampler = prior_sampler
         self.latent = latent
-        self.chain_axis = chain_axis
         self.n_chains = n_chains
         self.n_temperatures = n_temperatures
 
@@ -75,8 +74,7 @@ class BDMC:
 
             self.log_fn = log_fn
             self.log_fn_val = log_fn(merge_dicts(observed, latent))
-            self.sample_op = hmc.sample(log_fn, observed, latent,
-                                        chain_axis=chain_axis)
+            self.sample_op = hmc.sample(log_fn, observed, latent)
             self.init_latent = [tf.assign(z, z_s)
                                 for z, z_s in zip(latent.values(),
                                                   self.prior_sampler.values())]
@@ -87,7 +85,7 @@ class BDMC:
         prior_density = sess.run(self.log_fn_val,
                                  feed_dict=merge_dicts(
                                      feed_dict, {self.temperature: 0}))
-        log_weights = -self.sum_density(prior_density)
+        log_weights = -prior_density
 
         # Forward AIS
         for num_t in range(self.n_temperatures):
@@ -96,8 +94,6 @@ class BDMC:
             new_feed_dict[self.temperature] = current_temperature
             _, _, _, _, oldp, newp, acc, ss = sess.run(self.sample_op,
                                                        feed_dict=new_feed_dict)
-            oldp = self.sum_density(oldp)
-            newp = self.sum_density(newp)
             if num_t + 1 < self.n_temperatures:
                 log_weights += oldp - newp
             else:
@@ -113,8 +109,6 @@ class BDMC:
                 self.sample_op,
                 feed_dict=merge_dicts(feed_dict,
                                       {self.temperature: current_temperature}))
-            oldp = self.sum_density(oldp)
-            newp = self.sum_density(newp)
             if num_t + 1 < self.n_temperatures:
                 log_weights += oldp - newp
             else:
@@ -123,9 +117,6 @@ class BDMC:
         ll_ub = -np.mean(self.get_lower_bound(log_weights))
 
         return ll_lb, ll_ub
-
-    def sum_density(self, density):
-        return np.reshape(density, [self.n_chains, -1])
 
     def get_lower_bound(self, log_weights):
         max_log_weights = np.max(log_weights, axis=0)
