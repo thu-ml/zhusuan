@@ -19,6 +19,7 @@ api:
 	for f in api/*.rst; do\
         	perl -pi -e 's/(module|package)$$// if $$. == 1' $$f ;\
 	done
+	python ./post_apidoc.py
 	@echo "Auto-generation of API documentation finished. " \
 		"The generated files are in 'api/'"
 
