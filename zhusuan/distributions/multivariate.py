@@ -119,6 +119,12 @@ class Multinomial(Distribution):
         shape = tf.concat([[n_samples, self.n_experiments],
                            self.batch_shape], 0)
         samples = tf.reshape(samples_flat, shape)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        static_n_exps = self.n_experiments if isinstance(self.n_experiments,
+                                                         int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples, static_n_exps]).
+                concatenate(self.get_batch_shape()))
         samples = tf.reduce_sum(
             tf.one_hot(samples, self.n_categories, dtype=tf.int32), axis=1)
         return samples
@@ -239,6 +245,11 @@ class OnehotCategorical(Distribution):
         else:
             shape = tf.concat([[n_samples], self.batch_shape], 0)
             samples = tf.reshape(samples_flat, shape)
+            static_n_samples = n_samples if isinstance(n_samples,
+                                                       int) else None
+            samples.set_shape(
+                tf.TensorShape([static_n_samples]).
+                    concatenate(self.get_batch_shape()))
         samples = tf.one_hot(samples, self.n_categories, dtype=tf.int32)
         return samples
 

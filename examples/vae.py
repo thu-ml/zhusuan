@@ -67,7 +67,6 @@ if __name__ == "__main__":
     x_train = np.vstack([x_train, x_valid]).astype('float32')
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
-    x_test = x_test[:400,:]
     n_x = x_train.shape[1]
 
     # Define model parameters
@@ -76,7 +75,7 @@ if __name__ == "__main__":
     # Define training/evaluation parameters
     lb_samples = 1
     ll_samples = 1000
-    epoches = 3
+    epoches = 3000
     batch_size = 100
     iters = x_train.shape[0] // batch_size
     learning_rate = 0.001

@@ -94,7 +94,12 @@ class Normal(Distribution):
             mean = tf.stop_gradient(mean)
             logstd = tf.stop_gradient(logstd)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.random_normal(shape) * tf.exp(logstd) + mean
+        samples = tf.random_normal(shape) * tf.exp(logstd) + mean
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
+        return samples
 
     def _log_prob(self, given):
         c = -0.5 * np.log(2 * np.pi)
@@ -154,6 +159,10 @@ class Bernoulli(Distribution):
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         alpha = tf.random_uniform(shape, minval=0, maxval=1)
         samples = tf.cast(tf.less(alpha, p), dtype=self.dtype)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
         return samples
 
     def _log_prob(self, given):
@@ -267,7 +276,12 @@ class Categorical(Distribution):
         if self.logits.get_shape().ndims == 2:
             return samples_flat
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.reshape(samples_flat, shape)
+        samples = tf.reshape(samples_flat, shape)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
+        return samples
 
     def _log_prob(self, given):
         logits = self.logits
@@ -395,7 +409,12 @@ class Uniform(Distribution):
             minval = tf.stop_gradient(minval)
             maxval = tf.stop_gradient(maxval)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
+        samples = tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
+        return samples
 
     def _log_prob(self, given):
         log_p = tf.log(self._prob(given))
