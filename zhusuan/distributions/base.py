@@ -171,6 +171,8 @@ class Distribution(object):
     @add_name_scope
     def sample(self, n_samples=None):
         """
+        sample(n_samples=None)
+
         Return samples from the distribution. When `n_samples` is None (by
         default), one sample of shape `batch_shape + value_shape` is generated.
         For a scalar `n_samples`, the returned Tensor has a new sample
@@ -223,6 +225,8 @@ class Distribution(object):
     @add_name_scope
     def log_prob(self, given):
         """
+        log_prob(given)
+
         Compute log probability density (mass) function at `given` value.
 
         :param given: A Tensor. The value at which to evaluate log probability
@@ -237,6 +241,8 @@ class Distribution(object):
     @add_name_scope
     def prob(self, given):
         """
+        prob(given)
+
         Compute probability density (mass) function at `given` value.
 
         :param given: A Tensor. The value at which to evaluate probability
