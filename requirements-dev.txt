@@ -1,4 +1,5 @@
 -r requirements.txt
+Sphinx
 coverage
 pep8
 scipy

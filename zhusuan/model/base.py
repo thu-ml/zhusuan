@@ -237,10 +237,12 @@ class BayesianNet(Context):
             # build the model
 
     A Bayesian Linear Regression example:
+
     .. math::
 
-        w \\sim N(0, \alpha I)
-        y \\sim N(w^Tx, \beta)
+        w \\sim N(0, \\alpha I)
+
+        y \\sim N(w^Tx, \\beta)
 
     ::
 
