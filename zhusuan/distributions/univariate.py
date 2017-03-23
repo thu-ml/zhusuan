@@ -19,6 +19,7 @@ __all__ = [
     'Uniform',
     'Gamma',
     'Beta',
+    'Poisson',
 ]
 
 
@@ -627,6 +628,98 @@ class Beta(Distribution):
                 log_given = tf.identity(log_given)
         return (alpha - 1) * log_given + (beta - 1) * log_1_minus_given - (
             lgamma_alpha + lgamma_beta - lgamma_alpha_plus_beta)
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Poisson(Distribution):
+    """
+    The class of univariate Poisson distribution.
+
+    :param lam: A Tensor. The rate parameter of Poisson. lam must be positive.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`Distribution` for more detailed explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 lam,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        lam = tf.convert_to_tensor(lam, dtype=tf.float32)
+        _assert_positive_op = tf.assert_positive(
+            lam, message="lam must be positive.")
+        with tf.control_dependencies([_assert_positive_op]):
+            self._lam = tf.identity(lam)
+
+        self._check_numerics = check_numerics
+
+        super(Poisson, self).__init__(
+            dtype=tf.int32,
+            is_continuous=False,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def lam(self):
+        """The rate parameter of Poisson."""
+        return self._lam
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.shape(self.lam)
+
+    def _get_batch_shape(self):
+        return self.lam.get_shape()
+
+    def _sample(self, n_samples):
+        dshape = tf.concat([[n_samples], self.batch_shape], 0)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        sshape = tf.TensorShape([static_n_samples]). \
+                concatenate(self.get_batch_shape())
+
+        L = tf.exp(-self.lam)
+        X = tf.zeros(dshape, dtype=self.dtype)
+        prod = tf.ones(dshape, dtype=tf.float32)
+
+        while_c = lambda prod, X: tf.reduce_any(tf.greater_equal(prod, L))
+        def while_b(prod, X):
+            prod *= tf.random_uniform(dshape, minval=0, maxval=1)
+            X += tf.cast(tf.greater_equal(prod, L), dtype=self.dtype)
+
+            X.set_shape(sshape)
+            prod.set_shape(sshape)
+            return prod, X
+
+        _, samples = tf.while_loop(while_c, while_b, 
+                                   loop_vars=[prod, X],
+                                   shape_invariants=[sshape, sshape])
+
+        samples.set_shape(sshape)
+        return samples
+
+    def _log_prob(self, given):
+        lam = self.lam
+        given = tf.to_float(given)
+
+        log_lam = tf.log(lam)
+        lgamma_given = tf.lgamma(given + 1)
+
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_lam, "log(lam)"),
+                     tf.check_numerics(lgamma_given, "lgamma(given + 1)")]):
+                log_lam = tf.identity(log_lam)
+        return given * log_lam - lam - lgamma_given
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
