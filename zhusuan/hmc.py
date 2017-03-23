@@ -329,10 +329,10 @@ class HMC:
         self.data_axes = [list(range(self.num_chain_dims, len(shape)))
                           for shape in self.data_shape]
 
-        print('Static shape = {}'.format(self.sshapes))
-        print('Data shape = {}'.format(self.data_shape))
-        print('Num chain dims = {}, data axes = {}'.
-              format(self.num_chain_dims, self.data_axes))
+        # print('Static shape = {}'.format(self.sshapes))
+        # print('Data shape = {}'.format(self.data_shape))
+        # print('Num chain dims = {}, data axes = {}'.
+        #       format(self.num_chain_dims, self.data_axes))
 
         if self.adapt_mass is not None:
             mass = [tf.stop_gradient(t) for t in
@@ -340,13 +340,13 @@ class HMC:
         else:
             mass = [tf.ones(shape) for shape in self.data_shape]
 
-        print('Mass shape = {}'.format([m.get_shape() for m in mass]))
+        # print('Mass shape = {}'.format([m.get_shape() for m in mass]))
 
         # print('Current mass shape={}'.format(current_mass[0].get_shape()))
         # print('Expanded mass shape={}'.format(expanded_mass[0].get_shape()))
 
         p = random_momentum(self.dshapes, mass)
-        print('P shape = {}'.format([pp.get_shape() for pp in p]))
+        # print('P shape = {}'.format([pp.get_shape() for pp in p]))
         # p = [tf.Print(p[0], [p[0]], "p")]
 
         current_p = copy(p)
@@ -392,8 +392,8 @@ class HMC:
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))
             if_accept = tf.less(u01, acceptance_rate)
 
-            print('Acceptance rate shape = {}'.format(
-                acceptance_rate.get_shape()))
+            # print('Acceptance rate shape = {}'.format(
+            #     acceptance_rate.get_shape()))
 
             new_q = []
             for nq, oq, da in zip(current_q, self.q, self.data_axes):
@@ -403,8 +403,8 @@ class HMC:
                 expanded_if_accept = tf.logical_and(
                     expanded_if_accept, tf.ones_like(nq, dtype=tf.bool)
                 )
-                print('Expanded if accept shape = {}'
-                    .format(expanded_if_accept.get_shape()))
+                # print('Expanded if accept shape = {}'
+                #     .format(expanded_if_accept.get_shape()))
                 new_q.append(tf.where(expanded_if_accept, nq, oq))
 
             update_q = [old.assign(new) for old, new in zip(latent_v, new_q)]
