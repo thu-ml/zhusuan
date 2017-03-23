@@ -1070,3 +1070,143 @@ class TestBeta(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "lgamma\(alpha\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 0., beta: 1., given: 0.5})
+
+
+class TestPoisson(tf.test.TestCase):
+    def test_value_shape(self):
+        # static
+        poisson = Poisson(tf.placeholder(tf.float32, None))
+        self.assertEqual(poisson.get_value_shape().as_list(), [])
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            self.assertEqual(poisson._value_shape().eval().tolist(), [])
+
+    def test_batch_shape(self):
+        # static
+        def _test_static(rate_shape):
+            rate = tf.placeholder(tf.float32, rate_shape)
+            poisson = Poisson(rate)
+            if poisson.get_batch_shape():
+                self.assertEqual(poisson.get_batch_shape().as_list(),
+                                 rate_shape)
+            else:
+                self.assertEqual(None, rate_shape)
+
+        _test_static([])
+        _test_static([2])
+        _test_static([2, 3])
+        _test_static([2, 1, 4])
+        _test_static([None])
+        _test_static([None, 3, 5])
+        _test_static([1, None, 3])
+        _test_static(None)
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(rate_shape):
+                rate = tf.placeholder(tf.float32, rate_shape)
+                poisson = Poisson(rate)
+                self.assertEqual(
+                    poisson.batch_shape.eval(
+                        feed_dict={rate: np.ones(rate_shape)}).tolist(),
+                    rate_shape)
+
+            _test_dynamic([])
+            _test_dynamic([2])
+            _test_dynamic([2, 3])
+            _test_dynamic([2, 1, 4])
+
+    def test_sample_shape(self):
+        def _test_static(rate_shape, n_samples, target_shape):
+            rate = tf.placeholder(tf.float32, rate_shape)
+            poisson = Poisson(rate)
+            samples = poisson.sample(n_samples)
+            if samples.get_shape():
+                self.assertEqual(samples.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], None, [2, 3])
+        _test_static([2, 3], 1, [1, 2, 3])
+        _test_static([5], 2, [2, 5])
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+        _test_static(None, 1, None)
+        _test_static(None, None, None)
+        _test_static([None, 1, 10], None, [None, 1, 10])
+        _test_static([3, None], 2, [2, 3, None])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(rate_shape, n_samples, target_shape):
+                rate = tf.placeholder(tf.float32, None)
+                poisson = Poisson(rate)
+                samples = poisson.sample(n_samples)
+                self.assertEqual(
+                    tf.shape(samples).eval(
+                        feed_dict={rate: np.ones(rate_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], 1, [1, 2, 3])
+            _test_dynamic([1, 3], 2, [2, 1, 3])
+            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+
+    def test_log_prob_shape(self):
+        def _test_static(rate_shape, given_shape, target_shape):
+            rate = tf.placeholder(tf.float32, rate_shape)
+            given = tf.placeholder(tf.int32, given_shape)
+            poisson = Poisson(rate)
+            log_p = poisson.log_prob(given)
+            if log_p.get_shape():
+                self.assertEqual(log_p.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [2, 1], [2, 3])
+        _test_static([5], [2, 1], [2, 5])
+        _test_static([None, 2], [3, None], [3, 2])
+        _test_static([None, 2], [None, 1, 1], [None, None, 2])
+        _test_static(None, [2, 2], None)
+        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3, None])
+        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
+            _test_static([2, 3, 5], [1, 2, 1], None)
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(rate_shape, given_shape, target_shape):
+                rate = tf.placeholder(tf.float32, None)
+                poisson = Poisson(rate)
+                given = tf.placeholder(tf.int32, None)
+                log_p = poisson.log_prob(given)
+                self.assertEqual(
+                    tf.shape(log_p).eval(
+                        feed_dict={rate: np.ones(rate_shape),
+                                   given: np.ones(given_shape,
+                                                   np.int32)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [1, 3], [2, 3])
+            _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
+            _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [1, 2, 1], None)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(rate, given):
+                rate = np.array(rate, np.float32)
+                given = np.array(given, np.float32)
+                poisson = Poisson(rate)
+                log_p = poisson.log_prob(given)
+                target_log_p = stats.poisson.logpmf(given, rate)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = poisson.prob(given)
+                target_p = stats.poisson.pmf(given, rate)
+                self.assertAllClose(p.eval(), target_p)
+
+            _test_value(1, [0, 1, 2, 3, 4, 5, 6])
+            _test_value([5, 1, 5], [0, 0, 1])
+            _test_value([10000, 1], [[100, 0], [0, 100]])
+            _test_value([[1, 10, 100], [999, 99, 9]],
+                        np.ones([3, 1, 2, 3], dtype=np.int32))
+            _test_value([[1, 10, 100], [999, 99, 9]],
+                        100 * np.ones([3, 1, 2, 3], dtype=np.int32))

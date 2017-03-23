@@ -19,6 +19,7 @@ __all__ = [
     'Uniform',
     'Gamma',
     'Beta',
+    'Poisson',
 ]
 
 
@@ -627,6 +628,95 @@ class Beta(Distribution):
                 log_given = tf.identity(log_given)
         return (alpha - 1) * log_given + (beta - 1) * log_1_minus_given - (
             lgamma_alpha + lgamma_beta - lgamma_alpha_plus_beta)
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Poisson(Distribution):
+    """
+    The class of univariate Poisson distribution.
+
+    :param rate: A Tensor. The rate parameter of Poisson. rate must be positive.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`Distribution` for more detailed explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 rate,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        self._rate = tf.convert_to_tensor(rate, dtype=tf.float32)
+        self._check_numerics = check_numerics
+
+        super(Poisson, self).__init__(
+            dtype=tf.int32,
+            is_continuous=False,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def rate(self):
+        """The rate parameter of Poisson."""
+        return self._rate
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.shape(self.rate)
+
+    def _get_batch_shape(self):
+        return self.rate.get_shape()
+
+    def _sample(self, n_samples):
+        # This algorithm to generate random Poisson-distributed numbers is given by Kunth [1]
+        # [1]: https://en.wikipedia.org/wiki/
+        #      Poisson_distribution#Generating_Poisson-distributed_random_variables
+        shape = tf.concat([[n_samples], self.batch_shape], 0)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        static_shape = tf.TensorShape([static_n_samples]). \
+                concatenate(self.get_batch_shape())
+
+        enlam = tf.exp(-self.rate)
+        x = tf.zeros(shape, dtype=self.dtype)
+        prod = tf.ones(shape, dtype=tf.float32)
+
+        def loop_cond(prod, x):
+            return tf.reduce_any(tf.greater_equal(prod, enlam))
+
+        def loop_body(prod, x):
+            prod *= tf.random_uniform(tf.shape(prod), minval=0, maxval=1)
+            x += tf.cast(tf.greater_equal(prod, enlam), dtype=self.dtype)
+            return prod, x
+
+        _, samples = tf.while_loop(loop_cond, loop_body, 
+                                   loop_vars=[prod, x],
+                                   shape_invariants=[static_shape, static_shape])
+
+        samples.set_shape(static_shape)
+        return samples
+
+    def _log_prob(self, given):
+        rate = self.rate
+        given = tf.to_float(given)
+
+        log_rate = tf.log(rate)
+        lgamma_given = tf.lgamma(given + 1)
+
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_rate, "log(rate)"),
+                     tf.check_numerics(lgamma_given, "lgamma(given + 1)")]):
+                log_rate = tf.identity(log_rate)
+        return given * log_rate - rate - lgamma_given
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
