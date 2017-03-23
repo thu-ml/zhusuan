@@ -91,18 +91,21 @@ class DocInherit(object):
     doc_inherit decorator
 
     Usage:
+    ::
 
-    class Foo(object):
-        def foo(self):
-            "Frobber"
-            pass
+        class Foo(object):
+            def foo(self):
+                "Frobber"
+                pass
 
-    class Bar(Foo):
-        @doc_inherit
-        def foo(self):
-            pass
+        class Bar(Foo):
+            @doc_inherit
+            def foo(self):
+                pass
 
-    Now, Bar.foo.__doc__ == Bar().foo.__doc__ == Foo.foo.__doc__ == "Frobber"
+    Now::
+
+        Bar.foo.__doc__ == Bar().foo.__doc__ == Foo.foo.__doc__ == "Frobber"
     """
 
     def __init__(self, mthd):

@@ -56,6 +56,7 @@ class TestNormal(tf.test.TestCase):
         _test_static([1, 2, 3], [1, 3], [1, 2, 3])
         _test_static([None, 3, 5], [3, None], [None, 3, 5])
         _test_static([None, 1, 3], [None, 1], [None, None, 3])
+        _test_static([None, 1, 10], [None, 1, 10], [None, 1, 10])
         _test_static([2, None], [], [2, None])
         _test_static(None, [1, 2], None)
 
@@ -97,6 +98,7 @@ class TestNormal(tf.test.TestCase):
                      [None, 3, 2])
         _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
+        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
@@ -261,6 +263,7 @@ class TestBernoulli(tf.test.TestCase):
         _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
         _test_static(None, 1, None)
         _test_static(None, None, None)
+        _test_static([None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
@@ -421,6 +424,7 @@ class TestCategorical(tf.test.TestCase):
         _test_static([1, 2, 4], None, [1, 2])
         _test_static([1, 2, 4], 1, [1, 1, 2])
         _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None])
+        _test_static([None, 1, 10], None, [None, 1])
         _test_static(None, None, None)
         _test_static(None, 1, None)
         _test_static([3, None], 2, [2, 3])
@@ -592,6 +596,7 @@ class TestUniform(tf.test.TestCase):
         _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
                      [None, 3, 2])
         _test_static(None, [1, 2], None, None)
+        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
         _test_static(None, [1, 2], 1, None)
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
@@ -780,6 +785,7 @@ class TestGamma(tf.test.TestCase):
                      [None, 3, 2])
         _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
+        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
@@ -962,6 +968,7 @@ class TestBeta(tf.test.TestCase):
                      [None, 3, 2])
         _test_static(None, [1, 2], None, None)
         _test_static(None, [1, 2], 1, None)
+        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], [3, 1], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):

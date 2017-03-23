@@ -119,25 +119,20 @@ if __name__ == "__main__":
 
     # Bidirectional Monte Carlo (BDMC) estimates of log likelihood:
     # Slower than IS estimates, used for evaluation after training
-    def joint_obj(observed):
-        return tf.squeeze(log_joint(observed))
-
     # Use q(z|x) as prior in BDMC
-    def prior_obj(observed):
+    def log_qz_given_x(observed):
         z = observed['z']
         model = q_net({'z': z}, x, n_z, n_particles, is_training)
-        log_qz = model.local_log_prob('z')
-        return tf.squeeze(log_qz)
+        return model.local_log_prob('z')
 
     prior_samples = {'z': qz_samples}
-    z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
+    z = tf.Variable(tf.zeros([test_n_chains, test_batch_size, n_z]),
                     name="z", trainable=False)
     hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
                  adapt_step_size=True, target_acceptance_rate=0.65,
                  adapt_mass=True)
-    temperature = tf.placeholder(tf.float32, shape=[], name="temperature")
-    bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples, hmc,
-                   {'x': x_obs}, {'z': z}, chain_axis=1,
+    bdmc = zs.BDMC(log_qz_given_x, log_joint, prior_samples, hmc,
+                   {'x': x_obs}, {'z': z},
                    n_chains=test_n_chains, n_temperatures=test_n_temperatures)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
@@ -222,10 +217,10 @@ if __name__ == "__main__":
         for t in range(test_iters):
             test_x_batch = x_test[t * test_batch_size:
                                   (t + 1) * test_batch_size]
-            test_x_batch = np.tile(test_x_batch, [test_n_chains, 1])
-            ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
-                                                     n_particles: 1,
-                                                     is_training: False})
+            ll_lb, ll_ub = bdmc.run(sess,
+                                    feed_dict={x: test_x_batch,
+                                    n_particles: test_n_chains,
+                                    is_training: False})
             test_ll_lbs.append(ll_lb)
             test_ll_ubs.append(ll_ub)
         time_bdmc += time.time()

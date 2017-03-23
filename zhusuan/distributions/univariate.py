@@ -94,7 +94,12 @@ class Normal(Distribution):
             mean = tf.stop_gradient(mean)
             logstd = tf.stop_gradient(logstd)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.random_normal(shape) * tf.exp(logstd) + mean
+        samples = tf.random_normal(shape) * tf.exp(logstd) + mean
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
+        return samples
 
     def _log_prob(self, given):
         c = -0.5 * np.log(2 * np.pi)
@@ -154,6 +159,10 @@ class Bernoulli(Distribution):
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         alpha = tf.random_uniform(shape, minval=0, maxval=1)
         samples = tf.cast(tf.less(alpha, p), dtype=self.dtype)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
         return samples
 
     def _log_prob(self, given):
@@ -172,11 +181,18 @@ class Bernoulli(Distribution):
                     given, logits = explicit_broadcast(given, logits,
                                                        'given', 'logits')
             else:
-                given, logits = tf.cond(
-                    is_same_dynamic_shape(given, logits),
-                    lambda: (given, logits),
-                    lambda: explicit_broadcast(given, logits,
-                                               'given', 'logits'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, logits = tf.cond(
+                #     is_same_dynamic_shape(given, logits),
+                #     lambda: (given, logits),
+                #     lambda: explicit_broadcast(given, logits,
+                #                                'given', 'logits'))
+                given, logits = explicit_broadcast(given, logits,
+                                                   'given', 'logits')
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -260,7 +276,12 @@ class Categorical(Distribution):
         if self.logits.get_shape().ndims == 2:
             return samples_flat
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.reshape(samples_flat, shape)
+        samples = tf.reshape(samples_flat, shape)
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
+        return samples
 
     def _log_prob(self, given):
         logits = self.logits
@@ -292,10 +313,16 @@ class Categorical(Distribution):
                 if given.get_shape() != logits.get_shape()[:-1]:
                     given, logits = _broadcast(given, logits)
             else:
-                given, logits = tf.cond(
-                    _is_same_dynamic_shape(given, logits),
-                    lambda: (given, logits),
-                    lambda: _broadcast(given, logits))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # given, logits = tf.cond(
+                #     is_same_dynamic_shape(given, logits),
+                #     lambda: (given, logits),
+                #     lambda: _broadcast(given, logits, 'given', 'logits'))
+                given, logits = _broadcast(given, logits)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
         if given.get_shape() and logits.get_shape():
@@ -382,7 +409,12 @@ class Uniform(Distribution):
             minval = tf.stop_gradient(minval)
             maxval = tf.stop_gradient(maxval)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        return tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
+        samples = tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).
+                concatenate(self.get_batch_shape()))
+        return samples
 
     def _log_prob(self, given):
         log_p = tf.log(self._prob(given))
@@ -563,10 +595,16 @@ class Beta(Distribution):
                     alpha, beta = explicit_broadcast(alpha, beta,
                                                      'alpha', 'beta')
             else:
-                alpha, beta = tf.cond(
-                    is_same_dynamic_shape(alpha, beta),
-                    lambda: (alpha, beta),
-                    lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
+                # Below code seems to induce a BUG when this function is
+                # called in HMC. Probably due to tensorflow's not supporting
+                # control flow edge from an op inside the body to outside.
+                # We should further fix this.
+                #
+                # alpha, beta = tf.cond(
+                #     is_same_dynamic_shape(alpha, beta),
+                #     lambda: (alpha, beta),
+                #     lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
+                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
         x = tf.random_gamma([n_samples], alpha, beta=1)
         y = tf.random_gamma([n_samples], beta, beta=1)
         return x / (x + y)

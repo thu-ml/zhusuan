@@ -78,6 +78,7 @@ class TestMultinomial(tf.test.TestCase):
         _test_static([None])
         _test_static([None, 3, 5])
         _test_static([1, None, 3])
+        _test_static([None, 1, 10])
         _test_static(None)
 
         # dynamic
@@ -113,6 +114,7 @@ class TestMultinomial(tf.test.TestCase):
         _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
         _test_static(None, None, None)
         _test_static(None, 1, None)
+        _test_static([None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
@@ -292,6 +294,7 @@ class TestOnehotCategorical(tf.test.TestCase):
         _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
         _test_static(None, None, None)
         _test_static(None, 1, None)
+        _test_static([None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
@@ -483,6 +486,7 @@ class TestDirichlet(tf.test.TestCase):
         _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
         _test_static(None, None, None)
         _test_static(None, 1, None)
+        _test_static([None, 1, 10], None, [None, 1, 10])
         _test_static([3, None], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):

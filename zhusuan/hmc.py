@@ -26,15 +26,15 @@ def velocity(momentum, mass):
     return map(lambda (x, y): x / y, zip(momentum, mass))
 
 
-def hamiltonian(q, p, log_posterior, mass, data_axis):
+def hamiltonian(q, p, log_posterior, mass, data_axes):
     # (n_particles, n)
     potential = -log_posterior(q)
     # (n_particles, n)
     kinetic = 0.5 * tf.add_n(
-        [tf.reduce_sum(tf.square(momentum) / m, axis, keep_dims=True)
-         for momentum, m, axis in zip(p, mass, data_axis)])
+        [tf.reduce_sum(tf.square(momentum) / m, axis)
+         for momentum, m, axis in zip(p, mass, data_axes)])
     # (n_particles, n)
-    return tf.reshape(potential, tf.shape(kinetic)) + kinetic, -potential
+    return potential + kinetic, -potential
     # return tf.reshape(potential, tf.shape(kinetic)) + \
     #        tf.Print(kinetic, [q, p, potential, kinetic])
 
@@ -50,13 +50,13 @@ def leapfrog_integrator(q, p, step_size1, step_size2, grad, mass):
     return q, p
 
 
-def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axis):
+def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axes):
     # (n_particles, n)
-    old_hamiltonian, old_log_prob = hamiltonian(q, p, log_posterior,
-                                                mass, data_axis)
+    old_hamiltonian, old_log_prob = hamiltonian(
+        q, p, log_posterior, mass, data_axes)
     # (n_particles, n)
-    new_hamiltonian, new_log_prob = hamiltonian(new_q, new_p, log_posterior,
-                                                mass, data_axis)
+    new_hamiltonian, new_log_prob = hamiltonian(
+        new_q, new_p, log_posterior, mass, data_axes)
     # (n_particles, n)
     return old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
         tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
@@ -114,34 +114,35 @@ class StepsizeTuner:
 
 
 class ExponentialWeightedMovingVariance:
-    def __init__(self, decay, shape, chain_axis):
+    def __init__(self, decay, shape, num_chain_dims):
         with tf.name_scope("ExponentialWeightedMovingVariance"):
             self.t = tf.Variable(0.0, name="t", trainable=False)
+            # mean, var: (1,...,1 data_dims)
             self.mean = [tf.Variable(tf.zeros(s), name="mean",
                                      trainable=False) for s in shape]
             self.var = [tf.Variable(tf.zeros(s), name="var",
                                     trainable=False) for s in shape]
             self.decay = decay
             self.one = tf.constant(1.0, dtype=tf.float32)
-            self.chain_axis = chain_axis
+            self.num_chain_dims = num_chain_dims
+            self.chain_axes = range(self.num_chain_dims)
 
     @add_name_scope
     def update(self, x):
-        # x: (n_chain, n1, .., nk)
+        # x: (chain_dims data_dims)
         new_t = tf.assign(self.t, self.t + 1)
         weight = (1 - self.decay) / (1 - tf.pow(self.decay, new_t))
-        # incr: (n_chain, n1, .., nk)
-        incr = [weight * (q - tf.expand_dims(mean, self.chain_axis))
-                for q, mean in zip(x, self.mean)]
-        # mean: (n1, ..., nk)
-        update_mean = [mean.assign_add(tf.reduce_mean(i, self.chain_axis))
+        # incr: (chain_dims data_dims)
+        incr = [weight * (q - mean) for q, mean in zip(x, self.mean)]
+        # mean: (1,...,1 data_dims)
+        update_mean = [mean.assign_add(
+            tf.reduce_mean(i, self.chain_axes, keep_dims=True))
                        for mean, i in zip(self.mean, incr)]
-        # var: (n1, ..., nk)
+        # var: (1,...,1 data_dims)
         new_var = [(1 - weight) * var +
-                   tf.reduce_mean(
-                       i * (q - tf.expand_dims(mean, self.chain_axis)),
-                       self.chain_axis)
+            tf.reduce_mean(i * (q - mean), self.chain_axes, keep_dims=True)
                    for var, i, q, mean in zip(self.var, incr, x, update_mean)]
+
         update_var = [tf.assign(var, n_var)
                       for var, n_var in zip(self.var, new_var)]
         return update_var
@@ -162,8 +163,8 @@ class HMC:
                  adapt_step_size=None, target_acceptance_rate=0.8,
                  gamma=0.05, t0=100, kappa=0.75,
                  adapt_mass=None, mass_collect_iters=10, mass_decay=0.99):
-        # Maintain the variables somewhere else to let the sample be called
-        # multiple times
+        # TODO: Maintain the variables somewhere else to let the sample be
+        # called multiple times
         self.step_size = tf.Variable(step_size, name="step_size",
                                      trainable=False)
         self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
@@ -188,9 +189,9 @@ class HMC:
         self.mass_decay = mass_decay
 
     @add_name_scope
-    def _adapt_mass(self, t, chain_axis):
+    def _adapt_mass(self, t, num_chain_dims):
         ewmv = ExponentialWeightedMovingVariance(
-            self.mass_decay, self.data_shape, chain_axis)
+            self.mass_decay, self.data_shape, num_chain_dims)
         new_mass = tf.cond(self.adapt_mass,
                            lambda: ewmv.get_updated_precision(self.q),
                            lambda: ewmv.precision())
@@ -228,7 +229,7 @@ class HMC:
                 get_gradient, mass)
             __, _, _, _, acceptance_rate = get_acceptance_rate(
                 q, p, new_q, new_p,
-                get_log_posterior, mass, self.data_axis)
+                get_log_posterior, mass, self.data_axes)
 
             acceptance_rate = tf.reduce_mean(acceptance_rate)
 
@@ -289,42 +290,19 @@ class HMC:
             tf.reduce_mean(acceptance_rate),
             tf.cast(if_initialize_step_size, tf.float32))
         update_step_size = tf.assign(self.step_size, new_step_size)
-        return update_step_size
+        return tf.stop_gradient(update_step_size)
 
     # Shape = [ChainShape DataShape]
     # Data shape should not change
-    def sample(self, log_joint, observed, latent, chain_axis=None):
+    def sample(self, log_joint, observed, latent):
+        """
+        sample(log_joint, observed, latent)
+        """
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 
         self.q = copy(latent_v)
         # self.q = [tf.Print(self.q[0], [self.q[0]], "q")]
-
-        self.sshapes = [q.get_shape() for q in self.q]
-        self.dshapes = [tf.shape(q) for q in self.q]
-        self.data_axis = [[i for i in range(len(shape)) if i != chain_axis]
-                          for shape in self.sshapes]
-        self.data_shape = [[shape[a] for a in axis] for axis, shape in
-                           zip(self.data_axis, self.sshapes)]
-
-        # print('Static shape = {}'.format(self.sshapes))
-        # print('Data axis = {}'.format(self.data_axis))
-        # print('Data shape = {}'.format(self.data_shape))
-
-        if self.adapt_mass is not None:
-            mass = self._adapt_mass(new_t, chain_axis)
-        else:
-            mass = [tf.ones(shape) for shape in self.data_shape]
-        # current_mass = [tf.Prints(current_mass[0], [current_mass[0]],
-        #                          "mass", summarize=10)]
-
-        expanded_mass = mass if chain_axis is None else \
-            [tf.expand_dims(m, chain_axis) for m in mass]
-        # print('Current mass shape={}'.format(current_mass[0].get_shape()))
-        # print('Expanded mass shape={}'.format(expanded_mass[0].get_shape()))
-
-        p = random_momentum(self.dshapes, expanded_mass)
-        # p = [tf.Print(p[0], [p[0]], "p")]
 
         def get_log_posterior(var_list):
             # (chain_axis)
@@ -339,6 +317,37 @@ class HMC:
             # print('LG = {}'.format(latent_grads))
             return latent_grads
 
+        self.sshapes = [q.get_shape() for q in self.q]
+        self.dshapes = [tf.shape(q) for q in self.q]
+        self.s_chain_shape = get_log_posterior(self.q).get_shape()
+        self.num_chain_dims = len(self.s_chain_shape)
+        # [1, .., 1, data_dims]
+        self.data_shape = [tf.reduce_sum(q, axis=range(self.num_chain_dims),
+                                         keep_dims=True).get_shape()
+                           for q in self.q]
+        self.data_axes = [range(self.num_chain_dims, len(shape))
+                          for shape in self.data_shape]
+
+        print('Static shape = {}'.format(self.sshapes))
+        print('Data shape = {}'.format(self.data_shape))
+        print('Num chain dims = {}, data axes = {}'.
+              format(self.num_chain_dims, self.data_axes))
+
+        if self.adapt_mass is not None:
+            mass = [tf.stop_gradient(t) for t in
+                    self._adapt_mass(new_t, self.num_chain_dims)]
+        else:
+            mass = [tf.ones(shape) for shape in self.data_shape]
+
+        print('Mass shape = {}'.format([m.get_shape() for m in mass]))
+
+        # print('Current mass shape={}'.format(current_mass[0].get_shape()))
+        # print('Expanded mass shape={}'.format(expanded_mass[0].get_shape()))
+
+        p = random_momentum(self.dshapes, mass)
+        print('P shape = {}'.format([pp.get_shape() for pp in p]))
+        # p = [tf.Print(p[0], [p[0]], "p")]
+
         current_p = copy(p)
         current_q = copy(self.q)
         # print('p shape = {}'.format(current_p[0].get_shape()))
@@ -351,13 +360,14 @@ class HMC:
         def iss():
             return self._init_step_size(current_q, current_p, mass,
                                         get_gradient, get_log_posterior)
-        new_step_size = tf.cond(if_initialize_step_size,
-                                iss, lambda: self.step_size)
+        new_step_size = tf.stop_gradient(
+            tf.cond(if_initialize_step_size, iss, lambda: self.step_size)
+        )
         # new_step_size = tf.Print(new_step_size, [new_step_size])
 
         # Leapfrog
         current_q, current_p = self._leapfrog(
-            current_q, current_p, new_step_size, get_gradient, expanded_mass)
+            current_q, current_p, new_step_size, get_gradient, mass)
 
         # for q in current_q:
         #     print(q.get_shape())
@@ -375,27 +385,36 @@ class HMC:
             old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
                 acceptance_rate = get_acceptance_rate(
                     self.q, p, current_q, current_p,
-                    get_log_posterior, mass, self.data_axis)
+                    get_log_posterior, mass, self.data_axes)
 
             # (n_particles, n)
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))
-            if_accept = tf.to_float(u01 < acceptance_rate)
+            if_accept = tf.less(u01, acceptance_rate)
 
-            def myselect(condition, x, y):
-                return condition * x + (1 - condition) * y
+            print('Acceptance rate shape = {}'.format(
+                acceptance_rate.get_shape()))
 
-            new_q = [myselect(if_accept, x, y)
-                     for x, y in zip(current_q, self.q)]
+            new_q = []
+            for nq, oq, da in zip(current_q, self.q, self.data_axes):
+                expanded_if_accept = if_accept
+                for i in range(len(da)):
+                    expanded_if_accept = tf.expand_dims(expanded_if_accept, -1)
+                expanded_if_accept = tf.logical_and(
+                    expanded_if_accept, tf.ones_like(nq, dtype=tf.bool)
+                )
+                print('Expanded if accept shape = {}'
+                    .format(expanded_if_accept.get_shape()))
+                new_q.append(tf.where(expanded_if_accept, nq, oq))
+
             update_q = [old.assign(new) for old, new in zip(latent_v, new_q)]
+
+            new_log_prob = tf.where(if_accept, new_log_prob, old_log_prob)
 
         if self.adapt_step_size is not None:
             update_step_size = self._adapt_step_size(acceptance_rate,
-                                                     if_initialize_step_size)
+                                                    if_initialize_step_size)
         else:
             update_step_size = self.step_size
-
-        new_log_prob = tf.where(tf.cast(tf.squeeze(if_accept), tf.bool),
-                                new_log_prob, old_log_prob)
 
         with tf.control_dependencies([update_step_size]):
             return update_q, p, tf.squeeze(old_hamiltonian), \

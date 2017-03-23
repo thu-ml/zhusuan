@@ -3,25 +3,49 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation
-=============
+ZhuSuan
+=======
+
+ZhuSuan is a python	library	for	**Generative Models**, built upon Tensorflow.
+Unlike existing deep learning libraries, which are mainly designed for
+supervised tasks, ZhuSuan is featured for its deep root into Bayesian
+Inference, thus supporting various kinds of generative models: both the
+traditional **hierarchical Bayesian models** and recent
+**deep generative models**.
+
+With ZhuSuan, users can enjoy powerful fitting and multi-GPU training of deep
+learning, while at the same time they can use generative models to model the
+complex world, exploit unlabeled data and deal with uncertainty by performing
+principled Bayesian inference.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
-   intro
-   tutorial
+
+Getting Started
+---------------
+
+An easy Normal case here for getting started.
+
+
+Tutorials
+---------
+
+.. toctree::
+   :maxdepth: 2
+
+   tutorials
 
 
 API Docs
 --------
 
+Information on specific functions, classes, and methods.
+
 .. toctree::
    :maxdepth: 2
 
-   apidoc/modules
-
+   api
 
 
 Indices and tables
