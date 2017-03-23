@@ -14,8 +14,66 @@ from six.moves import range
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
-
+from zhusuan.transform import semi_broadcast
 import dataset
+
+
+# MADE
+def random_NN_W(n_in, n_out):
+    return tf.random_normal(shape=(n_in, n_out), mean=0, stddev=np.sqrt(2/n_in), dtype=tf.float32)
+
+
+def random_NN_b(n_out):
+    return tf.constant([0] * n_out, dtype=tf.float32)
+
+
+def get_linear_mask(input_pri, output_pri, hidden):
+    layers = [len(input_pri)] + hidden + [len(output_pri)]
+    max_pri = max(input_pri)
+    priority = [input_pri] + [[np.random.randint(max_pri + 1) for j in range(hidden[i])] \
+            for i in range(len(hidden))] + [output_pri]
+    mask = []
+    for l in range(len(layers) - 1):
+        # z_{j} = z_{i} * W_{ij}
+        maskl = np.zeros((layers[l], layers[l + 1]))
+        for i in range(layers[l]):
+            for j in range(layers[l + 1]):
+                maskl[i][j] = (priority[l][i] <= priority[l + 1][j]) * 1.0
+        mask.append(maskl)
+    return mask
+
+
+def MADE(name, id, z, hidden, units=500, hidden_layers=2):
+    static_z_shape = z.get_shape()
+    ndim = static_z_shape.ndims
+    D = int(static_z_shape[ndim - 1])
+
+    layerunit = [2*D] + [units] * hidden_layers + [2*D]
+    mask = get_linear_mask([i+1 for i in range(D)] + [0]*D,
+                            [i for i in range(D)]*2, [units] * hidden_layers)
+
+    with tf.name_scope(name + '%d' % id):
+        layer = tf.concat([z, hidden], ndim - 1, name='layer_0')
+        for i in range(hidden_layers):
+            W = tf.Variable(random_NN_W(layerunit[i], layerunit[i + 1]))
+            W = W * tf.constant(mask[i], dtype=tf.float32)
+            b = tf.Variable(random_NN_b(layerunit[i + 1]))
+            linear = tf.matmul(layer, semi_broadcast(W, layer)) + b
+            if i < hidden_layers:
+                layer = tf.nn.relu(linear, name='layer_%d' % (i + 1))
+            else:
+                layer = linear
+        mW = tf.Variable(random_NN_W(layerunit[hidden_layers], D))
+        mW = mW * tf.constant(mask[hidden_layers][:,:D], dtype=tf.float32)
+        mb = tf.Variable(random_NN_b(D))
+        m = tf.matmul(layer, semi_broadcast(mW, layer)) + mb
+
+        sW = tf.Variable(random_NN_W(layerunit[hidden_layers], D))
+        sW = sW * tf.constant(mask[hidden_layers][:,D:], dtype=tf.float32)
+        sb = tf.Variable(random_NN_b(D))
+        s = tf.matmul(layer, semi_broadcast(sW, layer)) + sb
+
+    return (m, s)
 
 
 @zs.reuse('model')
@@ -51,9 +109,11 @@ def q_net(observed, x, n_z, n_particles, is_training):
             normalizer_params=normalizer_params)
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        hidden = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        hidden = tf.tile(tf.expand_dims(hidden, 0), [n_particles, 1, 1])
         z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
                       group_event_ndims=1)
-    return variational
+    return variational, hidden
 
 
 if __name__ == "__main__":
@@ -105,12 +165,11 @@ if __name__ == "__main__":
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return log_pz + log_px_z
 
-    variational = q_net({}, x, n_z, n_particles, is_training)
+    variational, hidden = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    qz_samples, log_qz = zs.iaf(qz_samples, None, log_qz, zs.linear_ar, iters=1)
+    qz_samples, log_qz = zs.iaf(qz_samples, hidden, log_qz, MADE, iters=5, update='gru')
     
-    #log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
@@ -119,29 +178,7 @@ if __name__ == "__main__":
     is_log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
-    '''
-    # Bidirectional Monte Carlo (BDMC) estimates of log likelihood:
-    # Slower than IS estimates, used for evaluation after training
-    def joint_obj(observed):
-        return tf.squeeze(log_joint(observed))
 
-    # Use q(z|x) as prior in BDMC
-    def prior_obj(observed):
-        z = observed['z']
-        model = q_net({'z': z}, x, n_z, n_particles, is_training)
-        log_qz = model.local_log_prob('z')
-        return tf.squeeze(tf.reduce_sum(log_qz, -1))
-
-    prior_samples = {'z': qz_samples}
-    z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
-                    name="z", trainable=False)
-    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
-                 adapt_step_size=True, target_acceptance_rate=0.65,
-                 adapt_mass=True)
-    bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples, hmc,
-                   {'x': x_obs}, {'z': z}, chain_axis=1,
-                   n_chains=test_n_chains, n_temperatures=test_n_temperatures)
-    '''
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     grads = optimizer.compute_gradients(-lower_bound)
@@ -151,7 +188,7 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    saver = tf.train.Saver(max_to_keep=1)
+    saver = tf.train.Saver(max_to_keep=10)
 
     # Run the inference
     with tf.Session() as sess:
@@ -206,34 +243,12 @@ if __name__ == "__main__":
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood (IS) = {}'.format(
                     np.mean(test_lls)))
-    '''
+
             if epoch % save_freq == 0:
                 print('Saving model...')
                 save_path = os.path.join(result_path,
                                          "vae.epoch.{}.ckpt".format(epoch))
-                utils.makedirs(save_path)
+                if not os.path.exists(os.path.dirname(save_path)):
+                    os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
                 print('Done')
-    
-        # BDMC evaluation
-        print('Start evaluation...')
-        time_bdmc = -time.time()
-        test_ll_lbs = []
-        test_ll_ubs = []
-        for t in range(test_iters):
-            test_x_batch = x_test[t * test_batch_size:
-                                  (t + 1) * test_batch_size]
-            test_x_batch = np.tile(test_x_batch, [test_n_chains, 1])
-            ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
-                                                     n_particles: 1,
-                                                     is_training: False})
-            test_ll_lbs.append(ll_lb)
-            test_ll_ubs.append(ll_ub)
-        time_bdmc += time.time()
-        test_ll_lb = np.mean(test_ll_lbs)
-        test_ll_ub = np.mean(test_ll_ubs)
-        print('>> Test log likelihood (BDMC) ({:.1f}s)\n'
-              '>> lower bound = {}, upper bound = {}, BDMC gap = {}'
-              .format(time_bdmc, test_ll_lb, test_ll_ub,
-                      test_ll_ub - test_ll_lb))
-    '''

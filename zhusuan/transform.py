@@ -54,12 +54,9 @@ def linear_ar(name, id, z, hidden=None):
     :return: A N-D Tensor, 'm' in the paper (Kingma 2016).
     :return: A N-D Tensor, 's' in the paper (Kingma 2016).
     '''
-    # reshape z
-    dynamic_z_shape = tf.shape(z)
     static_z_shape = z.get_shape()
     ndim = static_z_shape.ndims
     D = int(static_z_shape[ndim - 1])
-    z_in = tf.reshape(z, [-1, D])
 
     # calculate diagonal mask
     mask = []
@@ -77,11 +74,9 @@ def linear_ar(name, id, z, hidden=None):
         mW = tfmask * mW
         sW = tfmask * sW
 
-        m = tf.matmul(z_in, mW)
-        s = tf.matmul(z_in, sW)
+        m = tf.matmul(z, semi_broadcast(mW, z))
+        s = tf.matmul(z, semi_broadcast(sW, z))
 
-        m = tf.reshape(m, dynamic_z_shape)
-        s = tf.reshape(s, dynamic_z_shape)
         s = tf.exp(s)
 
     return (m, s)
@@ -116,11 +111,8 @@ def planar_nf(sample, log_prob, iters):
         logpdf(qk): [S, N, M]
     '''
     input_x = sample
-
     # define parameters
     x_shape = input_x.get_shape()
-    print(x_shape)
-    print(log_prob.get_shape())
     ndim = x_shape.ndims
     D = x_shape[ndim - 1]
     D = int(D)
@@ -149,7 +141,7 @@ def planar_nf(sample, log_prob, iters):
 
         # check invertible
         invertible_check = tf.assert_greater_equal(scalar, tf.constant(-1.0, dtype=tf.float32), 
-                                                    message='w\'x must be greated or equal to -1')
+                                                    message='w\'x must be greater or equal to -1')
         with tf.control_dependencies([invertible_check]):
             scalar = tf.identity(scalar)
 
@@ -163,7 +155,7 @@ def planar_nf(sample, log_prob, iters):
         log_det_ja.append( tf.log(det_ja) )
         z = z + tf.matmul(activation, para_u, name='update_calc')
 
-    return (z, log_prob - sum(log_det_ja))
+    return z, log_prob - sum(log_det_ja)
 
 
 def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
@@ -185,13 +177,24 @@ def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
     :return: A N-D Tensor, the transformed sample of the origin input
     tensor
     :return: A (N-1)-D Tensor, the joint-prob of the transformed sample 
-
     '''
 
     joint_prob = log_prob
     z = sample
+    m = s = None
+
+    static_z_shape = z.get_shape()
+    ndim = static_z_shape.ndims
+    D = int(static_z_shape[ndim - 1])
+    
+    reverse = np.zeros((D, D))
+    for i in range(D):
+        reverse[i][D - i - 1] = 1.0
+
+    reverse = tf.constant(reverse, dtype=tf.float32)
+
     for iter in range(iters):
-        m, s = autoregressiveNN('iaf', iter, sample, hidden)
+        m, s = autoregressiveNN('iaf', iter, z, hidden)
 
         if update == 'gru':
             sigma = tf.sigmoid(s)
@@ -202,5 +205,7 @@ def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
             z = s * z + m
             joint_prob = joint_prob - tf.reduce_sum(tf.log(s), axis=-1)
 
-    return (z, joint_prob)
+        z = tf.matmul(z, semi_broadcast(reverse, z))
+
+    return z, joint_prob
 

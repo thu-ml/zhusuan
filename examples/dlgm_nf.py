@@ -108,40 +108,18 @@ if __name__ == "__main__":
     variational = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=10)
+    # qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=0)
     
-    #log_qz = tf.reduce_sum(log_qz, -1)
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
+    batch = advi_visual(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]})
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training
     is_log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
-    '''
-    # Bidirectional Monte Carlo (BDMC) estimates of log likelihood:
-    # Slower than IS estimates, used for evaluation after training
-    def joint_obj(observed):
-        return tf.squeeze(log_joint(observed))
 
-    # Use q(z|x) as prior in BDMC
-    def prior_obj(observed):
-        z = observed['z']
-        model = q_net({'z': z}, x, n_z, n_particles, is_training)
-        log_qz = model.local_log_prob('z')
-        return tf.squeeze(tf.reduce_sum(log_qz, -1))
-
-    prior_samples = {'z': qz_samples}
-    z = tf.Variable(tf.zeros([1, test_n_chains * test_batch_size, n_z]),
-                    name="z", trainable=False)
-    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
-                 adapt_step_size=True, target_acceptance_rate=0.65,
-                 adapt_mass=True)
-    bdmc = zs.BDMC(prior_obj, joint_obj, prior_samples, hmc,
-                   {'x': x_obs}, {'z': z}, chain_axis=1,
-                   n_chains=test_n_chains, n_temperatures=test_n_temperatures)
-    '''
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     grads = optimizer.compute_gradients(-lower_bound)
@@ -151,7 +129,7 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    saver = tf.train.Saver(max_to_keep=1)
+    saver = tf.train.Saver(max_to_keep=10)
 
     # Run the inference
     with tf.Session() as sess:
@@ -211,29 +189,7 @@ if __name__ == "__main__":
                 print('Saving model...')
                 save_path = os.path.join(result_path,
                                          "vae.epoch.{}.ckpt".format(epoch))
-                utils.makedirs(save_path)
+                if not os.path.exists(os.path.dirname(save_path)):
+                    os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
                 print('Done')
-    '''
-        # BDMC evaluation
-        print('Start evaluation...')
-        time_bdmc = -time.time()
-        test_ll_lbs = []
-        test_ll_ubs = []
-        for t in range(test_iters):
-            test_x_batch = x_test[t * test_batch_size:
-                                  (t + 1) * test_batch_size]
-            test_x_batch = np.tile(test_x_batch, [test_n_chains, 1])
-            ll_lb, ll_ub = bdmc.run(sess, feed_dict={x: test_x_batch,
-                                                     n_particles: 1,
-                                                     is_training: False})
-            test_ll_lbs.append(ll_lb)
-            test_ll_ubs.append(ll_ub)
-        time_bdmc += time.time()
-        test_ll_lb = np.mean(test_ll_lbs)
-        test_ll_ub = np.mean(test_ll_ubs)
-        print('>> Test log likelihood (BDMC) ({:.1f}s)\n'
-              '>> lower bound = {}, upper bound = {}, BDMC gap = {}'
-              .format(time_bdmc, test_ll_lb, test_ll_ub,
-                      test_ll_ub - test_ll_lb))
-    '''
