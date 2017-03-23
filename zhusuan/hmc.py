@@ -296,6 +296,9 @@ class HMC:
     # Shape = [ChainShape DataShape]
     # Data shape should not change
     def sample(self, log_joint, observed, latent):
+        """
+        sample(log_joint, observed, latent)
+        """
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
 
