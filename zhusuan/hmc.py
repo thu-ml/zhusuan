@@ -23,7 +23,8 @@ def random_momentum(dshapes, mass):
 
 
 def velocity(momentum, mass):
-    return map(lambda (x, y): x / y, zip(momentum, mass))
+    return map(lambda z: z[0] / z[1], zip(momentum, mass))
+    # return map(lambda (x, y): x / y, zip(momentum, mass))
 
 
 def hamiltonian(q, p, log_posterior, mass, data_axes):
@@ -136,11 +137,11 @@ class ExponentialWeightedMovingVariance:
         incr = [weight * (q - mean) for q, mean in zip(x, self.mean)]
         # mean: (1,...,1 data_dims)
         update_mean = [mean.assign_add(
-            tf.reduce_mean(i, self.chain_axes, keep_dims=True))
+            tf.reduce_mean(i, list(self.chain_axes), keep_dims=True))
                        for mean, i in zip(self.mean, incr)]
         # var: (1,...,1 data_dims)
         new_var = [(1 - weight) * var +
-            tf.reduce_mean(i * (q - mean), self.chain_axes, keep_dims=True)
+            tf.reduce_mean(i * (q - mean), list(self.chain_axes), keep_dims=True)
                    for var, i, q, mean in zip(self.var, incr, x, update_mean)]
 
         update_var = [tf.assign(var, n_var)
@@ -319,10 +320,10 @@ class HMC:
         self.s_chain_shape = get_log_posterior(self.q).get_shape()
         self.num_chain_dims = len(self.s_chain_shape)
         # [1, .., 1, data_dims]
-        self.data_shape = [tf.reduce_sum(q, axis=range(self.num_chain_dims),
+        self.data_shape = [tf.reduce_sum(q, axis=list(range(self.num_chain_dims)),
                                          keep_dims=True).get_shape()
                            for q in self.q]
-        self.data_axes = [range(self.num_chain_dims, len(shape))
+        self.data_axes = [list(range(self.num_chain_dims, len(shape)))
                           for shape in self.data_shape]
 
         print('Static shape = {}'.format(self.sshapes))
