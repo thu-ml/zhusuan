@@ -637,7 +637,7 @@ class Poisson(Distribution):
     """
     The class of univariate Poisson distribution.
 
-    :param lam: A Tensor. The rate parameter of Poisson. lam must be positive.
+    :param rate: A Tensor. The rate parameter of Poisson. rate must be positive.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -647,15 +647,10 @@ class Poisson(Distribution):
     """
 
     def __init__(self,
-                 lam,
+                 rate,
                  group_event_ndims=0,
                  check_numerics=False):
-        lam = tf.convert_to_tensor(lam, dtype=tf.float32)
-        _assert_positive_op = tf.assert_positive(
-            lam, message="lam must be positive.")
-        with tf.control_dependencies([_assert_positive_op]):
-            self._lam = tf.identity(lam)
-
+        self._rate = tf.convert_to_tensor(rate, dtype=tf.float32)
         self._check_numerics = check_numerics
 
         super(Poisson, self).__init__(
@@ -665,9 +660,9 @@ class Poisson(Distribution):
             group_event_ndims=group_event_ndims)
 
     @property
-    def lam(self):
+    def rate(self):
         """The rate parameter of Poisson."""
-        return self._lam
+        return self._rate
 
     def _value_shape(self):
         return tf.constant([], dtype=tf.int32)
@@ -676,50 +671,52 @@ class Poisson(Distribution):
         return tf.TensorShape([])
 
     def _batch_shape(self):
-        return tf.shape(self.lam)
+        return tf.shape(self.rate)
 
     def _get_batch_shape(self):
-        return self.lam.get_shape()
+        return self.rate.get_shape()
 
     def _sample(self, n_samples):
-        dshape = tf.concat([[n_samples], self.batch_shape], 0)
+        # This algorithm to generate random Poisson-distributed numbers is given by Kunth [1]
+        # [1]: https://en.wikipedia.org/wiki/
+        #      Poisson_distribution#Generating_Poisson-distributed_random_variables
+        shape = tf.concat([[n_samples], self.batch_shape], 0)
         static_n_samples = n_samples if isinstance(n_samples, int) else None
-        sshape = tf.TensorShape([static_n_samples]). \
+        static_shape = tf.TensorShape([static_n_samples]). \
                 concatenate(self.get_batch_shape())
 
-        L = tf.exp(-self.lam)
-        X = tf.zeros(dshape, dtype=self.dtype)
-        prod = tf.ones(dshape, dtype=tf.float32)
+        enlam = tf.exp(-self.rate)
+        x = tf.zeros(shape, dtype=self.dtype)
+        prod = tf.ones(shape, dtype=tf.float32)
 
-        while_c = lambda prod, X: tf.reduce_any(tf.greater_equal(prod, L))
-        def while_b(prod, X):
-            prod *= tf.random_uniform(dshape, minval=0, maxval=1)
-            X += tf.cast(tf.greater_equal(prod, L), dtype=self.dtype)
+        def loop_cond(prod, x):
+            return tf.reduce_any(tf.greater_equal(prod, enlam))
 
-            X.set_shape(sshape)
-            prod.set_shape(sshape)
-            return prod, X
+        def loop_body(prod, x):
+            prod *= tf.random_uniform(tf.shape(prod), minval=0, maxval=1)
+            x += tf.cast(tf.greater_equal(prod, enlam), dtype=self.dtype)
+            return prod, x
 
-        _, samples = tf.while_loop(while_c, while_b, 
-                                   loop_vars=[prod, X],
-                                   shape_invariants=[sshape, sshape])
+        _, samples = tf.while_loop(loop_cond, loop_body, 
+                                   loop_vars=[prod, x],
+                                   shape_invariants=[static_shape, static_shape])
 
-        samples.set_shape(sshape)
+        samples.set_shape(static_shape)
         return samples
 
     def _log_prob(self, given):
-        lam = self.lam
+        rate = self.rate
         given = tf.to_float(given)
 
-        log_lam = tf.log(lam)
+        log_rate = tf.log(rate)
         lgamma_given = tf.lgamma(given + 1)
 
         if self._check_numerics:
             with tf.control_dependencies(
-                    [tf.check_numerics(log_lam, "log(lam)"),
+                    [tf.check_numerics(log_rate, "log(rate)"),
                      tf.check_numerics(lgamma_given, "lgamma(given + 1)")]):
-                log_lam = tf.identity(log_lam)
-        return given * log_lam - lam - lgamma_given
+                log_rate = tf.identity(log_rate)
+        return given * log_rate - rate - lgamma_given
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))

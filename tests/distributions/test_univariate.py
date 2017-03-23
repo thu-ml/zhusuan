@@ -1084,14 +1084,14 @@ class TestPoisson(tf.test.TestCase):
 
     def test_batch_shape(self):
         # static
-        def _test_static(lam_shape):
-            lam = tf.placeholder(tf.float32, lam_shape)
-            poisson = Poisson(lam)
+        def _test_static(rate_shape):
+            rate = tf.placeholder(tf.float32, rate_shape)
+            poisson = Poisson(rate)
             if poisson.get_batch_shape():
                 self.assertEqual(poisson.get_batch_shape().as_list(),
-                                 lam_shape)
+                                 rate_shape)
             else:
-                self.assertEqual(None, lam_shape)
+                self.assertEqual(None, rate_shape)
 
         _test_static([])
         _test_static([2])
@@ -1104,13 +1104,13 @@ class TestPoisson(tf.test.TestCase):
 
         # dynamic
         with self.test_session(use_gpu=True):
-            def _test_dynamic(lam_shape):
-                lam = tf.placeholder(tf.float32, lam_shape)
-                poisson = Poisson(lam)
+            def _test_dynamic(rate_shape):
+                rate = tf.placeholder(tf.float32, rate_shape)
+                poisson = Poisson(rate)
                 self.assertEqual(
                     poisson.batch_shape.eval(
-                        feed_dict={lam: np.ones(lam_shape)}).tolist(),
-                    lam_shape)
+                        feed_dict={rate: np.ones(rate_shape)}).tolist(),
+                    rate_shape)
 
             _test_dynamic([])
             _test_dynamic([2])
@@ -1118,9 +1118,9 @@ class TestPoisson(tf.test.TestCase):
             _test_dynamic([2, 1, 4])
 
     def test_sample_shape(self):
-        def _test_static(lam_shape, n_samples, target_shape):
-            lam = tf.placeholder(tf.float32, lam_shape)
-            poisson = Poisson(lam)
+        def _test_static(rate_shape, n_samples, target_shape):
+            rate = tf.placeholder(tf.float32, rate_shape)
+            poisson = Poisson(rate)
             samples = poisson.sample(n_samples)
             if samples.get_shape():
                 self.assertEqual(samples.get_shape().as_list(), target_shape)
@@ -1137,13 +1137,13 @@ class TestPoisson(tf.test.TestCase):
         _test_static([3, None], 2, [2, 3, None])
 
         with self.test_session(use_gpu=True):
-            def _test_dynamic(lam_shape, n_samples, target_shape):
-                lam = tf.placeholder(tf.float32, None)
-                poisson = Poisson(lam)
+            def _test_dynamic(rate_shape, n_samples, target_shape):
+                rate = tf.placeholder(tf.float32, None)
+                poisson = Poisson(rate)
                 samples = poisson.sample(n_samples)
                 self.assertEqual(
                     tf.shape(samples).eval(
-                        feed_dict={lam: np.ones(lam_shape)}).tolist(),
+                        feed_dict={rate: np.ones(rate_shape)}).tolist(),
                     target_shape)
 
             _test_dynamic([2, 3], 1, [1, 2, 3])
@@ -1151,10 +1151,10 @@ class TestPoisson(tf.test.TestCase):
             _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
     def test_log_prob_shape(self):
-        def _test_static(lam_shape, given_shape, target_shape):
-            lam = tf.placeholder(tf.float32, lam_shape)
+        def _test_static(rate_shape, given_shape, target_shape):
+            rate = tf.placeholder(tf.float32, rate_shape)
             given = tf.placeholder(tf.int32, given_shape)
-            poisson = Poisson(lam)
+            poisson = Poisson(rate)
             log_p = poisson.log_prob(given)
             if log_p.get_shape():
                 self.assertEqual(log_p.get_shape().as_list(), target_shape)
@@ -1171,14 +1171,14 @@ class TestPoisson(tf.test.TestCase):
             _test_static([2, 3, 5], [1, 2, 1], None)
 
         with self.test_session(use_gpu=True):
-            def _test_dynamic(lam_shape, given_shape, target_shape):
-                lam = tf.placeholder(tf.float32, None)
-                poisson = Poisson(lam)
+            def _test_dynamic(rate_shape, given_shape, target_shape):
+                rate = tf.placeholder(tf.float32, None)
+                poisson = Poisson(rate)
                 given = tf.placeholder(tf.int32, None)
                 log_p = poisson.log_prob(given)
                 self.assertEqual(
                     tf.shape(log_p).eval(
-                        feed_dict={lam: np.ones(lam_shape),
+                        feed_dict={rate: np.ones(rate_shape),
                                    given: np.ones(given_shape,
                                                    np.int32)}).tolist(),
                     target_shape)
@@ -1192,15 +1192,15 @@ class TestPoisson(tf.test.TestCase):
 
     def test_value(self):
         with self.test_session(use_gpu=True):
-            def _test_value(lam, given):
-                lam = np.array(lam, np.float32)
+            def _test_value(rate, given):
+                rate = np.array(rate, np.float32)
                 given = np.array(given, np.float32)
-                poisson = Poisson(lam)
+                poisson = Poisson(rate)
                 log_p = poisson.log_prob(given)
-                target_log_p = stats.poisson.logpmf(given, lam)
+                target_log_p = stats.poisson.logpmf(given, rate)
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = poisson.prob(given)
-                target_p = stats.poisson.pmf(given, lam)
+                target_p = stats.poisson.pmf(given, rate)
                 self.assertAllClose(p.eval(), target_p)
 
             _test_value(1, [0, 1, 2, 3, 4, 5, 6])
