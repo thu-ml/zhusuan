@@ -22,9 +22,9 @@ class Multinomial(Distribution):
     """
     The class of Multinomial distribution.
 
-    :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
-        Each slice `[i, j, ..., k, :]` represents the un-normalized log
-        probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -170,9 +170,9 @@ class OnehotCategorical(Distribution):
     """
     The class of one-hot Categorical distribution.
 
-    :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
-        Each slice `[i, j, ..., k, :]` represents the un-normalized log
-        probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -309,7 +309,7 @@ class Dirichlet(Distribution):
     """
     The class of Dirichlet distribution.
 
-    :param alpha: A N-D (N >= 1) Tensor of shape (..., n_categories).
+    :param alpha: A N-D (N >= 1) `float32` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
         of a Dirichlet distribution. Should be positive.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of

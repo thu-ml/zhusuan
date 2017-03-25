@@ -23,7 +23,8 @@ def random_momentum(dshapes, mass):
 
 
 def velocity(momentum, mass):
-    return map(lambda (x, y): x / y, zip(momentum, mass))
+    return map(lambda z: z[0] / z[1], zip(momentum, mass))
+    # return map(lambda (x, y): x / y, zip(momentum, mass))
 
 
 def hamiltonian(q, p, log_posterior, mass, data_axes):
@@ -136,11 +137,11 @@ class ExponentialWeightedMovingVariance:
         incr = [weight * (q - mean) for q, mean in zip(x, self.mean)]
         # mean: (1,...,1 data_dims)
         update_mean = [mean.assign_add(
-            tf.reduce_mean(i, self.chain_axes, keep_dims=True))
+            tf.reduce_mean(i, list(self.chain_axes), keep_dims=True))
                        for mean, i in zip(self.mean, incr)]
         # var: (1,...,1 data_dims)
         new_var = [(1 - weight) * var +
-            tf.reduce_mean(i * (q - mean), self.chain_axes, keep_dims=True)
+            tf.reduce_mean(i * (q - mean), list(self.chain_axes), keep_dims=True)
                    for var, i, q, mean in zip(self.var, incr, x, update_mean)]
 
         update_var = [tf.assign(var, n_var)
@@ -322,16 +323,16 @@ class HMC:
         self.s_chain_shape = get_log_posterior(self.q).get_shape()
         self.num_chain_dims = len(self.s_chain_shape)
         # [1, .., 1, data_dims]
-        self.data_shape = [tf.reduce_sum(q, axis=range(self.num_chain_dims),
+        self.data_shape = [tf.reduce_sum(q, axis=list(range(self.num_chain_dims)),
                                          keep_dims=True).get_shape()
                            for q in self.q]
-        self.data_axes = [range(self.num_chain_dims, len(shape))
+        self.data_axes = [list(range(self.num_chain_dims, len(shape)))
                           for shape in self.data_shape]
 
-        print('Static shape = {}'.format(self.sshapes))
-        print('Data shape = {}'.format(self.data_shape))
-        print('Num chain dims = {}, data axes = {}'.
-              format(self.num_chain_dims, self.data_axes))
+        # print('Static shape = {}'.format(self.sshapes))
+        # print('Data shape = {}'.format(self.data_shape))
+        # print('Num chain dims = {}, data axes = {}'.
+        #       format(self.num_chain_dims, self.data_axes))
 
         if self.adapt_mass is not None:
             mass = [tf.stop_gradient(t) for t in
@@ -339,13 +340,13 @@ class HMC:
         else:
             mass = [tf.ones(shape) for shape in self.data_shape]
 
-        print('Mass shape = {}'.format([m.get_shape() for m in mass]))
+        # print('Mass shape = {}'.format([m.get_shape() for m in mass]))
 
         # print('Current mass shape={}'.format(current_mass[0].get_shape()))
         # print('Expanded mass shape={}'.format(expanded_mass[0].get_shape()))
 
         p = random_momentum(self.dshapes, mass)
-        print('P shape = {}'.format([pp.get_shape() for pp in p]))
+        # print('P shape = {}'.format([pp.get_shape() for pp in p]))
         # p = [tf.Print(p[0], [p[0]], "p")]
 
         current_p = copy(p)
@@ -391,8 +392,8 @@ class HMC:
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))
             if_accept = tf.less(u01, acceptance_rate)
 
-            print('Acceptance rate shape = {}'.format(
-                acceptance_rate.get_shape()))
+            # print('Acceptance rate shape = {}'.format(
+            #     acceptance_rate.get_shape()))
 
             new_q = []
             for nq, oq, da in zip(current_q, self.q, self.data_axes):
@@ -402,8 +403,8 @@ class HMC:
                 expanded_if_accept = tf.logical_and(
                     expanded_if_accept, tf.ones_like(nq, dtype=tf.bool)
                 )
-                print('Expanded if accept shape = {}'
-                    .format(expanded_if_accept.get_shape()))
+                # print('Expanded if accept shape = {}'
+                #     .format(expanded_if_accept.get_shape()))
                 new_q.append(tf.where(expanded_if_accept, nq, oq))
 
             update_q = [old.assign(new) for old, new in zip(latent_v, new_q)]
