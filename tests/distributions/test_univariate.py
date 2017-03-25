@@ -1210,3 +1210,17 @@ class TestPoisson(tf.test.TestCase):
                         np.ones([3, 1, 2, 3], dtype=np.int32))
             _test_value([[1, 10, 100], [999, 99, 9]],
                         100 * np.ones([3, 1, 2, 3], dtype=np.int32))
+
+    def test_check_numerics(self):
+        rate = tf.placeholder(tf.float32, [])
+        given = tf.placeholder(tf.int32, [])
+        poisson = Poisson(rate, check_numerics=True)
+        log_p = poisson.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(
+                    tf.errors.InvalidArgumentError,
+                    "lgamma\(given \+ 1\).*Tensor had Inf"):
+                log_p.eval(feed_dict={rate: 1., given: -2})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(rate\).*Tensor had NaN"):
+                log_p.eval(feed_dict={rate: -1., given: 1})

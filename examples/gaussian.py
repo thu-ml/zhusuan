@@ -66,10 +66,6 @@ if __name__ == "__main__":
                                       adapt_mass: i < burnin})
             print('Sample {}: Acceptance rate = {}, step size = {}'.format(
                 i, np.mean(ar), ss))
-            # print('Q = {}'.format(q))
-            # print('OL = {}'.format(ol))
-            # print('NL = {}'.format(nl))
-            # print('AR = {}'.format(ar))
             if i >= burnin:
                 samples.append(q[0])
         print('Finished.')
