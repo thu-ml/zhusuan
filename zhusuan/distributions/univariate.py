@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from .base import *
-from .utils import explicit_broadcast, is_same_dynamic_shape
+from .utils import maybe_explicit_broadcast
 
 
 __all__ = [
@@ -169,33 +169,8 @@ class Bernoulli(Distribution):
         return samples
 
     def _log_prob(self, given):
-        given = tf.to_float(given)
-        logits = self.logits
-        if not (given.get_shape() and logits.get_shape()):
-            given, logits = explicit_broadcast(given, logits,
-                                               'given', 'logits')
-        else:
-            if given.get_shape().ndims != logits.get_shape().ndims:
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
-            elif given.get_shape().is_fully_defined() and \
-                    logits.get_shape().is_fully_defined():
-                if given.get_shape() != logits.get_shape():
-                    given, logits = explicit_broadcast(given, logits,
-                                                       'given', 'logits')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # given, logits = tf.cond(
-                #     is_same_dynamic_shape(given, logits),
-                #     lambda: (given, logits),
-                #     lambda: explicit_broadcast(given, logits,
-                #                                'given', 'logits'))
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
+        given, logits = maybe_explicit_broadcast(
+            tf.to_float(given), self.logits, 'given', 'logits')
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -588,28 +563,8 @@ class Beta(Distribution):
                                          self.beta.get_shape())
 
     def _sample(self, n_samples):
-        alpha, beta = self.alpha, self.beta
-        if not (alpha.get_shape() and beta.get_shape()):
-            alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
-        else:
-            if alpha.get_shape().ndims != beta.get_shape().ndims:
-                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
-            elif alpha.get_shape().is_fully_defined() and \
-                    beta.get_shape().is_fully_defined():
-                if alpha.get_shape() != beta.get_shape():
-                    alpha, beta = explicit_broadcast(alpha, beta,
-                                                     'alpha', 'beta')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # alpha, beta = tf.cond(
-                #     is_same_dynamic_shape(alpha, beta),
-                #     lambda: (alpha, beta),
-                #     lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
-                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
+        alpha, beta = maybe_explicit_broadcast(
+            self.alpha, self.beta, 'alpha', 'beta')
         x = tf.random_gamma([n_samples], alpha, beta=1)
         y = tf.random_gamma([n_samples], beta, beta=1)
         return x / (x + y)
