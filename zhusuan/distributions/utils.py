@@ -35,11 +35,11 @@ def log_combination(n, ks):
 
     .. math::
 
-    \\log \binom{n}{k_1, k_2, \dots} = \\log n! - \sum_{i}\\log k_i!
+        \\log \\binom{n}{k_1, k_2, \\dots} = \\log n! - \\sum_{i}\\log k_i!
 
     :param n: A N-D `int32` Tensor. Can broadcast to match `ks[:-1]`.
-    :param ks: A (N + 1)-D `int32` Tensor. Each slice [i, j, ..., k, :] is a
-        vector of [k_1, k_2, ...].
+    :param ks: A (N + 1)-D `int32` Tensor. Each slice `[i, j, ..., k, :]` is a
+        vector of `[k_1, k_2, ...]`.
 
     :return: A N-D Tensor of type `float32`.
     """
