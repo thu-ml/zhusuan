@@ -189,11 +189,11 @@ def nvil(log_joint,
     return cost, lower_bound
 
 
-def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one=False):
+def vimco(log_joint, observed, latent, axis=0):
     """
-    Implements the variance reduced score function estimator for gradients
-    of the variational lower bound from (Minh, 2016). This works for both
-    continuous and discrete latent `StochasticTensor` s.
+    Implements the multi-sample variance reduced score function estimator for
+    gradients of the variational lower bound from (Minh, 2016). This works for
+    both continuous and discrete latent `StochasticTensor` s.
 
     :param log_joint: A function that accepts a dictionary argument of
         (str, Tensor) pairs, which are mappings from all `StochasticTensor`
@@ -206,16 +206,11 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one=False):
         probabilities.
     :param axis: The sample dimension to reduce when computing the
         variational lower bound.
-    :param is_particle_larger_one: Whether the number of samples
-        (in the paper, K) is greater than 1. If K = 1, return the results of
-        advi.
 
     :return: A Tensor. The proxy object function to maximize.
     :return: A Tensor. The variational lower bound.
     """
-    if not is_particle_larger_one:
-        return advi(log_joint, observed, latent, axis)
-
+    # TODO: check ndim of sample axis should be larger than 1, else raise.
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
