@@ -14,8 +14,27 @@ from six.moves import range
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
-from zhusuan.transform import semi_broadcast
 import dataset
+
+
+# util
+def semi_broadcast(x, base):
+    '''
+    shape(base) =  [i, ..., k, p, ..., q]
+    shape(x)    =  [         , w, ..., z]
+    return semi_broadcast of x
+    shape(tx)   =  [i, ..., k, w, ..., z]
+    '''
+    base_shape = base.get_shape()
+    base_ndim = base_shape.ndims
+    x_shape = x.get_shape()
+    x_ndim = int(x_shape.ndims)
+    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1] * x_ndim, dtype=tf.int32)], 0)
+
+    while x.get_shape().ndims < base_ndim:
+        x = tf.expand_dims(x, 0)
+    tx = tf.tile(x, multiples=tx_shape, name='semi_broadcast')
+    return tx
 
 
 # MADE

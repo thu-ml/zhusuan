@@ -108,12 +108,11 @@ if __name__ == "__main__":
     variational = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    # qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=0)
+    qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=10)
     
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
-    batch = advi_visual(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]})
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training
     is_log_likelihood = tf.reduce_mean(
