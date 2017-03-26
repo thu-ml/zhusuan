@@ -777,7 +777,7 @@ class Binomial(Distribution):
 
     def _log_prob(self, given):
         logits = self.logits
-        n = tf.convert_to_tensor(self.n_experiments, dtype=tf.float32)
+        n = tf.to_float(self.n_experiments)
         given = tf.to_float(given)
 
         log_1_minus_p = -tf.nn.softplus(logits)

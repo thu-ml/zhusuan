@@ -114,6 +114,40 @@ class TestBeta(tf.test.TestCase):
             self.assertTrue(i.op in log_p_ops)
 
 
+class TestPoisson(tf.test.TestCase):
+    def test_Poisson(self):
+        with BayesianNet():
+            rate = tf.ones([2, 3])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Poisson('a', rate, n_samples, group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [rate, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [rate, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
+
+
+class TestBinomial(tf.test.TestCase):
+    def test_Binomial(self):
+        with BayesianNet():
+            logits = tf.zeros([2, 3])
+            n_experiments = tf.placeholder(tf.int32, shape=[])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Binomial('a', logits, n_experiments, n_samples,
+                         group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [logits, n_experiments, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [logits, n_experiments, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
+
+
 class TestMultinomial(tf.test.TestCase):
     def test_Multinomial(self):
         with BayesianNet():
