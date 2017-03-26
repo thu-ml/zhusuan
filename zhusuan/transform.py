@@ -14,33 +14,6 @@ __all__ = [
 ]
 
 
-# utils
-def random_value(shape, mean=0, sd=0.005):
-    '''
-    Return a random tensor
-    '''
-    return tf.random_normal(shape=shape, mean=mean, stddev=sd, dtype=tf.float32)
-
-
-def semi_broadcast(x, base):
-    '''
-    shape(base) =  [i, ..., k, p, ..., q]
-    shape(x)    =  [         , w, ..., z]
-    return semi_broadcast of x
-    shape(tx)   =  [i, ..., k, w, ..., z]
-    '''
-    base_shape = base.get_shape()
-    base_ndim = base_shape.ndims
-    x_shape = x.get_shape()
-    x_ndim = int(x_shape.ndims)
-    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1] * x_ndim, dtype=tf.int32)], 0)
-
-    while x.get_shape().ndims < base_ndim:
-        x = tf.expand_dims(x, 0)
-    tx = tf.tile(x, multiples=tx_shape, name='semi_broadcast')
-    return tx
-
-
 # autoregressive neural network
 def linear_ar(name, id, z, hidden=None):
     '''
@@ -54,9 +27,13 @@ def linear_ar(name, id, z, hidden=None):
     :return: A N-D Tensor, 'm' in the paper (Kingma 2016).
     :return: A N-D Tensor, 's' in the paper (Kingma 2016).
     '''
-    static_z_shape = z.get_shape()
-    ndim = static_z_shape.ndims
-    D = int(static_z_shape[ndim - 1])
+    input_x = z
+    dynamic_x_shape = tf.shape(input_x)
+    static_x_shape = input_x.get_shape()
+    if not static_x_shape[-1:].is_fully_defined():
+        raise ValueError('Inputs %s has undefined last dimension.' % (
+            input_x.name))
+    D = int(static_x_shape[-1])
 
     # calculate diagonal mask
     mask = []
@@ -67,17 +44,22 @@ def linear_ar(name, id, z, hidden=None):
         mask.append(maski)
     tfmask = tf.constant(mask, dtype=tf.float32)
 
+    z = tf.reshape(input_x, [-1, D])
     with tf.name_scope(name + '%d' % id):
-        mW = tf.Variable(random_value([D, D]), name='mW')
-        sW = tf.Variable(random_value([D, D]), name='mW')
-
+        mW = tf.get_variable(shape=[D,D], name='mW',
+                             initializer=tf.random_normal_initializer(0,0.005))
+        sW = tf.get_variable(shape=[D,D], name='sW',
+                             initializer=tf.random_normal_initializer(0,0.005))
         mW = tfmask * mW
         sW = tfmask * sW
 
-        m = tf.matmul(z, semi_broadcast(mW, z))
-        s = tf.matmul(z, semi_broadcast(sW, z))
+        m = tf.matmul(z, mW)
+        s = tf.matmul(z, sW)
 
         s = tf.exp(s)
+
+        m = tf.reshape(m, dynamic_x_shape)
+        s = tf.reshape(s, dynamic_x_shape)
 
     return (m, s)
 
@@ -111,19 +93,25 @@ def planar_nf(sample, log_prob, iters):
         logpdf(qk): [S, N, M]
     '''
     input_x = sample
+    dynamic_x_shape = tf.shape(input_x)
+    static_x_shape = input_x.get_shape()
+    if not static_x_shape[-1:].is_fully_defined():
+        raise ValueError('Inputs %s has undefined last dimension.' % (
+            input_x.name))
+    D = int(static_x_shape[-1])
+
     # define parameters
-    x_shape = input_x.get_shape()
-    ndim = x_shape.ndims
-    D = x_shape[ndim - 1]
-    D = int(D)
     with tf.name_scope('flow_parameters'):
         para_bs = []
         para_us = []
         para_ws = []
         for iter in range(iters):
-            para_b = tf.Variable(random_value([1]), name='para_b_%d' % iter)
-            aux_u = tf.Variable(random_value([D, 1]), name='aux_u_%d' % iter)
-            para_w = tf.Variable(random_value([D, 1]), name='para_w_%d' % iter)
+            para_b = tf.get_variable(name='para_b_%d' % iter, shape=[1],
+                                     initializer=tf.constant_initializer(0.0))
+            aux_u = tf.get_variable(name='aux_u_%d' % iter, shape=[D, 1],
+                                    initializer=tf.random_normal_initializer(0, 0.005))
+            para_w = tf.get_variable(name='para_w_%d' % iter, shape=[D, 1],
+                                     initializer=tf.random_normal_initializer(0, 0.005))
             dot_prod = tf.matmul(para_w, aux_u, transpose_a=True)
             para_u = aux_u + para_w / tf.matmul(para_w, para_w, transpose_a=True) \
                         * (tf.log(tf.exp(dot_prod) + 1) - 1 - dot_prod)
@@ -133,29 +121,29 @@ def planar_nf(sample, log_prob, iters):
             para_us.append(para_u)
 
     # forward and log_det_jacobian
-    z = input_x
-    log_det_ja = []
+    z = tf.reshape(input_x, [-1, D])
     for iter in range(iters):
         scalar = tf.matmul(para_us[iter], para_ws[iter], name='scalar_calc')
         scalar = tf.reshape(scalar, [])
 
         # check invertible
         invertible_check = tf.assert_greater_equal(scalar, tf.constant(-1.0, dtype=tf.float32), 
-                                                    message='w\'x must be greater or equal to -1')
+                                                    message='w\'u must be greater or equal to -1')
         with tf.control_dependencies([invertible_check]):
             scalar = tf.identity(scalar)
 
-        para_w = semi_broadcast(para_ws[iter], z)
+        para_w = para_ws[iter]
         activation = tf.tanh(tf.matmul(z, para_w, name='score_calc') + para_bs[iter], name='activation_calc')
-        para_u = semi_broadcast(para_us[iter], activation)
+        para_u = para_us[iter]
 
         reduce_act = tf.reduce_sum(activation, axis=-1)
         det_ja = scalar * (tf.constant(1.0, dtype=tf.float32) - reduce_act * reduce_act) \
             + tf.constant(1.0, dtype=tf.float32)
-        log_det_ja.append( tf.log(det_ja) )
+        log_prob -= tf.log(det_ja)
         z = z + tf.matmul(activation, para_u, name='update_calc')
+    z = tf.reshape(z, dynamic_x_shape)
 
-    return z, log_prob - sum(log_det_ja)
+    return z, log_prob
 
 
 def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
@@ -183,16 +171,6 @@ def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
     z = sample
     m = s = None
 
-    static_z_shape = z.get_shape()
-    ndim = static_z_shape.ndims
-    D = int(static_z_shape[ndim - 1])
-    
-    reverse = np.zeros((D, D))
-    for i in range(D):
-        reverse[i][D - i - 1] = 1.0
-
-    reverse = tf.constant(reverse, dtype=tf.float32)
-
     for iter in range(iters):
         m, s = autoregressiveNN('iaf', iter, z, hidden)
 
@@ -205,7 +183,7 @@ def iaf(sample, hidden, log_prob, autoregressiveNN, iters, update='normal'):
             z = s * z + m
             joint_prob = joint_prob - tf.reduce_sum(tf.log(s), axis=-1)
 
-        z = tf.matmul(z, semi_broadcast(reverse, z))
+        z = tf.reverse(z, [-1])
 
     return z, joint_prob
 
