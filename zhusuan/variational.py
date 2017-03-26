@@ -92,7 +92,7 @@ def rws(log_joint, observed, latent, axis=0):
     :param axis: The sample dimension(s) to reduce when computing the
         log likelihood and the cost for adapting proposals.
 
-    :return: A Tensor. The cost to minimize given by Reweighted Wake-sleep.
+    :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. Estimated log likelihoods.
     """
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
@@ -143,7 +143,7 @@ def nvil(log_joint,
     :param axis: The sample dimension(s) to reduce when computing the
         variational lower bound.
 
-    :return: A Tensor. The cost to minimize.
+    :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
     """
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
@@ -207,7 +207,7 @@ def vimco(log_joint, observed, latent, axis=0):
     :param axis: The sample dimension to reduce when computing the
         variational lower bound.
 
-    :return: A Tensor. The proxy object function to maximize.
+    :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
     """
     # TODO: check ndim of sample axis should be larger than 1, else raise.
@@ -217,42 +217,32 @@ def vimco(log_joint, observed, latent, axis=0):
     joint_obs = merge_dicts(observed, latent_outputs)
     log_joint_value = log_joint(joint_obs)
     entropy = -sum(latent_logpdfs)
-
     l_signal = log_joint_value + entropy
-    mean_except_signal = tf.reduce_sum(l_signal, axis, keep_dims=True) - \
-        l_signal / tf.to_float(tf.shape(l_signal)[axis] - 1)
 
-    # calculate log_mean_exp_sub
-    x = tf.cast(l_signal, dtype=tf.float32)
-    sub_x = tf.cast(mean_except_signal, dtype=tf.float32)
+    # compute variance reduction term
+    mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) -
+        l_signal) / tf.to_float(tf.shape(l_signal)[axis] - 1)
+    x, sub_x = tf.to_float(l_signal), tf.to_float(mean_except_signal)
 
-    x_shape = tf.shape(x)
     n_dim = tf.rank(x)
-    dims = tf.range(n_dim)
     axis_dim_mask = tf.cast(tf.one_hot(axis, n_dim), tf.bool)
     original_mask = tf.cast(tf.one_hot(n_dim - 1, n_dim), tf.bool)
     axis_dim = tf.ones([n_dim], tf.int32) * axis
     originals = tf.ones([n_dim], tf.int32) * (n_dim - 1)
-    perm = tf.where(original_mask, axis_dim, dims)
+    perm = tf.where(original_mask, axis_dim, tf.range(n_dim))
     perm = tf.where(axis_dim_mask, originals, perm)
-
-    rep_para = tf.concat([tf.ones([n_dim], tf.int32),
-                         tf.ones([1], tf.int32) * x_shape[axis]], 0)
+    multiples = tf.concat([tf.ones([n_dim], tf.int32), [tf.shape(x)[axis]]], 0)
 
     x = tf.transpose(x, perm=perm)
     sub_x = tf.transpose(sub_x, perm=perm)
-
-    # extend to another dimension
-    x_ex = tf.tile(tf.expand_dims(x, n_dim), rep_para)
+    x_ex = tf.tile(tf.expand_dims(x, n_dim), multiples)
     x_ex = x_ex - tf.matrix_diag(x) + tf.matrix_diag(sub_x)
-
     pre_signal = tf.transpose(log_mean_exp(x_ex, n_dim - 1), perm=perm)
-    # end of calculation of log_mean_exp_sub
 
+    # variance reduced objective
     l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal
-
     fake_term = tf.reduce_sum(-entropy * tf.stop_gradient(l_signal), axis)
     lower_bound = log_mean_exp(log_joint_value + entropy, axis)
-    object_function = fake_term + log_mean_exp(log_joint_value + entropy, axis)
+    cost = -fake_term - log_mean_exp(log_joint_value + entropy, axis)
 
-    return object_function, lower_bound
+    return cost, lower_bound
