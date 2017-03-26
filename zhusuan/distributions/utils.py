@@ -11,6 +11,7 @@ __all__ = [
     'log_factorial',
     'log_combination',
     'explicit_broadcast',
+    'maybe_explicit_broadcast',
     'is_same_dynamic_shape',
 ]
 
@@ -35,11 +36,11 @@ def log_combination(n, ks):
 
     .. math::
 
-    \\log \binom{n}{k_1, k_2, \dots} = \\log n! - \sum_{i}\\log k_i!
+        \\log \\binom{n}{k_1, k_2, \\dots} = \\log n! - \\sum_{i}\\log k_i!
 
     :param n: A N-D `int32` Tensor. Can broadcast to match `ks[:-1]`.
-    :param ks: A (N + 1)-D `int32` Tensor. Each slice [i, j, ..., k, :] is a
-        vector of [k_1, k_2, ...].
+    :param ks: A (N + 1)-D `int32` Tensor. Each slice `[i, j, ..., k, :]` is a
+        vector of `[k_1, k_2, ...]`.
 
     :return: A N-D Tensor of type `float32`.
     """
@@ -61,6 +62,35 @@ def explicit_broadcast(x, y, x_name, y_name):
         raise ValueError(
             "{} and {} cannot broadcast to match. ({} vs. {})".format(
                 x_name, y_name, x.get_shape(), y.get_shape()))
+    return x, y
+
+
+def maybe_explicit_broadcast(x, y, x_name, y_name):
+    """
+    Explicit broadcast two Tensors to have the same shape if necessary.
+
+    :return: x, y after broadcast.
+    """
+    if not (x.get_shape() and y.get_shape()):
+        x, y = explicit_broadcast(x, y, x_name, y_name)
+    else:
+        if x.get_shape().ndims != y.get_shape().ndims:
+            x, y = explicit_broadcast(x, y, x_name, y_name)
+        elif x.get_shape().is_fully_defined() and \
+                y.get_shape().is_fully_defined():
+            if x.get_shape() != y.get_shape():
+                x, y = explicit_broadcast(x, y, x_name, y_name)
+        else:
+            # Below code seems to induce a BUG when this function is
+            # called in HMC. Probably due to tensorflow's not supporting
+            # control flow edge from an op inside the body to outside.
+            # We should further fix this.
+            #
+            # x, y = tf.cond(
+            #     is_same_dynamic_shape(x, y),
+            #     lambda: (x, y),
+            #     lambda: explicit_broadcast(x, y, x_name, y_name))
+            x, y = explicit_broadcast(x, y, x_name, y_name)
     return x, y
 
 

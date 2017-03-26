@@ -7,7 +7,7 @@ from __future__ import division
 import tensorflow as tf
 
 from .base import *
-from .utils import explicit_broadcast, log_combination, is_same_dynamic_shape
+from .utils import maybe_explicit_broadcast, log_combination
 
 
 __all__ = [
@@ -22,9 +22,9 @@ class Multinomial(Distribution):
     """
     The class of Multinomial distribution.
 
-    :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
-        Each slice `[i, j, ..., k, :]` represents the un-normalized log
-        probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -130,32 +130,8 @@ class Multinomial(Distribution):
         return samples
 
     def _log_prob(self, given):
-        logits = self.logits
-        if not (given.get_shape() and logits.get_shape()):
-            given, logits = explicit_broadcast(given, logits,
-                                               'given', 'logits')
-        else:
-            if given.get_shape().ndims != logits.get_shape().ndims:
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
-            elif given.get_shape().is_fully_defined() and \
-                    logits.get_shape().is_fully_defined():
-                if given.get_shape() != logits.get_shape():
-                    given, logits = explicit_broadcast(given, logits,
-                                                       'given', 'logits')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # given, logits = tf.cond(
-                #     is_same_dynamic_shape(given, logits),
-                #     lambda: (given, logits),
-                #     lambda: explicit_broadcast(given, logits,
-                #                                'given', 'logits'))
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
+        given, logits = maybe_explicit_broadcast(
+            given, self.logits, 'given', 'logits')
         normalized_logits = logits - tf.reduce_logsumexp(
             logits, axis=-1, keep_dims=True)
         log_p = log_combination(self.n_experiments, given) + \
@@ -170,9 +146,9 @@ class OnehotCategorical(Distribution):
     """
     The class of one-hot Categorical distribution.
 
-    :param logits: A N-D (N >= 1) Tensor of shape (..., n_categories).
-        Each slice `[i, j, ..., k, :]` represents the un-normalized log
-        probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -254,33 +230,8 @@ class OnehotCategorical(Distribution):
         return samples
 
     def _log_prob(self, given):
-        given = tf.to_float(given)
-        logits = self.logits
-        if not (given.get_shape() and logits.get_shape()):
-            given, logits = explicit_broadcast(given, logits,
-                                               'given', 'logits')
-        else:
-            if given.get_shape().ndims != logits.get_shape().ndims:
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
-            elif given.get_shape().is_fully_defined() and \
-                    logits.get_shape().is_fully_defined():
-                if given.get_shape() != logits.get_shape():
-                    given, logits = explicit_broadcast(given, logits,
-                                                       'given', 'logits')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # given, logits = tf.cond(
-                #     is_same_dynamic_shape(given, logits),
-                #     lambda: (given, logits),
-                #     lambda: explicit_broadcast(given, logits,
-                #                                'given', 'logits'))
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
+        given, logits = maybe_explicit_broadcast(
+            tf.to_float(given), self.logits, 'given', 'logits')
         if (given.get_shape().ndims == 2) or (logits.get_shape().ndims == 2):
             given_flat = given
             logits_flat = logits
@@ -309,7 +260,7 @@ class Dirichlet(Distribution):
     """
     The class of Dirichlet distribution.
 
-    :param alpha: A N-D (N >= 1) Tensor of shape (..., n_categories).
+    :param alpha: A N-D (N >= 1) `float32` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
         of a Dirichlet distribution. Should be positive.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
@@ -390,31 +341,8 @@ class Dirichlet(Distribution):
 
     def _log_prob(self, given):
         alpha = self.alpha
-        if not (given.get_shape() and alpha.get_shape()):
-            given, alpha = explicit_broadcast(given, alpha,
-                                              'given', 'alpha')
-        else:
-            if given.get_shape().ndims != alpha.get_shape().ndims:
-                given, alpha = explicit_broadcast(given, alpha,
-                                                  'given', 'alpha')
-            elif given.get_shape().is_fully_defined() and \
-                    alpha.get_shape().is_fully_defined():
-                if given.get_shape() != alpha.get_shape():
-                    given, alpha = explicit_broadcast(given, alpha,
-                                                      'given', 'alpha')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # given, alpha = tf.cond(
-                #     is_same_dynamic_shape(given, alpha),
-                #     lambda: (given, alpha),
-                #     lambda: explicit_broadcast(given, alpha,
-                #                                'given', 'alpha'))
-                given, alpha = explicit_broadcast(given, alpha,
-                                                  'given', 'alpha')
+        given, alpha = maybe_explicit_broadcast(
+            given, self.alpha, 'given', 'alpha')
         log_Beta_alpha = tf.lbeta(alpha)
         # fix of no static shape inference for tf.lbeta
         if alpha.get_shape():
