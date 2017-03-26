@@ -230,12 +230,19 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one=False):
     # calculate log_mean_exp_sub
     x = tf.cast(l_signal, dtype=tf.float32)
     sub_x = tf.cast(mean_except_signal, dtype=tf.float32)
-    x_shape = x.get_shape()
-    n_dim = x_shape.ndims
-    op_indices = n_dim - 1
 
-    perm = range(axis) + [op_indices] + range(axis + 1, n_dim - 1) + [axis]
-    rep_para = [1] * n_dim + [tf.shape(x)[axis]]
+    x_shape = tf.shape(x)
+    n_dim = tf.rank(x)
+    dims = tf.range(n_dim)
+    axis_dim_mask = tf.cast(tf.one_hot(axis, n_dim), tf.bool)
+    original_mask = tf.cast(tf.one_hot(n_dim - 1, n_dim), tf.bool)
+    axis_dim = tf.ones([n_dim], tf.int32) * axis
+    originals = tf.ones([n_dim], tf.int32) * (n_dim - 1)
+    perm = tf.where(original_mask, axis_dim, dims)
+    perm = tf.where(axis_dim_mask, originals, perm)
+
+    rep_para = tf.concat([tf.ones([n_dim], tf.int32),
+                         tf.ones([1], tf.int32) * x_shape[axis]], 0)
 
     x = tf.transpose(x, perm=perm)
     sub_x = tf.transpose(sub_x, perm=perm)
@@ -244,7 +251,7 @@ def vimco(log_joint, observed, latent, axis=0, is_particle_larger_one=False):
     x_ex = tf.tile(tf.expand_dims(x, n_dim), rep_para)
     x_ex = x_ex - tf.matrix_diag(x) + tf.matrix_diag(sub_x)
 
-    pre_signal = tf.transpose(log_mean_exp(x_ex, op_indices), perm=perm)
+    pre_signal = tf.transpose(log_mean_exp(x_ex, n_dim - 1), perm=perm)
     # end of calculation of log_mean_exp_sub
 
     l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal

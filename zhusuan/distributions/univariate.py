@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from .base import *
-from .utils import explicit_broadcast, is_same_dynamic_shape
+from .utils import maybe_explicit_broadcast
 
 
 __all__ = [
@@ -20,6 +20,7 @@ __all__ = [
     'Gamma',
     'Beta',
     'Poisson',
+    'Binomial',
 ]
 
 
@@ -168,33 +169,8 @@ class Bernoulli(Distribution):
         return samples
 
     def _log_prob(self, given):
-        given = tf.to_float(given)
-        logits = self.logits
-        if not (given.get_shape() and logits.get_shape()):
-            given, logits = explicit_broadcast(given, logits,
-                                               'given', 'logits')
-        else:
-            if given.get_shape().ndims != logits.get_shape().ndims:
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
-            elif given.get_shape().is_fully_defined() and \
-                    logits.get_shape().is_fully_defined():
-                if given.get_shape() != logits.get_shape():
-                    given, logits = explicit_broadcast(given, logits,
-                                                       'given', 'logits')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # given, logits = tf.cond(
-                #     is_same_dynamic_shape(given, logits),
-                #     lambda: (given, logits),
-                #     lambda: explicit_broadcast(given, logits,
-                #                                'given', 'logits'))
-                given, logits = explicit_broadcast(given, logits,
-                                                   'given', 'logits')
+        given, logits = maybe_explicit_broadcast(
+            tf.to_float(given), self.logits, 'given', 'logits')
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -587,28 +563,8 @@ class Beta(Distribution):
                                          self.beta.get_shape())
 
     def _sample(self, n_samples):
-        alpha, beta = self.alpha, self.beta
-        if not (alpha.get_shape() and beta.get_shape()):
-            alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
-        else:
-            if alpha.get_shape().ndims != beta.get_shape().ndims:
-                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
-            elif alpha.get_shape().is_fully_defined() and \
-                    beta.get_shape().is_fully_defined():
-                if alpha.get_shape() != beta.get_shape():
-                    alpha, beta = explicit_broadcast(alpha, beta,
-                                                     'alpha', 'beta')
-            else:
-                # Below code seems to induce a BUG when this function is
-                # called in HMC. Probably due to tensorflow's not supporting
-                # control flow edge from an op inside the body to outside.
-                # We should further fix this.
-                #
-                # alpha, beta = tf.cond(
-                #     is_same_dynamic_shape(alpha, beta),
-                #     lambda: (alpha, beta),
-                #     lambda: explicit_broadcast(alpha, beta, 'alpha', 'beta'))
-                alpha, beta = explicit_broadcast(alpha, beta, 'alpha', 'beta')
+        alpha, beta = maybe_explicit_broadcast(
+            self.alpha, self.beta, 'alpha', 'beta')
         x = tf.random_gamma([n_samples], alpha, beta=1)
         y = tf.random_gamma([n_samples], beta, beta=1)
         return x / (x + y)
@@ -723,6 +679,122 @@ class Poisson(Distribution):
                                        "lgamma(given + 1)")]):
                 log_rate = tf.identity(log_rate)
         return given * log_rate - rate - lgamma_given_plus_1
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Binomial(Distribution):
+    """
+    The class of univariate Binomial distribution.
+
+    :param logits: A `float32` Tensor. The log-odds of probabilities.
+
+        .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
+
+    :param n_experiments: A 0-D `int32` Tensor. The number of experiments
+        for each sample.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`Distribution` for more detailed explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 logits,
+                 n_experiments,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        sign_err_msg = "n_experiments must be positive"
+        if isinstance(n_experiments, int):
+            if n_experiments <= 0:
+                raise ValueError(sign_err_msg)
+            self._n_experiments = n_experiments
+        else:
+            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            _assert_rank_op = tf.assert_rank(
+                n_experiments, 0,
+                message="n_experiments should be a scalar (0-D Tensor).")
+            _assert_positive_op = tf.assert_greater(
+                n_experiments, 0, message=sign_err_msg)
+            with tf.control_dependencies([_assert_rank_op,
+                                          _assert_positive_op]):
+                self._n_experiments = tf.identity(n_experiments)
+
+        self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
+        self._check_numerics = check_numerics
+        super(Binomial, self).__init__(
+            dtype=tf.int32,
+            is_continuous=False,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def n_experiments(self):
+        """The number of experiments."""
+        return self._n_experiments
+
+    @property
+    def logits(self):
+        """The log-odds of probabilities."""
+        return self._logits
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.shape(self.logits)
+
+    def _get_batch_shape(self):
+        return self.logits.get_shape()
+
+    def _sample(self, n_samples):
+        n = self.n_experiments
+        if self.logits.get_shape().ndims == 1:
+            logits_flat = self.logits
+        else:
+            logits_flat = tf.reshape(self.logits, [-1])
+        log_1_minus_p = -tf.nn.softplus(logits_flat)
+        log_p = logits_flat + log_1_minus_p
+        stacked_logits_flat = tf.stack([log_1_minus_p, log_p], axis=-1)
+        samples_flat = tf.transpose(
+            tf.multinomial(stacked_logits_flat, n_samples * n))
+
+        shape = tf.concat([[n, n_samples], self.batch_shape], 0)
+        samples = tf.reduce_sum(tf.reshape(samples_flat, shape), axis=0)
+
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        static_shape = tf.TensorShape([static_n_samples]).concatenate(
+            self.get_batch_shape())
+        samples.set_shape(static_shape)
+
+        return samples
+
+    def _log_prob(self, given):
+        logits = self.logits
+        n = tf.convert_to_tensor(self.n_experiments, dtype=tf.float32)
+        given = tf.to_float(given)
+
+        log_1_minus_p = -tf.nn.softplus(logits)
+        lgamma_n_plus_1 = tf.lgamma(n + 1)
+        lgamma_given_plus_1 = tf.lgamma(given + 1)
+        lgamma_n_minus_given_plus_1 = tf.lgamma(n - given + 1)
+
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(lgamma_given_plus_1,
+                                       "lgamma(given + 1)"),
+                     tf.check_numerics(lgamma_n_minus_given_plus_1,
+                                       "lgamma(n - given + 1)")]):
+                lgamma_given_plus_1 = tf.identity(lgamma_given_plus_1)
+
+        return lgamma_n_plus_1 - lgamma_n_minus_given_plus_1 - \
+            lgamma_given_plus_1 + given * logits + n * log_1_minus_p
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
