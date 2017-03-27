@@ -14,70 +14,72 @@ from six.moves import range
 import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
+
 import dataset
 
 
 # MADE
-def random_NN_W(n_in, n_out):
-    return tf.random_normal(shape=(n_in, n_out), mean=0, stddev=np.sqrt(2/n_in), dtype=tf.float32)
+def random_weights(n_in, n_out):
+    return tf.random_normal(shape=(n_in, n_out), mean=0,
+                            stddev=np.sqrt(2 / n_in), dtype=tf.float32)
 
 
-def random_NN_b(n_out):
+def random_bias(n_out):
     return tf.constant([0] * n_out, dtype=tf.float32)
 
 
 def get_linear_mask(input_pri, output_pri, hidden):
     layers = [len(input_pri)] + hidden + [len(output_pri)]
     max_pri = max(input_pri)
-    priority = [input_pri] + [[np.random.randint(max_pri + 1) for j in range(hidden[i])] \
-            for i in range(len(hidden))] + [output_pri]
+    priority = [input_pri] + \
+        [[np.random.randint(max_pri + 1) for _ in range(hidden[i])]
+         for i in range(len(hidden))] + [output_pri]
     mask = []
     for l in range(len(layers) - 1):
         # z_{j} = z_{i} * W_{ij}
-        maskl = np.zeros((layers[l], layers[l + 1]))
+        mask_l = np.zeros((layers[l], layers[l + 1]))
         for i in range(layers[l]):
             for j in range(layers[l + 1]):
-                maskl[i][j] = (priority[l][i] <= priority[l + 1][j]) * 1.0
-        mask.append(maskl)
+                mask_l[i][j] = (priority[l][i] <= priority[l + 1][j]) * 1.0
+        mask.append(mask_l)
     return mask
 
 
-def MADE(name, id, z, hidden, units=500, hidden_layers=2):
+def made(name, id, z, hidden, units=500, hidden_layers=2):
     static_z_shape = z.get_shape()
     if not static_z_shape[-1:].is_fully_defined():
-        raise ValueError('Inputs %s has undefined last dimension.' % (
-            z.name))
-    dynamic_z_shape = tf.shape(z)
-    D = int(static_z_shape[-1])
+        raise ValueError('Inputs {} has undefined last dimension.'.format(z))
+    d = int(static_z_shape[-1])
 
-    layerunit = [2*D] + [units] * hidden_layers + [2*D]
-    mask = get_linear_mask([i+1 for i in range(D)] + [0]*D,
-                            [i for i in range(D)]*2, [units] * hidden_layers)
+    layer_unit = [2 * d] + [units] * hidden_layers + [2 * d]
+    mask = get_linear_mask([i + 1 for i in range(d)] + [0] * d,
+                           [i for i in range(d)] * 2, [units] * hidden_layers)
 
     with tf.name_scope(name + '%d' % id):
-        layer = tf.concat([z, hidden], static_z_shape.ndims - 1, name='layer_0')
-        layer = tf.reshape(layer, [-1, 2 * D])
+        layer = tf.concat([z, hidden], static_z_shape.ndims - 1,
+                          name='layer_0')
+        layer = tf.reshape(layer, [-1, 2 * d])
         for i in range(hidden_layers):
-            W = tf.Variable(random_NN_W(layerunit[i], layerunit[i + 1]))
-            W = W * tf.constant(mask[i], dtype=tf.float32)
-            b = tf.Variable(random_NN_b(layerunit[i + 1]))
-            linear = tf.matmul(layer, W) + b
+            w = tf.Variable(random_weights(layer_unit[i], layer_unit[i + 1]))
+            w = w * tf.constant(mask[i], dtype=tf.float32)
+            b = tf.Variable(random_bias(layer_unit[i + 1]))
+            linear = tf.matmul(layer, w) + b
             layer = tf.nn.relu(linear, name='layer_%d' % (i + 1))
 
-        mW = tf.Variable(random_NN_W(layerunit[hidden_layers], D))
-        mW = mW * tf.constant(mask[hidden_layers][:,:D], dtype=tf.float32)
-        mb = tf.Variable(random_NN_b(D))
-        m = tf.matmul(layer, mW) + mb
+        m_w = tf.Variable(random_weights(layer_unit[hidden_layers], d))
+        m_w = m_w * tf.constant(mask[hidden_layers][:, :d], dtype=tf.float32)
+        m_b = tf.Variable(random_bias(d))
+        m = tf.matmul(layer, m_w) + m_b
 
-        sW = tf.Variable(random_NN_W(layerunit[hidden_layers], D))
-        sW = sW * tf.constant(mask[hidden_layers][:,D:], dtype=tf.float32)
-        sb = tf.Variable(random_NN_b(D))
-        s = tf.matmul(layer, sW) + sb
+        s_w = tf.Variable(random_weights(layer_unit[hidden_layers], d))
+        s_w = s_w * tf.constant(mask[hidden_layers][:, d:], dtype=tf.float32)
+        s_b = tf.Variable(random_bias(d))
+        s = tf.matmul(layer, s_w) + s_b
 
-    m = tf.reshape(m, dynamic_z_shape)
-    s = tf.reshape(s, dynamic_z_shape)
+    m = tf.reshape(m, tf.shape(z))
+    s = tf.reshape(s, tf.shape(z))
 
-    return (m, s)
+    return m, s
 
 
 @zs.reuse('model')
@@ -152,7 +154,7 @@ if __name__ == "__main__":
     test_n_leapfrogs = 10
     test_n_chains = 10
     save_freq = 100
-    result_path = "results/vae"
+    result_path = "results/vae_iaf"
 
     # Build the computation graph
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
@@ -172,8 +174,8 @@ if __name__ == "__main__":
     variational, hidden = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    qz_samples, log_qz = zs.iaf(qz_samples, hidden, log_qz, MADE, iters=5, update='gru')
-    
+    qz_samples, log_qz = zs.inv_autoregressive_flow(
+        qz_samples, hidden, log_qz, made, n_iters=5, update='gru')
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
@@ -251,7 +253,7 @@ if __name__ == "__main__":
             if epoch % save_freq == 0:
                 print('Saving model...')
                 save_path = os.path.join(result_path,
-                                         "vae.epoch.{}.ckpt".format(epoch))
+                                         "vae_iaf.epoch.{}.ckpt".format(epoch))
                 if not os.path.exists(os.path.dirname(save_path)):
                     os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
