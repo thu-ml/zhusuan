@@ -210,7 +210,6 @@ def vimco(log_joint, observed, latent, axis=0):
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
     """
-    # TODO: check ndim of sample axis should be larger than 1, else raise.
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
@@ -218,6 +217,18 @@ def vimco(log_joint, observed, latent, axis=0):
     log_joint_value = log_joint(joint_obs)
     entropy = -sum(latent_logpdfs)
     l_signal = log_joint_value + entropy
+
+    # check ndim of sample axis
+    static_signal_shape = l_signal.get_shape()
+    if static_signal_shape[axis:axis+1].is_fully_defined():
+        K = int(static_signal_shape[axis])
+        if K < 2:
+            raise ValueError('ndim of sample axis should be larger than 1')
+    dynamic_signal_shape = tf.shape(l_signal)
+    _assert_axis_dim = tf.assert_greater_equal(dynamic_signal_shape[axis], 2,
+                                               message="ndim of sample axis should be larger than 1")
+    with tf.control_dependencies([_assert_axis_dim]):
+        l_signal = tf.identity(l_signal)
 
     # compute variance reduction term
     mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) -
