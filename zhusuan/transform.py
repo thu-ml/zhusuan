@@ -46,10 +46,10 @@ def linear_ar(name, id, z, hidden=None):
 
     z = tf.reshape(input_x, [-1, D])
     with tf.name_scope(name + '%d' % id):
-        mW = tf.get_variable(shape=[D,D], name='mW',
-                             initializer=tf.random_normal_initializer(0,0.005))
-        sW = tf.get_variable(shape=[D,D], name='sW',
-                             initializer=tf.random_normal_initializer(0,0.005))
+        mW = tf.Variable(tf.random_normal(shape=[D,D], mean=0, stddev=0.005,
+                        dtype=tf.float32), name='mW')
+        sW = tf.Variable(tf.random_normal(shape=[D,D], mean=0, stddev=0.005,
+                        dtype=tf.float32), name='sW')
         mW = tfmask * mW
         sW = tfmask * sW
 
@@ -101,17 +101,17 @@ def planar_nf(sample, log_prob, iters):
     D = int(static_x_shape[-1])
 
     # define parameters
-    with tf.name_scope('flow_parameters'):
+    with tf.name_scope('planar_flow_parameters'):
         para_bs = []
         para_us = []
         para_ws = []
         for iter in range(iters):
-            para_b = tf.get_variable(name='para_b_%d' % iter, shape=[1],
-                                     initializer=tf.constant_initializer(0.0))
-            aux_u = tf.get_variable(name='aux_u_%d' % iter, shape=[D, 1],
-                                    initializer=tf.random_normal_initializer(0, 0.005))
-            para_w = tf.get_variable(name='para_w_%d' % iter, shape=[D, 1],
-                                     initializer=tf.random_normal_initializer(0, 0.005))
+            para_b = tf.Variable(tf.zeros(shape=[1],dtype=tf.float32),
+                                 name='para_b_%d' % iter)
+            aux_u = tf.Variable(tf.random_normal(shape=[D, 1], mean=0, stddev=0.005, dtype=tf.float32),
+                                name='aux_u_%d' % iter)
+            para_w = tf.Variable(tf.random_normal(shape=[D, 1], mean=0, stddev=0.005, dtype=tf.float32),
+                                 name='para_w_%d' % iter)
             dot_prod = tf.matmul(para_w, aux_u, transpose_a=True)
             para_u = aux_u + para_w / tf.matmul(para_w, para_w, transpose_a=True) \
                         * (tf.log(tf.exp(dot_prod) + 1) - 1 - dot_prod)

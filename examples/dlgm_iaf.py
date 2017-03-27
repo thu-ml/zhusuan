@@ -17,26 +17,6 @@ import zhusuan as zs
 import dataset
 
 
-# util
-def semi_broadcast(x, base):
-    '''
-    shape(base) =  [i, ..., k, p, ..., q]
-    shape(x)    =  [         , w, ..., z]
-    return semi_broadcast of x
-    shape(tx)   =  [i, ..., k, w, ..., z]
-    '''
-    base_shape = base.get_shape()
-    base_ndim = base_shape.ndims
-    x_shape = x.get_shape()
-    x_ndim = int(x_shape.ndims)
-    tx_shape = tf.concat([tf.shape(base)[:-x_ndim], tf.constant([1] * x_ndim, dtype=tf.int32)], 0)
-
-    while x.get_shape().ndims < base_ndim:
-        x = tf.expand_dims(x, 0)
-    tx = tf.tile(x, multiples=tx_shape, name='semi_broadcast')
-    return tx
-
-
 # MADE
 def random_NN_W(n_in, n_out):
     return tf.random_normal(shape=(n_in, n_out), mean=0, stddev=np.sqrt(2/n_in), dtype=tf.float32)
@@ -64,33 +44,38 @@ def get_linear_mask(input_pri, output_pri, hidden):
 
 def MADE(name, id, z, hidden, units=500, hidden_layers=2):
     static_z_shape = z.get_shape()
-    ndim = static_z_shape.ndims
-    D = int(static_z_shape[ndim - 1])
+    if not static_z_shape[-1:].is_fully_defined():
+        raise ValueError('Inputs %s has undefined last dimension.' % (
+            z.name))
+    dynamic_z_shape = tf.shape(z)
+    D = int(static_z_shape[-1])
 
     layerunit = [2*D] + [units] * hidden_layers + [2*D]
     mask = get_linear_mask([i+1 for i in range(D)] + [0]*D,
                             [i for i in range(D)]*2, [units] * hidden_layers)
 
     with tf.name_scope(name + '%d' % id):
-        layer = tf.concat([z, hidden], ndim - 1, name='layer_0')
+        layer = tf.concat([z, hidden], static_z_shape.ndims - 1, name='layer_0')
+        layer = tf.reshape(layer, [-1, 2 * D])
         for i in range(hidden_layers):
             W = tf.Variable(random_NN_W(layerunit[i], layerunit[i + 1]))
             W = W * tf.constant(mask[i], dtype=tf.float32)
             b = tf.Variable(random_NN_b(layerunit[i + 1]))
-            linear = tf.matmul(layer, semi_broadcast(W, layer)) + b
-            if i < hidden_layers:
-                layer = tf.nn.relu(linear, name='layer_%d' % (i + 1))
-            else:
-                layer = linear
+            linear = tf.matmul(layer, W) + b
+            layer = tf.nn.relu(linear, name='layer_%d' % (i + 1))
+
         mW = tf.Variable(random_NN_W(layerunit[hidden_layers], D))
         mW = mW * tf.constant(mask[hidden_layers][:,:D], dtype=tf.float32)
         mb = tf.Variable(random_NN_b(D))
-        m = tf.matmul(layer, semi_broadcast(mW, layer)) + mb
+        m = tf.matmul(layer, mW) + mb
 
         sW = tf.Variable(random_NN_W(layerunit[hidden_layers], D))
         sW = sW * tf.constant(mask[hidden_layers][:,D:], dtype=tf.float32)
         sb = tf.Variable(random_NN_b(D))
-        s = tf.matmul(layer, semi_broadcast(sW, layer)) + sb
+        s = tf.matmul(layer, sW) + sb
+
+    m = tf.reshape(m, dynamic_z_shape)
+    s = tf.reshape(s, dynamic_z_shape)
 
     return (m, s)
 

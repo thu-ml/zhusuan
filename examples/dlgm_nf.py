@@ -75,6 +75,7 @@ if __name__ == "__main__":
     # Define training/evaluation parameters
     lb_samples = 1
     ll_samples = 1000
+    planar_flows = 10
     epoches = 3000
     batch_size = 100
     iters = x_train.shape[0] // batch_size
@@ -108,8 +109,9 @@ if __name__ == "__main__":
     variational = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=10)
-    
+    qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=planar_flows)
+    qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=planar_flows)
+
     lower_bound = tf.reduce_mean(
         zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
