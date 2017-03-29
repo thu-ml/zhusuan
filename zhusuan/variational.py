@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-def advi(log_joint, observed, latent, axis=0):
+def advi(log_joint, observed, latent, axis=None):
     """
     Implements the automatic differentiation variational inference (ADVI)
     algorithm. This only works for continuous latent `StochasticTensor` s that
@@ -39,7 +39,8 @@ def advi(log_joint, observed, latent, axis=0):
         from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
-        variational lower bound.
+        outer expectation in variational lower bound. If `None`, no dimension
+        is reduced.
 
     :return: A Tensor. The variational lower bound.
     """
@@ -48,11 +49,12 @@ def advi(log_joint, observed, latent, axis=0):
     latent_logpdfs = map(lambda x: x[1], latent_v)
     joint_obs = merge_dicts(observed, latent_outputs)
     lower_bound = log_joint(joint_obs) - sum(latent_logpdfs)
-    lower_bound = tf.reduce_mean(lower_bound, axis)
+    if axis is not None:
+        lower_bound = tf.reduce_mean(lower_bound, axis)
     return lower_bound
 
 
-def iwae(log_joint, observed, latent, axis=0):
+def iwae(log_joint, observed, latent, axis=None):
     """
     Implements the importance weighted lower bound from (Burda, 2015).
     This only works for continuous latent `StochasticTensor` s that
@@ -68,14 +70,15 @@ def iwae(log_joint, observed, latent, axis=0):
         from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
-        variational lower bound.
+        outer expectation in variational lower bound. If `None`, no dimension
+        is reduced.
 
     :return: A Tensor. The importance weighted lower bound.
     """
     return is_loglikelihood(log_joint, observed, latent, axis)
 
 
-def rws(log_joint, observed, latent, axis=0):
+def rws(log_joint, observed, latent, axis=None):
     """
     Implements Reweighted Wake-sleep from (Bornschein, 2015). This works for
     both continuous and discrete latent `StochasticTensor` s.
@@ -90,7 +93,8 @@ def rws(log_joint, observed, latent, axis=0):
         from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
-        log likelihood and the cost for adapting proposals.
+        outer expectation in log likelihood and in the cost for adapting
+        proposals. If `None`, no dimension is reduced.
 
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. Estimated log likelihoods.
@@ -102,13 +106,18 @@ def rws(log_joint, observed, latent, axis=0):
     log_joint_value = log_joint(joint_obs)
     entropy = -sum(latent_logpdfs)
     log_w = log_joint_value + entropy
-    log_w_max = tf.reduce_max(log_w, axis, keep_dims=True)
-    w_u = tf.exp(log_w - log_w_max)
-    w_tilde = tf.stop_gradient(w_u / tf.reduce_sum(w_u, axis, keep_dims=True))
-    log_likelihood = log_mean_exp(log_w, axis)
-    fake_log_joint_cost = -tf.reduce_sum(w_tilde * log_joint_value, axis)
-    fake_proposal_cost = tf.reduce_sum(w_tilde * entropy, axis)
-    cost = fake_log_joint_cost + fake_proposal_cost
+    if axis is not None:
+        log_w_max = tf.reduce_max(log_w, axis, keep_dims=True)
+        w_u = tf.exp(log_w - log_w_max)
+        w_tilde = tf.stop_gradient(
+            w_u / tf.reduce_sum(w_u, axis, keep_dims=True))
+        log_likelihood = log_mean_exp(log_w, axis)
+        fake_log_joint_cost = -tf.reduce_sum(w_tilde * log_joint_value, axis)
+        fake_proposal_cost = tf.reduce_sum(w_tilde * entropy, axis)
+        cost = fake_log_joint_cost + fake_proposal_cost
+    else:
+        cost = log_w
+        log_likelihood = log_w
     return cost, log_likelihood
 
 
@@ -118,7 +127,7 @@ def nvil(log_joint,
          baseline=None,
          decay=0.8,
          variance_normalization=False,
-         axis=0):
+         axis=None):
     """
     Implements the variance reduced score function estimator for gradients
     of the variational lower bound from (Mnih, 2014). This algorithm is also
@@ -134,14 +143,15 @@ def nvil(log_joint,
     :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
         from names of latent `StochasticTensor` s to their samples and log
         probabilities.
-    :param baseline: A Tensor with the same shape as returned by `log_joint`.
-        A trainable estimation for the scale of the variational lower bound,
-        which is typically dependent on observed values, e.g., a neural
-        network with observed values as inputs.
+    :param baseline: A Tensor that can broadcast to match the shape returned
+        by `log_joint`. A trainable estimation for the scale of the
+        variational lower bound, which is typically dependent on observed
+        values, e.g., a neural network with observed values as inputs.
     :param variance_normalization: Whether to use variance normalization.
     :param decay: Float. The moving average decay for variance normalization.
     :param axis: The sample dimension(s) to reduce when computing the
-        variational lower bound.
+        outer expectation in variational lower bound. If `None`, no dimension
+        is reduced.
 
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
@@ -156,13 +166,12 @@ def nvil(log_joint,
     cost = 0.
 
     if baseline is not None:
-        baseline = tf.expand_dims(baseline, axis)
-        baseline_cost = 0.5 * tf.reduce_mean(tf.square(
-            tf.stop_gradient(l_signal) - baseline), axis)
+        baseline_cost = 0.5 * tf.square(tf.stop_gradient(l_signal) - baseline)
         l_signal = l_signal - baseline
         cost += baseline_cost
 
     if variance_normalization is True:
+        # TODO: extend to non-scalar
         bc = tf.reduce_mean(l_signal)
         bv = tf.reduce_mean(tf.square(l_signal - bc))
         moving_mean = tf.get_variable(
@@ -181,19 +190,26 @@ def nvil(log_joint,
         with tf.control_dependencies([update_mean, update_variance]):
             l_signal = tf.identity(l_signal)
 
-    fake_log_joint_cost = -tf.reduce_mean(log_joint_value, axis)
-    fake_variational_cost = tf.reduce_mean(
-        tf.stop_gradient(l_signal) * entropy, axis)
+    fake_log_joint_cost = -log_joint_value
+    fake_variational_cost = tf.stop_gradient(l_signal) * entropy
     cost += fake_log_joint_cost + fake_variational_cost
-    lower_bound = tf.reduce_mean(log_joint_value + entropy, axis)
+    lower_bound = log_joint_value + entropy
+    if axis is not None:
+        cost = tf.reduce_mean(cost, axis)
+        lower_bound = tf.reduce_mean(lower_bound, axis)
     return cost, lower_bound
 
 
-def vimco(log_joint, observed, latent, axis=0):
+def vimco(log_joint, observed, latent, axis=None):
     """
     Implements the multi-sample variance reduced score function estimator for
     gradients of the variational lower bound from (Minh, 2016). This works for
     both continuous and discrete latent `StochasticTensor` s.
+
+    .. note::
+
+        :func:`vimco` is a multi-sample objective, size along `axis` in the
+        objective should be larger than 1, else an error is raised.
 
     :param log_joint: A function that accepts a dictionary argument of
         (str, Tensor) pairs, which are mappings from all `StochasticTensor`
@@ -205,11 +221,16 @@ def vimco(log_joint, observed, latent, axis=0):
         from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension to reduce when computing the
-        variational lower bound.
+        outer expectation in variational lower bound. Must be specified. If
+        `None`, an error is raised.
 
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
     """
+    if axis is None:
+        raise ValueError("vimco is a multi-sample objective, "
+                         "the 'axis' argument must be specified.")
+
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
@@ -218,21 +239,20 @@ def vimco(log_joint, observed, latent, axis=0):
     entropy = -sum(latent_logpdfs)
     l_signal = log_joint_value + entropy
 
-    # check ndim of sample axis
-    static_signal_shape = l_signal.get_shape()
-    if static_signal_shape[axis:axis+1].is_fully_defined():
-        K = int(static_signal_shape[axis])
-        if K < 2:
-            raise ValueError('ndim of sample axis should be larger than 1')
-    dynamic_signal_shape = tf.shape(l_signal)
-    _assert_axis_dim = tf.assert_greater_equal(dynamic_signal_shape[axis], 2,
-                                               message="ndim of sample axis should be larger than 1")
-    with tf.control_dependencies([_assert_axis_dim]):
+    # check size along the sample axis
+    err_msg = "vimco() is a multi-sample objective, " \
+              "size along 'axis' in the objective should be larger than 1."
+    if l_signal.get_shape()[axis:axis + 1].is_fully_defined():
+        if l_signal.get_shape()[axis].value < 2:
+            raise ValueError(err_msg)
+    _assert_size_along_axis = tf.assert_greater_equal(
+        tf.shape(l_signal)[axis], 2, message=err_msg)
+    with tf.control_dependencies([_assert_size_along_axis]):
         l_signal = tf.identity(l_signal)
 
     # compute variance reduction term
     mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) -
-        l_signal) / tf.to_float(tf.shape(l_signal)[axis] - 1)
+                          l_signal) / tf.to_float(tf.shape(l_signal)[axis] - 1)
     x, sub_x = tf.to_float(l_signal), tf.to_float(mean_except_signal)
 
     n_dim = tf.rank(x)
@@ -248,10 +268,10 @@ def vimco(log_joint, observed, latent, axis=0):
     sub_x = tf.transpose(sub_x, perm=perm)
     x_ex = tf.tile(tf.expand_dims(x, n_dim), multiples)
     x_ex = x_ex - tf.matrix_diag(x) + tf.matrix_diag(sub_x)
-    pre_signal = tf.transpose(log_mean_exp(x_ex, n_dim - 1), perm=perm)
+    control_variate = tf.transpose(log_mean_exp(x_ex, n_dim - 1), perm=perm)
 
     # variance reduced objective
-    l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - pre_signal
+    l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - control_variate
     fake_term = tf.reduce_sum(-entropy * tf.stop_gradient(l_signal), axis)
     lower_bound = log_mean_exp(log_joint_value + entropy, axis)
     cost = -fake_term - log_mean_exp(log_joint_value + entropy, axis)

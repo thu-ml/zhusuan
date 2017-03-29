@@ -159,7 +159,7 @@ def inv_autoregressive_flow(samples, hidden, log_probs, autoregressive_nn,
 
     :param samples: A N-D (N>=2) `float32` Tensor of shape `[..., d]`, and
         inverse autoregressive flow will be performed along the last axis.
-    :param hidden: A N-D (N>=2) `float32` Tensor (N>=2) of shape `[..., d]`,
+    :param hidden: A N-D (N>=2) `float32` Tensor of shape `[..., d]`,
         should be of the same shape as `samples`, whose meaning follows which
         described in (Kingma, 2016).
     :param log_probs: A (N-1)-D `float32` Tensor. should be of the same shape

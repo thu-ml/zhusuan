@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-def is_loglikelihood(log_joint, observed, latent, axis=0):
+def is_loglikelihood(log_joint, observed, latent, axis=None):
     """
     Marginal log likelihood (:math:`\log p(x)`) estimates using self-normalized
     importance sampling.
@@ -35,7 +35,7 @@ def is_loglikelihood(log_joint, observed, latent, axis=0):
         from names of latent `StochasticTensor` s to their samples and log
         probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
-        log likelihood.
+        outer expectation in log likelihood. If None, no dimension is reduced.
 
     :return: A Tensor. The estimated log likelihood of observed data.
     """
@@ -44,7 +44,9 @@ def is_loglikelihood(log_joint, observed, latent, axis=0):
     latent_logpdfs = map(lambda x: x[1], latent_v)
     joint_obs = merge_dicts(observed, latent_outputs)
     log_w = log_joint(joint_obs) - sum(latent_logpdfs)
-    return log_mean_exp(log_w, axis)
+    if axis is not None:
+        return log_mean_exp(log_w, axis)
+    return log_w
 
 
 class BDMC:

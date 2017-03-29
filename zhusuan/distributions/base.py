@@ -186,7 +186,7 @@ class Distribution(object):
         if n_samples is None:
             samples = self._sample(n_samples=1)
             return tf.squeeze(samples, axis=0)
-        if isinstance(n_samples, int):
+        elif isinstance(n_samples, int):
             return self._sample(n_samples)
         else:
             n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)

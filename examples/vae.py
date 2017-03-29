@@ -219,8 +219,8 @@ if __name__ == "__main__":
                                   (t + 1) * test_batch_size]
             ll_lb, ll_ub = bdmc.run(sess,
                                     feed_dict={x: test_x_batch,
-                                    n_particles: test_n_chains,
-                                    is_training: False})
+                                               n_particles: test_n_chains,
+                                               is_training: False})
             test_ll_lbs.append(ll_lb)
             test_ll_ubs.append(ll_ub)
         time_bdmc += time.time()

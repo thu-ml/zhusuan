@@ -110,10 +110,11 @@ if __name__ == "__main__":
                                   'h1': [qh1_samples, log_qh1]}, axis=0)
     lower_bound = tf.reduce_mean(lower_bound)
     cost = tf.reduce_mean(cost)
-    log_likelihood = tf.reduce_mean(zs.is_loglikelihood(
-        log_joint, {'x': x_obs}, {'h3': [qh3_samples, log_qh3],
-                                  'h2': [qh2_samples, log_qh2],
-                                  'h1': [qh1_samples, log_qh1]}, axis=0))
+    log_likelihood = tf.reduce_mean(
+        zs.is_loglikelihood(log_joint, {'x': x_obs},
+                            {'h3': [qh3_samples, log_qh3],
+                             'h2': [qh2_samples, log_qh2],
+                             'h1': [qh1_samples, log_qh1]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
