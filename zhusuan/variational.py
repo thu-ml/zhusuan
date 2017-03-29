@@ -15,7 +15,7 @@ from .evaluation import is_loglikelihood
 
 
 __all__ = [
-    'advi',
+    'sgvb',
     'iwae',
     'rws',
     'nvil',
@@ -23,11 +23,11 @@ __all__ = [
 ]
 
 
-def advi(log_joint, observed, latent, axis=None):
+def sgvb(log_joint, observed, latent, axis=None):
     """
-    Implements the automatic differentiation variational inference (ADVI)
-    algorithm. This only works for continuous latent `StochasticTensor` s that
-    can be reparameterized (Kingma, 2013).
+    Implements the stochastic gradient variational bayes (SGVB) algorithm
+    from (Kingma, 2013). This only works for continuous latent
+    `StochasticTensor` s that can be reparameterized (Kingma, 2013).
 
     :param log_joint: A function that accepts a dictionary argument of
         (str, Tensor) pairs, which are mappings from all `StochasticTensor`

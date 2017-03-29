@@ -177,7 +177,7 @@ if __name__ == "__main__":
     qz_samples, log_qz = zs.inv_autoregressive_flow(
         qz_samples, hidden, log_qz, made, n_iters=5, update='gru')
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training

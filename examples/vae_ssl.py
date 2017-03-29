@@ -106,7 +106,7 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     labeled_lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
+        zs.sgvb(log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
                 {'z': [qz_samples, log_qz]}, axis=0))
 
     # Unlabeled
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     variational = qz_xy(x_u, y_u, n_z, n_particles)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lb_z = zs.advi(log_joint, {'x': x_unlabeled_obs, 'y': y_unlabeled_obs},
+    lb_z = zs.sgvb(log_joint, {'x': x_unlabeled_obs, 'y': y_unlabeled_obs},
                    {'z': [qz_samples, log_qz]}, axis=0)
     # sum over y
     lb_z = tf.reshape(lb_z, [-1, n_y])

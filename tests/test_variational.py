@@ -10,7 +10,7 @@ from .context import zhusuan
 from zhusuan.variational import *
 
 
-class TestAdvi(tf.test.TestCase):
-    def test_advi(self):
-        # TODO: advi test
+class TestSgvb(tf.test.TestCase):
+    def test_sgvb(self):
+        # TODO: sgvb test
         pass

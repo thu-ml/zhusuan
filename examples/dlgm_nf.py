@@ -116,7 +116,7 @@ if __name__ == "__main__":
                                                     n_iters=n_planar_flows)
 
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training
