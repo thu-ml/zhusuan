@@ -27,8 +27,11 @@ class StochasticTensor(object):
     The :class:`StochasticTensor` class is the base class for various
     stochastic nodes used when building Bayesian Networks (Directed graphical
     models). Its instance is Tensor-like, which enables transparent building
-    of Bayesian Networks using tensorflow primitives. See :class:`BayesianNet`
-    for examples of usage.
+    of Bayesian Networks using tensorflow primitives.
+
+    The list of all available `StochasticTensor` s is on :mod:`this page
+    <zhusuan.model.stochastic>`. See :class:`BayesianNet` for examples of
+    usage.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -260,7 +263,7 @@ class BayesianNet(Context):
     After construction, `BayesianNet` supports queries on the network:
     ::
 
-        # get samples of random variable z by running generative process
+        # get samples of random variable w by running generative process
         model.outputs('w')
 
         # get local log probability values of w and y, which returns
