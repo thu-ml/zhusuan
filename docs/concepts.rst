@@ -3,8 +3,8 @@ Basic Concepts in ZhuSuan
 
 .. _dist-and-stochastic:
 
-Distributions and StochasticTensors
------------------------------------
+Distribution and StochasticTensor
+---------------------------------
 
 
 .. bibliography:: refs.bib

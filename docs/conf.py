@@ -100,6 +100,7 @@ html_theme_options = {
     'github_repo': 'ZhuSuan',
     'github_type': 'star',
     'sidebar_width': '220px',
+    'page_width': '980px',
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

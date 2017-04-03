@@ -75,7 +75,7 @@ def save_image_collections(x, filename, shape=(10, 10), scale_each=False,
     """
     :param shape: tuple
         The shape of final big images.
-    :param x: uint8 numpy array
+    :param x: numpy array
         Input image collections. (number_of_images, rows, columns, channels) or
         (number_of_images, channels, rows, columns)
     :param scale_each: bool
