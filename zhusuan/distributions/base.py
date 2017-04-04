@@ -31,11 +31,12 @@ class Distribution(object):
     of non-batch input parameter, :attr:`batch_shape` represents how many 
     independent inputs are fed into the distribution.
 
-    Samples generated are of shape ``(n_samples + )batch_shape + value_shape``.
-    The first additional axis is omitted only when passed `n_samples` is None 
-    (by default), in which case one sample is generated. :attr:`value_shape` 
-    is the non-batch value shape of the distribution. For a univariate 
-    distribution, its :attr:`value_shape` is [].
+    Samples generated are of shape 
+    ``([n_samples]+ )batch_shape + value_shape``. The first additional axis 
+    is omitted only when passed `n_samples` is None (by default), in which 
+    case one sample is generated. :attr:`value_shape` is the non-batch value 
+    shape of the distribution. For a univariate distribution, its 
+    :attr:`value_shape` is [].
 
     There are cases where a batch of random variables are grouped into a
     single event so that their probabilities should be computed together. This
