@@ -390,7 +390,7 @@ Run Gradient Descent
 --------------------
 
 Now, everything is good before a run. So we could just open the Tensorflow
-session, run the training loop, print statistics and write generated
+session, run the training loop, print statistics, and write generated
 images to disk. Keep watching them and have fun :)
 ::
 

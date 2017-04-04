@@ -36,7 +36,8 @@ class Normal(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed 
+        explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -129,7 +130,8 @@ class Bernoulli(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     """
 
     def __init__(self, logits, group_event_ndims=0):
@@ -192,7 +194,8 @@ class Categorical(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed 
+        explanation.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
@@ -327,7 +330,8 @@ class Uniform(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -426,7 +430,8 @@ class Gamma(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -512,7 +517,8 @@ class Beta(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -602,7 +608,8 @@ class Poisson(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -698,7 +705,8 @@ class Binomial(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
