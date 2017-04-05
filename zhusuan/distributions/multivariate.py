@@ -21,6 +21,7 @@ __all__ = [
 class Multinomial(Distribution):
     """
     The class of Multinomial distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
@@ -146,6 +147,7 @@ class Multinomial(Distribution):
 class OnehotCategorical(Distribution):
     """
     The class of one-hot Categorical distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
@@ -261,6 +263,7 @@ OnehotDiscrete = OnehotCategorical
 class Dirichlet(Distribution):
     """
     The class of Dirichlet distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param alpha: A N-D (N >= 1) `float32` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter

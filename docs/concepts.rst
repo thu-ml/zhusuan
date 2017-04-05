@@ -93,14 +93,18 @@ Example of multivariate distributions
 There are cases where a batch of random variables are grouped into a
 single event so that their probabilities can be computed together. This
 is achieved by setting `group_event_ndims` argument, which defaults to 0.
-The last `group_event_ndims` number of axes in ``batch_shape`` are grouped
-into a single event. For example, a ``Normal(..., group_event_ndims=1)`` will
-set the last axis of ``batch_shape`` to a single event, i.e., a multivariate
-Normal with identity covariance matrix.
+The last `group_event_ndims` number of axes in
+:attr:`~.Distribution.batch_shape` are grouped into a single event.
+For example, ``Normal(..., group_event_ndims=1)`` will
+set the last axis of its :attr:`~.Distribution.batch_shape` to a single event,
+i.e., a multivariate Normal with identity covariance matrix.
 
-When evaluating probabilities at given values, the given Tensor should be
+Log probability density (mass) function can be evaluated by passing given
+values to :meth:`~zhusuan.distributions.base.Distribution.log_prob` method of
+distribution objects.
+In that case, the given Tensor should be
 broadcastable to shape ``(... + )batch_shape + value_shape``. The returned
-Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``. Example::
+Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``. For example::
 
     >>> d = zs.distributions.Normal([[-1., 1.], [0., -2.]], 0.,
     ...                             group_event_ndims=1)
@@ -117,8 +121,40 @@ Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``. Example::
 StochasticTensor
 ^^^^^^^^^^^^^^^^
 
+While :class:`~zhusuan.distributions.base.Distribution` provides the basic
+functionality for probabilistic distributions. Directly building computation
+graph with them is still painful because they are not aware of any inner
+reusability as stochastic nodes in Bayesian Networks: Once you have sampled
+from a distribution, there is no way to reuse the downroot graph when you
+want to observe it.
+
+To address this challenge, ZhuSuan provides another abstraction built upon
+distributions. That's :class:`~zhusuan.model.base.StochasticTensor`. For all
+distributions available in :mod:`zhusuan.distributions` there is a
+corresponding :class:`~zhusuan.model.base.StochasticTensor`, which can be
+accessed by ``zs.Normal`` (for example, a univariate
+:class:`~zhusuan.model.stochastic.Normal` StochasticTensor).
+Their list is on :mod:`this page <zhusuan.model.stochastic>`.
+
+.. Note::
+
+    Use ``zs.Normal`` when you want
+    :class:`~zhusuan.model.base.StochasticTensor` and use
+    ``zs.distributions.Normal`` when you want
+    :class:`~zhusuan.distributions.base.Distribution`.
+
+:class:`~zhusuan.model.base.StochasticTensor` can only be constructed under
+:class:`~zhusuan.model.base.BayesianNet` context.
+Their instances are Tensor-like, which enables transparent building of Bayesian
+Networks using tensorflow primitives. See the :ref:`bayesian-net` section for
+examples of usage.
+
+.. _bayesian-net:
+
 BayesianNet
 -----------
+
+
 
 .. bibliography:: refs.bib
     :style: unsrtalpha

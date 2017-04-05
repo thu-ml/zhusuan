@@ -20,11 +20,7 @@ class Distribution(object):
     distributions which support batch inputs, generating batches of samples and
     evaluate probabilities at batches of given values. 
     
-    The list of all available distributions can be found on these pages:
-
-    * :mod:`univariate distributions <zhusuan.distributions.univariate>`
-    * :mod:`multivariate distributions 
-      <zhusuan.distributions.multivariate>`
+    
 
     The typical input shape for a :class:`Distribution` is like
     ``batch_shape + input_shape``. where ``input_shape`` represents the shape
@@ -42,14 +38,18 @@ class Distribution(object):
     single event so that their probabilities should be computed together. This
     is achieved by setting `group_event_ndims` argument, which defaults to 0.
     The last `group_event_ndims` number of axes in :attr:`batch_shape` are 
-    grouped into a single event. For example, a 
-    ``Normal(..., group_event_ndims=1)`` will set the last axis of 
+    grouped into a single event. For example, 
+    ``Normal(..., group_event_ndims=1)`` will set the last axis of its
     :attr:`batch_shape` to a single event, i.e., a multivariate Normal with 
     identity covariance matrix.
 
-    When evaluating probabilities at given values, the given Tensor can be of
-    shape ``(... + )batch_shape + value_shape``. The returned Tensor has shape
-    ``(... + )batch_shape[:-group_event_ndims]``.
+    When evaluating probabilities at given values, the given Tensor should be
+    broadcastable to shape ``(... + )batch_shape + value_shape``. The returned 
+    Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``.
+    
+    .. seealso::
+    
+        :doc:`/concepts`
 
     :param dtype: The value type of samples from the distribution.
     :param is_continuous: Whether the distribution is continuous.

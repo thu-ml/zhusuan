@@ -27,6 +27,7 @@ __all__ = [
 class Normal(Distribution):
     """
     The class of univariate Normal distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param mean: A `float32` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
@@ -120,6 +121,7 @@ class Normal(Distribution):
 class Bernoulli(Distribution):
     """
     The class of univariate Bernoulli distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A `float32` Tensor. The log-odds of probabilities of
         being 1.
@@ -183,6 +185,7 @@ class Bernoulli(Distribution):
 class Categorical(Distribution):
     """
     The class of univariate Categorical distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
@@ -321,6 +324,7 @@ Discrete = Categorical
 class Uniform(Distribution):
     """
     The class of univariate Uniform distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param minval: A `float32` Tensor. The lower bound on the range of the
         uniform distribution. Should be broadcastable to match `maxval`.
@@ -421,6 +425,7 @@ class Uniform(Distribution):
 class Gamma(Distribution):
     """
     The class of univariate Gamma distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param alpha: A `float32` Tensor. The shape parameter of the Gamma
         distribution. Should be positive and broadcastable to match `beta`.
@@ -506,6 +511,7 @@ class Gamma(Distribution):
 class Beta(Distribution):
     """
     The class of univariate Beta distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param alpha: A `float32` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
@@ -601,6 +607,7 @@ class Beta(Distribution):
 class Poisson(Distribution):
     """
     The class of univariate Poisson distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param rate: A `float32` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
@@ -694,6 +701,7 @@ class Poisson(Distribution):
 class Binomial(Distribution):
     """
     The class of univariate Binomial distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A `float32` Tensor. The log-odds of probabilities.
 
