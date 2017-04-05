@@ -136,6 +136,12 @@ accessed by ``zs.Normal`` (for example, a univariate
 :class:`~zhusuan.model.stochastic.Normal` StochasticTensor).
 Their list is on :mod:`this page <zhusuan.model.stochastic>`.
 
+:class:`~zhusuan.model.base.StochasticTensor` can only be constructed under
+:class:`~zhusuan.model.base.BayesianNet` context.
+Their instances are Tensor-like, which enables transparent building of Bayesian
+Networks using tensorflow primitives. See the :ref:`bayesian-net` section for
+examples of usage.
+
 .. Note::
 
     Use ``zs.Normal`` when you want
@@ -143,18 +149,99 @@ Their list is on :mod:`this page <zhusuan.model.stochastic>`.
     ``zs.distributions.Normal`` when you want
     :class:`~zhusuan.distributions.base.Distribution`.
 
-:class:`~zhusuan.model.base.StochasticTensor` can only be constructed under
-:class:`~zhusuan.model.base.BayesianNet` context.
-Their instances are Tensor-like, which enables transparent building of Bayesian
-Networks using tensorflow primitives. See the :ref:`bayesian-net` section for
-examples of usage.
-
 .. _bayesian-net:
 
 BayesianNet
 -----------
 
+The :class:`~zhusuan.model.base.BayesianNet` class is a context class
+supporting model construction in ZhuSuan as Bayesian Networks (Directed
+graphical models). A :class:`~zhusuan.model.base.BayesianNet` represents a DAG
+with two kinds of nodes:
 
+* Deterministic nodes, made up of any tensorflow operations.
+* Stochastic nodes, constructed by
+  :class:`~zhusuan.model.base.StochasticTensor`.
+
+To start a :class:`~zhusuan.model.base.BayesianNet` context::
+
+    import zhusuan as zs
+    with zs.BayesianNet() as model:
+        # build the model
+
+A Bayesian Linear Regression example:
+
+.. math::
+
+    w \sim N(0, \alpha^2 I)
+
+    y \sim N(w^Tx, \beta^2)
+
+::
+
+    import tensorflow as tf
+    import zhusuan as zs
+
+    def bayesian_linear_regression(x, alpha, beta):
+        with zs.BayesianNet() as model:
+            w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+            y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
+            y = zs.Normal('y', y_mean, tf.log(beta))
+        return model
+
+To observe any stochastic nodes in the network, pass a dictionary mapping of
+``(name, Tensor)`` pairs when constructing
+:class:`~zhusuan.model.base.BayesianNet`. This will assign observed values
+to corresponding :class:`~zhusuan.model.base.StochasticTensor` s. For example::
+
+    def bayesian_linear_regression(observed, x, alpha, beta):
+        with zs.BayesianNet(observed=observed) as model:
+            w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+            y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
+            y = zs.Normal('y', y_mean, tf.log(beta))
+        return model
+
+    model = bayesian_linear_regression({'w': w_obs}, ...)
+
+will set ``w`` to be observed. The result is that ``y_mean`` is computed
+from the observed value of ``w`` (``w_obs``) instead of the samples of ``w``.
+Calling the above function with different `observed` arguments instantiates the
+:class:`~zhusuan.model.base.BayesianNet` with different observations, which
+is a common behaviour for probabilistic graphical models.
+
+.. Note::
+
+    The observation passed must have the same type and shape as the
+    `StochasticTensor`.
+
+If there are
+tensorflow `Variables <https://www.tensorflow.org/api_docs/python/tf/Variable>`_
+created in this function, you may want to reuse it. ZhuSuan provides an easy
+way to do this. You could just add a decorator to the function::
+
+    @zs.reuse(scope="model")
+    def bayesian_linear_regression(observed, x, alpha, beta):
+        ...
+
+See :func:`~zhusuan.model.base.reuse` for details.
+
+After construction, :class:`~zhusuan.model.base.BayesianNet` supports queries
+on the network::
+
+    # get samples of random variable y following generative process
+    # in the network
+    model.outputs('y')
+
+    # because w is observed in this case, its observed value will be
+    # returned
+    model.outputs('w')
+
+    # get local log probability values of w and y, which returns
+    # log p(w) and log p(y|w, x)
+    model.local_log_prob(['w', 'y'])
+
+    # query many quantities at the same time
+    model.query('w', outputs=True, local_log_prob=True)
 
 .. bibliography:: refs.bib
     :style: unsrtalpha

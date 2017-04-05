@@ -240,7 +240,7 @@ class BayesianNet(Context):
     * Deterministic nodes, made up of any tensorflow operations.
     * Stochastic nodes, constructed by :class:`StochasticTensor`.
 
-    To start a `BayesianNet` context::
+    To start a :class:`BayesianNet` context::
 
         import zhusuan as zs
         with zs.BayesianNet() as model:
@@ -250,33 +250,61 @@ class BayesianNet(Context):
 
     .. math::
 
-        w \\sim N(0, \\alpha I)
+        w \\sim N(0, \\alpha^2 I)
 
-        y \\sim N(w^Tx, \\beta)
+        y \\sim N(w^Tx, \\beta^2)
 
     ::
 
         import tensorflow as tf
         import zhusuan as zs
 
-        with zs.BayesianNet() as model:
-            x = tf.placeholder(tf.float32, [None, n_x])
-            w_logstd = tf.Variable(tf.zeros([n_x]))
-            w = zs.Normal('w', mean=0., logstd=w_logstd)
-            y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
-            y_logstd = tf.Variable(0.)
-            y = zs.Normal('y', y_mean, y_logstd)
+        def bayesian_linear_regression(x, alpha, beta):
+            with zs.BayesianNet() as model:
+                w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+                y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
+                y = zs.Normal('y', y_mean, tf.log(beta))
+            return model
 
-    After construction, `BayesianNet` supports queries on the network:
-    ::
-
-        # get samples of random variable w by running generative process
+    To observe any stochastic nodes in the network, pass a dictionary mapping 
+    of ``(name, Tensor)`` pairs when constructing :class:`BayesianNet`. 
+    This will assign observed values to corresponding 
+    :class:`StochasticTensor` s. For example::
+    
+        def bayesian_linear_regression(observed, x, alpha, beta):
+            with zs.BayesianNet(observed=observed) as model:
+                w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+                y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
+                y = zs.Normal('y', y_mean, tf.log(beta))
+            return model
+    
+        model = bayesian_linear_regression({'w': w_obs}, ...)
+    
+    will set ``w`` to be observed. The result is that ``y_mean`` is computed
+    from the observed value of ``w`` (``w_obs``) instead of the samples of 
+    ``w``. Calling the above function with different `observed` arguments 
+    instantiates :class:`BayesianNet` with different observations, which
+    is a common behaviour for probabilistic graphical models.
+    
+    .. Note::
+    
+        The observation passed must have the same type and shape as the
+        `StochasticTensor`.
+    
+    After construction, :class:`BayesianNet` supports queries on the network::
+    
+        # get samples of random variable y following generative process
+        # in the network
+        model.outputs('y')
+    
+        # because w is observed in this case, its observed value will be
+        # returned
         model.outputs('w')
-
+    
         # get local log probability values of w and y, which returns
         # log p(w) and log p(y|w, x)
         model.local_log_prob(['w', 'y'])
-
+    
         # query many quantities at the same time
         model.query('w', outputs=True, local_log_prob=True)
         
@@ -308,8 +336,8 @@ class BayesianNet(Context):
 
     def outputs(self, name_or_names):
         """
-        Get the outputs of `StochasticTensor` s by their names, following
-        generative process in the network. For observed variables,
+        Get the outputs of :class:`StochasticTensor` s by their names, 
+        following generative process in the network. For observed variables,
         their observed values are returned; while for latent variables,
         samples are returned.
 
@@ -325,10 +353,10 @@ class BayesianNet(Context):
 
     def local_log_prob(self, name_or_names):
         """
-        Get local probability density (mass) values of `StochasticTensor` s by
-        their names. For observed variables, the probability is evaluated at
-        their observed values; for latent variables, the probability is
-        evaluated at their sampled values.
+        Get local probability density (mass) values of 
+        :class:`StochasticTensor` s by their names. For observed variables, 
+        the probability is evaluated at their observed values; for latent 
+        variables, the probability is evaluated at their sampled values.
 
         :param name_or_names: A string or a list of strings. Names of
             `StochasticTensor` s in the network.
@@ -349,11 +377,12 @@ class BayesianNet(Context):
         Make probabilistic queries on the `BayesianNet`. Various options
         are available:
 
-        * outputs: See `BayesianNet.outputs()`.
-        * local_log_prob: See `BayesianNet.local_log_prob()`.
+        * outputs: See :meth:`outputs`.
+        * local_log_prob: See :meth:`local_log_prob`.
 
-        For each queried `StochasticTensor`, a tuple containing results of
-        selected options is returned.
+        For each queried :class:`StochasticTensor`, a tuple containing results 
+        of selected options is returned. If only one is queried, the returned
+        is a tuple; else the returned is a list of tuples.
 
         :param name_or_names: A string or a list of strings. Names of
             `StochasticTensor` s in the network.
@@ -381,11 +410,10 @@ class BayesianNet(Context):
         which automatically sums over all local log probabilities in the
         network.
 
-        This is called when `BayesianNet` instance is passed to ZhuSuan's
-        inference objectives (e.g., `advi`). However, they may do things wrong
-        when the network has data sub-sampling. In that case, users should pass
-        `log_joint` function written by themselves to the inference objectives
-        instead of directly passing a `BayesianNet` instance.
+        .. warning::
+
+            This function may do things wrong when the network has data 
+            sub-sampling.
         """
         return tf.add_n(
             self.local_log_prob(list(six.iterkeys(self._stochastic_tensors))),
@@ -394,13 +422,14 @@ class BayesianNet(Context):
 
 def reuse(scope):
     """
-    A decorator for transparent reuse of tensorflow `Variable` s in a function.
-    When a :class:`BayesianNet` is reused as in a function, this decorator
-    helps reuse tensorflow `Variable` s in the graph every time the function is
-    called.
+    A decorator for transparent reuse of tensorflow 
+    `Variables <https://www.tensorflow.org/api_docs/python/tf/Variable>`_ in a 
+    function. The decorated function will automatically create variables the 
+    first time they are called and reuse them thereafter.
 
     :param scope: A string. The scope name passed to tensorflow
-        `variable_scope()`.
+        `variable_scope() 
+        <https://www.tensorflow.org/api_docs/python/tf/variable_scope>`_.
     """
 
     def reuse_decorator(f):

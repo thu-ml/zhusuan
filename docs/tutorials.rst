@@ -6,4 +6,3 @@ Tutorials
 
    vae
    concepts
-   mean_field

@@ -19,8 +19,6 @@ class Distribution(object):
     The :class:`Distribution` class is the base class for various probabilistic
     distributions which support batch inputs, generating batches of samples and
     evaluate probabilities at batches of given values. 
-    
-    
 
     The typical input shape for a :class:`Distribution` is like
     ``batch_shape + input_shape``. where ``input_shape`` represents the shape

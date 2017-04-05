@@ -141,7 +141,7 @@ the observed value, i.e., ``x_batch``, instead of the sampled tensor.
 .. Note::
 
     The observation passed must have the same type and shape as the
-    ``StochasticTensor``.
+    `StochasticTensor`.
 
 ..
    With the help of both the ``BayesianNet`` context and factory pattern
