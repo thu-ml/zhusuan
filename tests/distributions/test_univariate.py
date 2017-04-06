@@ -12,10 +12,123 @@ from scipy import stats, misc
 from tests.context import zhusuan
 from zhusuan.distributions.univariate import *
 
-
 # TODO: test sample value
-# TODO: test sample type
+def _test_dtype_2parameter(test_class, Distribution):
+    # Test sample dtype
+    def _test_sample(dtype):
+        param1 = tf.placeholder(dtype, None)
+        param2 = tf.placeholder(dtype, None)
+        distribution = Distribution(param1, param2)
+        test_class.assertAllEqual(dtype, distribution.sample(1).dtype)
 
+    _test_sample(tf.float16)
+    _test_sample(tf.float32)
+    _test_sample(tf.float64)
+
+    # Test log_prob and prob dtype
+    def _test_tensor(dtype):
+        param1 = tf.placeholder(dtype, None)
+        param2 = tf.placeholder(dtype, None)
+        distribution = Distribution(param1, param2)
+
+        given = tf.placeholder(dtype, None)
+        test_class.assertAllEqual(distribution.prob(given).dtype, dtype)
+        test_class.assertAllEqual(distribution.log_prob(given).dtype, dtype)
+
+    _test_tensor(tf.float16)
+    _test_tensor(tf.float32)
+    _test_tensor(tf.float64)
+
+    def _test_numpy(dtype, numpy_dtype):
+        param1 = tf.placeholder(dtype, None)
+        param2 = tf.placeholder(numpy_dtype, None)
+        distribution = Distribution(param1, param2)
+
+        given = np.array([1, 2], dtype=numpy_dtype)
+        test_class.assertAllEqual(distribution.prob(given).dtype, dtype)
+        test_class.assertAllEqual(distribution.log_prob(given).dtype, dtype)
+
+    #_test_numpy(tf.float32, np.int32)
+    _test_numpy(tf.float32, np.float32)
+    _test_numpy(tf.float64, np.float64)
+
+    def _test_tensor_raise(dtype, given_dtype):
+        param1 = tf.placeholder(dtype, None)
+        param2 = tf.placeholder(dtype, None)
+        distribution = Distribution(param1, param2)
+
+        given = tf.placeholder(given_dtype, None)
+        with test_class.assertRaises(ValueError):
+            distribution.log_prob(given)
+
+        with test_class.assertRaises(ValueError):
+            distribution.prob(given)
+
+    _test_tensor_raise(tf.float32, tf.float64)
+    _test_tensor_raise(tf.float32, tf.float16)
+    _test_tensor_raise(tf.float64, tf.float32)
+
+    # Test dtype for parameters
+    def _test_tensor(result_dtype, param1_dtype, param2_dtype):
+        param1 = tf.placeholder(param1_dtype, None)
+        param2 = tf.placeholder(param2_dtype, None)
+        distribution = Distribution(param1, param2)
+        test_class.assertAllEqual(distribution.dtype, result_dtype)
+
+    _test_tensor(tf.float16, tf.float16, tf.float16)
+    _test_tensor(tf.float32, tf.float32, tf.float32)
+    _test_tensor(tf.float64, tf.float64, tf.float64)
+
+    def _test_tensor_raise(param1_dtype, param2_dtype):
+        with test_class.assertRaisesRegexp(TypeError, ".*, type=.*, must be"):
+            _test_tensor(None, param1_dtype, param2_dtype)
+
+    _test_tensor_raise(tf.float16, tf.float32)
+    _test_tensor_raise(tf.float32, tf.float64)
+    _test_tensor_raise(tf.int32, tf.int32)
+
+    with test_class.assertRaises(TypeError):
+        _test_tensor(None, tf.int32, tf.int32)
+
+def _test_dtype_1parameter_discrete(test_class, Distribution):
+    def _test_dtype(result_dtype, dtype):
+        distribution = Distribution([1.], dtype=dtype)
+        samples = distribution.sample(2)
+        test_class.assertAllEqual(distribution.dtype, result_dtype)
+        test_class.assertAllEqual(samples.dtype, result_dtype)
+
+    _test_dtype(tf.int32, None)
+    _test_dtype(tf.int16, tf.int16)
+    _test_dtype(tf.int32, tf.int32)
+    _test_dtype(tf.float64, tf.float64)
+
+    def _test_dtype_prob(dtype, given_dtype):
+        param = tf.placeholder(dtype, [1])
+        given = tf.placeholder(given_dtype, None)
+        distribution = Distribution(param, dtype=given_dtype)
+        prob = distribution.prob(given)
+        log_prob = distribution.log_prob(given)
+        test_class.assertAllEqual(prob.dtype, dtype)
+        test_class.assertAllEqual(log_prob.dtype, dtype)
+        test_class.assertAllEqual(distribution.param_dtype, dtype)
+
+    _test_dtype_prob(tf.float16, tf.int32)
+    _test_dtype_prob(tf.float32, tf.int32)
+    _test_dtype_prob(tf.float64, tf.int64)
+
+    def _test_dtype_prob_numpy(dtype, numpy_dtype):
+        param = tf.placeholder(dtype, [1])
+        given = np.array([1], dtype=numpy_dtype)
+        distribution = Distribution(param)
+        prob = distribution.prob(given)
+        log_prob = distribution.log_prob(given)
+        test_class.assertAllEqual(prob.dtype, dtype)
+        test_class.assertAllEqual(log_prob.dtype, dtype)
+
+    _test_dtype_prob_numpy(tf.float32, np.int32)
+    _test_dtype_prob_numpy(tf.float32, np.float32)
+    _test_dtype_prob_numpy(tf.float32, np.float64)
+    _test_dtype_prob_numpy(tf.float64, np.float32)
 
 class TestNormal(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -201,6 +314,9 @@ class TestNormal(tf.test.TestCase):
                                          "precision.*Tensor had Inf"):
                 norm.log_prob(0.).eval()
 
+    def test_dtype(self):
+        _test_dtype_2parameter(self, Normal)
+
 
 class TestBernoulli(tf.test.TestCase):
     def test_value_shape(self):
@@ -340,6 +456,9 @@ class TestBernoulli(tf.test.TestCase):
             _test_value([0., 4.], [[0, 1], [0, 1]])
             _test_value([[2., 3., 1.], [5., 7., 4.]],
                         np.ones([3, 1, 2, 3], dtype=np.int32))
+
+    def test_dtype(self):
+        _test_dtype_1parameter_discrete(self, Bernoulli)
 
 
 class TestCategorical(tf.test.TestCase):
@@ -515,6 +634,9 @@ class TestCategorical(tf.test.TestCase):
             _test_value([0., 4.], [[0, 1], [0, 1]])
             _test_value([[2., 3., 1.], [5., 7., 4.]],
                         np.ones([3, 1, 1], dtype=np.int32))
+
+    def test_dtype(self):
+        _test_dtype_1parameter_discrete(self, Categorical)
 
 
 class TestUniform(tf.test.TestCase):
@@ -692,7 +814,7 @@ class TestUniform(tf.test.TestCase):
                 self.assertAllClose(p.eval(), target_p)
 
             # Uniform semantics different from scipy at maxval.
-            self.assertEqual(Uniform(0, 1).log_prob(1).eval(), -np.inf)
+            self.assertEqual(Uniform(0., 1.).log_prob(1).eval(), -np.inf)
             _test_value(0., 1., [-1., 0., 0.5, 2.])
             _test_value([-1e10, -1], [1, 1e10], 0.)
             _test_value([0., -1.], [[[1., 2.], [3., 5.], [4., 9.]]], [7.])
@@ -703,6 +825,9 @@ class TestUniform(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "p.*Tensor had Inf"):
                 unif.log_prob(0.).eval()
+
+    def test_dtype(self):
+        _test_dtype_2parameter(self, Uniform)
 
 
 class TestGamma(tf.test.TestCase):
@@ -885,6 +1010,9 @@ class TestGamma(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(alpha\).*Tensor had NaN"):
                 log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
+
+    def test_dtype(self):
+        _test_dtype_2parameter(self, Gamma)
 
 
 class TestBeta(tf.test.TestCase):
@@ -1071,6 +1199,9 @@ class TestBeta(tf.test.TestCase):
                                          "lgamma\(alpha\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 0., beta: 1., given: 0.5})
 
+    def test_dtype(self):
+        _test_dtype_2parameter(self, Beta)
+
 
 class TestPoisson(tf.test.TestCase):
     def test_value_shape(self):
@@ -1224,6 +1355,9 @@ class TestPoisson(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(rate\).*Tensor had NaN"):
                 log_p.eval(feed_dict={rate: -1., given: 1})
+
+    def test_dtype(self):
+        _test_dtype_1parameter_discrete(self, Poisson)
 
 
 class TestBinomial(tf.test.TestCase):
@@ -1406,3 +1540,23 @@ class TestBinomial(tf.test.TestCase):
                     tf.errors.InvalidArgumentError,
                     "lgamma\(n - given \+ 1\).*Tensor had Inf"):
                 log_p.eval(feed_dict={logits: 1., given: 12})
+
+    def test_dtype(self):
+        def _test_sample_dtype(dtype, param_dtype):
+            logits = tf.placeholder(param_dtype, [])
+            binomial = Binomial(logits, 10, dtype=dtype)
+            self.assertAllEqual(binomial.sample(1).dtype, dtype)
+
+        _test_sample_dtype(tf.int32, tf.float32)
+        _test_sample_dtype(tf.int32, tf.float64)
+        _test_sample_dtype(tf.int64, tf.float64)
+
+        def _test_prob_dtype(dtype, param_dtype, given_dtype):
+            logits = tf.placeholder(param_dtype, [])
+            binomial = Binomial(logits, 10, dtype=dtype)
+            given = tf.placeholder(given_dtype, [])
+            self.assertAllEqual(binomial.prob(given).dtype, param_dtype)
+            self.assertAllEqual(binomial.log_prob(given).dtype, param_dtype)
+
+        _test_prob_dtype(tf.int32, tf.float32, tf.int32)
+        _test_prob_dtype(tf.int64, tf.float32, tf.int64)

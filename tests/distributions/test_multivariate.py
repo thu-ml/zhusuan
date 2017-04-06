@@ -209,6 +209,27 @@ class TestMultinomial(tf.test.TestCase):
             _test_value([-10., 10., 20., 50.], 100, [[0, 1, 99, 100],
                                                      [100, 99, 1, 0]])
 
+    def test_dtype(self):
+        def _test_sample_dtype(dtype, param_dtype):
+            logits = tf.placeholder(param_dtype, [2])
+            multinomial = Multinomial(logits, 10, dtype=dtype)
+            self.assertAllEqual(multinomial.sample(1).dtype, dtype)
+
+        _test_sample_dtype(tf.int32, tf.float32)
+        _test_sample_dtype(tf.int32, tf.float64)
+        _test_sample_dtype(tf.int64, tf.float64)
+
+        def _test_prob_dtype(dtype, param_dtype, given_dtype):
+            logits = tf.placeholder(param_dtype, [2])
+            multinomial = Multinomial(logits, 10, dtype=dtype)
+            given = tf.placeholder(given_dtype, [2])
+            self.assertAllEqual(multinomial.prob(given).dtype, param_dtype)
+            self.assertAllEqual(multinomial.log_prob(given).dtype, param_dtype)
+
+        _test_prob_dtype(tf.int32, tf.float32, tf.int32)
+        _test_prob_dtype(tf.int64, tf.float32, tf.int64)
+        _test_prob_dtype(tf.int64, tf.float64, tf.int64)
+
 
 class TestOnehotCategorical(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -394,6 +415,27 @@ class TestOnehotCategorical(tf.test.TestCase):
             _test_value([0., 4.], [[0, 1], [0, 1]])
             _test_value([[2., 3., 1.], [5., 7., 4.]],
                         np.ones([3, 1, 1], dtype=np.int32))
+
+    def test_dtype(self):
+        def _test_sample_dtype(dtype, param_dtype):
+            logits = tf.placeholder(param_dtype, [2])
+            onehot = OnehotCategorical(logits, dtype=dtype)
+            self.assertAllEqual(onehot.sample(1).dtype, dtype)
+
+        _test_sample_dtype(tf.int32, tf.float32)
+        _test_sample_dtype(tf.int32, tf.float64)
+        _test_sample_dtype(tf.int64, tf.float64)
+
+        def _test_prob_dtype(dtype, param_dtype, given_dtype):
+            logits = tf.placeholder(param_dtype, [2])
+            onehot = OnehotCategorical(logits, dtype=dtype)
+            given = tf.placeholder(given_dtype, [2])
+            self.assertAllEqual(onehot.prob(given).dtype, param_dtype)
+            self.assertAllEqual(onehot.log_prob(given).dtype, param_dtype)
+
+        _test_prob_dtype(tf.int32, tf.float32, tf.int32)
+        _test_prob_dtype(tf.int64, tf.float32, tf.int64)
+        _test_prob_dtype(tf.int64, tf.float64, tf.int64)
 
 
 class TestDirichlet(tf.test.TestCase):
@@ -621,3 +663,28 @@ class TestDirichlet(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "lbeta\(alpha\).*Tensor had NaN"):
                 log_p.eval(feed_dict={alpha: [-1., 1.], given: [0.5, 0.5]})
+
+    def test_dtype(self):
+        def _test_dtype(dtype):
+            alpha = tf.placeholder(dtype, [2])
+            dirichlet = Dirichlet(alpha)
+            self.assertAllEqual(dirichlet.sample(1).dtype, dtype)
+
+            given = tf.placeholder(dtype, [2])
+            self.assertAllEqual(dirichlet.prob(given).dtype, dtype)
+            self.assertAllEqual(dirichlet.log_prob(given).dtype, dtype)
+
+        _test_dtype(tf.float32)
+        _test_dtype(tf.float64)
+
+        def _test_dtype_numpy(dtype, np_dtype):
+            alpha = tf.placeholder(dtype, [2])
+            dirichlet = Dirichlet(alpha)
+
+            given = np.array([2], dtype=np_dtype)
+            self.assertAllEqual(dirichlet.prob(given).dtype, dtype)
+            self.assertAllEqual(dirichlet.log_prob(given).dtype, dtype)
+
+        _test_dtype_numpy(tf.float32, np.int32)
+        _test_dtype_numpy(tf.float32, np.float32)
+        _test_dtype_numpy(tf.float64, np.float32)

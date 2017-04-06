@@ -15,6 +15,7 @@ from zhusuan.distributions.base import *
 class Dist(Distribution):
     def __init__(self, group_event_ndims=0, shape_fully_defined=True):
         super(Dist, self).__init__(tf.float32,
+                                   tf.float32,
                                    is_continuous=True,
                                    is_reparameterized=True,
                                    group_event_ndims=group_event_ndims)
@@ -49,10 +50,12 @@ class Dist(Distribution):
 class TestDistributions(tf.test.TestCase):
     def test_baseclass(self):
         dist = Distribution(tf.float32,
+                            param_dtype=tf.float32,
                             is_continuous=True,
                             is_reparameterized=True,
                             group_event_ndims=2)
         self.assertEqual(dist.dtype, tf.float32)
+        self.assertEqual(dist.param_dtype, tf.float32)
         self.assertEqual(dist.is_continuous, True)
         self.assertEqual(dist.is_reparameterized, True)
         self.assertEqual(dist.group_event_ndims, 2)
@@ -72,7 +75,7 @@ class TestDistributions(tf.test.TestCase):
             dist._prob(tf.ones([2, 3, 4, 5]))
 
         with self.assertRaisesRegexp(ValueError, "must be non-negative"):
-            dist2 = Distribution(tf.float32, True, True, -1)
+            dist2 = Distribution(tf.float32, tf.float32, True, True, -1)
 
     def test_subclass(self):
         with self.test_session(use_gpu=True):

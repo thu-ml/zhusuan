@@ -43,7 +43,18 @@ class Distribution(object):
     shape `(... + )batch_shape + value_shape`. The returned Tensor has shape
     `(... + )batch_shape[:-group_event_ndims]`.
 
+    For the discrete distribution, the parameter `dtype` represents the value
+    type of `samples`, and the parameter type of `prob` and `log_prob`. 
+    
+    The value type of `prob` and `log_prob` will be `param_dtype` which is
+    deduced from the parameter(s) when initializating. And `dtype` must be
+    among `int16`, `int32`, `int64`, `float16`, `float32` and `float64`.
+
+    When two or more parameters are tensors and they have different type, 
+    `TypeError` will be raised.
+
     :param dtype: The value type of samples from the distribution.
+    :param param_dtype: The parameter(s) type of the distribution.
     :param is_continuous: Whether the distribution is continuous.
     :param is_reparameterized: A bool. Whether the gradients of samples can
         and are allowed to propagate back into inputs, using the
@@ -55,9 +66,14 @@ class Distribution(object):
         See above for more detailed explanation.
     """
 
-    def __init__(self, dtype, is_continuous, is_reparameterized,
+    def __init__(self, 
+                 dtype, 
+                 param_dtype,
+                 is_continuous, 
+                 is_reparameterized,
                  group_event_ndims=0):
         self._dtype = dtype
+        self._param_dtype = param_dtype
         self._is_continuous = is_continuous
         self._is_reparameterized = is_reparameterized
         if isinstance(group_event_ndims, int):
@@ -81,6 +97,11 @@ class Distribution(object):
     def dtype(self):
         """The sample type of the distribution."""
         return self._dtype
+
+    @property
+    def param_dtype(self):
+        """The parameter(s) type of the distribution."""
+        return self._param_dtype
 
     @property
     def is_continuous(self):
@@ -205,6 +226,7 @@ class Distribution(object):
 
     def _check_input_shape(self, given):
         given = tf.convert_to_tensor(given, dtype=self.dtype)
+
         err_msg = "The given argument should be able to broadcast to " \
                   "match batch_shape + value_shape of the distribution."
         if (given.get_shape() and self.get_batch_shape() and

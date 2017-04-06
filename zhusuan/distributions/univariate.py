@@ -8,7 +8,11 @@ import numpy as np
 import tensorflow as tf
 
 from .base import *
-from .utils import maybe_explicit_broadcast
+from .utils import \
+        maybe_explicit_broadcast, \
+        assert_same_float_dtype, \
+        assert_same_float_int_dtype, \
+        assert_same_dtype
 
 
 __all__ = [
@@ -28,9 +32,9 @@ class Normal(Distribution):
     """
     The class of univariate Normal distribution.
 
-    :param mean: A `float32` Tensor. The mean of the Normal distribution.
+    :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
-    :param logstd: A `float32` Tensor. The log standard deviation of the Normal
+    :param logstd: A `float` Tensor. The log standard deviation of the Normal
         distribution. Should be broadcastable to match `mean`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -49,8 +53,10 @@ class Normal(Distribution):
                  group_event_ndims=0,
                  is_reparameterized=True,
                  check_numerics=False):
-        self._mean = tf.convert_to_tensor(mean, dtype=tf.float32)
-        self._logstd = tf.convert_to_tensor(logstd, dtype=tf.float32)
+        self._mean = tf.convert_to_tensor(mean)
+        self._logstd = tf.convert_to_tensor(logstd)
+        dtype = assert_same_float_dtype([self._mean, self._logstd])
+
         try:
             tf.broadcast_static_shape(self._mean.get_shape(),
                                       self._logstd.get_shape())
@@ -61,7 +67,8 @@ class Normal(Distribution):
                     self._mean.get_shape(), self._logstd.get_shape()))
         self._check_numerics = check_numerics
         super(Normal, self).__init__(
-            dtype=tf.float32,
+            dtype=dtype,
+            param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
             group_event_ndims=group_event_ndims)
@@ -96,7 +103,8 @@ class Normal(Distribution):
             mean = tf.stop_gradient(mean)
             logstd = tf.stop_gradient(logstd)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.random_normal(shape) * tf.exp(logstd) + mean
+        samples = tf.random_normal(shape, dtype=self.dtype) * \
+                tf.exp(logstd) + mean
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
@@ -120,11 +128,11 @@ class Bernoulli(Distribution):
     """
     The class of univariate Bernoulli distribution.
 
-    :param logits: A `float32` Tensor. The log-odds of probabilities of
-        being 1.
+    :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
 
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
 
+    :param dtype: The value type of samples from the distribution.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -132,10 +140,16 @@ class Bernoulli(Distribution):
         See :class:`Distribution` for more detailed explanation.
     """
 
-    def __init__(self, logits, group_event_ndims=0):
-        self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
+    def __init__(self, logits, dtype=None, group_event_ndims=0):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype([self._logits])
+
+        if dtype is None: dtype = tf.int32
+        assert_same_float_int_dtype([], dtype)
+
         super(Bernoulli, self).__init__(
-            dtype=tf.int32,
+            dtype=dtype,
+            param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -160,7 +174,8 @@ class Bernoulli(Distribution):
     def _sample(self, n_samples):
         p = tf.sigmoid(self.logits)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        alpha = tf.random_uniform(shape, minval=0, maxval=1)
+        alpha = tf.random_uniform(
+            shape, minval=0, maxval=1, dtype=self.param_dtype)
         samples = tf.cast(tf.less(alpha, p), dtype=self.dtype)
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
@@ -169,8 +184,9 @@ class Bernoulli(Distribution):
         return samples
 
     def _log_prob(self, given):
+        given = tf.cast(given, self.param_dtype)
         given, logits = maybe_explicit_broadcast(
-            tf.to_float(given), self.logits, 'given', 'logits')
+            given, self.logits, 'given', 'logits')
         return -tf.nn.sigmoid_cross_entropy_with_logits(labels=given,
                                                         logits=logits)
 
@@ -182,12 +198,13 @@ class Categorical(Distribution):
     """
     The class of univariate Categorical distribution.
 
-    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
         un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
+    :param dtype: The value type of samples from the distribution.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -198,8 +215,13 @@ class Categorical(Distribution):
     [0, n_categories).
     """
 
-    def __init__(self, logits, group_event_ndims=0):
-        self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
+    def __init__(self, logits, dtype=None, group_event_ndims=0):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype([self._logits])
+
+        if dtype is None: dtype = tf.int32
+        assert_same_float_int_dtype([], dtype)
+
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
@@ -214,9 +236,9 @@ class Categorical(Distribution):
                 self._logits = tf.identity(self._logits)
             self._n_categories = tf.shape(self._logits)[-1]
 
-        # TODO: add type argument for distributions
         super(Categorical, self).__init__(
-            dtype=tf.int32,
+            dtype=dtype,
+            param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -254,7 +276,7 @@ class Categorical(Distribution):
         if self.logits.get_shape().ndims == 2:
             return samples_flat
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.reshape(samples_flat, shape)
+        samples = tf.cast(tf.reshape(samples_flat, shape), self.dtype)
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
@@ -263,14 +285,15 @@ class Categorical(Distribution):
 
     def _log_prob(self, given):
         logits = self.logits
+        given = tf.cast(given, self.param_dtype)
 
         def _broadcast(given, logits):
             # static shape has been checked in base class.
-            ones_ = tf.ones(tf.shape(logits)[:-1], tf.int32)
+            ones_ = tf.ones(tf.shape(logits)[:-1], self.param_dtype)
             if logits.get_shape():
                 ones_.set_shape(logits.get_shape()[:-1])
             given *= ones_
-            logits *= tf.ones_like(tf.expand_dims(given, -1), tf.float32)
+            logits *= tf.ones_like(tf.expand_dims(given, -1), self.param_dtype)
             return given, logits
 
         def _is_same_dynamic_shape(given, logits):
@@ -301,6 +324,8 @@ class Categorical(Distribution):
                 #     lambda: (given, logits),
                 #     lambda: _broadcast(given, logits, 'given', 'logits'))
                 given, logits = _broadcast(given, logits)
+
+        given = tf.cast(given, dtype=self.dtype)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
         if given.get_shape() and logits.get_shape():
@@ -319,9 +344,9 @@ class Uniform(Distribution):
     """
     The class of univariate Uniform distribution.
 
-    :param minval: A `float32` Tensor. The lower bound on the range of the
+    :param minval: A `float` Tensor. The lower bound on the range of the
         uniform distribution. Should be broadcastable to match `maxval`.
-    :param maxval: A `float32` Tensor. The upper bound on the range of the
+    :param maxval: A `float` Tensor. The upper bound on the range of the
         uniform distribution. Should be element-wise bigger than `minval`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -340,8 +365,10 @@ class Uniform(Distribution):
                  group_event_ndims=0,
                  is_reparameterized=True,
                  check_numerics=False):
-        self._minval = tf.convert_to_tensor(minval, dtype=tf.float32)
-        self._maxval = tf.convert_to_tensor(maxval, dtype=tf.float32)
+        self._minval = tf.convert_to_tensor(minval)
+        self._maxval = tf.convert_to_tensor(maxval)
+        dtype = assert_same_float_dtype([self._minval, self._maxval])
+
         try:
             tf.broadcast_static_shape(self._minval.get_shape(),
                                       self._maxval.get_shape())
@@ -352,7 +379,8 @@ class Uniform(Distribution):
                     self._minval.get_shape(), self._maxval.get_shape()))
         self._check_numerics = check_numerics
         super(Uniform, self).__init__(
-            dtype=tf.float32,
+            dtype=dtype,
+            param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
             group_event_ndims=group_event_ndims)
@@ -368,7 +396,7 @@ class Uniform(Distribution):
         return self._maxval
 
     def _value_shape(self):
-        return tf.constant([], tf.float32)
+        return tf.constant([], tf.int32)
 
     def _get_value_shape(self):
         return tf.TensorShape([])
@@ -387,7 +415,8 @@ class Uniform(Distribution):
             minval = tf.stop_gradient(minval)
             maxval = tf.stop_gradient(maxval)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.random_uniform(shape, 0, 1) * (maxval - minval) + minval
+        samples = tf.random_uniform(shape, 0, 1, dtype=self.dtype) * \
+            (maxval - minval) + minval
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
@@ -405,7 +434,7 @@ class Uniform(Distribution):
     def _prob(self, given):
         mask = tf.cast(tf.logical_and(tf.less_equal(self.minval, given),
                                       tf.less(given, self.maxval)),
-                       tf.float32)
+                       self.dtype)
         p = 1. / (self.maxval - self.minval)
         if self._check_numerics:
             with tf.control_dependencies(
@@ -418,9 +447,9 @@ class Gamma(Distribution):
     """
     The class of univariate Gamma distribution.
 
-    :param alpha: A `float32` Tensor. The shape parameter of the Gamma
+    :param alpha: A `float` Tensor. The shape parameter of the Gamma
         distribution. Should be positive and broadcastable to match `beta`.
-    :param beta: A `float32` Tensor. The inverse scale parameter of the Gamma
+    :param beta: A `float` Tensor. The inverse scale parameter of the Gamma
         distribution. Should be positive and broadcastable to match `alpha`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -435,8 +464,10 @@ class Gamma(Distribution):
                  beta,
                  group_event_ndims=0,
                  check_numerics=False):
-        self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
-        self._beta = tf.convert_to_tensor(beta, dtype=tf.float32)
+        self._alpha = tf.convert_to_tensor(alpha)
+        self._beta = tf.convert_to_tensor(beta)
+        dtype = assert_same_float_dtype([self._alpha, self._beta])
+
         try:
             tf.broadcast_static_shape(self._alpha.get_shape(),
                                       self._beta.get_shape())
@@ -447,7 +478,8 @@ class Gamma(Distribution):
                     self._alpha.get_shape(), self._beta.get_shape()))
         self._check_numerics = check_numerics
         super(Gamma, self).__init__(
-            dtype=tf.float32,
+            dtype=dtype,
+            param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -477,7 +509,8 @@ class Gamma(Distribution):
                                          self.beta.get_shape())
 
     def _sample(self, n_samples):
-        return tf.random_gamma([n_samples], self.alpha, beta=self.beta)
+        return tf.random_gamma([n_samples], self.alpha,
+                               beta=self.beta, dtype=self.dtype)
 
     def _log_prob(self, given):
         alpha, beta = self.alpha, self.beta
@@ -502,10 +535,10 @@ class Beta(Distribution):
     """
     The class of univariate Beta distribution.
 
-    :param alpha: A `float32` Tensor. One of the two shape parameters of the
+    :param alpha: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
         `beta`.
-    :param beta: A `float32` Tensor. One of the two shape parameters of the
+    :param beta: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
         `alpha`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
@@ -519,10 +552,13 @@ class Beta(Distribution):
     def __init__(self,
                  alpha,
                  beta,
+                 dtype=None,
                  group_event_ndims=0,
                  check_numerics=False):
-        self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
-        self._beta = tf.convert_to_tensor(beta, dtype=tf.float32)
+        self._alpha = tf.convert_to_tensor(alpha)
+        self._beta = tf.convert_to_tensor(beta)
+        dtype = assert_same_float_dtype([self._alpha, self._beta])
+
         try:
             tf.broadcast_static_shape(self._alpha.get_shape(),
                                       self._beta.get_shape())
@@ -533,7 +569,8 @@ class Beta(Distribution):
                     self._alpha.get_shape(), self._beta.get_shape()))
         self._check_numerics = check_numerics
         super(Beta, self).__init__(
-            dtype=tf.float32,
+            dtype=dtype,
+            param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -565,8 +602,8 @@ class Beta(Distribution):
     def _sample(self, n_samples):
         alpha, beta = maybe_explicit_broadcast(
             self.alpha, self.beta, 'alpha', 'beta')
-        x = tf.random_gamma([n_samples], alpha, beta=1)
-        y = tf.random_gamma([n_samples], beta, beta=1)
+        x = tf.random_gamma([n_samples], alpha, beta=1, dtype=self.dtype)
+        y = tf.random_gamma([n_samples], beta, beta=1, dtype=self.dtype)
         return x / (x + y)
 
     def _log_prob(self, given):
@@ -596,8 +633,9 @@ class Poisson(Distribution):
     """
     The class of univariate Poisson distribution.
 
-    :param rate: A `float32` Tensor. The rate parameter of Poisson
+    :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
+    :param dtype: The value type of samples from the distribution.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -608,13 +646,20 @@ class Poisson(Distribution):
 
     def __init__(self,
                  rate,
+                 dtype=None,
                  group_event_ndims=0,
                  check_numerics=False):
-        self._rate = tf.convert_to_tensor(rate, dtype=tf.float32)
+        self._rate = tf.convert_to_tensor(rate)
+        param_dtype = assert_same_float_dtype([self._rate])
+
+        if dtype is None: dtype = tf.int32
+        assert_same_float_int_dtype([], dtype)
+
         self._check_numerics = check_numerics
 
         super(Poisson, self).__init__(
-            dtype=tf.int32,
+            dtype=dtype,
+            param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -648,7 +693,7 @@ class Poisson(Distribution):
 
         enlam = tf.exp(-self.rate)
         x = tf.zeros(shape, dtype=self.dtype)
-        prod = tf.ones(shape, dtype=tf.float32)
+        prod = tf.ones(shape, dtype=self.param_dtype)
 
         def loop_cond(prod, x):
             return tf.reduce_any(tf.greater_equal(prod, enlam))
@@ -667,7 +712,7 @@ class Poisson(Distribution):
 
     def _log_prob(self, given):
         rate = self.rate
-        given = tf.to_float(given)
+        given = tf.cast(given, self.param_dtype)
 
         log_rate = tf.log(rate)
         lgamma_given_plus_1 = tf.lgamma(given + 1)
@@ -688,12 +733,13 @@ class Binomial(Distribution):
     """
     The class of univariate Binomial distribution.
 
-    :param logits: A `float32` Tensor. The log-odds of probabilities.
+    :param logits: A `float` Tensor. The log-odds of probabilities.
 
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
 
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
+    :param dtype: The value type of samples from the distribution.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -705,15 +751,22 @@ class Binomial(Distribution):
     def __init__(self,
                  logits,
                  n_experiments,
+                 dtype=None,
                  group_event_ndims=0,
                  check_numerics=False):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype([self._logits])
+
+        if dtype is None: dtype = tf.int32
+        assert_same_float_int_dtype([], dtype)
+
         sign_err_msg = "n_experiments must be positive"
         if isinstance(n_experiments, int):
             if n_experiments <= 0:
                 raise ValueError(sign_err_msg)
             self._n_experiments = n_experiments
         else:
-            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            n_experiments = tf.convert_to_tensor(n_experiments, dtype)
             _assert_rank_op = tf.assert_rank(
                 n_experiments, 0,
                 message="n_experiments should be a scalar (0-D Tensor).")
@@ -723,10 +776,10 @@ class Binomial(Distribution):
                                           _assert_positive_op]):
                 self._n_experiments = tf.identity(n_experiments)
 
-        self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
         self._check_numerics = check_numerics
         super(Binomial, self).__init__(
-            dtype=tf.int32,
+            dtype=dtype,
+            param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -773,12 +826,12 @@ class Binomial(Distribution):
             self.get_batch_shape())
         samples.set_shape(static_shape)
 
-        return samples
+        return tf.cast(samples, self.dtype)
 
     def _log_prob(self, given):
         logits = self.logits
-        n = tf.to_float(self.n_experiments)
-        given = tf.to_float(given)
+        n = tf.cast(self.n_experiments, self.param_dtype)
+        given = tf.cast(given, self.param_dtype)
 
         log_1_minus_p = -tf.nn.softplus(logits)
         lgamma_n_plus_1 = tf.lgamma(n + 1)
