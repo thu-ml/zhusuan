@@ -19,7 +19,7 @@ principled Bayesian inference.
   * __Structured__ posterior: With user specified dependencies.
 
 * Variational objectives we support:
-  * __ADVI__: Automatic Differentiation Variational Inference
+  * __SGVB__: Stochastic gradient variational Bayes
   * __IWAE__: Importance weighted objectives
   * __NVIL__: Score function estimator with variance reduction
   * __VIMCO__: Multi-sample score function estimator with variance reduction
@@ -34,16 +34,16 @@ principled Bayesian inference.
 * Gaussian: 
 [HMC](examples/gaussian.py)
 * Toy 2D Intractable Posterior: 
-[ADVI](examples/toy2d.py)
+[SGVB](examples/toy2d.py)
 * Beyesian Neural Networks: 
-[ADVI](examples/bayesian_nn.py)
+[SGVB](examples/bayesian_nn.py)
 * Variational Autoencoder (VAE): 
-[ADVI](examples/vae.py), 
+[SGVB](examples/vae.py), 
 [IWAE](examples/iwae.py)
 * Convolutional VAE: 
-[ADVI](examples/vae_conv.py)
+[SGVB](examples/vae_conv.py)
 * Semi-supervised VAE (Kingma, 2014): 
-[ADVI](examples/vae_ssl.py),
+[SGVB](examples/vae_ssl.py),
 [RWS](examples/vae_ssl_rws.py)
 * Deep Sigmoid Belief Networks
 [RWS](examples/sbn_rws.py),

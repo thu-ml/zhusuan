@@ -56,6 +56,7 @@ def q_net(x, n_z, n_particles, is_training):
 def baseline_net(x):
     lc_x = layers.fully_connected(tf.to_float(x), 100)
     lc_x = layers.fully_connected(lc_x, 1, activation_fn=None)
+    lc_x = tf.squeeze(lc_x, -1)
     return lc_x
 
 
@@ -106,7 +107,7 @@ if __name__ == "__main__":
     variational = q_net(x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    cx = baseline_net(x)
+    cx = tf.expand_dims(baseline_net(x), 0)
     cost, lower_bound = zs.nvil(
         log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, baseline=cx,
         axis=0, variance_normalization=False)

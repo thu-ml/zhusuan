@@ -75,6 +75,7 @@ if __name__ == "__main__":
     # Define training/evaluation parameters
     lb_samples = 1
     ll_samples = 1000
+    n_planar_flows = 10
     epoches = 3000
     batch_size = 100
     iters = x_train.shape[0] // batch_size
@@ -108,12 +109,15 @@ if __name__ == "__main__":
     variational = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    # qz_samples, log_qz = zs.planar_nf(qz_samples, log_qz, iters=0)
-    
-    lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+    # TODO: add tests for repeated calls of flows
+    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
+                                                    n_iters=n_planar_flows)
+    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
+                                                    n_iters=n_planar_flows)
 
-    batch = advi_visual(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]})
+    lower_bound = tf.reduce_mean(
+        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training
     is_log_likelihood = tf.reduce_mean(

@@ -33,7 +33,9 @@ sys.path.insert(0, os.path.abspath('..'))
 extensions = ['sphinx.ext.doctest',
               'sphinx.ext.mathjax',
               'sphinx.ext.viewcode',
-              'sphinx.ext.autodoc']
+              'sphinx.ext.autodoc',
+              'sphinxcontrib.bibtex',
+              'sphinx.ext.intersphinx']
 mathjax_path = 'http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML'
 
 # Add any paths that contain templates here, relative to this directory.
@@ -98,6 +100,7 @@ html_theme_options = {
     'github_repo': 'ZhuSuan',
     'github_type': 'star',
     'sidebar_width': '220px',
+    'page_width': '980px',
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

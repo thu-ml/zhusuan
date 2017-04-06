@@ -68,7 +68,7 @@ if __name__ == "__main__":
     n_h = 200
 
     # Define training/evaluation parameters
-    lb_samples = 2
+    lb_samples = 10
     ll_samples = 1000
     epoches = 3000
     batch_size = 24
@@ -104,21 +104,21 @@ if __name__ == "__main__":
                                              local_log_prob=True)
     qh1_samples, log_qh1 = variational.query('h1', outputs=True,
                                              local_log_prob=True)
-    object_function, lower_bound = zs.vimco(
-        log_joint, {'x': x_obs}, {'h3': [qh3_samples, log_qh3],
+    cost, lower_bound = zs.vimco(log_joint, {'x': x_obs},
+                                 {'h3': [qh3_samples, log_qh3],
                                   'h2': [qh2_samples, log_qh2],
-                                  'h1': [qh1_samples, log_qh1]}, axis=0,
-        is_particle_larger_one=True)
+                                  'h1': [qh1_samples, log_qh1]}, axis=0)
     lower_bound = tf.reduce_mean(lower_bound)
-    object_function = tf.reduce_mean(object_function)
-    log_likelihood = tf.reduce_mean(zs.is_loglikelihood(
-        log_joint, {'x': x_obs}, {'h3': [qh3_samples, log_qh3],
-                                  'h2': [qh2_samples, log_qh2],
-                                  'h1': [qh1_samples, log_qh1]}, axis=0))
+    cost = tf.reduce_mean(cost)
+    log_likelihood = tf.reduce_mean(
+        zs.is_loglikelihood(log_joint, {'x': x_obs},
+                            {'h3': [qh3_samples, log_qh3],
+                             'h2': [qh2_samples, log_qh2],
+                             'h1': [qh1_samples, log_qh1]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-object_function)
+    grads = optimizer.compute_gradients(cost)
     infer = optimizer.apply_gradients(grads)
 
     params = tf.trainable_variables()

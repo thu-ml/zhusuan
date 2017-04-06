@@ -202,7 +202,7 @@ if __name__ == "__main__":
                                        local_log_prob=True)
         latents = dict(zip(z_names, qz_outputs))
         lower_bound = tf.reduce_mean(
-            zs.advi(log_joint, {'x': x_obs}, latents, axis=0))
+            zs.sgvb(log_joint, {'x': x_obs}, latents, axis=0))
         bits_per_dim = -lower_bound / n_x * 1. / np.log(2.)
         grads = optimizer.compute_gradients(bits_per_dim)
         return lower_bound, bits_per_dim, grads

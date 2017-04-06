@@ -107,7 +107,7 @@ if __name__ == '__main__':
     log_qes = [log_qe / x_train.shape[0] for log_qe in log_qes]
     e_dict = dict(zip(e_names, zip(qe_samples, log_qes)))
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'y': y_obs}, e_dict, axis=0))
+        zs.sgvb(log_joint, {'y': y_obs}, e_dict, axis=0))
 
     with tf.name_scope('accuracy'):
         _, y_pred = var_dropout({}, x_obs, n, net_size,

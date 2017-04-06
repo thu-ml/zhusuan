@@ -12,5 +12,6 @@ Information on specific functions, classes, and methods.
    api/zhusuan.variational
    api/zhusuan.hmc
    api/zhusuan.evaluation
+   api/zhusuan.transform
    api/zhusuan.diagnostics
    api/zhusuan.utils

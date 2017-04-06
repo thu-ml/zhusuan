@@ -25,6 +25,7 @@ __all__ = [
 class Multinomial(Distribution):
     """
     The class of Multinomial distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
@@ -39,7 +40,8 @@ class Multinomial(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a vector of counts for all categories.
@@ -139,7 +141,7 @@ class Multinomial(Distribution):
                                                          int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples, static_n_exps]).
-                concatenate(self.get_batch_shape()))
+            concatenate(self.get_batch_shape()))
         samples = tf.reduce_sum(
             tf.one_hot(samples, self.n_categories, dtype=self.dtype), axis=1)
         return samples
@@ -162,6 +164,7 @@ class Multinomial(Distribution):
 class OnehotCategorical(Distribution):
     """
     The class of one-hot Categorical distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
@@ -174,7 +177,8 @@ class OnehotCategorical(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a one-hot vector of the selected category.
@@ -284,6 +288,7 @@ OnehotDiscrete = OnehotCategorical
 class Dirichlet(Distribution):
     """
     The class of Dirichlet distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param alpha: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
@@ -292,7 +297,8 @@ class Dirichlet(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a N-D Tensor with the same shape as alpha. Each slice
     `[i, j, ..., k, :]` of the sample is a vector of probabilities of a
@@ -372,20 +378,19 @@ class Dirichlet(Distribution):
         return samples / tf.reduce_sum(samples, -1, keep_dims=True)
 
     def _log_prob(self, given):
-        alpha = self.alpha
         given, alpha = maybe_explicit_broadcast(
             given, self.alpha, 'given', 'alpha')
-        log_Beta_alpha = tf.lbeta(alpha)
+        lbeta_alpha = tf.lbeta(alpha)
         # fix of no static shape inference for tf.lbeta
         if alpha.get_shape():
-            log_Beta_alpha.set_shape(alpha.get_shape()[:-1])
+            lbeta_alpha.set_shape(alpha.get_shape()[:-1])
         log_given = tf.log(given)
         if self._check_numerics:
             with tf.control_dependencies(
-                    [tf.check_numerics(log_Beta_alpha, "lbeta(alpha)"),
+                    [tf.check_numerics(lbeta_alpha, "lbeta(alpha)"),
                      tf.check_numerics(log_given, "log(given)")]):
                 log_given = tf.identity(log_given)
-        log_p = -log_Beta_alpha + tf.reduce_sum((alpha - 1) * log_given, -1)
+        log_p = -lbeta_alpha + tf.reduce_sum((alpha - 1) * log_given, -1)
         return log_p
 
     def _prob(self, given):

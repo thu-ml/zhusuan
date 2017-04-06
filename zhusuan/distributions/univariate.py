@@ -31,6 +31,7 @@ __all__ = [
 class Normal(Distribution):
     """
     The class of univariate Normal distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
@@ -40,7 +41,8 @@ class Normal(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed 
+        explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -127,6 +129,7 @@ class Normal(Distribution):
 class Bernoulli(Distribution):
     """
     The class of univariate Bernoulli distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
 
@@ -137,7 +140,8 @@ class Bernoulli(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     """
 
     def __init__(self, logits, dtype=None, group_event_ndims=0):
@@ -197,6 +201,7 @@ class Bernoulli(Distribution):
 class Categorical(Distribution):
     """
     The class of univariate Categorical distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
@@ -209,7 +214,8 @@ class Categorical(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed 
+        explanation.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
@@ -343,6 +349,7 @@ Discrete = Categorical
 class Uniform(Distribution):
     """
     The class of univariate Uniform distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param minval: A `float` Tensor. The lower bound on the range of the
         uniform distribution. Should be broadcastable to match `maxval`.
@@ -352,7 +359,8 @@ class Uniform(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -446,6 +454,7 @@ class Uniform(Distribution):
 class Gamma(Distribution):
     """
     The class of univariate Gamma distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param alpha: A `float` Tensor. The shape parameter of the Gamma
         distribution. Should be positive and broadcastable to match `beta`.
@@ -455,7 +464,8 @@ class Gamma(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -534,6 +544,7 @@ class Gamma(Distribution):
 class Beta(Distribution):
     """
     The class of univariate Beta distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param alpha: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
@@ -545,7 +556,8 @@ class Beta(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -632,6 +644,7 @@ class Beta(Distribution):
 class Poisson(Distribution):
     """
     The class of univariate Poisson distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
@@ -640,7 +653,8 @@ class Poisson(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -732,6 +746,7 @@ class Poisson(Distribution):
 class Binomial(Distribution):
     """
     The class of univariate Binomial distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A `float` Tensor. The log-odds of probabilities.
 
@@ -744,7 +759,8 @@ class Binomial(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 

@@ -119,7 +119,7 @@ if __name__ == '__main__':
     qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
     latent = dict(zip(w_names, qw_outputs))
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'y': y_obs}, latent, axis=0))
+        zs.sgvb(log_joint, {'y': y_obs}, latent, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)

@@ -28,9 +28,8 @@ __all__ = [
 
 class Normal(StochasticTensor):
     """
-    The class of univariate Normal :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Normal `StochasticTensor`.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -44,7 +43,8 @@ class Normal(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -71,9 +71,8 @@ class Normal(StochasticTensor):
 
 class Bernoulli(StochasticTensor):
     """
-    The class of univariate Bernoulli :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Bernoulli `StochasticTensor`.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -88,7 +87,8 @@ class Bernoulli(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     """
 
     def __init__(self,
@@ -105,9 +105,8 @@ class Bernoulli(StochasticTensor):
 
 class Categorical(StochasticTensor):
     """
-    The class of univariate Categorical :class:`StochasticTensor`.
-    Instances of this class can only be constructed in the `BayesianNet`
-    context. See :class:`BayesianNet` for examples of usage.
+    The class of univariate Categorical `StochasticTensor`.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -123,7 +122,8 @@ class Categorical(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
@@ -146,9 +146,8 @@ Discrete = Categorical
 
 class Uniform(StochasticTensor):
     """
-    The class of univariate Uniform :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Uniform `StochasticTensor`.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -162,7 +161,8 @@ class Uniform(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
@@ -189,9 +189,8 @@ class Uniform(StochasticTensor):
 
 class Gamma(StochasticTensor):
     """
-    The class of univariate Gamma :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Gamma `StochasticTensor`.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -205,7 +204,8 @@ class Gamma(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -227,9 +227,8 @@ class Gamma(StochasticTensor):
 
 class Beta(StochasticTensor):
     """
-    The class of univariate Beta :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Beta `StochasticTensor`. 
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -245,7 +244,8 @@ class Beta(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -267,9 +267,8 @@ class Beta(StochasticTensor):
 
 class Poisson(StochasticTensor):
     """
-    The class of univariate Poisson :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Poisson `StochasticTensor`. 
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -281,7 +280,8 @@ class Poisson(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -301,9 +301,8 @@ class Poisson(StochasticTensor):
 
 class Binomial(StochasticTensor):
     """
-    The class of univariate Binomial :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of univariate Binomial `StochasticTensor`. 
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -319,7 +318,8 @@ class Binomial(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -341,9 +341,8 @@ class Binomial(StochasticTensor):
 
 class Multinomial(StochasticTensor):
     """
-    The class of Multinomial :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of Multinomial `StochasticTensor`. 
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -361,7 +360,8 @@ class Multinomial(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a vector of counts for all categories.
@@ -383,9 +383,8 @@ class Multinomial(StochasticTensor):
 
 class OnehotCategorical(StochasticTensor):
     """
-    The class of one-hot Categorical :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of one-hot Categorical `StochasticTensor`. 
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -401,7 +400,8 @@ class OnehotCategorical(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a one-hot vector of the selected category.
@@ -424,9 +424,8 @@ OnehotDiscrete = OnehotCategorical
 
 class Dirichlet(StochasticTensor):
     """
-    The class of Dirichlet :class:`StochasticTensor`. Instances of
-    this class can only be constructed in the `BayesianNet` context.
-    See :class:`BayesianNet` for examples of usage.
+    The class of Dirichlet `StochasticTensor`. 
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -439,7 +438,8 @@ class Dirichlet(StochasticTensor):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`Distribution` for more detailed explanation.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
 
     A single sample is a N-D Tensor with the same shape as alpha. Each slice

@@ -123,7 +123,7 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     lower_bound = tf.reduce_mean(
-        zs.advi(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
     log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))

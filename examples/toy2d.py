@@ -45,8 +45,9 @@ if __name__ == "__main__":
     variational, z_mean, z_logstd = mean_field_variational(n_particles)
     [qz1_samples, log_qz1], [qz2_samples, log_qz2] = variational.query(
         ['z1', 'z2'], outputs=True, local_log_prob=True)
-    lower_bound = zs.advi(log_joint, {}, {'z1': [qz1_samples, log_qz1],
-                                          'z2': [qz2_samples, log_qz2]})
+    lower_bound = zs.sgvb(
+        log_joint, {}, {'z1': [qz1_samples, log_qz1],
+                        'z2': [qz2_samples, log_qz2]}, axis=0)
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer = optimizer.minimize(-lower_bound)
 
