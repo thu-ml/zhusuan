@@ -1560,3 +1560,187 @@ class TestBinomial(tf.test.TestCase):
 
         _test_prob_dtype(tf.int32, tf.float32, tf.int32)
         _test_prob_dtype(tf.int64, tf.float32, tf.int64)
+
+
+class TestInverseGamma(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError,
+                                         "should be broadcastable to match"):
+                InverseGamma(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
+
+        InverseGamma(tf.placeholder(tf.float32, [None, 1]),
+              tf.placeholder(tf.float32, [None, 1, 3]))
+
+    def test_value_shape(self):
+        # static
+        inv_gamma = InverseGamma(alpha=tf.placeholder(tf.float32, None),
+                      beta=tf.placeholder(tf.float32, None))
+        self.assertEqual(inv_gamma.get_value_shape().as_list(), [])
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            self.assertEqual(inv_gamma._value_shape().eval().tolist(), [])
+
+    def test_batch_shape(self):
+        # static
+        def _test_static(alpha_shape, beta_shape, target_shape):
+            alpha = tf.placeholder(tf.float32, alpha_shape)
+            beta = tf.placeholder(tf.float32, beta_shape)
+            inv_gamma = InverseGamma(alpha, beta)
+            if inv_gamma.get_batch_shape():
+                self.assertEqual(inv_gamma.get_batch_shape().as_list(),
+                                 target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], [2, 3])
+        _test_static([2, 3], [3], [2, 3])
+        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
+        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
+        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
+        _test_static([None, 3, 5], [3, None], [None, 3, 5])
+        _test_static([None, 1, 3], [None, 1], [None, None, 3])
+        _test_static([2, None], [], [2, None])
+        _test_static(None, [1, 2], None)
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(alpha_shape, beta_shape, target_shape):
+                alpha = tf.placeholder(tf.float32, None)
+                beta = tf.placeholder(tf.float32, None)
+                inv_gamma = InverseGamma(alpha, beta)
+                self.assertEqual(
+                    inv_gamma.batch_shape.eval(
+                        feed_dict={alpha: np.ones(alpha_shape),
+                                   beta: np.ones(beta_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [], [2, 3])
+            _test_dynamic([2, 3], [3], [2, 3])
+            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
+            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [3, 2], None)
+
+    def test_sample_shape(self):
+        def _test_static(alpha_shape, beta_shape, n_samples, target_shape):
+            alpha = tf.placeholder(tf.float32, alpha_shape)
+            beta = tf.placeholder(tf.float32, beta_shape)
+            inv_gamma = InverseGamma(alpha, beta)
+            samples = inv_gamma.sample(n_samples)
+            if samples.get_shape():
+                self.assertEqual(samples.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], None, [2, 3])
+        _test_static([2, 3], [], 1, [1, 2, 3])
+        _test_static([5], [5], 2, [2, 5])
+        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
+                     [None, 3, 2])
+        _test_static(None, [1, 2], None, None)
+        _test_static(None, [1, 2], 1, None)
+        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
+        _test_static([3, None], [3, 1], 2, [2, 3, None])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(alpha_shape, beta_shape, n_samples,
+                              target_shape):
+                alpha = tf.placeholder(tf.float32, None)
+                beta = tf.placeholder(tf.float32, None)
+                inv_gamma = InverseGamma(alpha, beta)
+                samples = inv_gamma.sample(n_samples)
+                self.assertEqual(
+                    tf.shape(samples).eval(
+                        feed_dict={alpha: np.ones(alpha_shape),
+                                   beta: np.ones(beta_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
+            _test_dynamic([1, 3], [], 2, [2, 1, 3])
+            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+
+    def test_log_prob_shape(self):
+        def _test_static(alpha_shape, beta_shape, given_shape, target_shape):
+            alpha = tf.placeholder(tf.float32, alpha_shape)
+            beta = tf.placeholder(tf.float32, beta_shape)
+            given = tf.placeholder(tf.float32, given_shape)
+            inv_gamma = InverseGamma(alpha, beta)
+            log_p = inv_gamma.log_prob(given)
+            if log_p.get_shape():
+                self.assertEqual(log_p.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], [2, 3], [2, 3])
+        _test_static([5], [5], [2, 1], [2, 5])
+        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
+        _test_static(None, [1, 2], [2, 2], None)
+        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(alpha_shape, beta_shape, given_shape,
+                              target_shape):
+                alpha = tf.placeholder(tf.float32, None)
+                beta = tf.placeholder(tf.float32, None)
+                inv_gamma = InverseGamma(alpha, beta)
+                given = tf.placeholder(tf.float32, None)
+                log_p = inv_gamma.log_prob(given)
+                self.assertEqual(
+                    tf.shape(log_p).eval(
+                        feed_dict={alpha: np.ones(alpha_shape),
+                                   beta: np.ones(beta_shape),
+                                   given: np.ones(given_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
+            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
+            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(alpha, beta, given):
+                alpha = np.array(alpha, np.float32)
+                beta = np.array(beta, np.float32)
+                given = np.array(given, np.float32)
+                inv_gamma = InverseGamma(alpha, beta)
+                log_p = inv_gamma.log_prob(given)
+                target_log_p = stats.invgamma.logpdf(given, alpha, scale=beta)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = inv_gamma.prob(given)
+                target_p = stats.invgamma.pdf(given, alpha, scale=beta)
+                self.assertAllClose(p.eval(), target_p)
+
+            _test_value(1., 1., [1., 10., 1e8])
+            _test_value([0.5, 1., 2., 3., 5., 7.5, 9.],
+                        [2., 2., 2., 1., 0.5, 1., 1.],
+                        np.transpose([np.arange(1, 20)]))
+            _test_value([1e-8, 1e8], [[1., 1e8], [1e-8, 5.]], [7.])
+
+    def test_check_numerics(self):
+        alpha = tf.placeholder(tf.float32, [])
+        beta = tf.placeholder(tf.float32, [])
+        given = tf.placeholder(tf.float32, [])
+        inv_gamma = InverseGamma(alpha, beta, check_numerics=True)
+        log_p = inv_gamma.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(given\).*Tensor had Inf"):
+                log_p.eval(feed_dict={alpha: 1., beta: 1., given: 0.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(beta\).*Tensor had NaN"):
+                log_p.eval(feed_dict={alpha: 1., beta: -1., given: 1.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(alpha\).*Tensor had NaN"):
+                log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
+
+    def test_dtype(self):
+        _test_dtype_2parameter(self, InverseGamma)

@@ -25,6 +25,7 @@ __all__ = [
     'Beta',
     'Poisson',
     'Binomial',
+    'InverseGamma',
 ]
 
 
@@ -867,3 +868,96 @@ class Binomial(Distribution):
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
+
+
+class InverseGamma(Distribution):
+    """
+    The class of univariate InverseGamma distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param alpha: A `float` Tensor. The shape parameter of the InverseGamma
+        distribution. Should be positive and broadcastable to match `beta`.
+    :param beta: A `float` Tensor. The scale parameter of the InverseGamma
+        distribution. Should be positive and broadcastable to match `alpha`.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 alpha,
+                 beta,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        self._alpha = tf.convert_to_tensor(alpha)
+        self._beta = tf.convert_to_tensor(beta)
+        dtype = assert_same_float_dtype([self._alpha, self._beta])
+
+        try:
+            tf.broadcast_static_shape(self._alpha.get_shape(),
+                                      self._beta.get_shape())
+        except ValueError:
+            raise ValueError(
+                "alpha and beta should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._alpha.get_shape(), self._beta.get_shape()))
+        self._check_numerics = check_numerics
+        super(InverseGamma, self).__init__(
+            dtype=dtype,
+            param_dtype=dtype,
+            is_continuous=True,
+            is_reparameterized=False,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def alpha(self):
+        """The shape parameter of the InverseGamma distribution."""
+        return self._alpha
+
+    @property
+    def beta(self):
+        """The scale parameter of the InverseGamma distribution."""
+        return self._beta
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.broadcast_dynamic_shape(tf.shape(self.alpha),
+                                          tf.shape(self.beta))
+
+    def _get_batch_shape(self):
+        return tf.broadcast_static_shape(self.alpha.get_shape(),
+                                         self.beta.get_shape())
+
+    def _sample(self, n_samples):
+        gamma = tf.random_gamma([n_samples], self.alpha,
+                                beta=self.beta, dtype=self.dtype)
+        return tf.reciprocal(gamma)
+
+    def _log_prob(self, given):
+        alpha, beta = self.alpha, self.beta
+        log_given = tf.log(given)
+        log_alpha, log_beta = tf.log(alpha), tf.log(beta)
+        lgamma_alpha = tf.lgamma(alpha)
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_given, "log(given)"),
+                     tf.check_numerics(log_alpha, "log(alpha)"),
+                     tf.check_numerics(log_beta, "log(beta)"),
+                     tf.check_numerics(lgamma_alpha, "lgamma(alpha)")]):
+                log_given = tf.identity(log_given)
+        return alpha * log_beta - lgamma_alpha - (alpha + 1) * log_given - \
+            beta / given
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
