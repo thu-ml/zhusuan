@@ -48,7 +48,7 @@ class TestLinearIaf(tf.test.TestCase):
                 z[i] = tf.constant(z[i], dtype=tf.float32)
             z_0 = tf.concat(z, axis=1)
             z_1, n_log_det_ja = inv_autoregressive_flow(
-                z_0, None, 0.0, linear_ar, n_iters=1)
+                z_0, None, [0.0], linear_ar, n_iters=1)
 
             n_log_det_ja = tf.reshape(n_log_det_ja, [])
 
