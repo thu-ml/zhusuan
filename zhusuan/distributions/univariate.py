@@ -11,8 +11,7 @@ from .base import *
 from .utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
-        assert_same_float_int_dtype, \
-        assert_same_dtype
+        assert_same_float_and_int_dtype
 
 
 __all__ = [
@@ -42,7 +41,7 @@ class Normal(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed 
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
@@ -107,7 +106,7 @@ class Normal(Distribution):
             logstd = tf.stop_gradient(logstd)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         samples = tf.random_normal(shape, dtype=self.dtype) * \
-                tf.exp(logstd) + mean
+            tf.exp(logstd) + mean
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
@@ -149,8 +148,9 @@ class Bernoulli(Distribution):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype([self._logits])
 
-        if dtype is None: dtype = tf.int32
-        assert_same_float_int_dtype([], dtype)
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
 
         super(Bernoulli, self).__init__(
             dtype=dtype,
@@ -215,7 +215,7 @@ class Categorical(Distribution):
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed 
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
@@ -226,8 +226,9 @@ class Categorical(Distribution):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype([self._logits])
 
-        if dtype is None: dtype = tf.int32
-        assert_same_float_int_dtype([], dtype)
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
 
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
@@ -667,8 +668,9 @@ class Poisson(Distribution):
         self._rate = tf.convert_to_tensor(rate)
         param_dtype = assert_same_float_dtype([self._rate])
 
-        if dtype is None: dtype = tf.int32
-        assert_same_float_int_dtype([], dtype)
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
 
         self._check_numerics = check_numerics
 
@@ -774,8 +776,9 @@ class Binomial(Distribution):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype([self._logits])
 
-        if dtype is None: dtype = tf.int32
-        assert_same_float_int_dtype([], dtype)
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
 
         sign_err_msg = "n_experiments must be positive"
         if isinstance(n_experiments, int):
@@ -783,7 +786,7 @@ class Binomial(Distribution):
                 raise ValueError(sign_err_msg)
             self._n_experiments = n_experiments
         else:
-            n_experiments = tf.convert_to_tensor(n_experiments, dtype)
+            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
             _assert_rank_op = tf.assert_rank(
                 n_experiments, 0,
                 message="n_experiments should be a scalar (0-D Tensor).")
@@ -959,5 +962,3 @@ class InverseGamma(Distribution):
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
-
-

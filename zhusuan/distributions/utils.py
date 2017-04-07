@@ -15,7 +15,7 @@ __all__ = [
     'assert_same_dtype',
     'assert_same_specific_dtype',
     'assert_same_float_dtype',
-    'assert_same_float_int_dtype',
+    'assert_same_float_and_int_dtype',
 ]
 
 
@@ -27,11 +27,11 @@ def log_combination(n, ks):
 
         \\log \\binom{n}{k_1, k_2, \\dots} = \\log n! - \\sum_{i}\\log k_i!
 
-    :param n: A N-D `float32` Tensor. Can broadcast to match `ks[:-1]`.
-    :param ks: A (N + 1)-D `float32` Tensor. Each slice `[i, j, ..., k, :]` is 
+    :param n: A N-D `float` Tensor. Can broadcast to match `ks[:-1]`.
+    :param ks: A (N + 1)-D `float` Tensor. Each slice `[i, j, ..., k, :]` is
         a vector of `[k_1, k_2, ...]`.
 
-    :return: A N-D Tensor of type `float32`.
+    :return: A N-D Tensor of type same as `n`.
     """
     return tf.lgamma(n + 1) - tf.reduce_sum(tf.lgamma(ks + 1), axis=-1)
 
@@ -103,8 +103,6 @@ def is_same_dynamic_shape(x, y):
 def assert_same_dtype(tensors, dtype=None):
     """
     Whether all types of tensors in `tensors` are the same as `dtype`.
-    If the item in `tensors` doesn't have attribute `dtype` that is the
-    instance of `tf.DType`, it will be ignored.
 
     :param tensors: A list of tensors.
     :param dtype: Expected type. If `None`, depend on the type of tensors.
@@ -112,47 +110,42 @@ def assert_same_dtype(tensors, dtype=None):
     """
     expected_dtype = dtype
     for tensor in tensors:
-        if tensor is not None and \
-           hasattr(tensor, 'dtype') and \
-           isinstance(tensor.dtype, tf.DType):
-            tensor_dtype = tensor.dtype
-            if not expected_dtype:
-                expected_dtype = tensor_dtype
-            elif expected_dtype != tensor_dtype:
-                raise TypeError('%s, type=%s, must be %s.' % (
+        tensor_dtype = tensor.dtype
+        if not expected_dtype:
+            expected_dtype = tensor_dtype
+        elif expected_dtype != tensor_dtype:
+            tensor0 = tensors[0]
+            raise TypeError(
+                '%s, type=%s, must be the same type as %s, type=%s.' % (
                     tensor.name if hasattr(tensor, 'name') else str(tensor),
-                    tensor_dtype, expected_dtype))
+                    tensor_dtype,
+                    tensor0.name if hasattr(tensor0, 'name') else str(tensor0),
+                    tensor0.dtype))
     return expected_dtype
 
 
 def assert_same_specific_dtype(tensors, dtypes):
     """
     Whether all types of tensors in `tensors` are the same and in `dtypes`.
-    If the item in `tensors` doesn't have attribute `dtype` that is the
-    instance of `tf.DType`, it will be ignored.
 
     :param tensors: A list of tensors.
     :param dtypes: A list of types.
     :return: The type of `tensors`.
     """
-    if tensors is None: return None
+    if tensors is None:
+        return None 
     tensors_dtype = assert_same_dtype(tensors)
     if tensors_dtype is not None and tensors_dtype not in dtypes:
-        for tensor in tensors:
-            if tensor is not None and \
-               hasattr(tensor, 'dtype') and \
-               isinstance(tensor.dtype, tf.DType):
-                raise TypeError('%s, type=%s, must be in %s.' % (
-                    tensor.name if hasattr(tensor, 'name') else str(tensor),
-                    tensor.dtype, dtypes))
+        tensor0 = tensors[0]
+        raise TypeError('%s, type=%s, must be in %s.' % (
+            tensor0.name if hasattr(tensor0, 'name') else str(tensor0),
+            tensor0.dtype, dtypes))
     return tensors_dtype
 
 
 def assert_same_float_dtype(tensors, dtype=None):
     """
     Whether all types of tensors in `tensors` are the same and floating type.
-    If the item in `tensors` doesn't have attribute `dtype` that is the
-    instance of `tf.DType`, it will be ignored.
 
     :param tensors: A list of tensors.
     :param dtype: Expected type. If `None`, depend on the type of tensors.
@@ -167,12 +160,11 @@ def assert_same_float_dtype(tensors, dtype=None):
     else:
         raise TypeError('dtype must be in %s' % floating_types)
 
-def assert_same_float_int_dtype(tensors, dtype=None):
+
+def assert_same_float_and_int_dtype(tensors, dtype=None):
     """
     Whether all types of tensors in `tensors` are the same and floating (or
     integer) type.
-    If the item in `tensors` doesn't have attribute `dtype` that is the
-    instance of `tf.DType`, it will be ignored.
 
     :param tensors: A list of tensors.
     :param dtype: Expected type. If `None`, depend on the type of tensors.

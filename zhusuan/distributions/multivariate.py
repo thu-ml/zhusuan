@@ -10,7 +10,7 @@ from .base import *
 from .utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
-        assert_same_float_int_dtype, \
+        assert_same_float_and_int_dtype, \
         log_combination
 
 
@@ -47,16 +47,17 @@ class Multinomial(Distribution):
     `[i, j, ..., k, :]` is a vector of counts for all categories.
     """
 
-    def __init__(self, 
-                 logits, 
-                 n_experiments, 
+    def __init__(self,
+                 logits,
+                 n_experiments,
                  dtype=None,
                  group_event_ndims=0):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype([self._logits])
 
-        if dtype is None: dtype = tf.int32
-        assert_same_float_int_dtype([], dtype)
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
 
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
@@ -78,7 +79,7 @@ class Multinomial(Distribution):
                 raise ValueError(sign_err_msg)
             self._n_experiments = n_experiments
         else:
-            n_experiments = tf.convert_to_tensor(n_experiments, dtype)
+            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
             _assert_rank_op = tf.assert_rank(
                 n_experiments, 0,
                 message="n_experiments should be a scalar (0-D Tensor).")
@@ -188,8 +189,9 @@ class OnehotCategorical(Distribution):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype([self._logits])
 
-        if dtype is None: dtype = tf.int32
-        assert_same_float_int_dtype([], dtype)
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
 
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
