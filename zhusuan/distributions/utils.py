@@ -108,19 +108,26 @@ def assert_same_dtype(tensors, dtype=None):
     :param dtype: Expected type. If `None`, depend on the type of tensors.
     :return: The type of `tensors`.
     """
+
+    def tensor_name(tensor):
+        return tensor.name if hasattr(tensor, 'name') else str(tensor)
+
     expected_dtype = dtype
     for tensor in tensors:
         tensor_dtype = tensor.dtype
         if not expected_dtype:
             expected_dtype = tensor_dtype
         elif expected_dtype != tensor_dtype:
-            tensor0 = tensors[0]
-            raise TypeError(
-                '%s, type=%s, must be the same type as %s, type=%s.' % (
-                    tensor.name if hasattr(tensor, 'name') else str(tensor),
-                    tensor_dtype,
-                    tensor0.name if hasattr(tensor0, 'name') else str(tensor0),
-                    tensor0.dtype))
+            if dtype is None:
+                raise TypeError(
+                    '%s, type=%s, must be the same type as %s, type=%s.' % (
+                        tensor_name(tensor), tensor_dtype,
+                        tensor_name(tensors[0]), tensors[0].dtype))
+            else:
+                raise TypeError(
+                    '%s, type=%s, must be %s.' % (
+                        tensor_name(tensor), tensor_dtype, expected_dtype))
+
     return expected_dtype
 
 
@@ -133,7 +140,7 @@ def assert_same_specific_dtype(tensors, dtypes):
     :return: The type of `tensors`.
     """
     if tensors is None:
-        return None 
+        return None
     tensors_dtype = assert_same_dtype(tensors)
     if tensors_dtype is not None and tensors_dtype not in dtypes:
         tensor0 = tensors[0]
