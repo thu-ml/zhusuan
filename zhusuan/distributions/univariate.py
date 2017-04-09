@@ -376,7 +376,7 @@ class Uniform(Distribution):
         return self._maxval
 
     def _value_shape(self):
-        return tf.constant([], tf.float32)
+        return tf.constant([], tf.int32)
 
     def _get_value_shape(self):
         return tf.TensorShape([])
