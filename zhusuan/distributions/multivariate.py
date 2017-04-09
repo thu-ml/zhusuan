@@ -53,7 +53,8 @@ class Multinomial(Distribution):
                  dtype=None,
                  group_event_ndims=0):
         self._logits = tf.convert_to_tensor(logits)
-        param_dtype = assert_same_float_dtype([self._logits])
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'Multinomial.logits')])
 
         if dtype is None:
             dtype = tf.int32
@@ -79,7 +80,10 @@ class Multinomial(Distribution):
                 raise ValueError(sign_err_msg)
             self._n_experiments = n_experiments
         else:
-            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            try:
+                n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            except ValueError:
+                raise TypeError('n_experiments must be int32')
             _assert_rank_op = tf.assert_rank(
                 n_experiments, 0,
                 message="n_experiments should be a scalar (0-D Tensor).")
@@ -187,7 +191,8 @@ class OnehotCategorical(Distribution):
 
     def __init__(self, logits, dtype=None, group_event_ndims=0):
         self._logits = tf.convert_to_tensor(logits)
-        param_dtype = assert_same_float_dtype([self._logits])
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'OnehotCategorical.logits')])
 
         if dtype is None:
             dtype = tf.int32
@@ -315,7 +320,8 @@ class Dirichlet(Distribution):
                  group_event_ndims=0,
                  check_numerics=False):
         self._alpha = tf.convert_to_tensor(alpha)
-        dtype = assert_same_float_dtype([self._alpha])
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'Dirichlet.alpha')])
 
         static_alpha_shape = self._alpha.get_shape()
         shape_err_msg = "alpha should have rank >= 1."

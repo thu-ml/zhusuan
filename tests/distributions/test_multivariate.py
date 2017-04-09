@@ -9,9 +9,9 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc, special
 
+from .utils import *
 from tests.context import zhusuan
 from zhusuan.distributions.multivariate import *
-
 
 class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -60,6 +60,8 @@ class TestMultinomial(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={logits: np.ones([2])}).tolist(), [2])
+
+        self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -210,25 +212,12 @@ class TestMultinomial(tf.test.TestCase):
                                                      [100, 99, 1, 0]])
 
     def test_dtype(self):
-        def _test_sample_dtype(dtype, param_dtype):
-            logits = tf.placeholder(param_dtype, [2])
-            multinomial = Multinomial(logits, 10, dtype=dtype)
-            self.assertAllEqual(multinomial.sample(1).dtype, dtype)
+        def _distribution(param, dtype=None):
+            return Multinomial(param, 10, dtype)
+        test_dtype_1parameter_discrete(self, _distribution)
 
-        _test_sample_dtype(tf.int32, tf.float32)
-        _test_sample_dtype(tf.int32, tf.float64)
-        _test_sample_dtype(tf.int64, tf.float64)
-
-        def _test_prob_dtype(dtype, param_dtype, given_dtype):
-            logits = tf.placeholder(param_dtype, [2])
-            multinomial = Multinomial(logits, 10, dtype=dtype)
-            given = tf.placeholder(given_dtype, [2])
-            self.assertAllEqual(multinomial.prob(given).dtype, param_dtype)
-            self.assertAllEqual(multinomial.log_prob(given).dtype, param_dtype)
-
-        _test_prob_dtype(tf.int32, tf.float32, tf.int32)
-        _test_prob_dtype(tf.int64, tf.float32, tf.int64)
-        _test_prob_dtype(tf.int64, tf.float64, tf.int64)
+        with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
+            Multinomial([1., 1.], tf.placeholder(tf.float32, []))
 
 
 class TestOnehotCategorical(tf.test.TestCase):
@@ -262,6 +251,8 @@ class TestOnehotCategorical(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(cat2._value_shape().eval(
                 feed_dict={logits: np.ones([2, 1, 3])}).tolist(), [3])
+
+        self.assertEqual(cat._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -417,25 +408,7 @@ class TestOnehotCategorical(tf.test.TestCase):
                         np.ones([3, 1, 1], dtype=np.int32))
 
     def test_dtype(self):
-        def _test_sample_dtype(dtype, param_dtype):
-            logits = tf.placeholder(param_dtype, [2])
-            onehot = OnehotCategorical(logits, dtype=dtype)
-            self.assertAllEqual(onehot.sample(1).dtype, dtype)
-
-        _test_sample_dtype(tf.int32, tf.float32)
-        _test_sample_dtype(tf.int32, tf.float64)
-        _test_sample_dtype(tf.int64, tf.float64)
-
-        def _test_prob_dtype(dtype, param_dtype, given_dtype):
-            logits = tf.placeholder(param_dtype, [2])
-            onehot = OnehotCategorical(logits, dtype=dtype)
-            given = tf.placeholder(given_dtype, [2])
-            self.assertAllEqual(onehot.prob(given).dtype, param_dtype)
-            self.assertAllEqual(onehot.log_prob(given).dtype, param_dtype)
-
-        _test_prob_dtype(tf.int32, tf.float32, tf.int32)
-        _test_prob_dtype(tf.int64, tf.float32, tf.int64)
-        _test_prob_dtype(tf.int64, tf.float64, tf.int64)
+        test_dtype_1parameter_discrete(self, OnehotCategorical)
 
 
 class TestDirichlet(tf.test.TestCase):
@@ -475,6 +448,7 @@ class TestDirichlet(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={alpha: np.ones([2, 1, 3])}).tolist(), [3])
+        self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -665,26 +639,4 @@ class TestDirichlet(tf.test.TestCase):
                 log_p.eval(feed_dict={alpha: [-1., 1.], given: [0.5, 0.5]})
 
     def test_dtype(self):
-        def _test_dtype(dtype):
-            alpha = tf.placeholder(dtype, [2])
-            dirichlet = Dirichlet(alpha)
-            self.assertAllEqual(dirichlet.sample(1).dtype, dtype)
-
-            given = tf.placeholder(dtype, [2])
-            self.assertAllEqual(dirichlet.prob(given).dtype, dtype)
-            self.assertAllEqual(dirichlet.log_prob(given).dtype, dtype)
-
-        _test_dtype(tf.float32)
-        _test_dtype(tf.float64)
-
-        def _test_dtype_numpy(dtype, np_dtype):
-            alpha = tf.placeholder(dtype, [2])
-            dirichlet = Dirichlet(alpha)
-
-            given = np.array([2], dtype=np_dtype)
-            self.assertAllEqual(dirichlet.prob(given).dtype, dtype)
-            self.assertAllEqual(dirichlet.log_prob(given).dtype, dtype)
-
-        _test_dtype_numpy(tf.float32, np.int32)
-        _test_dtype_numpy(tf.float32, np.float32)
-        _test_dtype_numpy(tf.float64, np.float32)
+        test_dtype_1parameter_continuous(self, Dirichlet)

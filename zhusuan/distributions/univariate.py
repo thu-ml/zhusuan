@@ -57,7 +57,9 @@ class Normal(Distribution):
                  check_numerics=False):
         self._mean = tf.convert_to_tensor(mean)
         self._logstd = tf.convert_to_tensor(logstd)
-        dtype = assert_same_float_dtype([self._mean, self._logstd])
+        dtype = assert_same_float_dtype(
+            [(self._mean, 'Normal.mean'),
+             (self._logstd, 'Normal.logstd')])
 
         try:
             tf.broadcast_static_shape(self._mean.get_shape(),
@@ -146,7 +148,8 @@ class Bernoulli(Distribution):
 
     def __init__(self, logits, dtype=None, group_event_ndims=0):
         self._logits = tf.convert_to_tensor(logits)
-        param_dtype = assert_same_float_dtype([self._logits])
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'Bernoulli.logits')])
 
         if dtype is None:
             dtype = tf.int32
@@ -224,7 +227,8 @@ class Categorical(Distribution):
 
     def __init__(self, logits, dtype=None, group_event_ndims=0):
         self._logits = tf.convert_to_tensor(logits)
-        param_dtype = assert_same_float_dtype([self._logits])
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'Categorical.logits')])
 
         if dtype is None:
             dtype = tf.int32
@@ -333,7 +337,16 @@ class Categorical(Distribution):
                 #     lambda: _broadcast(given, logits, 'given', 'logits'))
                 given, logits = _broadcast(given, logits)
 
-        given = tf.cast(given, dtype=self.dtype)
+        # `labels` type of `sparse_softmax_cross_entropy_with_logits` must be
+        # int32 or int64
+        if self.dtype == tf.float32:
+            given = tf.cast(given, dtype=tf.int32)
+        elif self.dtype == tf.float64:
+            given = tf.cast(given, dtype=tf.int64)
+        elif self.dtype in [tf.int32, tf.int64]:
+            given = tf.cast(given, self.dtype)
+        else:
+            given = tf.cast(given, tf.int32)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
         if given.get_shape() and logits.get_shape():
@@ -377,7 +390,9 @@ class Uniform(Distribution):
                  check_numerics=False):
         self._minval = tf.convert_to_tensor(minval)
         self._maxval = tf.convert_to_tensor(maxval)
-        dtype = assert_same_float_dtype([self._minval, self._maxval])
+        dtype = assert_same_float_dtype(
+            [(self._minval, 'Uniform.minval'),
+             (self._maxval, 'Uniform.maxval')])
 
         try:
             tf.broadcast_static_shape(self._minval.get_shape(),
@@ -478,7 +493,9 @@ class Gamma(Distribution):
                  check_numerics=False):
         self._alpha = tf.convert_to_tensor(alpha)
         self._beta = tf.convert_to_tensor(beta)
-        dtype = assert_same_float_dtype([self._alpha, self._beta])
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'Gamma.alpha'),
+             (self._beta, 'Gamma.beta')])
 
         try:
             tf.broadcast_static_shape(self._alpha.get_shape(),
@@ -571,7 +588,9 @@ class Beta(Distribution):
                  check_numerics=False):
         self._alpha = tf.convert_to_tensor(alpha)
         self._beta = tf.convert_to_tensor(beta)
-        dtype = assert_same_float_dtype([self._alpha, self._beta])
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'Beta.alpha'),
+             (self._beta, 'Beta.beta')])
 
         try:
             tf.broadcast_static_shape(self._alpha.get_shape(),
@@ -666,7 +685,8 @@ class Poisson(Distribution):
                  group_event_ndims=0,
                  check_numerics=False):
         self._rate = tf.convert_to_tensor(rate)
-        param_dtype = assert_same_float_dtype([self._rate])
+        param_dtype = assert_same_float_dtype(
+            [(self._rate, 'Poisson.rate')])
 
         if dtype is None:
             dtype = tf.int32
@@ -774,7 +794,8 @@ class Binomial(Distribution):
                  group_event_ndims=0,
                  check_numerics=False):
         self._logits = tf.convert_to_tensor(logits)
-        param_dtype = assert_same_float_dtype([self._logits])
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'Binomial.logits')])
 
         if dtype is None:
             dtype = tf.int32
@@ -786,7 +807,10 @@ class Binomial(Distribution):
                 raise ValueError(sign_err_msg)
             self._n_experiments = n_experiments
         else:
-            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            try:
+                n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            except ValueError:
+                raise TypeError('n_experiments must be int32')
             _assert_rank_op = tf.assert_rank(
                 n_experiments, 0,
                 message="n_experiments should be a scalar (0-D Tensor).")
@@ -898,7 +922,9 @@ class InverseGamma(Distribution):
                  check_numerics=False):
         self._alpha = tf.convert_to_tensor(alpha)
         self._beta = tf.convert_to_tensor(beta)
-        dtype = assert_same_float_dtype([self._alpha, self._beta])
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'InverseGamma.alpha'),
+             (self._beta, 'InverseGamma.beta')])
 
         try:
             tf.broadcast_static_shape(self._alpha.get_shape(),
@@ -943,7 +969,7 @@ class InverseGamma(Distribution):
     def _sample(self, n_samples):
         gamma = tf.random_gamma([n_samples], self.alpha,
                                 beta=self.beta, dtype=self.dtype)
-        return tf.reciprocal(gamma)
+        return 1 / gamma
 
     def _log_prob(self, given):
         alpha, beta = self.alpha, self.beta
