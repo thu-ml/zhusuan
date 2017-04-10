@@ -11,11 +11,9 @@ from scipy import stats, misc
 
 from tests.context import zhusuan
 from zhusuan.distributions.univariate import *
-
+from .utils import *
 
 # TODO: test sample value
-# TODO: test sample type
-
 
 class TestNormal(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -37,6 +35,8 @@ class TestNormal(tf.test.TestCase):
         self.assertTrue(norm._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(norm._value_shape().eval().tolist(), [])
+
+        self.assertEqual(norm._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -203,6 +203,9 @@ class TestNormal(tf.test.TestCase):
                                          "precision.*Tensor had Inf"):
                 norm.log_prob(0.).eval()
 
+    def test_dtype(self):
+        test_dtype_2parameter(self, Normal)
+
 
 class TestBernoulli(tf.test.TestCase):
     def test_value_shape(self):
@@ -214,6 +217,8 @@ class TestBernoulli(tf.test.TestCase):
         self.assertTrue(bernoulli._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(bernoulli._value_shape().eval().tolist(), [])
+
+        self.assertEqual(bernoulli._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -345,6 +350,9 @@ class TestBernoulli(tf.test.TestCase):
             _test_value([[2., 3., 1.], [5., 7., 4.]],
                         np.ones([3, 1, 2, 3], dtype=np.int32))
 
+    def test_dtype(self):
+        test_dtype_1parameter_discrete(self, Bernoulli)
+
 
 class TestCategorical(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -377,6 +385,8 @@ class TestCategorical(tf.test.TestCase):
         self.assertTrue(cat._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(cat._value_shape().eval().tolist(), [])
+
+        self.assertEqual(cat._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -522,6 +532,9 @@ class TestCategorical(tf.test.TestCase):
             _test_value([[2., 3., 1.], [5., 7., 4.]],
                         np.ones([3, 1, 1], dtype=np.int32))
 
+    def test_dtype(self):
+        test_dtype_1parameter_discrete(self, Categorical)
+
 
 class TestUniform(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -543,6 +556,8 @@ class TestUniform(tf.test.TestCase):
         self.assertTrue(unif._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(unif._value_shape().eval().tolist(), [])
+
+        self.assertEqual(unif._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -700,7 +715,7 @@ class TestUniform(tf.test.TestCase):
                 self.assertAllClose(p.eval(), target_p)
 
             # Uniform semantics different from scipy at maxval.
-            self.assertEqual(Uniform(0, 1).log_prob(1).eval(), -np.inf)
+            self.assertEqual(Uniform(0., 1.).log_prob(1).eval(), -np.inf)
             _test_value(0., 1., [-1., 0., 0.5, 2.])
             _test_value([-1e10, -1], [1, 1e10], 0.)
             _test_value([0., -1.], [[[1., 2.], [3., 5.], [4., 9.]]], [7.])
@@ -711,6 +726,9 @@ class TestUniform(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "p.*Tensor had Inf"):
                 unif.log_prob(0.).eval()
+
+    def test_dtype(self):
+        test_dtype_2parameter(self, Uniform)
 
 
 class TestGamma(tf.test.TestCase):
@@ -733,6 +751,7 @@ class TestGamma(tf.test.TestCase):
         self.assertTrue(gamma._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(gamma._value_shape().eval().tolist(), [])
+        self.assertEqual(gamma._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -896,6 +915,9 @@ class TestGamma(tf.test.TestCase):
                                          "log\(alpha\).*Tensor had NaN"):
                 log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
 
+    def test_dtype(self):
+        test_dtype_2parameter(self, Gamma)
+
 
 class TestBeta(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -917,6 +939,7 @@ class TestBeta(tf.test.TestCase):
         self.assertTrue(dist._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(dist._value_shape().eval().tolist(), [])
+        self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -1083,6 +1106,9 @@ class TestBeta(tf.test.TestCase):
                                          "lgamma\(alpha\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 0., beta: 1., given: 0.5})
 
+    def test_dtype(self):
+        test_dtype_2parameter(self, Beta)
+
 
 class TestPoisson(tf.test.TestCase):
     def test_value_shape(self):
@@ -1094,6 +1120,7 @@ class TestPoisson(tf.test.TestCase):
         self.assertTrue(poisson._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(poisson._value_shape().eval().tolist(), [])
+        self.assertEqual(poisson._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -1239,6 +1266,9 @@ class TestPoisson(tf.test.TestCase):
                                          "log\(rate\).*Tensor had NaN"):
                 log_p.eval(feed_dict={rate: -1., given: 1})
 
+    def test_dtype(self):
+        test_dtype_1parameter_discrete(self, Poisson)
+
 
 class TestBinomial(tf.test.TestCase):
     def test_init_n(self):
@@ -1270,6 +1300,7 @@ class TestBinomial(tf.test.TestCase):
         self.assertTrue(binomial._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(binomial._value_shape().eval().tolist(), [])
+        self.assertEqual(binomial._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -1422,3 +1453,195 @@ class TestBinomial(tf.test.TestCase):
                     tf.errors.InvalidArgumentError,
                     "lgamma\(n - given \+ 1\).*Tensor had Inf"):
                 log_p.eval(feed_dict={logits: 1., given: 12})
+
+    def test_dtype(self):
+        def _distribution(param, dtype=None):
+            return Binomial(param, 10, dtype)
+        test_dtype_1parameter_discrete(self, _distribution)
+
+        with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
+            Binomial(1., tf.placeholder(tf.float32, []))
+
+class TestInverseGamma(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError,
+                                         "should be broadcastable to match"):
+                InverseGamma(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
+
+        InverseGamma(tf.placeholder(tf.float32, [None, 1]),
+              tf.placeholder(tf.float32, [None, 1, 3]))
+
+    def test_value_shape(self):
+        # static
+        inv_gamma = InverseGamma(alpha=tf.placeholder(tf.float32, None),
+                      beta=tf.placeholder(tf.float32, None))
+        self.assertEqual(inv_gamma.get_value_shape().as_list(), [])
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            self.assertEqual(inv_gamma._value_shape().eval().tolist(), [])
+        self.assertEqual(inv_gamma._value_shape().dtype, tf.int32)
+
+    def test_batch_shape(self):
+        # static
+        def _test_static(alpha_shape, beta_shape, target_shape):
+            alpha = tf.placeholder(tf.float32, alpha_shape)
+            beta = tf.placeholder(tf.float32, beta_shape)
+            inv_gamma = InverseGamma(alpha, beta)
+            if inv_gamma.get_batch_shape():
+                self.assertEqual(inv_gamma.get_batch_shape().as_list(),
+                                 target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], [2, 3])
+        _test_static([2, 3], [3], [2, 3])
+        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
+        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
+        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
+        _test_static([None, 3, 5], [3, None], [None, 3, 5])
+        _test_static([None, 1, 3], [None, 1], [None, None, 3])
+        _test_static([2, None], [], [2, None])
+        _test_static(None, [1, 2], None)
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(alpha_shape, beta_shape, target_shape):
+                alpha = tf.placeholder(tf.float32, None)
+                beta = tf.placeholder(tf.float32, None)
+                inv_gamma = InverseGamma(alpha, beta)
+                self.assertEqual(
+                    inv_gamma.batch_shape.eval(
+                        feed_dict={alpha: np.ones(alpha_shape),
+                                   beta: np.ones(beta_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [], [2, 3])
+            _test_dynamic([2, 3], [3], [2, 3])
+            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
+            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [3, 2], None)
+
+    def test_sample_shape(self):
+        def _test_static(alpha_shape, beta_shape, n_samples, target_shape):
+            alpha = tf.placeholder(tf.float32, alpha_shape)
+            beta = tf.placeholder(tf.float32, beta_shape)
+            inv_gamma = InverseGamma(alpha, beta)
+            samples = inv_gamma.sample(n_samples)
+            if samples.get_shape():
+                self.assertEqual(samples.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], None, [2, 3])
+        _test_static([2, 3], [], 1, [1, 2, 3])
+        _test_static([5], [5], 2, [2, 5])
+        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
+                     [None, 3, 2])
+        _test_static(None, [1, 2], None, None)
+        _test_static(None, [1, 2], 1, None)
+        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
+        _test_static([3, None], [3, 1], 2, [2, 3, None])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(alpha_shape, beta_shape, n_samples,
+                              target_shape):
+                alpha = tf.placeholder(tf.float32, None)
+                beta = tf.placeholder(tf.float32, None)
+                inv_gamma = InverseGamma(alpha, beta)
+                samples = inv_gamma.sample(n_samples)
+                self.assertEqual(
+                    tf.shape(samples).eval(
+                        feed_dict={alpha: np.ones(alpha_shape),
+                                   beta: np.ones(beta_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
+            _test_dynamic([1, 3], [], 2, [2, 1, 3])
+            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+
+    def test_log_prob_shape(self):
+        def _test_static(alpha_shape, beta_shape, given_shape, target_shape):
+            alpha = tf.placeholder(tf.float32, alpha_shape)
+            beta = tf.placeholder(tf.float32, beta_shape)
+            given = tf.placeholder(tf.float32, given_shape)
+            inv_gamma = InverseGamma(alpha, beta)
+            log_p = inv_gamma.log_prob(given)
+            if log_p.get_shape():
+                self.assertEqual(log_p.get_shape().as_list(), target_shape)
+            else:
+                self.assertEqual(None, target_shape)
+
+        _test_static([2, 3], [], [2, 3], [2, 3])
+        _test_static([5], [5], [2, 1], [2, 5])
+        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
+        _test_static(None, [1, 2], [2, 2], None)
+        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
+
+        with self.test_session(use_gpu=True):
+            def _test_dynamic(alpha_shape, beta_shape, given_shape,
+                              target_shape):
+                alpha = tf.placeholder(tf.float32, None)
+                beta = tf.placeholder(tf.float32, None)
+                inv_gamma = InverseGamma(alpha, beta)
+                given = tf.placeholder(tf.float32, None)
+                log_p = inv_gamma.log_prob(given)
+                self.assertEqual(
+                    tf.shape(log_p).eval(
+                        feed_dict={alpha: np.ones(alpha_shape),
+                                   beta: np.ones(beta_shape),
+                                   given: np.ones(given_shape)}).tolist(),
+                    target_shape)
+
+            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
+            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
+            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "Incompatible shapes"):
+                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(alpha, beta, given):
+                alpha = np.array(alpha, np.float32)
+                beta = np.array(beta, np.float32)
+                given = np.array(given, np.float32)
+                inv_gamma = InverseGamma(alpha, beta)
+                log_p = inv_gamma.log_prob(given)
+                target_log_p = stats.invgamma.logpdf(given, alpha, scale=beta)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = inv_gamma.prob(given)
+                target_p = stats.invgamma.pdf(given, alpha, scale=beta)
+                self.assertAllClose(p.eval(), target_p)
+
+            _test_value(1., 1., [1., 10., 1e8])
+            _test_value([0.5, 1., 2., 3., 5., 7.5, 9.],
+                        [2., 2., 2., 1., 0.5, 1., 1.],
+                        np.transpose([np.arange(1, 20)]))
+            _test_value([1e-8, 1e8], [[1., 1e8], [1e-8, 5.]], [7.])
+
+    def test_check_numerics(self):
+        alpha = tf.placeholder(tf.float32, [])
+        beta = tf.placeholder(tf.float32, [])
+        given = tf.placeholder(tf.float32, [])
+        inv_gamma = InverseGamma(alpha, beta, check_numerics=True)
+        log_p = inv_gamma.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(given\).*Tensor had Inf"):
+                log_p.eval(feed_dict={alpha: 1., beta: 1., given: 0.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(beta\).*Tensor had NaN"):
+                log_p.eval(feed_dict={alpha: 1., beta: -1., given: 1.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(alpha\).*Tensor had NaN"):
+                log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
+
+    def test_dtype(self):
+        test_dtype_2parameter(self, InverseGamma)

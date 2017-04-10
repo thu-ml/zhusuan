@@ -92,9 +92,9 @@ class TestBayesianNet(tf.test.TestCase):
         # outputs
         a_observed = tf.zeros([])
         with BayesianNet({'a': a_observed}) as model:
-            a = Normal('a', 0, 1)
-            b = Normal('b', 0, 1)
-            c = Normal('c', b, 1)
+            a = Normal('a', 0., 1.)
+            b = Normal('b', 0., 1.)
+            c = Normal('c', b, 1.)
         self.assertTrue(model.outputs('a') is a_observed)
         b_out, c_out = model.outputs(['b', 'c'])
         self.assertTrue(b_out is b.tensor)

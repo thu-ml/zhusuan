@@ -7,7 +7,11 @@ from __future__ import division
 import tensorflow as tf
 
 from .base import *
-from .utils import maybe_explicit_broadcast, log_combination
+from .utils import \
+        maybe_explicit_broadcast, \
+        assert_same_float_dtype, \
+        assert_same_float_and_int_dtype, \
+        log_combination
 
 
 __all__ = [
@@ -23,7 +27,7 @@ class Multinomial(Distribution):
     The class of Multinomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
         un-normalized log probabilities for all categories.
 
@@ -31,6 +35,7 @@ class Multinomial(Distribution):
 
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
+    :param dtype: The value type of samples from the distribution.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -42,8 +47,19 @@ class Multinomial(Distribution):
     `[i, j, ..., k, :]` is a vector of counts for all categories.
     """
 
-    def __init__(self, logits, n_experiments, group_event_ndims=0):
-        self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
+    def __init__(self,
+                 logits,
+                 n_experiments,
+                 dtype=None,
+                 group_event_ndims=0):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'Multinomial.logits')])
+
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
+
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
@@ -64,7 +80,10 @@ class Multinomial(Distribution):
                 raise ValueError(sign_err_msg)
             self._n_experiments = n_experiments
         else:
-            n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            try:
+                n_experiments = tf.convert_to_tensor(n_experiments, tf.int32)
+            except ValueError:
+                raise TypeError('n_experiments must be int32')
             _assert_rank_op = tf.assert_rank(
                 n_experiments, 0,
                 message="n_experiments should be a scalar (0-D Tensor).")
@@ -75,7 +94,8 @@ class Multinomial(Distribution):
                 self._n_experiments = tf.identity(n_experiments)
 
         super(Multinomial, self).__init__(
-            dtype=tf.int32,
+            dtype=dtype,
+            param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -128,16 +148,18 @@ class Multinomial(Distribution):
             tf.TensorShape([static_n_samples, static_n_exps]).
             concatenate(self.get_batch_shape()))
         samples = tf.reduce_sum(
-            tf.one_hot(samples, self.n_categories, dtype=tf.int32), axis=1)
+            tf.one_hot(samples, self.n_categories, dtype=self.dtype), axis=1)
         return samples
 
     def _log_prob(self, given):
+        given = tf.cast(given, self.param_dtype)
         given, logits = maybe_explicit_broadcast(
             given, self.logits, 'given', 'logits')
         normalized_logits = logits - tf.reduce_logsumexp(
             logits, axis=-1, keep_dims=True)
-        log_p = log_combination(self.n_experiments, given) + \
-            tf.reduce_sum(tf.to_float(given) * normalized_logits, -1)
+        n = tf.cast(self.n_experiments, self.param_dtype)
+        log_p = log_combination(n, given) + \
+            tf.reduce_sum(given * normalized_logits, -1)
         return log_p
 
     def _prob(self, given):
@@ -149,12 +171,13 @@ class OnehotCategorical(Distribution):
     The class of one-hot Categorical distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float32` Tensor of shape (...,
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
         un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
+    :param dtype: The value type of samples from the distribution.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -166,8 +189,15 @@ class OnehotCategorical(Distribution):
     `[i, j, ..., k, :]` is a one-hot vector of the selected category.
     """
 
-    def __init__(self, logits, group_event_ndims=0):
-        self._logits = tf.convert_to_tensor(logits, dtype=tf.float32)
+    def __init__(self, logits, dtype=None, group_event_ndims=0):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'OnehotCategorical.logits')])
+
+        if dtype is None:
+            dtype = tf.int32
+        assert_same_float_and_int_dtype([], dtype)
+
         static_logits_shape = self._logits.get_shape()
         shape_err_msg = "logits should have rank >= 1."
         if static_logits_shape and (static_logits_shape.ndims < 1):
@@ -183,7 +213,8 @@ class OnehotCategorical(Distribution):
             self._n_categories = tf.shape(self._logits)[-1]
 
         super(OnehotCategorical, self).__init__(
-            dtype=tf.int32,
+            dtype=dtype,
+            param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -229,13 +260,14 @@ class OnehotCategorical(Distribution):
                                                        int) else None
             samples.set_shape(
                 tf.TensorShape([static_n_samples]).
-                concatenate(self.get_batch_shape()))
-        samples = tf.one_hot(samples, self.n_categories, dtype=tf.int32)
+                    concatenate(self.get_batch_shape()))
+        samples = tf.one_hot(samples, self.n_categories, dtype=self.dtype)
         return samples
 
     def _log_prob(self, given):
+        given = tf.cast(given, self.param_dtype)
         given, logits = maybe_explicit_broadcast(
-            tf.to_float(given), self.logits, 'given', 'logits')
+            given, self.logits, 'given', 'logits')
         if (given.get_shape().ndims == 2) or (logits.get_shape().ndims == 2):
             given_flat = given
             logits_flat = logits
@@ -265,7 +297,7 @@ class Dirichlet(Distribution):
     The class of Dirichlet distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param alpha: A N-D (N >= 1) `float32` Tensor of shape (..., n_categories).
+    :param alpha: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
         of a Dirichlet distribution. Should be positive.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
@@ -283,8 +315,14 @@ class Dirichlet(Distribution):
 
     """
 
-    def __init__(self, alpha, group_event_ndims=0, check_numerics=False):
-        self._alpha = tf.convert_to_tensor(alpha, dtype=tf.float32)
+    def __init__(self,
+                 alpha,
+                 group_event_ndims=0,
+                 check_numerics=False):
+        self._alpha = tf.convert_to_tensor(alpha)
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'Dirichlet.alpha')])
+
         static_alpha_shape = self._alpha.get_shape()
         shape_err_msg = "alpha should have rank >= 1."
         cat_err_msg = "n_categories (length of the last axis " \
@@ -310,7 +348,8 @@ class Dirichlet(Distribution):
         self._check_numerics = check_numerics
 
         super(Dirichlet, self).__init__(
-            dtype=tf.float32,
+            dtype=dtype,
+            param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
             group_event_ndims=group_event_ndims)
@@ -342,7 +381,8 @@ class Dirichlet(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        samples = tf.random_gamma([n_samples], self.alpha, beta=1)
+        samples = tf.random_gamma([n_samples], self.alpha,
+                                  beta=1, dtype=self.dtype)
         return samples / tf.reduce_sum(samples, -1, keep_dims=True)
 
     def _log_prob(self, given):

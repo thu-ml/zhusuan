@@ -9,9 +9,9 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc, special
 
+from .utils import *
 from tests.context import zhusuan
 from zhusuan.distributions.multivariate import *
-
 
 class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -61,6 +61,8 @@ class TestMultinomial(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={logits: np.ones([2])}).tolist(), [2])
+
+        self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -211,6 +213,14 @@ class TestMultinomial(tf.test.TestCase):
             _test_value([-10., 10., 20., 50.], 100, [[0, 1, 99, 100],
                                                      [100, 99, 1, 0]])
 
+    def test_dtype(self):
+        def _distribution(param, dtype=None):
+            return Multinomial(param, 10, dtype)
+        test_dtype_1parameter_discrete(self, _distribution)
+
+        with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
+            Multinomial([1., 1.], tf.placeholder(tf.float32, []))
+
 
 class TestOnehotCategorical(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -244,6 +254,8 @@ class TestOnehotCategorical(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(cat2._value_shape().eval(
                 feed_dict={logits: np.ones([2, 1, 3])}).tolist(), [3])
+
+        self.assertEqual(cat._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -399,6 +411,9 @@ class TestOnehotCategorical(tf.test.TestCase):
             _test_value([[2., 3., 1.], [5., 7., 4.]],
                         np.ones([3, 1, 1], dtype=np.int32))
 
+    def test_dtype(self):
+        test_dtype_1parameter_discrete(self, OnehotCategorical)
+
 
 class TestDirichlet(tf.test.TestCase):
     def test_init_check_shape(self):
@@ -438,6 +453,7 @@ class TestDirichlet(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={alpha: np.ones([2, 1, 3])}).tolist(), [3])
+        self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
         # static
@@ -627,3 +643,6 @@ class TestDirichlet(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "lbeta\(alpha\).*Tensor had NaN"):
                 log_p.eval(feed_dict={alpha: [-1., 1.], given: [0.5, 0.5]})
+
+    def test_dtype(self):
+        test_dtype_1parameter_continuous(self, Dirichlet)
