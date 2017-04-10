@@ -13,9 +13,13 @@ from zhusuan.distributions.base import *
 
 
 class Dist(Distribution):
-    def __init__(self, group_event_ndims=0, shape_fully_defined=True):
-        super(Dist, self).__init__(tf.float32,
-                                   tf.float32,
+    def __init__(self,
+                 dtype=tf.float32,
+                 param_dtype=tf.float32,
+                 group_event_ndims=0,
+                 shape_fully_defined=True):
+        super(Dist, self).__init__(dtype,
+                                   param_dtype,
                                    is_continuous=True,
                                    is_reparameterized=True,
                                    group_event_ndims=group_event_ndims)
@@ -174,3 +178,25 @@ class TestDistributions(tf.test.TestCase):
             self.assertAllEqual(static_b_shape.as_list(), [None, 3, 4])
             b_shape = dist3.batch_shape
             self.assertAllEqual(b_shape.eval(), [2, 3, 4])
+
+            # given type of log_prob and prob
+            def _test_log_prob_raise(dtype, given_dtype):
+                dist = Dist(dtype=dtype)
+
+                given = tf.placeholder(given_dtype, None)
+                with self.assertRaises(ValueError):
+                    dist.prob(given)
+
+                with self.assertRaises(ValueError):
+                    dist.log_prob(given)
+
+            _test_log_prob_raise(tf.float32, tf.float64)
+            _test_log_prob_raise(tf.float32, tf.float16)
+            _test_log_prob_raise(tf.float32, tf.int32)
+            _test_log_prob_raise(tf.float32, tf.int64)
+            _test_log_prob_raise(tf.float64, tf.float32)
+            _test_log_prob_raise(tf.float64, tf.int32)
+            _test_log_prob_raise(tf.int32, tf.float32)
+            _test_log_prob_raise(tf.int32, tf.int64)
+            _test_log_prob_raise(tf.int64, tf.int32)
+            _test_log_prob_raise(tf.int64, tf.float64)

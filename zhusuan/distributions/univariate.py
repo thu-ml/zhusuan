@@ -297,11 +297,10 @@ class Categorical(Distribution):
 
     def _log_prob(self, given):
         logits = self.logits
-        given = tf.cast(given, self.param_dtype)
 
         def _broadcast(given, logits):
             # static shape has been checked in base class.
-            ones_ = tf.ones(tf.shape(logits)[:-1], self.param_dtype)
+            ones_ = tf.ones(tf.shape(logits)[:-1], self.dtype)
             if logits.get_shape():
                 ones_.set_shape(logits.get_shape()[:-1])
             given *= ones_
@@ -343,9 +342,7 @@ class Categorical(Distribution):
             given = tf.cast(given, dtype=tf.int32)
         elif self.dtype == tf.float64:
             given = tf.cast(given, dtype=tf.int64)
-        elif self.dtype in [tf.int32, tf.int64]:
-            given = tf.cast(given, self.dtype)
-        else:
+        elif self.dtype not in [tf.int32, tf.int64]:
             given = tf.cast(given, tf.int32)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
