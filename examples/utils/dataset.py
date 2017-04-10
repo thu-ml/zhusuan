@@ -40,6 +40,8 @@ def to_one_hot(x, depth):
     Get one-hot representation of a 1-D numpy array of integers.
 
     :param x: 1-D Numpy array of type int.
+    :param depth: A int.
+
     :return: 2-D Numpy array of type int.
     """
     ret = np.zeros((x.shape[0], depth))
@@ -56,8 +58,11 @@ def load_mnist_realval(path, one_hot=True, dequantify=False):
     """
     Loads the real valued MNIST dataset.
 
-    :param path: Path to dataset file.
-    :param one_hot: Use one-hot representation for the labels.
+    :param path: Path to the dataset file.
+    :param one_hot: Whether to use one-hot representation for the labels.
+    :param dequantify:  Whether to add uniform noise to dequantify the data 
+        following (Uria, 2013).
+
     :return: The MNIST dataset.
     """
     if not os.path.isfile(path):
@@ -91,7 +96,7 @@ def load_binary_mnist_realval(path):
     Loads real valued MNIST dataset for binary classification (Treat 0 & 2-9
     as 0).
 
-    :param path: path to dataset file.
+    :param path: Path to the dataset file.
     :return: The binary labeled MNIST dataset.
     """
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
@@ -109,8 +114,8 @@ def load_mnist_semi_supervised(path, one_hot=True, seed=123456):
     Select 10 labeled data for each class and use all the other training data
     as unlabeled.
 
-    :param path: path to dataset file.
-    :param one_hot: Use one-hot representation for the labels.
+    :param path: Path to the dataset file.
+    :param one_hot: Whether to use one-hot representation for the labels.
     :param seed: Random seed for selecting labeled data.
 
     :return: The MNIST dataset for semi-supervised learning.
@@ -146,11 +151,11 @@ def load_cifar10(path, normalize=True, dequantify=False, one_hot=True):
     """
     Loads the cifar10 dataset.
 
-    :param path: path to dataset file.
-    :param normalize: normalize the x data to the range [0, 1].
-    :param dequantify: Add uniform noise to dequantify the data following (
-        Uria, 2013).
-    :param one_hot: Use one-hot representation for the labels.
+    :param path: Path to the dataset file.
+    :param normalize: Whether to normalize the x data to the range [0, 1].
+    :param dequantify: Whether to add uniform noise to dequantify the data 
+        following (Uria, 2013).
+    :param one_hot: Whether to use one-hot representation for the labels.
 
     :return: The cifar10 dataset.
     """
@@ -205,8 +210,11 @@ def load_cifar10_semi_supervised(path, normalize=True, dequantify=False,
     Select 400 labeled data for each class and use all the other training data
     as unlabeled.
 
-    :param path: path to dataset file.
-    :param one_hot: Use one-hot representation for the labels.
+    :param path: Path to the dataset file.
+    :param normalize: Whether to normalize the x data to the range [0, 1].
+    :param dequantify: Whether to add uniform noise to dequantify the data 
+        following (Uria, 2013).
+    :param one_hot: Whether to use one-hot representation for the labels.
     :param seed: Random seed for selecting labeled data.
 
     :return: The cifar10 dataset for semi-supervised learning.
@@ -248,13 +256,12 @@ def load_uci_german_credits(path, n_train):
     n_dims = 24
     data = np.loadtxt(path)
 
-    X_train = data[:n_train, :n_dims]
+    x_train = data[:n_train, :n_dims]
     y_train = data[:n_train, n_dims] - 1
-    X_test = data[n_train:, :n_dims]
+    x_test = data[n_train:, :n_dims]
     y_test = data[n_train:, n_dims] - 1
-    print('Finished reading data')
 
-    return X_train, y_train, X_test, y_test
+    return x_train, y_train, x_test, y_test
 
 
 def load_uci_boston_housing(path):
@@ -275,22 +282,23 @@ def load_uci_boston_housing(path):
     index_test = permutation[size_train:size_test]
     index_val = permutation[size_test:]
 
-    X_train, y_train = data[index_train, :-1], data[index_train, -1]
-    X_val, y_val = data[index_val, :-1], data[index_val, -1]
-    X_test, y_test = data[index_test, :-1], data[index_test, -1]
+    x_train, y_train = data[index_train, :-1], data[index_train, -1]
+    x_val, y_val = data[index_val, :-1], data[index_val, -1]
+    x_test, y_test = data[index_test, :-1], data[index_test, -1]
 
-    return X_train, y_train, X_val, y_val, X_test, y_test
+    return x_train, y_train, x_val, y_val, x_test, y_test
 
 
 def load_uci_bow(data_name, data_path):
     """
     Loads the bag-of-words dataset from UCI machine learning repository.
 
-    :param data_name: Name of the dataset, e.g., nips, nytimes.
-    :param data_path: Path of the dataset.
-    :return: A tuple of (X, vocab), where X is a D*V bag-of-words matrix,
-    whose each row is a document and its elements are count of each word.
-    vocab is a list of words in the vocabulary.
+    :param data_name: Name of the dataset, e.g., nips, NYTimes.
+    :param data_path: Path to the dataset.
+
+    :return: A tuple of (X, vocab), where X is a D * V bag-of-words matrix,
+        whose each row is a document and its elements are count of each word.
+        vocab is a list of words in the vocabulary.
     """
     data_dir = os.path.dirname(data_path)
     if not os.path.exists(os.path.dirname(data_path)):

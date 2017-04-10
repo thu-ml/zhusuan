@@ -6,27 +6,22 @@ Ladder Variational Autoencoder on CIFAR10. (Casper, 2016)
 """
 
 from __future__ import absolute_import
-from __future__ import print_function
 from __future__ import division
-import sys
+from __future__ import print_function
 import os
 import time
 from collections import namedtuple
 
-import tensorflow as tf
-from tensorflow.contrib import layers
+import numpy as np
 import six
 from six.moves import range
-import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import tensorflow as tf
+from tensorflow.contrib import layers
 import zhusuan as zs
 from zhusuan.distributions_old import logistic
 
-import dataset
-import utils
-import multi_gpu
-from multi_gpu import FLAGS
+from examples.utils import dataset, multi_gpu, optimizers
+from examples.utils.multi_gpu import FLAGS
 
 
 @zs.reuse('model')
@@ -178,8 +173,8 @@ if __name__ == "__main__":
     x = tf.placeholder(tf.float32, shape=(None, n_x), name='x')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
-    optimizer = utils.AdamaxOptimizer(learning_rate_ph, beta1=0.9,
-                                      beta2=0.999)
+    optimizer = optimizers.AdamaxOptimizer(learning_rate_ph, beta1=0.9,
+                                           beta2=0.999)
 
     def build_tower_graph(x, id_):
         x_part = x[id_ * tf.shape(x)[0] // FLAGS.num_gpus:

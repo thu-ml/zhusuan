@@ -10,8 +10,8 @@ import six
 from six.moves import zip, map
 from tensorflow.python.training import moving_averages
 
-from .utils import log_mean_exp, merge_dicts
-from .evaluation import is_loglikelihood
+from zhusuan.utils import log_mean_exp, merge_dicts
+from zhusuan.evaluation import is_loglikelihood
 
 
 __all__ = [

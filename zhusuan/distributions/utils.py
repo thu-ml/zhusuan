@@ -12,10 +12,6 @@ __all__ = [
     'explicit_broadcast',
     'maybe_explicit_broadcast',
     'is_same_dynamic_shape',
-    'assert_same_dtype',
-    'assert_same_specific_dtype',
-    'assert_same_float_dtype',
-    'assert_same_float_and_int_dtype',
 ]
 
 

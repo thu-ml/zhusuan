@@ -6,7 +6,6 @@ from __future__ import division
 
 import tensorflow as tf
 
-from .context import zhusuan
 from zhusuan.evaluation import *
 
 

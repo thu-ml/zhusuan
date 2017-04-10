@@ -5,17 +5,14 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 import os
-import sys
 
 import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
-import utils
+from examples.utils import dataset, save_image_collections
 
 
 def main():
@@ -100,7 +97,7 @@ def main():
             if epoch % save_freq == 0:
                 images = sess.run(x_gen)
                 name = "results/vae/vae.epoch.{}.png".format(epoch)
-                utils.save_image_collections(images, name)
+                save_image_collections(images, name)
 
 
 if __name__ == "__main__":

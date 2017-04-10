@@ -9,7 +9,7 @@ from six.moves import zip, map
 import tensorflow as tf
 import numpy as np
 
-from .utils import log_mean_exp, merge_dicts
+from zhusuan.utils import log_mean_exp, merge_dicts
 
 
 __all__ = [

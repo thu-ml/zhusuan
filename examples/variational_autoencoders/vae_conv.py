@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,14 +11,13 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
+from examples.utils import dataset
 
 
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_particles, is_training):
+def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
     with zs.BayesianNet(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
@@ -27,28 +25,46 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
         z_logstd = tf.zeros([n, n_z])
         z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
                       group_event_ndims=1)
-        lx_z = layers.fully_connected(
-            z, 500, normalizer_fn=layers.batch_norm,
+        lx_z = tf.reshape(z, [-1, 1, 1, n_z])
+        lx_z = layers.conv2d_transpose(
+            lx_z, 128, kernel_size=3, padding='VALID',
+            normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lx_z = layers.fully_connected(
-            lx_z, 500, normalizer_fn=layers.batch_norm,
+        lx_z = layers.conv2d_transpose(
+            lx_z, 64, kernel_size=5, padding='VALID',
+            normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        lx_z = layers.conv2d_transpose(
+            lx_z, 32, kernel_size=5, stride=2,
+            normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        lx_z = layers.conv2d_transpose(
+            lx_z, 1, kernel_size=5, stride=2,
+            activation_fn=None)
+        x_logits = tf.reshape(lx_z, [n_particles, n, -1])
         x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
     return model
 
 
-@zs.reuse('variational')
-def q_net(observed, x, n_z, n_particles, is_training):
-    with zs.BayesianNet(observed=observed) as variational:
+def q_net(x, n_xl, n_z, n_particles, is_training):
+    with zs.BayesianNet() as variational:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
-        lz_x = layers.fully_connected(
-            tf.to_float(x), 500, normalizer_fn=layers.batch_norm,
+        lz_x = tf.reshape(tf.to_float(x), [-1, n_xl, n_xl, 1])
+        lz_x = layers.conv2d(
+            lz_x, 32, kernel_size=5, stride=2,
+            normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lz_x = layers.fully_connected(
-            lz_x, 500, normalizer_fn=layers.batch_norm,
+        lz_x = layers.conv2d(
+            lz_x, 64, kernel_size=5, stride=2,
+            normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
+        lz_x = layers.conv2d(
+            lz_x, 128, kernel_size=5, padding='VALID',
+            normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        lz_x = layers.dropout(lz_x, keep_prob=0.9, is_training=is_training)
+        lz_x = tf.reshape(lz_x, [-1, 128 * 3 * 3])
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
@@ -68,28 +84,23 @@ if __name__ == "__main__":
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_x = x_train.shape[1]
+    n_xl = int(np.sqrt(n_x))
 
     # Define model parameters
     n_z = 40
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 1000
-    n_planar_flows = 10
+    ll_samples = 100
     epoches = 3000
     batch_size = 100
+    test_batch_size = 100
     iters = x_train.shape[0] // batch_size
+    test_iters = x_test.shape[0] // test_batch_size
+    test_freq = 10
     learning_rate = 0.001
     anneal_lr_freq = 200
     anneal_lr_rate = 0.75
-    test_freq = 10
-    test_batch_size = 400
-    test_iters = x_test.shape[0] // test_batch_size
-    test_n_temperatures = 100
-    test_n_leapfrogs = 10
-    test_n_chains = 10
-    save_freq = 100
-    result_path = "results/vae"
 
     # Build the computation graph
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
@@ -102,25 +113,16 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = vae(observed, n, n_x, n_z, n_particles, is_training)
+        model = vae_conv(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return log_pz + log_px_z
 
-    variational = q_net({}, x, n_z, n_particles, is_training)
+    variational = q_net(x, n_xl, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    # TODO: add tests for repeated calls of flows
-    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
-                                                    n_iters=n_planar_flows)
-    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
-                                                    n_iters=n_planar_flows)
-
     lower_bound = tf.reduce_mean(
         zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
-
-    # Importance sampling estimates of log likelihood:
-    # Fast, used for evaluation during training
-    is_log_likelihood = tf.reduce_mean(
+    log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
@@ -133,21 +135,10 @@ if __name__ == "__main__":
     for i in params:
         print(i.name, i.get_shape())
 
-    saver = tf.train.Saver(max_to_keep=10)
-
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-
-        # Restore from the latest checkpoint
-        ckpt_file = tf.train.latest_checkpoint(result_path)
-        begin_epoch = 1
-        if ckpt_file is not None:
-            print('Restoring model from {}...'.format(ckpt_file))
-            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
-            saver.restore(sess, ckpt_file)
-
-        for epoch in range(begin_epoch, epoches + 1):
+        for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
@@ -165,19 +156,18 @@ if __name__ == "__main__":
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
                 epoch, time_epoch, np.mean(lbs)))
-
             if epoch % test_freq == 0:
                 time_test = -time.time()
                 test_lbs = []
                 test_lls = []
                 for t in range(test_iters):
-                    test_x_batch = x_test[t * test_batch_size:
-                                          (t + 1) * test_batch_size]
+                    test_x_batch = x_test[
+                        t * test_batch_size: (t + 1) * test_batch_size]
                     test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
                                                   n_particles: lb_samples,
                                                   is_training: False})
-                    test_ll = sess.run(is_log_likelihood,
+                    test_ll = sess.run(log_likelihood,
                                        feed_dict={x: test_x_batch,
                                                   n_particles: ll_samples,
                                                   is_training: False})
@@ -186,14 +176,4 @@ if __name__ == "__main__":
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                print('>> Test log likelihood (IS) = {}'.format(
-                    np.mean(test_lls)))
-
-            if epoch % save_freq == 0:
-                print('Saving model...')
-                save_path = os.path.join(result_path,
-                                         "vae.epoch.{}.ckpt".format(epoch))
-                if not os.path.exists(os.path.dirname(save_path)):
-                    os.makedirs(os.path.dirname(save_path))
-                saver.save(sess, save_path)
-                print('Done')
+                print('>> Test log likelihood = {}'.format(np.mean(test_lls)))

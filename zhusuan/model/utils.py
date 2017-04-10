@@ -7,6 +7,11 @@ from __future__ import division
 from collections import deque, OrderedDict
 
 
+__all__ = [
+    'get_backward_ops',
+]
+
+
 class Context(object):
     """
     Context stack.
@@ -42,7 +47,7 @@ def get_backward_ops(seed_tensors, treat_as_inputs=None):
     :param treat_as_inputs: None or a list of Tensors that is treated as
         inputs during the search (where to stop searching the backward graph).
 
-    :return: A list of tf.Operation's in topological order.
+    :return: A list of tensorflow `Operation` s in topological order.
     """
     if treat_as_inputs is None:
         treat_as_inputs = []

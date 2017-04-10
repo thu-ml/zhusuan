@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,10 +11,9 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
+from examples.utils import dataset
 
 
 @zs.reuse('model')

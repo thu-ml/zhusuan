@@ -12,7 +12,7 @@ import six
 from six.moves import zip
 import tensorflow as tf
 
-from .utils import Context
+from zhusuan.model.utils import Context
 
 
 __all__ = [

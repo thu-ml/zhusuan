@@ -9,7 +9,7 @@ import six
 from six.moves import zip, map, filter
 import tensorflow as tf
 
-from .utils import add_name_scope, merge_dicts
+from zhusuan.utils import add_name_scope, merge_dicts
 
 
 __all__ = [

@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,10 +11,10 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
+from zhusuan.transform import inv_autoregressive_flow
 
-import dataset
+from examples.utils import dataset
 
 
 # MADE
@@ -174,7 +173,7 @@ if __name__ == "__main__":
     variational, hidden = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    qz_samples, log_qz = zs.inv_autoregressive_flow(
+    qz_samples, log_qz = inv_autoregressive_flow(
         qz_samples, hidden, log_qz, made, n_iters=5, update='gru')
     lower_bound = tf.reduce_mean(
         zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))

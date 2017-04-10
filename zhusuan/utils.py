@@ -8,6 +8,12 @@ from functools import wraps
 import tensorflow as tf
 
 
+__all__ = [
+    'log_mean_exp',
+    'merge_dicts',
+]
+
+
 def log_sum_exp(x, axis=None, keep_dims=False):
     """
     Deprecated: Use tf.reduce_logsumexp().

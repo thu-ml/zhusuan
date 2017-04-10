@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,10 +11,9 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
+from examples.utils import dataset
 
 
 @zs.reuse('model')
@@ -104,8 +102,8 @@ if __name__ == "__main__":
                                              local_log_prob=True)
     qh1_samples, log_qh1 = variational.query('h1', outputs=True,
                                              local_log_prob=True)
-    cost, lower_bound = zs.vimco(log_joint, {'x': x_obs},
-                                 {'h3': [qh3_samples, log_qh3],
+    cost, lower_bound = zs.rws(
+        log_joint, {'x': x_obs}, {'h3': [qh3_samples, log_qh3],
                                   'h2': [qh2_samples, log_qh2],
                                   'h1': [qh1_samples, log_qh1]}, axis=0)
     lower_bound = tf.reduce_mean(lower_bound)

@@ -6,8 +6,8 @@ from __future__ import division
 
 import tensorflow as tf
 
-from .base import *
-from .utils import \
+from zhusuan.distributions.base import Distribution
+from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \

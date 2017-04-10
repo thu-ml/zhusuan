@@ -5,13 +5,12 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-from .utils import convert_to_int
+from zhusuan.utils import convert_to_int
 import numpy as np
 
+
 __all__ = [
-    'linear_ar',
     'planar_normalizing_flow',
-    'inv_autoregressive_flow'
 ]
 
 

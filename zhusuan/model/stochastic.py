@@ -6,7 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 from zhusuan import distributions
-from .base import StochasticTensor
+from zhusuan.model.base import StochasticTensor
 
 
 __all__ = [

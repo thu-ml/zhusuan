@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,52 +11,42 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
+from examples.utils import dataset
 
 
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_particles, is_training):
+def sbn(observed, n, n_x, n_h, n_particles, is_training):
     with zs.BayesianNet(observed=observed) as model:
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        z_logits = tf.zeros([n, n_z])
-        z = zs.Bernoulli('z', z_logits, n_samples=n_particles,
-                         group_event_ndims=1)
-        lx_z = layers.fully_connected(
-            tf.to_float(z), 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lx_z = layers.fully_connected(
-            lx_z, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        h3_logits = tf.zeros([n, n_h])
+        h3 = zs.Bernoulli('h3', h3_logits, n_samples=n_particles,
+                          group_event_ndims=1)
+        h2_logits = layers.fully_connected(
+            tf.to_float(h3), n_h, activation_fn=None)
+        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1)
+        h1_logits = layers.fully_connected(
+            tf.to_float(h2), n_h, activation_fn=None)
+        h1 = zs.Bernoulli('h1', h1_logits, group_event_ndims=1)
+        x_logits = layers.fully_connected(
+            tf.to_float(h1), n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
     return model
 
 
-def q_net(x, n_z, n_particles, is_training):
+def q_net(x, n_h, n_particles, is_training):
     with zs.BayesianNet() as variational:
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        lz_x = layers.fully_connected(
-            tf.to_float(x), 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lz_x = layers.fully_connected(
-            lz_x, 500, normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        z_logits = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Bernoulli('z', z_logits, n_samples=n_particles,
-                         group_event_ndims=1)
+        h1_logits = layers.fully_connected(
+            tf.to_float(x), n_h, activation_fn=None)
+        h1 = zs.Bernoulli('h1', h1_logits, n_samples=n_particles,
+                          group_event_ndims=1)
+        h2_logits = layers.fully_connected(
+            tf.to_float(h1), n_h, activation_fn=None)
+        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1)
+        h3_logits = layers.fully_connected(
+            tf.to_float(h2), n_h, activation_fn=None)
+        h3 = zs.Bernoulli('h3', h3_logits, group_event_ndims=1)
     return variational
-
-
-def baseline_net(x):
-    lc_x = layers.fully_connected(tf.to_float(x), 100)
-    lc_x = layers.fully_connected(lc_x, 1, activation_fn=None)
-    lc_x = tf.squeeze(lc_x, -1)
-    return lc_x
 
 
 if __name__ == "__main__":
@@ -74,13 +63,13 @@ if __name__ == "__main__":
     n_x = x_train.shape[1]
 
     # Define model parameters
-    n_z = 40
+    n_h = 200
 
     # Define training/evaluation parameters
-    lb_samples = 1
-    ll_samples = 50
+    lb_samples = 10
+    ll_samples = 1000
     epoches = 3000
-    batch_size = 100
+    batch_size = 24
     test_batch_size = 100
     iters = x_train.shape[0] // batch_size
     test_iters = x_test.shape[0] // test_batch_size
@@ -92,6 +81,7 @@ if __name__ == "__main__":
     # Build the computation graph
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
+
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
                     tf.int32)
@@ -100,22 +90,29 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = vae(observed, n, n_x, n_z, n_particles, is_training)
-        log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-        return log_pz + log_px_z
+        model = sbn(observed, n, n_x, n_h, n_particles, is_training)
+        log_ph3, log_ph2_h3, log_ph1_h2, log_px_h1 = model.local_log_prob(
+            ['h3', 'h2', 'h1', 'x'])
+        return log_ph3 + log_ph2_h3 + log_ph1_h2 + log_px_h1
 
-    variational = q_net(x, n_z, n_particles, is_training)
-    qz_samples, log_qz = variational.query('z', outputs=True,
-                                           local_log_prob=True)
-    cx = tf.expand_dims(baseline_net(x), 0)
-    cost, lower_bound = zs.nvil(
-        log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, baseline=cx,
-        axis=0, variance_normalization=False)
-    cost = tf.reduce_mean(cost)
+    variational = q_net(x, n_h, n_particles, is_training)
+    qh3_samples, log_qh3 = variational.query('h3', outputs=True,
+                                             local_log_prob=True)
+    qh2_samples, log_qh2 = variational.query('h2', outputs=True,
+                                             local_log_prob=True)
+    qh1_samples, log_qh1 = variational.query('h1', outputs=True,
+                                             local_log_prob=True)
+    cost, lower_bound = zs.vimco(log_joint, {'x': x_obs},
+                                 {'h3': [qh3_samples, log_qh3],
+                                  'h2': [qh2_samples, log_qh2],
+                                  'h1': [qh1_samples, log_qh1]}, axis=0)
     lower_bound = tf.reduce_mean(lower_bound)
+    cost = tf.reduce_mean(cost)
     log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
-                            {'z': [qz_samples, log_qz]}, axis=0))
+                            {'h3': [qh3_samples, log_qh3],
+                             'h2': [qh2_samples, log_qh2],
+                             'h1': [qh1_samples, log_qh1]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)

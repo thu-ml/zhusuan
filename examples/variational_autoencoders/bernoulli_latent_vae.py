@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,66 +11,51 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
+from examples.utils import dataset
 
 
 @zs.reuse('model')
-def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
+def vae(observed, n, n_x, n_z, n_particles, is_training):
     with zs.BayesianNet(observed=observed) as model:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
-        z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
-        lx_z = tf.reshape(z, [-1, 1, 1, n_z])
-        lx_z = layers.conv2d_transpose(
-            lx_z, 128, kernel_size=3, padding='VALID',
-            normalizer_fn=layers.batch_norm,
+        z_logits = tf.zeros([n, n_z])
+        z = zs.Bernoulli('z', z_logits, n_samples=n_particles,
+                         group_event_ndims=1)
+        lx_z = layers.fully_connected(
+            tf.to_float(z), 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lx_z = layers.conv2d_transpose(
-            lx_z, 64, kernel_size=5, padding='VALID',
-            normalizer_fn=layers.batch_norm,
+        lx_z = layers.fully_connected(
+            lx_z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lx_z = layers.conv2d_transpose(
-            lx_z, 32, kernel_size=5, stride=2,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lx_z = layers.conv2d_transpose(
-            lx_z, 1, kernel_size=5, stride=2,
-            activation_fn=None)
-        x_logits = tf.reshape(lx_z, [n_particles, n, -1])
+        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
     return model
 
 
-def q_net(x, n_xl, n_z, n_particles, is_training):
+def q_net(x, n_z, n_particles, is_training):
     with zs.BayesianNet() as variational:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
-        lz_x = tf.reshape(tf.to_float(x), [-1, n_xl, n_xl, 1])
-        lz_x = layers.conv2d(
-            lz_x, 32, kernel_size=5, stride=2,
-            normalizer_fn=layers.batch_norm,
+        lz_x = layers.fully_connected(
+            tf.to_float(x), 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lz_x = layers.conv2d(
-            lz_x, 64, kernel_size=5, stride=2,
-            normalizer_fn=layers.batch_norm,
+        lz_x = layers.fully_connected(
+            lz_x, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        lz_x = layers.conv2d(
-            lz_x, 128, kernel_size=5, padding='VALID',
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lz_x = layers.dropout(lz_x, keep_prob=0.9, is_training=is_training)
-        lz_x = tf.reshape(lz_x, [-1, 128 * 3 * 3])
-        lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
+        z_logits = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        z = zs.Bernoulli('z', z_logits, n_samples=n_particles,
+                         group_event_ndims=1)
     return variational
+
+
+def baseline_net(x):
+    lc_x = layers.fully_connected(tf.to_float(x), 100)
+    lc_x = layers.fully_connected(lc_x, 1, activation_fn=None)
+    lc_x = tf.squeeze(lc_x, -1)
+    return lc_x
 
 
 if __name__ == "__main__":
@@ -86,14 +70,13 @@ if __name__ == "__main__":
     np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_x = x_train.shape[1]
-    n_xl = int(np.sqrt(n_x))
 
     # Define model parameters
     n_z = 40
 
     # Define training/evaluation parameters
     lb_samples = 1
-    ll_samples = 100
+    ll_samples = 50
     epoches = 3000
     batch_size = 100
     test_batch_size = 100
@@ -115,22 +98,26 @@ if __name__ == "__main__":
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = vae_conv(observed, n, n_x, n_z, n_particles, is_training)
+        model = vae(observed, n, n_x, n_z, n_particles, is_training)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return log_pz + log_px_z
 
-    variational = q_net(x, n_xl, n_z, n_particles, is_training)
+    variational = q_net(x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+    cx = tf.expand_dims(baseline_net(x), 0)
+    cost, lower_bound = zs.nvil(
+        log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, baseline=cx,
+        axis=0, variance_normalization=False)
+    cost = tf.reduce_mean(cost)
+    lower_bound = tf.reduce_mean(lower_bound)
     log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
+    grads = optimizer.compute_gradients(cost)
     infer = optimizer.apply_gradients(grads)
 
     params = tf.trainable_variables()

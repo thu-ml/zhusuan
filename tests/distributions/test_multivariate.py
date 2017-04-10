@@ -9,9 +9,9 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc, special
 
-from .utils import *
-from tests.context import zhusuan
+from tests.distributions.utils import *
 from zhusuan.distributions.multivariate import *
+
 
 class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):

@@ -9,9 +9,9 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc
 
-from tests.context import zhusuan
+from tests.distributions.utils import *
 from zhusuan.distributions.univariate import *
-from .utils import *
+
 
 # TODO: test sample value
 

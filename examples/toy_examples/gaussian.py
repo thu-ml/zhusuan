@@ -4,24 +4,20 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
-import os
 
 import numpy as np
 from scipy import stats
 import matplotlib as mpl
 mpl.use('TkAgg')
-
 import matplotlib.pyplot as plt
 import tensorflow as tf
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
 
-def gaussian(observed, n_x, log_stdev, n_particles):
+def gaussian(observed, n_x, stdev, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         x_mean = tf.zeros([n_x])
-        x = zs.Normal('x', x_mean, log_stdev, n_samples=n_particles,
+        x = zs.Normal('x', x_mean, tf.log(stdev), n_samples=n_particles,
                       group_event_ndims=1)
     return model
 
@@ -32,8 +28,7 @@ if __name__ == "__main__":
     # Define model parameters
     n_x = 1
     # n_x = 10
-    stdev = 1 / (np.arange(n_x) + 1)
-    log_stdev = np.log(stdev)
+    stdev = 1 / (np.arange(n_x, dtype=np.float32) + 1)
 
     # Define HMC parameters
     kernel_width = 0.1
@@ -44,7 +39,7 @@ if __name__ == "__main__":
 
     # Build the computation graph
     def log_joint(observed):
-        model = gaussian(observed, n_x, log_stdev, n_chains)
+        model = gaussian(observed, n_x, stdev, n_chains)
         return model.local_log_prob('x')
 
     adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")

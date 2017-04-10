@@ -4,7 +4,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import sys
 import os
 import time
 
@@ -12,10 +11,9 @@ import tensorflow as tf
 from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import zhusuan as zs
 
-import dataset
+from examples.utils import dataset
 
 
 @zs.reuse('model')
@@ -49,9 +47,9 @@ def q_net(observed, x, n_z, n_particles, is_training):
         lz_x = layers.fully_connected(
             lz_x, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
-        z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
+        lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
                       group_event_ndims=1)
     return variational
 
@@ -75,6 +73,7 @@ if __name__ == "__main__":
     # Define training/evaluation parameters
     lb_samples = 1
     ll_samples = 1000
+    n_planar_flows = 10
     epoches = 3000
     batch_size = 100
     iters = x_train.shape[0] // batch_size
@@ -108,6 +107,12 @@ if __name__ == "__main__":
     variational = q_net({}, x, n_z, n_particles, is_training)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
+    # TODO: add tests for repeated calls of flows
+    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
+                                                    n_iters=n_planar_flows)
+    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
+                                                    n_iters=n_planar_flows)
+
     lower_bound = tf.reduce_mean(
         zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
@@ -116,24 +121,6 @@ if __name__ == "__main__":
     is_log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
-
-    # Bidirectional Monte Carlo (BDMC) estimates of log likelihood:
-    # Slower than IS estimates, used for evaluation after training
-    # Use q(z|x) as prior in BDMC
-    def log_qz_given_x(observed):
-        z = observed['z']
-        model = q_net({'z': z}, x, n_z, n_particles, is_training)
-        return model.local_log_prob('z')
-
-    prior_samples = {'z': qz_samples}
-    z = tf.Variable(tf.zeros([test_n_chains, test_batch_size, n_z]),
-                    name="z", trainable=False)
-    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
-                 adapt_step_size=True, target_acceptance_rate=0.65,
-                 adapt_mass=True)
-    bdmc = zs.BDMC(log_qz_given_x, log_joint, prior_samples, hmc,
-                   {'x': x_obs}, {'z': z},
-                   n_chains=test_n_chains, n_temperatures=test_n_temperatures)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
@@ -208,25 +195,3 @@ if __name__ == "__main__":
                     os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
                 print('Done')
-
-        # BDMC evaluation
-        print('Start evaluation...')
-        time_bdmc = -time.time()
-        test_ll_lbs = []
-        test_ll_ubs = []
-        for t in range(test_iters):
-            test_x_batch = x_test[t * test_batch_size:
-                                  (t + 1) * test_batch_size]
-            ll_lb, ll_ub = bdmc.run(sess,
-                                    feed_dict={x: test_x_batch,
-                                               n_particles: test_n_chains,
-                                               is_training: False})
-            test_ll_lbs.append(ll_lb)
-            test_ll_ubs.append(ll_ub)
-        time_bdmc += time.time()
-        test_ll_lb = np.mean(test_ll_lbs)
-        test_ll_ub = np.mean(test_ll_ubs)
-        print('>> Test log likelihood (BDMC) ({:.1f}s)\n'
-              '>> lower bound = {}, upper bound = {}, BDMC gap = {}'
-              .format(time_bdmc, test_ll_lb, test_ll_ub,
-                      test_ll_ub - test_ll_lb))

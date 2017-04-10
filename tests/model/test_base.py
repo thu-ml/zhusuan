@@ -8,7 +8,6 @@ from __future__ import division
 from mock import Mock
 import tensorflow as tf
 
-from tests.context import zhusuan
 from zhusuan.model.base import *
 from zhusuan.model.stochastic import *
 
