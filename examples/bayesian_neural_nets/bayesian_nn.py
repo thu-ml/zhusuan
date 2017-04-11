@@ -12,6 +12,7 @@ from six.moves import range, zip
 import numpy as np
 import zhusuan as zs
 
+from examples import conf
 from examples.utils import dataset
 
 
@@ -68,8 +69,7 @@ if __name__ == '__main__':
     np.random.seed(1234)
 
     # Load UCI Boston housing data
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'housing.data')
+    data_path = os.path.join(conf.data_dir, 'housing.data')
     x_train, y_train, x_valid, y_valid, x_test, y_test = \
         dataset.load_uci_boston_housing(data_path)
     x_train = np.vstack([x_train, x_valid]).astype('float32')

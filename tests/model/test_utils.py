@@ -128,7 +128,6 @@ class TestGetBackwardTensors(tf.test.TestCase):
         self.assertEqual(get_backward_ops([d, f], treat_as_inputs=[b]),
                          [c.op, d.op, a.op, b.op, e.op, f.op])
 
-
     def test_get_backward_ops_control_flow(self):
         # while_loop, scan, TensorArray
         pass

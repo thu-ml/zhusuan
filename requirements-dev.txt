@@ -6,4 +6,4 @@ pep8
 scipy
 matplotlib
 mock
-skimage
+scikit-image

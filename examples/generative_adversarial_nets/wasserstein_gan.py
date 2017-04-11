@@ -13,6 +13,7 @@ from six.moves import range
 from tensorflow.contrib import layers
 import zhusuan as zs
 
+from examples import conf
 from examples.utils import dataset, multi_gpu, save_image_collections
 from examples.utils.multi_gpu import FLAGS
 
@@ -64,8 +65,7 @@ if __name__ == "__main__":
     tf.set_random_seed(1234)
 
     # Load MINST
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'mnist.pkl.gz')
+    data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         dataset.load_mnist_realval(data_path)
     n_xl = 28

@@ -260,7 +260,7 @@ class OnehotCategorical(Distribution):
                                                        int) else None
             samples.set_shape(
                 tf.TensorShape([static_n_samples]).
-                    concatenate(self.get_batch_shape()))
+                concatenate(self.get_batch_shape()))
         samples = tf.one_hot(samples, self.n_categories, dtype=self.dtype)
         return samples
 

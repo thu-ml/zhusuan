@@ -40,10 +40,16 @@ please clone the repository and run
 in the main directory. This will install ZhuSuan and its dependencies 
 automatically. 
 
-If you are developing ZhuSuan, you may want to install in a 
+If you are developing ZhuSuan, you may want to install in an 
 "editable" or "develop" mode. See the Developments section below.
 
 ## Examples
+
+To run the provided examples, you may need extra dependencies to be installed.
+This can be done by
+
+`pip install .[examples]`
+
 * Gaussian: 
 [HMC](examples/toy_examples/gaussian.py)
 * Toy 2D Intractable Posterior: 

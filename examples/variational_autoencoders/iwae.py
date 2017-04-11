@@ -13,6 +13,7 @@ from six.moves import range
 import numpy as np
 import zhusuan as zs
 
+from examples import conf
 from examples.utils import dataset, makedirs
 
 
@@ -46,8 +47,7 @@ if __name__ == "__main__":
     tf.set_random_seed(1237)
 
     # Load MNIST
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'mnist.pkl.gz')
+    data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         dataset.load_mnist_realval(data_path)
     x_train = np.vstack([x_train, x_valid]).astype('float32')

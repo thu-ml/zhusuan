@@ -13,6 +13,7 @@ from six.moves import range
 import numpy as np
 import zhusuan as zs
 
+from examples import conf
 from examples.utils import dataset
 
 
@@ -72,8 +73,7 @@ if __name__ == "__main__":
     tf.set_random_seed(1234)
 
     # Load MNIST
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'mnist.pkl.gz')
+    data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
     np.random.seed(1234)
     x_labeled, t_labeled, x_unlabeled, x_test, t_test = \
         dataset.load_mnist_semi_supervised(data_path, one_hot=True)

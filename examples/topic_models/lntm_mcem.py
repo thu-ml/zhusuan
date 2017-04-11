@@ -15,6 +15,7 @@ from six.moves import range
 import numpy as np
 import zhusuan as zs
 
+from examples import conf
 from examples.utils import dataset
 
 
@@ -38,8 +39,7 @@ if __name__ == "__main__":
 
     # Load nips dataset
     data_name = 'nips'
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', data_name + '.pkl.gz')
+    data_path = os.path.join(conf.data_dir, data_name + '.pkl.gz')
     X, vocab = dataset.load_uci_bow(data_name, data_path)
     X_train = X[:1200, :]
     X_test = X[1200:, :]

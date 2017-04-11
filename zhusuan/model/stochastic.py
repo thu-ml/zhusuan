@@ -227,7 +227,7 @@ class Gamma(StochasticTensor):
 
 class Beta(StochasticTensor):
     """
-    The class of univariate Beta `StochasticTensor`. 
+    The class of univariate Beta `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
@@ -267,7 +267,7 @@ class Beta(StochasticTensor):
 
 class Poisson(StochasticTensor):
     """
-    The class of univariate Poisson `StochasticTensor`. 
+    The class of univariate Poisson `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
@@ -301,7 +301,7 @@ class Poisson(StochasticTensor):
 
 class Binomial(StochasticTensor):
     """
-    The class of univariate Binomial `StochasticTensor`. 
+    The class of univariate Binomial `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
@@ -341,7 +341,7 @@ class Binomial(StochasticTensor):
 
 class Multinomial(StochasticTensor):
     """
-    The class of Multinomial `StochasticTensor`. 
+    The class of Multinomial `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
@@ -383,7 +383,7 @@ class Multinomial(StochasticTensor):
 
 class OnehotCategorical(StochasticTensor):
     """
-    The class of one-hot Categorical `StochasticTensor`. 
+    The class of one-hot Categorical `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
@@ -424,7 +424,7 @@ OnehotDiscrete = OnehotCategorical
 
 class Dirichlet(StochasticTensor):
     """
-    The class of Dirichlet `StochasticTensor`. 
+    The class of Dirichlet `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique

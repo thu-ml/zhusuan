@@ -92,7 +92,7 @@ setup(
         'examples': [
             'scipy',
             'matplotlib',
-            'skimage'
+            'scikit-image'
         ],
     },
 

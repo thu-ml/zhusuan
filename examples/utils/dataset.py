@@ -60,7 +60,7 @@ def load_mnist_realval(path, one_hot=True, dequantify=False):
 
     :param path: Path to the dataset file.
     :param one_hot: Whether to use one-hot representation for the labels.
-    :param dequantify:  Whether to add uniform noise to dequantify the data 
+    :param dequantify:  Whether to add uniform noise to dequantify the data
         following (Uria, 2013).
 
     :return: The MNIST dataset.
@@ -153,7 +153,7 @@ def load_cifar10(path, normalize=True, dequantify=False, one_hot=True):
 
     :param path: Path to the dataset file.
     :param normalize: Whether to normalize the x data to the range [0, 1].
-    :param dequantify: Whether to add uniform noise to dequantify the data 
+    :param dequantify: Whether to add uniform noise to dequantify the data
         following (Uria, 2013).
     :param one_hot: Whether to use one-hot representation for the labels.
 
@@ -212,7 +212,7 @@ def load_cifar10_semi_supervised(path, normalize=True, dequantify=False,
 
     :param path: Path to the dataset file.
     :param normalize: Whether to normalize the x data to the range [0, 1].
-    :param dequantify: Whether to add uniform noise to dequantify the data 
+    :param dequantify: Whether to add uniform noise to dequantify the data
         following (Uria, 2013).
     :param one_hot: Whether to use one-hot representation for the labels.
     :param seed: Random seed for selecting labeled data.

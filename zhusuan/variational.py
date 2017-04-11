@@ -13,7 +13,6 @@ from tensorflow.python.training import moving_averages
 from zhusuan.utils import log_mean_exp, merge_dicts
 from zhusuan.evaluation import is_loglikelihood
 
-
 __all__ = [
     'sgvb',
     'iwae',
@@ -30,14 +29,14 @@ def sgvb(log_joint, observed, latent, axis=None):
     `StochasticTensor` s that can be reparameterized (Kingma, 2013).
 
     :param log_joint: A function that accepts a dictionary argument of
-        ``(string, Tensor)`` pairs, which are mappings from all 
-        `StochasticTensor` names in the model to their observed values. The 
-        function should return a Tensor, representing the log joint likelihood 
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
         of the model.
-    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from 
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
         names of observed `StochasticTensor` s to their values
-    :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs. 
-        Mapping from names of latent `StochasticTensor` s to their samples and 
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
         log probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in variational lower bound. If `None`, no dimension
@@ -62,14 +61,14 @@ def iwae(log_joint, observed, latent, axis=None):
     can be reparameterized (Kingma, 2013).
 
     :param log_joint: A function that accepts a dictionary argument of
-        ``(string, Tensor)`` pairs, which are mappings from all 
-        `StochasticTensor` names in the model to their observed values. The 
-        function should return a Tensor, representing the log joint likelihood 
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
         of the model.
-    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from 
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
         names of observed `StochasticTensor` s to their values.
-    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs. 
-        Mapping from names of latent `StochasticTensor` s to their samples and 
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
         log probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in variational lower bound. If `None`, no dimension
@@ -86,14 +85,14 @@ def rws(log_joint, observed, latent, axis=None):
     both continuous and discrete latent `StochasticTensor` s.
 
     :param log_joint: A function that accepts a dictionary argument of
-        ``(string, Tensor)`` pairs, which are mappings from all 
-        `StochasticTensor` names in the model to their observed values. The 
-        function should return a Tensor, representing the log joint likelihood 
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
         of the model.
-    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from 
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
         names of observed `StochasticTensor` s to their values.
-    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs. 
-        Mapping from names of latent `StochasticTensor` s to their samples and 
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
         log probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in log likelihood and in the cost for adapting
@@ -138,14 +137,14 @@ def nvil(log_joint,
     discrete latent `StochasticTensor` s.
 
     :param log_joint: A function that accepts a dictionary argument of
-        ``(string, Tensor)`` pairs, which are mappings from all 
-        `StochasticTensor` names in the model to their observed values. The 
-        function should return a Tensor, representing the log joint likelihood 
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
         of the model.
-    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from 
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
         names of observed `StochasticTensor` s to their values.
-    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs. 
-        Mapping from names of latent `StochasticTensor` s to their samples and 
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
         log probabilities.
     :param baseline: A Tensor that can broadcast to match the shape returned
         by `log_joint`. A trainable estimation for the scale of the
@@ -216,14 +215,14 @@ def vimco(log_joint, observed, latent, axis=None):
         objective should be larger than 1, else an error is raised.
 
     :param log_joint: A function that accepts a dictionary argument of
-        ``(string, Tensor)`` pairs, which are mappings from all 
-        `StochasticTensor` names in the model to their observed values. The 
-        function should return a Tensor, representing the log joint likelihood 
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
         of the model.
-    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from 
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
         names of observed `StochasticTensor` s to their values.
-    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs. 
-        Mapping from names of latent `StochasticTensor` s to their samples and 
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))``) pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
         log probabilities.
     :param axis: The sample dimension to reduce when computing the
         outer expectation in variational lower bound. Must be specified. If

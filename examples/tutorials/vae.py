@@ -12,13 +12,13 @@ from six.moves import range
 import numpy as np
 import zhusuan as zs
 
+from examples import conf
 from examples.utils import dataset, save_image_collections
 
 
 def main():
     # Load MNIST
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'mnist.pkl.gz')
+    data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         dataset.load_mnist_realval(data_path)
     x_train = np.random.binomial(1, x_train, size=x_train.shape)

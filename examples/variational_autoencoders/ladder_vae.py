@@ -20,6 +20,7 @@ from tensorflow.contrib import layers
 import zhusuan as zs
 from zhusuan.distributions_old import logistic
 
+from examples import conf
 from examples.utils import dataset, multi_gpu, optimizers
 from examples.utils.multi_gpu import FLAGS
 
@@ -135,8 +136,8 @@ if __name__ == "__main__":
     tf.set_random_seed(1234)
 
     # Load CIFAR
-    data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             'data', 'cifar10', 'cifar-10-python.tar.gz')
+    data_path = os.path.join(conf.data_dir, 'cifar10',
+                             'cifar-10-python.tar.gz')
     np.random.seed(1234)
     x_train, t_train, x_test, t_test = \
         dataset.load_cifar10(data_path, normalize=True, one_hot=True)
