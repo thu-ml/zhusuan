@@ -9,8 +9,7 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc, special
 
-from .utils import *
-from tests.context import zhusuan
+from tests.distributions.utils import *
 from zhusuan.distributions.multivariate import *
 
 class TestMultinomial(tf.test.TestCase):
@@ -57,6 +56,7 @@ class TestMultinomial(tf.test.TestCase):
         # dynamic
         logits = tf.placeholder(tf.float32, None)
         dist2 = Multinomial(logits, 10)
+        self.assertTrue(dist2._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={logits: np.ones([2])}).tolist(), [2])
@@ -86,8 +86,9 @@ class TestMultinomial(tf.test.TestCase):
         # dynamic
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, logits_shape)
+                logits = tf.placeholder(tf.float32, None)
                 dist = Multinomial(logits, 10)
+                self.assertTrue(dist.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     dist.batch_shape.eval(
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
@@ -248,6 +249,7 @@ class TestOnehotCategorical(tf.test.TestCase):
         # dynamic
         logits = tf.placeholder(tf.float32, None)
         cat2 = OnehotCategorical(logits)
+        self.assertTrue(cat2._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(cat2._value_shape().eval(
                 feed_dict={logits: np.ones([2, 1, 3])}).tolist(), [3])
@@ -276,8 +278,9 @@ class TestOnehotCategorical(tf.test.TestCase):
         # dynamic
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, logits_shape)
+                logits = tf.placeholder(tf.float32, None)
                 cat = OnehotCategorical(logits)
+                self.assertTrue(cat.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     cat.batch_shape.eval(
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
@@ -445,6 +448,7 @@ class TestDirichlet(tf.test.TestCase):
         alpha = tf.placeholder(tf.float32, None)
         dist2 = Dirichlet(alpha)
         self.assertEqual(dist2.get_value_shape().as_list(), [None])
+        self.assertTrue(dist2._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={alpha: np.ones([2, 1, 3])}).tolist(), [3])
@@ -474,6 +478,7 @@ class TestDirichlet(tf.test.TestCase):
             def _test_dynamic(alpha_shape):
                 alpha = tf.placeholder(tf.float32, None)
                 dist = Dirichlet(alpha)
+                self.assertTrue(dist.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     dist.batch_shape.eval(
                         feed_dict={alpha: np.zeros(alpha_shape)}).tolist(),

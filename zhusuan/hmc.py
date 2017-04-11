@@ -9,7 +9,7 @@ import six
 from six.moves import zip, map, filter
 import tensorflow as tf
 
-from .utils import add_name_scope, merge_dicts
+from zhusuan.utils import add_name_scope, merge_dicts
 
 
 __all__ = [
@@ -140,9 +140,11 @@ class ExponentialWeightedMovingVariance:
             tf.reduce_mean(i, list(self.chain_axes), keep_dims=True))
                        for mean, i in zip(self.mean, incr)]
         # var: (1,...,1 data_dims)
-        new_var = [(1 - weight) * var +
-            tf.reduce_mean(i * (q - mean), list(self.chain_axes), keep_dims=True)
-                   for var, i, q, mean in zip(self.var, incr, x, update_mean)]
+        new_var = [
+            (1 - weight) * var +
+            tf.reduce_mean(i * (q - mean), list(self.chain_axes),
+                           keep_dims=True)
+            for var, i, q, mean in zip(self.var, incr, x, update_mean)]
 
         update_var = [tf.assign(var, n_var)
                       for var, n_var in zip(self.var, new_var)]
@@ -273,7 +275,7 @@ class HMC:
 
             # [(n_particles, n, n_z)], [(n_particles, n, n_z)]
             q, p = leapfrog_integrator(q, p, step_size1, step_size2,
-                lambda q: get_gradient(q), mass)
+                                       lambda q: get_gradient(q), mass)
             return [i + 1, q, p]
 
         i = tf.constant(0)
@@ -323,9 +325,9 @@ class HMC:
         self.s_chain_shape = get_log_posterior(self.q).get_shape()
         self.num_chain_dims = len(self.s_chain_shape)
         # [1, .., 1, data_dims]
-        self.data_shape = [tf.reduce_sum(q, axis=list(range(self.num_chain_dims)),
-                                         keep_dims=True).get_shape()
-                           for q in self.q]
+        self.data_shape = [
+            tf.reduce_sum(q, axis=list(range(self.num_chain_dims)),
+                          keep_dims=True).get_shape() for q in self.q]
         self.data_axes = [list(range(self.num_chain_dims, len(shape)))
                           for shape in self.data_shape]
 
@@ -413,7 +415,7 @@ class HMC:
 
         if self.adapt_step_size is not None:
             update_step_size = self._adapt_step_size(acceptance_rate,
-                                                    if_initialize_step_size)
+                                                     if_initialize_step_size)
         else:
             update_step_size = self.step_size
 

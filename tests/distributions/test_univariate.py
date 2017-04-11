@@ -9,7 +9,7 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc
 
-from tests.context import zhusuan
+from tests.distributions.utils import *
 from zhusuan.distributions.univariate import *
 from .utils import *
 
@@ -32,6 +32,7 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(norm.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(norm._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(norm._value_shape().eval().tolist(), [])
 
@@ -66,6 +67,7 @@ class TestNormal(tf.test.TestCase):
                 mean = tf.placeholder(tf.float32, None)
                 logstd = tf.placeholder(tf.float32, None)
                 norm = Normal(mean, logstd)
+                self.assertTrue(norm.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     norm.batch_shape.eval(
                         feed_dict={mean: np.ones(mean_shape),
@@ -212,6 +214,7 @@ class TestBernoulli(tf.test.TestCase):
         self.assertEqual(bernoulli.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(bernoulli._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(bernoulli._value_shape().eval().tolist(), [])
 
@@ -240,8 +243,9 @@ class TestBernoulli(tf.test.TestCase):
         # dynamic
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, logits_shape)
+                logits = tf.placeholder(tf.float32, None)
                 bernoulli = Bernoulli(logits)
+                self.assertTrue(bernoulli.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     bernoulli.batch_shape.eval(
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
@@ -378,6 +382,7 @@ class TestCategorical(tf.test.TestCase):
         self.assertEqual(cat.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(cat._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(cat._value_shape().eval().tolist(), [])
 
@@ -405,8 +410,9 @@ class TestCategorical(tf.test.TestCase):
         # dynamic
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, logits_shape)
+                logits = tf.placeholder(tf.float32, None)
                 cat = Categorical(logits)
+                self.assertTrue(cat.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     cat.batch_shape.eval(
                         feed_dict={logits: np.zeros(logits_shape)}).tolist(),
@@ -547,6 +553,7 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(unif.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(unif._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(unif._value_shape().eval().tolist(), [])
 
@@ -580,6 +587,7 @@ class TestUniform(tf.test.TestCase):
                 minval = tf.placeholder(tf.float32, None)
                 maxval = tf.placeholder(tf.float32, None)
                 unif = Uniform(minval, maxval)
+                self.assertTrue(unif.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     unif.batch_shape.eval(
                         feed_dict={minval: np.ones(minval_shape),
@@ -740,6 +748,7 @@ class TestGamma(tf.test.TestCase):
         self.assertEqual(gamma.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(gamma._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(gamma._value_shape().eval().tolist(), [])
         self.assertEqual(gamma._value_shape().dtype, tf.int32)
@@ -772,6 +781,7 @@ class TestGamma(tf.test.TestCase):
                 alpha = tf.placeholder(tf.float32, None)
                 beta = tf.placeholder(tf.float32, None)
                 gamma = Gamma(alpha, beta)
+                self.assertTrue(gamma.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     gamma.batch_shape.eval(
                         feed_dict={alpha: np.ones(alpha_shape),
@@ -926,6 +936,7 @@ class TestBeta(tf.test.TestCase):
         self.assertEqual(dist.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(dist._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(dist._value_shape().eval().tolist(), [])
         self.assertEqual(dist._value_shape().dtype, tf.int32)
@@ -958,6 +969,7 @@ class TestBeta(tf.test.TestCase):
                 alpha = tf.placeholder(tf.float32, None)
                 beta = tf.placeholder(tf.float32, None)
                 dist = Beta(alpha, beta)
+                self.assertTrue(dist.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     dist.batch_shape.eval(
                         feed_dict={alpha: np.ones(alpha_shape),
@@ -1105,6 +1117,7 @@ class TestPoisson(tf.test.TestCase):
         self.assertEqual(poisson.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(poisson._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(poisson._value_shape().eval().tolist(), [])
         self.assertEqual(poisson._value_shape().dtype, tf.int32)
@@ -1132,8 +1145,9 @@ class TestPoisson(tf.test.TestCase):
         # dynamic
         with self.test_session(use_gpu=True):
             def _test_dynamic(rate_shape):
-                rate = tf.placeholder(tf.float32, rate_shape)
+                rate = tf.placeholder(tf.float32, None)
                 poisson = Poisson(rate)
+                self.assertTrue(poisson.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     poisson.batch_shape.eval(
                         feed_dict={rate: np.ones(rate_shape)}).tolist(),
@@ -1207,7 +1221,7 @@ class TestPoisson(tf.test.TestCase):
                     tf.shape(log_p).eval(
                         feed_dict={rate: np.ones(rate_shape),
                                    given: np.ones(given_shape,
-                                                   np.int32)}).tolist(),
+                                                  np.int32)}).tolist(),
                     target_shape)
 
             _test_dynamic([2, 3], [1, 3], [2, 3])
@@ -1264,7 +1278,7 @@ class TestBinomial(tf.test.TestCase):
         with self.assertRaisesRegexp(ValueError, "must be positive"):
             _ = Binomial(tf.ones([2]), 0)
 
-        with self.test_session(use_gpu=True) as sess:
+        with self.test_session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
             n_experiments = tf.placeholder(tf.int32, None)
             dist2 = Binomial(logits, n_experiments)
@@ -1283,6 +1297,7 @@ class TestBinomial(tf.test.TestCase):
         self.assertEqual(binomial.get_value_shape().as_list(), [])
 
         # dynamic
+        self.assertTrue(binomial._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(binomial._value_shape().eval().tolist(), [])
         self.assertEqual(binomial._value_shape().dtype, tf.int32)
@@ -1310,8 +1325,9 @@ class TestBinomial(tf.test.TestCase):
         # dynamic
         with self.test_session(use_gpu=True):
             def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, logits_shape)
+                logits = tf.placeholder(tf.float32, None)
                 binomial = Binomial(logits, 10)
+                self.assertTrue(binomial.batch_shape.dtype is tf.int32)
                 self.assertEqual(
                     binomial.batch_shape.eval(
                         feed_dict={logits: np.ones(logits_shape)}).tolist(),
@@ -1385,7 +1401,7 @@ class TestBinomial(tf.test.TestCase):
                     tf.shape(log_p).eval(
                         feed_dict={logits: np.ones(logits_shape),
                                    given: np.ones(given_shape,
-                                                   np.int32)}).tolist(),
+                                                  np.int32)}).tolist(),
                     target_shape)
 
             _test_dynamic([2, 3], [1, 3], [2, 3])
@@ -1446,6 +1462,7 @@ class TestBinomial(tf.test.TestCase):
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
             Binomial(1., tf.placeholder(tf.float32, []))
 
+
 class TestInverseGamma(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):
@@ -1454,12 +1471,12 @@ class TestInverseGamma(tf.test.TestCase):
                 InverseGamma(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
 
         InverseGamma(tf.placeholder(tf.float32, [None, 1]),
-              tf.placeholder(tf.float32, [None, 1, 3]))
+                     tf.placeholder(tf.float32, [None, 1, 3]))
 
     def test_value_shape(self):
         # static
         inv_gamma = InverseGamma(alpha=tf.placeholder(tf.float32, None),
-                      beta=tf.placeholder(tf.float32, None))
+                                 beta=tf.placeholder(tf.float32, None))
         self.assertEqual(inv_gamma.get_value_shape().as_list(), [])
 
         # dynamic

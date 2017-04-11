@@ -7,8 +7,8 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 
-from .context import zhusuan
 from zhusuan.transform import *
+from zhusuan.transform import linear_ar, inv_autoregressive_flow
 
 
 class TestPlanarNormalizingFlow(tf.test.TestCase):
@@ -48,7 +48,7 @@ class TestLinearIaf(tf.test.TestCase):
                 z[i] = tf.constant(z[i], dtype=tf.float32)
             z_0 = tf.concat(z, axis=1)
             z_1, n_log_det_ja = inv_autoregressive_flow(
-                z_0, None, 0.0, linear_ar, n_iters=1)
+                z_0, None, [0.0], linear_ar, n_iters=1)
 
             n_log_det_ja = tf.reshape(n_log_det_ja, [])
 

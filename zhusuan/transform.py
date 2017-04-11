@@ -5,13 +5,12 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-from .utils import convert_to_int
+from zhusuan.utils import convert_to_int
 import numpy as np
 
+
 __all__ = [
-    'linear_ar',
     'planar_normalizing_flow',
-    'inv_autoregressive_flow'
 ]
 
 
@@ -89,6 +88,9 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
     :return: A (N-1)-D Tensor, the log probabilities of the transformed
         samples.
     """
+    samples = tf.convert_to_tensor(samples, dtype=tf.float32)
+    log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
+
     if not isinstance(n_iters, int):
         raise ValueError('n_iters should be type \'int\'')
 
@@ -219,6 +221,10 @@ def inv_autoregressive_flow(samples, hidden, log_probs, autoregressive_nn,
         samples.
     """
     # TODO: properly deal with hidden.
+    samples = tf.convert_to_tensor(samples, dtype=tf.float32)
+    log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
+    if hidden is not None:
+        hidden = tf.convert_to_tensor(hidden, dtype=tf.float32)
     if not isinstance(n_iters, int):
         raise ValueError('n_iters should be type \'int\'')
 

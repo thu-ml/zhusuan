@@ -6,8 +6,8 @@ from __future__ import division
 
 import tensorflow as tf
 
-from .base import *
-from .utils import \
+from zhusuan.distributions.base import Distribution
+from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
@@ -260,7 +260,7 @@ class OnehotCategorical(Distribution):
                                                        int) else None
             samples.set_shape(
                 tf.TensorShape([static_n_samples]).
-                    concatenate(self.get_batch_shape()))
+                concatenate(self.get_batch_shape()))
         samples = tf.one_hot(samples, self.n_categories, dtype=self.dtype)
         return samples
 
