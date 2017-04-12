@@ -39,89 +39,12 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(norm._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(mean_shape, logstd_shape, target_shape):
-            mean = tf.placeholder(tf.float32, mean_shape)
-            logstd = tf.placeholder(tf.float32, logstd_shape)
-            norm = Normal(mean, logstd)
-            if norm.get_batch_shape():
-                self.assertEqual(norm.get_batch_shape().as_list(),
-                                 target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3])
-        _test_static([2, 3], [3], [2, 3])
-        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
-        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
-        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
-        _test_static([None, 3, 5], [3, None], [None, 3, 5])
-        _test_static([None, 1, 3], [None, 1], [None, None, 3])
-        _test_static([None, 1, 10], [None, 1, 10], [None, 1, 10])
-        _test_static([2, None], [], [2, None])
-        _test_static(None, [1, 2], None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(mean_shape, logstd_shape, target_shape):
-                mean = tf.placeholder(tf.float32, None)
-                logstd = tf.placeholder(tf.float32, None)
-                norm = Normal(mean, logstd)
-                self.assertTrue(norm.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    norm.batch_shape.eval(
-                        feed_dict={mean: np.ones(mean_shape),
-                                   logstd: np.ones(logstd_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [], [2, 3])
-            _test_dynamic([2, 3], [3], [2, 3])
-            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
-            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [3, 2], None)
+        test_batch_shape_2parameter_univariate(
+            self, Normal, np.zeros, np.zeros)
 
     def test_sample_shape(self):
-        def _test_static(mean_shape, logstd_shape, n_samples, target_shape):
-            mean = tf.placeholder(tf.float32, mean_shape)
-            logstd = tf.placeholder(tf.float32, logstd_shape)
-            norm = Normal(mean, logstd)
-            samples = norm.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], None, [2, 3])
-        _test_static([2, 3], [], 1, [1, 2, 3])
-        _test_static([5], [5], 2, [2, 5])
-        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     [None, 3, 2])
-        _test_static(None, [1, 2], None, None)
-        _test_static(None, [1, 2], 1, None)
-        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], [3, 1], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(mean_shape, logstd_shape, n_samples,
-                              target_shape):
-                mean = tf.placeholder(tf.float32, None)
-                logstd = tf.placeholder(tf.float32, None)
-                norm = Normal(mean, logstd)
-                samples = norm.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={mean: np.zeros(mean_shape),
-                                   logstd: np.zeros(logstd_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
-            _test_dynamic([1, 3], [], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+        test_sample_shape_2parameter_univariate(
+            self, Normal, np.zeros, np.zeros)
 
     def test_sample_reparameterized(self):
         mean = tf.ones([2, 3])
@@ -139,44 +62,8 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(logstd_grads, None)
 
     def test_log_prob_shape(self):
-        def _test_static(mean_shape, logstd_shape, given_shape, target_shape):
-            mean = tf.placeholder(tf.float32, mean_shape)
-            logstd = tf.placeholder(tf.float32, logstd_shape)
-            given = tf.placeholder(tf.float32, given_shape)
-            norm = Normal(mean, logstd)
-            log_p = norm.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3], [2, 3])
-        _test_static([5], [5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
-        _test_static(None, [1, 2], [2, 2], None)
-        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(mean_shape, logstd_shape, given_shape,
-                              target_shape):
-                mean = tf.placeholder(tf.float32, None)
-                logstd = tf.placeholder(tf.float32, None)
-                norm = Normal(mean, logstd)
-                given = tf.placeholder(tf.float32, None)
-                log_p = norm.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={mean: np.zeros(mean_shape),
-                                   logstd: np.zeros(logstd_shape),
-                                   given: np.zeros(given_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
-            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+        test_log_prob_shape_2parameter_univariate(
+            self, Normal, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -221,113 +108,16 @@ class TestBernoulli(tf.test.TestCase):
         self.assertEqual(bernoulli._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(logits_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            bernoulli = Bernoulli(logits)
-            if bernoulli.get_batch_shape():
-                self.assertEqual(bernoulli.get_batch_shape().as_list(),
-                                 logits_shape)
-            else:
-                self.assertEqual(None, logits_shape)
-
-        _test_static([])
-        _test_static([2])
-        _test_static([2, 3])
-        _test_static([2, 1, 4])
-        _test_static([None])
-        _test_static([None, 3, 5])
-        _test_static([1, None, 3])
-        _test_static(None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, None)
-                bernoulli = Bernoulli(logits)
-                self.assertTrue(bernoulli.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    bernoulli.batch_shape.eval(
-                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
-                    logits_shape)
-
-            _test_dynamic([])
-            _test_dynamic([2])
-            _test_dynamic([2, 3])
-            _test_dynamic([2, 1, 4])
+        test_batch_shape_1parameter(
+            self, Bernoulli, np.zeros, is_univariate=True)
 
     def test_sample_shape(self):
-        def _test_static(logits_shape, n_samples, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            bernoulli = Bernoulli(logits)
-            samples = bernoulli.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], None, [2, 3])
-        _test_static([2, 3], 1, [1, 2, 3])
-        _test_static([5], 2, [2, 5])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
-        _test_static(None, 1, None)
-        _test_static(None, None, None)
-        _test_static([None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, n_samples, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                bernoulli = Bernoulli(logits)
-                samples = bernoulli.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], 1, [1, 2, 3])
-            _test_dynamic([1, 3], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        test_sample_shape_1parameter_univariate(
+            self, Bernoulli, np.zeros)
 
     def test_log_prob_shape(self):
-        def _test_static(logits_shape, given_shape, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            given = tf.placeholder(tf.int32, given_shape)
-            bernoulli = Bernoulli(logits)
-            log_p = bernoulli.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [2, 1], [2, 3])
-        _test_static([5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [3, 2])
-        _test_static([None, 2], [None, 1, 1], [None, None, 2])
-        _test_static(None, [2, 2], None)
-        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3, None])
-        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
-            _test_static([2, 3, 5], [1, 2, 1], None)
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, given_shape, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                bernoulli = Bernoulli(logits)
-                given = tf.placeholder(tf.int32, None)
-                log_p = bernoulli.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={logits: np.zeros(logits_shape),
-                                   given: np.zeros(given_shape,
-                                                   np.int32)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
-            _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [1, 2, 1], None)
+        test_log_prob_shape_1parameter_univariate(
+            self, Bernoulli, np.zeros, np.zeros)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -560,88 +350,12 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(unif._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(minval_shape, maxval_shape, target_shape):
-            minval = tf.placeholder(tf.float32, minval_shape)
-            maxval = tf.placeholder(tf.float32, maxval_shape)
-            unif = Uniform(minval, maxval)
-            if unif.get_batch_shape():
-                self.assertEqual(unif.get_batch_shape().as_list(),
-                                 target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3])
-        _test_static([2, 3], [3], [2, 3])
-        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
-        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
-        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
-        _test_static([None, 3, 5], [3, None], [None, 3, 5])
-        _test_static([None, 1, 3], [None, 1], [None, None, 3])
-        _test_static([2, None], [], [2, None])
-        _test_static(None, [1, 2], None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(minval_shape, maxval_shape, target_shape):
-                minval = tf.placeholder(tf.float32, None)
-                maxval = tf.placeholder(tf.float32, None)
-                unif = Uniform(minval, maxval)
-                self.assertTrue(unif.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    unif.batch_shape.eval(
-                        feed_dict={minval: np.ones(minval_shape),
-                                   maxval: np.ones(maxval_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [], [2, 3])
-            _test_dynamic([2, 3], [3], [2, 3])
-            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
-            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [3, 2], None)
+        test_batch_shape_2parameter_univariate(
+            self, Uniform, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        def _test_static(minval_shape, maxval_shape, n_samples, target_shape):
-            minval = tf.placeholder(tf.float32, minval_shape)
-            maxval = tf.placeholder(tf.float32, maxval_shape)
-            unif = Uniform(minval, maxval)
-            samples = unif.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], None, [2, 3])
-        _test_static([2, 3], [], 1, [1, 2, 3])
-        _test_static([5], [5], 2, [2, 5])
-        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     [None, 3, 2])
-        _test_static(None, [1, 2], None, None)
-        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
-        _test_static(None, [1, 2], 1, None)
-        _test_static([3, None], [3, 1], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(minval_shape, maxval_shape, n_samples,
-                              target_shape):
-                minval = tf.placeholder(tf.float32, None)
-                maxval = tf.placeholder(tf.float32, None)
-                unif = Uniform(minval, maxval)
-                samples = unif.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={minval: np.zeros(minval_shape),
-                                   maxval: np.ones(maxval_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
-            _test_dynamic([1, 3], [], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+        test_sample_shape_2parameter_univariate(
+            self, Uniform, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
         minval = tf.ones([2, 3])
@@ -659,45 +373,8 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(maxval_grads, None)
 
     def test_log_prob_shape(self):
-        def _test_static(minval_shape, maxval_shape, given_shape,
-                         target_shape):
-            minval = tf.placeholder(tf.float32, minval_shape)
-            maxval = tf.placeholder(tf.float32, maxval_shape)
-            given = tf.placeholder(tf.float32, given_shape)
-            unif = Uniform(minval, maxval)
-            log_p = unif.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3], [2, 3])
-        _test_static([5], [5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
-        _test_static(None, [1, 2], [2, 2], None)
-        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(minval_shape, maxval_shape, given_shape,
-                              target_shape):
-                minval = tf.placeholder(tf.float32, None)
-                maxval = tf.placeholder(tf.float32, None)
-                unif = Uniform(minval, maxval)
-                given = tf.placeholder(tf.float32, None)
-                log_p = unif.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={minval: np.zeros(minval_shape),
-                                   maxval: np.ones(maxval_shape),
-                                   given: np.zeros(given_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
-            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+        test_log_prob_shape_2parameter_univariate(
+            self, Uniform, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -754,128 +431,16 @@ class TestGamma(tf.test.TestCase):
         self.assertEqual(gamma._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(alpha_shape, beta_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            gamma = Gamma(alpha, beta)
-            if gamma.get_batch_shape():
-                self.assertEqual(gamma.get_batch_shape().as_list(),
-                                 target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3])
-        _test_static([2, 3], [3], [2, 3])
-        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
-        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
-        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
-        _test_static([None, 3, 5], [3, None], [None, 3, 5])
-        _test_static([None, 1, 3], [None, 1], [None, None, 3])
-        _test_static([2, None], [], [2, None])
-        _test_static(None, [1, 2], None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                gamma = Gamma(alpha, beta)
-                self.assertTrue(gamma.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    gamma.batch_shape.eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [], [2, 3])
-            _test_dynamic([2, 3], [3], [2, 3])
-            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
-            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [3, 2], None)
+        test_batch_shape_2parameter_univariate(
+            self, Gamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        def _test_static(alpha_shape, beta_shape, n_samples, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            gamma = Gamma(alpha, beta)
-            samples = gamma.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], None, [2, 3])
-        _test_static([2, 3], [], 1, [1, 2, 3])
-        _test_static([5], [5], 2, [2, 5])
-        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     [None, 3, 2])
-        _test_static(None, [1, 2], None, None)
-        _test_static(None, [1, 2], 1, None)
-        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], [3, 1], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, n_samples,
-                              target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                gamma = Gamma(alpha, beta)
-                samples = gamma.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
-            _test_dynamic([1, 3], [], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+        test_sample_shape_2parameter_univariate(
+            self, Gamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        def _test_static(alpha_shape, beta_shape, given_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            given = tf.placeholder(tf.float32, given_shape)
-            gamma = Gamma(alpha, beta)
-            log_p = gamma.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3], [2, 3])
-        _test_static([5], [5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
-        _test_static(None, [1, 2], [2, 2], None)
-        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, given_shape,
-                              target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                gamma = Gamma(alpha, beta)
-                given = tf.placeholder(tf.float32, None)
-                log_p = gamma.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape),
-                                   given: np.ones(given_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
-            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+        test_log_prob_shape_2parameter_univariate(
+            self, Gamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -942,129 +507,16 @@ class TestBeta(tf.test.TestCase):
         self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(alpha_shape, beta_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            dist = Beta(alpha, beta)
-            if dist.get_batch_shape():
-                self.assertEqual(dist.get_batch_shape().as_list(),
-                                 target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3])
-        _test_static([2, 3], [3], [2, 3])
-        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
-        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
-        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
-        _test_static([None, 3, 5], [3, None], [None, 3, 5])
-        _test_static([None, 1, 3], [None, 1], [None, None, 3])
-        _test_static([2, None], [], [2, None])
-        _test_static(None, [1, 2], None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                dist = Beta(alpha, beta)
-                self.assertTrue(dist.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    dist.batch_shape.eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [], [2, 3])
-            _test_dynamic([2, 3], [3], [2, 3])
-            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
-            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [3, 2], None)
+        test_batch_shape_2parameter_univariate(
+            self, Beta, np.ones, np.ones)
 
     def test_sample_shape(self):
-        def _test_static(alpha_shape, beta_shape, n_samples, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            dist = Beta(alpha, beta)
-            samples = dist.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], None, [2, 3])
-        _test_static([2, 3], [], 1, [1, 2, 3])
-        _test_static([5], [5], 2, [2, 5])
-        _test_static([2, 1, 4], [1, 2, 4], 3, [3, 2, 2, 4])
-        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     [None, 3, 2])
-        _test_static(None, [1, 2], None, None)
-        _test_static(None, [1, 2], 1, None)
-        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], [3, 1], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, n_samples,
-                              target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                dist = Beta(alpha, beta)
-                samples = dist.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
-            _test_dynamic([1, 3], [], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+        test_sample_shape_2parameter_univariate(
+            self, Beta, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        def _test_static(alpha_shape, beta_shape, given_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            given = tf.placeholder(tf.float32, given_shape)
-            dist = Beta(alpha, beta)
-            log_p = dist.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3], [2, 3])
-        _test_static([5], [5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
-        _test_static(None, [1, 2], [2, 2], None)
-        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, given_shape,
-                              target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                dist = Beta(alpha, beta)
-                given = tf.placeholder(tf.float32, None)
-                log_p = dist.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape),
-                                   given: np.ones(given_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
-            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+        test_log_prob_shape_2parameter_univariate(
+            self, Beta, np.ones, np.ones, np.ones)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -1123,113 +575,16 @@ class TestPoisson(tf.test.TestCase):
         self.assertEqual(poisson._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(rate_shape):
-            rate = tf.placeholder(tf.float32, rate_shape)
-            poisson = Poisson(rate)
-            if poisson.get_batch_shape():
-                self.assertEqual(poisson.get_batch_shape().as_list(),
-                                 rate_shape)
-            else:
-                self.assertEqual(None, rate_shape)
-
-        _test_static([])
-        _test_static([2])
-        _test_static([2, 3])
-        _test_static([2, 1, 4])
-        _test_static([None])
-        _test_static([None, 3, 5])
-        _test_static([1, None, 3])
-        _test_static(None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(rate_shape):
-                rate = tf.placeholder(tf.float32, None)
-                poisson = Poisson(rate)
-                self.assertTrue(poisson.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    poisson.batch_shape.eval(
-                        feed_dict={rate: np.ones(rate_shape)}).tolist(),
-                    rate_shape)
-
-            _test_dynamic([])
-            _test_dynamic([2])
-            _test_dynamic([2, 3])
-            _test_dynamic([2, 1, 4])
+        test_batch_shape_1parameter(
+            self, Poisson, np.ones, is_univariate=True)
 
     def test_sample_shape(self):
-        def _test_static(rate_shape, n_samples, target_shape):
-            rate = tf.placeholder(tf.float32, rate_shape)
-            poisson = Poisson(rate)
-            samples = poisson.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], None, [2, 3])
-        _test_static([2, 3], 1, [1, 2, 3])
-        _test_static([5], 2, [2, 5])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
-        _test_static(None, 1, None)
-        _test_static(None, None, None)
-        _test_static([None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(rate_shape, n_samples, target_shape):
-                rate = tf.placeholder(tf.float32, None)
-                poisson = Poisson(rate)
-                samples = poisson.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={rate: np.ones(rate_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], 1, [1, 2, 3])
-            _test_dynamic([1, 3], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        test_sample_shape_1parameter_univariate(
+            self, Poisson, np.ones)
 
     def test_log_prob_shape(self):
-        def _test_static(rate_shape, given_shape, target_shape):
-            rate = tf.placeholder(tf.float32, rate_shape)
-            given = tf.placeholder(tf.int32, given_shape)
-            poisson = Poisson(rate)
-            log_p = poisson.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [2, 1], [2, 3])
-        _test_static([5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [3, 2])
-        _test_static([None, 2], [None, 1, 1], [None, None, 2])
-        _test_static(None, [2, 2], None)
-        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3, None])
-        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
-            _test_static([2, 3, 5], [1, 2, 1], None)
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(rate_shape, given_shape, target_shape):
-                rate = tf.placeholder(tf.float32, None)
-                poisson = Poisson(rate)
-                given = tf.placeholder(tf.int32, None)
-                log_p = poisson.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={rate: np.ones(rate_shape),
-                                   given: np.ones(given_shape,
-                                                  np.int32)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
-            _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [1, 2, 1], None)
+        test_log_prob_shape_1parameter_univariate(
+            self, Poisson, np.ones, np.ones)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -1303,113 +658,22 @@ class TestBinomial(tf.test.TestCase):
         self.assertEqual(binomial._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(logits_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            binomial = Binomial(logits, 10)
-            if binomial.get_batch_shape():
-                self.assertEqual(binomial.get_batch_shape().as_list(),
-                                 logits_shape)
-            else:
-                self.assertEqual(None, logits_shape)
-
-        _test_static([])
-        _test_static([2])
-        _test_static([2, 3])
-        _test_static([2, 1, 4])
-        _test_static([None])
-        _test_static([None, 3, 5])
-        _test_static([1, None, 3])
-        _test_static(None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, None)
-                binomial = Binomial(logits, 10)
-                self.assertTrue(binomial.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    binomial.batch_shape.eval(
-                        feed_dict={logits: np.ones(logits_shape)}).tolist(),
-                    logits_shape)
-
-            _test_dynamic([])
-            _test_dynamic([2])
-            _test_dynamic([2, 3])
-            _test_dynamic([2, 1, 4])
+        def _distribution(param):
+            return Binomial(param, 10)
+        test_batch_shape_1parameter(
+            self, _distribution, np.ones, is_univariate=True)
 
     def test_sample_shape(self):
-        def _test_static(logits_shape, n_samples, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            binomial = Binomial(logits, 10)
-            samples = binomial.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], None, [2, 3])
-        _test_static([2, 3], 1, [1, 2, 3])
-        _test_static([5], 2, [2, 5])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
-        _test_static(None, 1, None)
-        _test_static(None, None, None)
-        _test_static([None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, n_samples, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                binomial = Binomial(logits, 10)
-                samples = binomial.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={logits: np.ones(logits_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], 1, [1, 2, 3])
-            _test_dynamic([1, 3], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        def _distribution(param):
+            return Binomial(param, 10)
+        test_sample_shape_1parameter_univariate(
+            self, _distribution, np.ones)
 
     def test_log_prob_shape(self):
-        def _test_static(logits_shape, given_shape, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            given = tf.placeholder(tf.int32, given_shape)
-            binomial = Binomial(logits, 10)
-            log_p = binomial.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [2, 1], [2, 3])
-        _test_static([5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [3, 2])
-        _test_static([None, 2], [None, 1, 1], [None, None, 2])
-        _test_static(None, [2, 2], None)
-        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3, None])
-        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
-            _test_static([2, 3, 5], [1, 2, 1], None)
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, given_shape, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                binomial = Binomial(logits, 10)
-                given = tf.placeholder(tf.int32, None)
-                log_p = binomial.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={logits: np.ones(logits_shape),
-                                   given: np.ones(given_shape,
-                                                  np.int32)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
-            _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [1, 2, 1], None)
+        def _distribution(param):
+            return Binomial(param, 10)
+        test_log_prob_shape_1parameter_univariate(
+            self, _distribution, np.ones, np.ones)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -1485,127 +749,16 @@ class TestInverseGamma(tf.test.TestCase):
         self.assertEqual(inv_gamma._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(alpha_shape, beta_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            inv_gamma = InverseGamma(alpha, beta)
-            if inv_gamma.get_batch_shape():
-                self.assertEqual(inv_gamma.get_batch_shape().as_list(),
-                                 target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3])
-        _test_static([2, 3], [3], [2, 3])
-        _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
-        _test_static([2, 3, 5], [3, 1], [2, 3, 5])
-        _test_static([1, 2, 3], [1, 3], [1, 2, 3])
-        _test_static([None, 3, 5], [3, None], [None, 3, 5])
-        _test_static([None, 1, 3], [None, 1], [None, None, 3])
-        _test_static([2, None], [], [2, None])
-        _test_static(None, [1, 2], None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                inv_gamma = InverseGamma(alpha, beta)
-                self.assertEqual(
-                    inv_gamma.batch_shape.eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [], [2, 3])
-            _test_dynamic([2, 3], [3], [2, 3])
-            _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
-            _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [3, 2], None)
+        test_batch_shape_2parameter_univariate(
+            self, InverseGamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        def _test_static(alpha_shape, beta_shape, n_samples, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            inv_gamma = InverseGamma(alpha, beta)
-            samples = inv_gamma.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], None, [2, 3])
-        _test_static([2, 3], [], 1, [1, 2, 3])
-        _test_static([5], [5], 2, [2, 5])
-        _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
-                     [None, 3, 2])
-        _test_static(None, [1, 2], None, None)
-        _test_static(None, [1, 2], 1, None)
-        _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], [3, 1], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, n_samples,
-                              target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                inv_gamma = InverseGamma(alpha, beta)
-                samples = inv_gamma.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
-            _test_dynamic([1, 3], [], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [2, 1], 1, None)
+        test_sample_shape_2parameter_univariate(
+            self, InverseGamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        def _test_static(alpha_shape, beta_shape, given_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            beta = tf.placeholder(tf.float32, beta_shape)
-            given = tf.placeholder(tf.float32, given_shape)
-            inv_gamma = InverseGamma(alpha, beta)
-            log_p = inv_gamma.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2, 3], [], [2, 3], [2, 3])
-        _test_static([5], [5], [2, 1], [2, 5])
-        _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
-        _test_static(None, [1, 2], [2, 2], None)
-        _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, beta_shape, given_shape,
-                              target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                beta = tf.placeholder(tf.float32, None)
-                inv_gamma = InverseGamma(alpha, beta)
-                given = tf.placeholder(tf.float32, None)
-                log_p = inv_gamma.log_prob(given)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={alpha: np.ones(alpha_shape),
-                                   beta: np.ones(beta_shape),
-                                   given: np.ones(given_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
-            _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+        test_log_prob_shape_2parameter_univariate(
+            self, InverseGamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
