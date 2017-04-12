@@ -11,7 +11,7 @@ from scipy import stats, misc
 
 from tests.distributions.utils import *
 from zhusuan.distributions.univariate import *
-from .utils import *
+
 
 # TODO: test sample value
 
