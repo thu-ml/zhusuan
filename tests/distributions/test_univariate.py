@@ -799,3 +799,71 @@ class TestInverseGamma(tf.test.TestCase):
 
     def test_dtype(self):
         test_dtype_2parameter(self, InverseGamma)
+
+
+class TestLaplace(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError,
+                                         "should be broadcastable to match"):
+                Laplace(loc=tf.ones([2, 1]), scale=tf.ones([2, 4, 3]))
+
+        Laplace(tf.placeholder(tf.float32, [None, 1]),
+                tf.placeholder(tf.float32, [None, 1, 3]))
+
+    def test_value_shape(self):
+        # static
+        laplace = Laplace(loc=tf.placeholder(tf.float32, None),
+                          scale=tf.placeholder(tf.float32, None))
+        self.assertEqual(laplace.get_value_shape().as_list(), [])
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            self.assertEqual(laplace._value_shape().eval().tolist(), [])
+        self.assertEqual(laplace._value_shape().dtype, tf.int32)
+
+    def test_batch_shape(self):
+        test_batch_shape_2parameter_univariate(
+            self, Laplace, np.zeros, np.ones)
+
+    def test_sample_shape(self):
+        test_sample_shape_2parameter_univariate(
+            self, Laplace, np.zeros, np.ones)
+
+    def test_log_prob_shape(self):
+        test_log_prob_shape_2parameter_univariate(
+            self, Laplace, np.zeros, np.ones, np.zeros)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(loc, scale, given):
+                loc = np.array(loc, np.float32)
+                scale = np.array(scale, np.float32)
+                given = np.array(given, np.float32)
+                laplace = Laplace(loc, scale)
+                log_p = laplace.log_prob(given)
+                target_log_p = stats.laplace.logpdf(given, loc, scale=scale)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = laplace.prob(given)
+                target_p = stats.laplace.pdf(given, loc, scale=scale)
+                self.assertAllClose(p.eval(), target_p)
+
+            _test_value(0., 1., [.01, .1, 1., 10., 100.])
+            _test_value([-3, -2, -1, 0, 1, 2, 3],
+                        [.1, 3, 2, 3, 3, 2, .1],
+                        np.transpose([np.arange(1, 20)]))
+            _test_value([1e-5, -1e-5], [[1., 10.], [1e8, 5.]], [7.])
+
+    def test_check_numerics(self):
+        loc = tf.placeholder(tf.float32, [])
+        scale = tf.placeholder(tf.float32, [])
+        given = tf.placeholder(tf.float32, [])
+        laplace = Laplace(loc, scale, check_numerics=True)
+        log_p = laplace.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(scale\).*Tensor had NaN"):
+                log_p.eval(feed_dict={loc: 1., scale: -1., given: 1.})
+
+    def test_dtype(self):
+        test_dtype_2parameter(self, Laplace)
