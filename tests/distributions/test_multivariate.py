@@ -265,6 +265,7 @@ class TestDirichlet(tf.test.TestCase):
             return samples / samples.sum(axis=-1, keepdims=True)
 
         # TODO: This failed with a bug in Tensorflow, waiting fix.
+        # https://github.com/tensorflow/tensorflow/issues/8391
         # _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
         test_log_prob_shape_1parameter_multivariate(
             self, Dirichlet, np.ones, _make_samples)

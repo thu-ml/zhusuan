@@ -242,7 +242,7 @@ def test_sample_shape_2parameter_univariate(
         _test_dynamic([1, 3], [], 2, [2, 1, 3])
         _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
         with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                     "Incompatible shapes"):
+                                           "Incompatible shapes"):
             _test_dynamic([2, 3, 5], [2, 1], 1, None)
 
 
@@ -467,7 +467,8 @@ def test_log_prob_shape_1parameter_multivariate(
     _test_static([None, 2], [None, 1, 1, 2], [None, 1, None])
     _test_static(None, [2, 2], None)
     if Distribution != Dirichlet:
-        # TODO: This failed with a bug in Tensorflow in Dirichlet, waiting fix.
+        # TODO: This failed with a bug in Tensorflow in Dirichlet.
+        # https://github.com/tensorflow/tensorflow/issues/8391
         _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
         _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
     with test_class.assertRaisesRegexp(ValueError, "broadcast to match"):
