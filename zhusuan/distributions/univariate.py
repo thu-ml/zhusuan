@@ -1003,6 +1003,9 @@ class Laplace(Distribution):
         together. Default is 0, which means a single value is an event.
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -1010,6 +1013,7 @@ class Laplace(Distribution):
                  loc,
                  scale,
                  group_event_ndims=0,
+                 is_reparameterized=True,
                  check_numerics=False):
         self._loc = tf.convert_to_tensor(loc)
         self._scale = tf.convert_to_tensor(scale)
@@ -1030,7 +1034,7 @@ class Laplace(Distribution):
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            is_reparameterized=False,
+            is_reparameterized=is_reparameterized,
             group_event_ndims=group_event_ndims)
 
     @property
@@ -1059,6 +1063,10 @@ class Laplace(Distribution):
 
     def _sample(self, n_samples):
         # samples must be sampled from (-1, 1) rather than [-1, 1)
+        loc, scale = self.loc, self.scale
+        if not self.is_reparameterized:
+            loc = tf.stop_gradient(loc)
+            scale = tf.stop_gradient(scale)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
         uniform_samples = tf.random_uniform(
             shape=shape,
@@ -1066,7 +1074,7 @@ class Laplace(Distribution):
                                 self.dtype.as_numpy_dtype(0.)),
             maxval=1.,
             dtype=self.dtype)
-        samples = self.loc - self.scale * tf.sign(uniform_samples) * \
+        samples = loc - scale * tf.sign(uniform_samples) * \
             tf.log1p(-tf.abs(uniform_samples))
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(

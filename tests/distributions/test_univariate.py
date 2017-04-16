@@ -830,6 +830,21 @@ class TestLaplace(tf.test.TestCase):
         test_sample_shape_2parameter_univariate(
             self, Laplace, np.zeros, np.ones)
 
+    def test_sample_reparameterized(self):
+        loc = tf.ones([2, 3])
+        scale = tf.ones([2, 3])
+        laplace_rep = Laplace(loc, scale)
+        samples = laplace_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        loc_grads, scale_grads = tf.gradients(samples, [loc, scale])
+        self.assertTrue(loc_grads is not None)
+        self.assertTrue(scale_grads is not None)
+
+        laplace_no_rep = Laplace(loc, scale, is_reparameterized=False)
+        samples = laplace_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        loc_grads, scale_grads = tf.gradients(samples, [loc, scale])
+        self.assertEqual(loc_grads, None)
+        self.assertEqual(scale_grads, None)
+
     def test_log_prob_shape(self):
         test_log_prob_shape_2parameter_univariate(
             self, Laplace, np.zeros, np.ones, np.zeros)
