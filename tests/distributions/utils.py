@@ -294,8 +294,10 @@ def test_batch_shape_1parameter(
         param = tf.placeholder(tf.float32, param_shape)
         dist = Distribution(param)
         if dist.get_batch_shape():
+            if not is_univariate:
+                param_shape = param_shape[:-1]
             test_class.assertEqual(dist.get_batch_shape().as_list(),
-                           param_shape if is_univariate else param_shape[:-1])
+                                   param_shape)
         else:
             test_class.assertEqual(None, param_shape)
 
