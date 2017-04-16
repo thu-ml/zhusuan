@@ -29,8 +29,9 @@ log_delta = 10.0
 def lntm(observed, D, K, V):
     with zs.BayesianNet(observed=observed) as model:
         log_alpha = zs.Normal('log_alpha', 0., 0.)
-        beta = zs.Normal('beta', tf.zeros([K, V]), tf.ones([K, V]) * log_delta)
-        eta = zs.Normal('eta', tf.zeros([D, K]), tf.ones([D, K]) * log_alpha)
+        eta = zs.Normal('eta', tf.zeros([D, K]), tf.ones([D, K]) * log_alpha, group_event_ndims=1)
+        beta = zs.Normal('beta', tf.zeros([K, V]), tf.ones([K, V]) * log_delta, group_event_ndims=1)
+
     return model
 
 
@@ -80,7 +81,7 @@ if __name__ == "__main__":
 
     def joint_obj(observed):
         model = lntm(observed, D, K, V)
-        # [D], [K]
+        # [D], [K], []
         log_p_eta, log_p_beta, log_p_alpha = \
             model.local_log_prob(['eta', 'beta', 'log_alpha'])
 
@@ -88,7 +89,7 @@ if __name__ == "__main__":
         phi = tf.nn.softmax(observed['beta'])
         pred = tf.matmul(theta, phi)
 
-        # D
+        # [D]
         log_px = tf.reduce_sum(observed['x'] * tf.log(pred), -1)
 
         return log_p_eta, log_p_beta, log_px, log_p_alpha
@@ -96,7 +97,7 @@ if __name__ == "__main__":
 
     def e_obj(observed):
         log_p_eta, _, log_px, _ = joint_obj(observed)
-        return tf.reduce_sum(log_p_eta, -1) + log_px
+        return log_p_eta + log_px
 
 
     lp_eta, lp_beta, lp_x, lp_alpha = \
