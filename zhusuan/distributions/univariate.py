@@ -25,6 +25,7 @@ __all__ = [
     'Poisson',
     'Binomial',
     'InverseGamma',
+    'Laplace',
 ]
 
 
@@ -982,6 +983,112 @@ class InverseGamma(Distribution):
                 log_given = tf.identity(log_given)
         return alpha * log_beta - lgamma_alpha - (alpha + 1) * log_given - \
             beta / given
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Laplace(Distribution):
+    """
+    The class of univariate Laplace distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param loc: A `float` Tensor. The location parameter of the Laplace
+        distribution. Should be broadcastable to match `scale`.
+    :param scale: A `float` Tensor. The scale parameter of the Laplace
+        distribution. Should be positive and broadcastable to match `loc`.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 loc,
+                 scale,
+                 group_event_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False):
+        self._loc = tf.convert_to_tensor(loc)
+        self._scale = tf.convert_to_tensor(scale)
+        dtype = assert_same_float_dtype(
+            [(self._loc, 'Laplace.loc'),
+             (self._scale, 'Laplace.scale')])
+
+        try:
+            tf.broadcast_static_shape(self._loc.get_shape(),
+                                      self._scale.get_shape())
+        except ValueError:
+            raise ValueError(
+                "loc and scale should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._loc.get_shape(), self._scale.get_shape()))
+        self._check_numerics = check_numerics
+        super(Laplace, self).__init__(
+            dtype=dtype,
+            param_dtype=dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def loc(self):
+        """The location parameter of the Laplace distribution."""
+        return self._loc
+
+    @property
+    def scale(self):
+        """The scale parameter of the Laplace distribution."""
+        return self._scale
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.broadcast_dynamic_shape(tf.shape(self.loc),
+                                          tf.shape(self.scale))
+
+    def _get_batch_shape(self):
+        return tf.broadcast_static_shape(self.loc.get_shape(),
+                                         self.scale.get_shape())
+
+    def _sample(self, n_samples):
+        # samples must be sampled from (-1, 1) rather than [-1, 1)
+        loc, scale = self.loc, self.scale
+        if not self.is_reparameterized:
+            loc = tf.stop_gradient(loc)
+            scale = tf.stop_gradient(scale)
+        shape = tf.concat([[n_samples], self.batch_shape], 0)
+        uniform_samples = tf.random_uniform(
+            shape=shape,
+            minval=np.nextafter(self.dtype.as_numpy_dtype(-1.),
+                                self.dtype.as_numpy_dtype(0.)),
+            maxval=1.,
+            dtype=self.dtype)
+        samples = loc - scale * tf.sign(uniform_samples) * \
+            tf.log1p(-tf.abs(uniform_samples))
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).concatenate(
+                self.get_batch_shape()))
+        return samples
+
+    def _log_prob(self, given):
+        log_scale = tf.log(self.scale)
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_scale, "log(scale)")]):
+                log_scale = tf.identity(log_scale)
+        return -np.log(2.) - log_scale - tf.abs(given - self.loc) / self.scale
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))

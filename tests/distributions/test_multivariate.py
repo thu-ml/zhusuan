@@ -65,129 +65,29 @@ class TestMultinomial(tf.test.TestCase):
         self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(logits_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            dist = Multinomial(logits, 10)
-            if dist.get_batch_shape():
-                self.assertEqual(dist.get_batch_shape().as_list(),
-                                 logits_shape[:-1])
-            else:
-                self.assertEqual(None, logits_shape)
-
-        _test_static([2])
-        _test_static([2, 3])
-        _test_static([2, 1, 4])
-        _test_static([None])
-        _test_static([None, 3, 5])
-        _test_static([1, None, 3])
-        _test_static([None, 1, 10])
-        _test_static(None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, None)
-                dist = Multinomial(logits, 10)
-                self.assertTrue(dist.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    dist.batch_shape.eval(
-                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
-                    logits_shape[:-1])
-
-            _test_dynamic([2])
-            _test_dynamic([2, 3])
-            _test_dynamic([2, 1, 4])
+        def _distribution(param):
+            return Multinomial(param, 10)
+        test_batch_shape_1parameter(
+            self, _distribution, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        def _test_static(logits_shape, n_samples, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            dist = Multinomial(logits, 10)
-            samples = dist.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2], None, [2])
-        _test_static([2], 1, [1, 2])
-        _test_static([2, 3], None, [2, 3])
-        _test_static([2, 3], 1, [1, 2, 3])
-        _test_static([5], 2, [2, 5])
-        _test_static([1, 2, 4], 3, [3, 1, 2, 4])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
-        _test_static(None, None, None)
-        _test_static(None, 1, None)
-        _test_static([None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, n_samples, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                dist = Multinomial(logits, 10)
-                samples = dist.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2], 1, [1, 2])
-            _test_dynamic([2, 3], 1, [1, 2, 3])
-            _test_dynamic([1, 3], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        def _distribution(param):
+            return Multinomial(param, 10)
+        test_sample_shape_1parameter_multivariate(
+            self, _distribution, np.zeros)
 
     def test_log_prob_shape(self):
-        def _test_static(logits_shape, given_shape, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            given = tf.placeholder(tf.int32, given_shape)
-            dist = Multinomial(logits, 1)
-            log_p = dist.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
+        def _distribution(param):
+            return Multinomial(param, 10)
 
-        _test_static([2, 3], [2, 3], [2])
-        _test_static([2, 5], [5], [2])
-        _test_static([1, 2, 4], [4], [1, 2])
-        _test_static([3, 1, 5], [1, 4, 5], [3, 4])
-        _test_static([1, 4], [2, 5, 4], [2, 5])
-        _test_static([None, 2, 4], [3, None, 4], [3, 2])
-        _test_static([None, 2], [None, 1, 1, 2], [None, 1, None])
-        _test_static(None, [2, 2], None)
-        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
-        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
-            _test_static([2, 3, 5], [1, 2, 5], None)
+        def _make_samples(shape):
+            samples = np.zeros(shape)
+            samples = samples.reshape((-1, shape[-1]))
+            samples[:, 0] = 1
+            return samples.reshape(shape)
 
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, given_shape, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                n_experiments = tf.placeholder(tf.int32, [])
-                dist = Multinomial(logits, n_experiments)
-                given = tf.placeholder(tf.int32, None)
-                log_p = dist.log_prob(given)
-
-                def _make_samples(shape):
-                    samples = np.zeros(shape)
-                    samples = samples.reshape((-1, shape[-1]))
-                    samples[:, 0] = 1
-                    return samples.reshape(shape)
-
-                logits_ = _make_samples(logits_shape)
-                given_ = _make_samples(given_shape)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={logits: logits_,
-                                   n_experiments: 1,
-                                   given: given_}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3, 3], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [2, 2, 3], [2, 2])
-            _test_dynamic([1, 5, 1], [1, 2, 1, 1], [1, 2, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [1, 2, 5], None)
+        test_log_prob_shape_1parameter_multivariate(
+            self, _distribution, _make_samples, _make_samples)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -258,126 +158,22 @@ class TestOnehotCategorical(tf.test.TestCase):
         self.assertEqual(cat._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(logits_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            cat = OnehotCategorical(logits)
-            if cat.get_batch_shape():
-                self.assertEqual(cat.get_batch_shape().as_list(),
-                                 logits_shape[:-1])
-            else:
-                self.assertEqual(None, logits_shape)
-
-        _test_static([2])
-        _test_static([2, 3])
-        _test_static([2, 1, 4])
-        _test_static([None])
-        _test_static([None, 3, 5])
-        _test_static([1, None, 3])
-        _test_static(None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape):
-                logits = tf.placeholder(tf.float32, None)
-                cat = OnehotCategorical(logits)
-                self.assertTrue(cat.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    cat.batch_shape.eval(
-                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
-                    logits_shape[:-1])
-
-            _test_dynamic([2])
-            _test_dynamic([2, 3])
-            _test_dynamic([2, 1, 4])
+        test_batch_shape_1parameter(
+            self, OnehotCategorical, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        def _test_static(logits_shape, n_samples, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            cat = OnehotCategorical(logits)
-            samples = cat.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2], None, [2])
-        _test_static([2], 1, [1, 2])
-        _test_static([2, 3], None, [2, 3])
-        _test_static([2, 3], 1, [1, 2, 3])
-        _test_static([5], 2, [2, 5])
-        _test_static([1, 2, 4], 3, [3, 1, 2, 4])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
-        _test_static(None, None, None)
-        _test_static(None, 1, None)
-        _test_static([None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, n_samples, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                cat = OnehotCategorical(logits)
-                samples = cat.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={logits: np.zeros(logits_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2], 1, [1, 2])
-            _test_dynamic([2, 3], 1, [1, 2, 3])
-            _test_dynamic([1, 3], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        test_sample_shape_1parameter_multivariate(
+            self, OnehotCategorical, np.zeros)
 
     def test_log_prob_shape(self):
-        def _test_static(logits_shape, given_shape, target_shape):
-            logits = tf.placeholder(tf.float32, logits_shape)
-            given = tf.placeholder(tf.int32, given_shape)
-            cat = OnehotCategorical(logits)
-            log_p = cat.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
+        def _make_samples(shape):
+            samples = np.zeros(shape)
+            samples = samples.reshape((-1, shape[-1]))
+            samples[:, 0] = 1
+            return samples.reshape(shape)
 
-        _test_static([2, 3], [2, 3], [2])
-        _test_static([2, 5], [5], [2])
-        _test_static([1, 2, 4], [4], [1, 2])
-        _test_static([3, 1, 5], [1, 4, 5], [3, 4])
-        _test_static([1, 4], [2, 5, 4], [2, 5])
-        _test_static([None, 2, 4], [3, None, 4], [3, 2])
-        _test_static([None, 2], [None, 1, 1, 2], [None, 1, None])
-        _test_static(None, [2, 2], None)
-        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
-        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
-            _test_static([2, 3, 5], [1, 2, 5], None)
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(logits_shape, given_shape, target_shape):
-                logits = tf.placeholder(tf.float32, None)
-                dist = OnehotCategorical(logits)
-                given = tf.placeholder(tf.int32, None)
-                log_p = dist.log_prob(given)
-
-                def _make_valid_samples(shape):
-                    samples = np.zeros(shape)
-                    samples = samples.reshape((-1, shape[-1]))
-                    samples[:, 0] = 1
-                    return samples.reshape(shape)
-
-                logits_ = _make_valid_samples(logits_shape)
-                given_ = _make_valid_samples(given_shape)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={logits: logits_,
-                                   given: given_}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3, 3], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [2, 2, 3], [2, 2])
-            _test_dynamic([1, 5, 1], [1, 2, 1, 1], [1, 2, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [1, 2, 5], None)
+        test_log_prob_shape_1parameter_multivariate(
+            self, OnehotCategorical, _make_samples, _make_samples)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -456,125 +252,23 @@ class TestDirichlet(tf.test.TestCase):
         self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        # static
-        def _test_static(alpha_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            dist = Dirichlet(alpha)
-            if dist.get_batch_shape():
-                self.assertEqual(dist.get_batch_shape().as_list(),
-                                 alpha_shape[:-1])
-            else:
-                self.assertEqual(None, alpha_shape)
-
-        _test_static([2])
-        _test_static([2, 3])
-        _test_static([2, 1, 4])
-        _test_static([None])
-        _test_static([None, 3, 5])
-        _test_static([1, None, 3])
-        _test_static(None)
-
-        # dynamic
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                dist = Dirichlet(alpha)
-                self.assertTrue(dist.batch_shape.dtype is tf.int32)
-                self.assertEqual(
-                    dist.batch_shape.eval(
-                        feed_dict={alpha: np.zeros(alpha_shape)}).tolist(),
-                    alpha_shape[:-1])
-
-            _test_dynamic([2])
-            _test_dynamic([2, 3])
-            _test_dynamic([2, 1, 4])
+        test_batch_shape_1parameter(
+            self, Dirichlet, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        def _test_static(alpha_shape, n_samples, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            dist = Dirichlet(alpha)
-            samples = dist.sample(n_samples)
-            if samples.get_shape():
-                self.assertEqual(samples.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
-
-        _test_static([2], None, [2])
-        _test_static([2], 1, [1, 2])
-        _test_static([2, 3], None, [2, 3])
-        _test_static([2, 3], 1, [1, 2, 3])
-        _test_static([5], 2, [2, 5])
-        _test_static([1, 2, 4], 3, [3, 1, 2, 4])
-        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
-        _test_static(None, None, None)
-        _test_static(None, 1, None)
-        _test_static([None, 1, 10], None, [None, 1, 10])
-        _test_static([3, None], 2, [2, 3, None])
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, n_samples, target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                dist = Dirichlet(alpha)
-                samples = dist.sample(n_samples)
-                self.assertEqual(
-                    tf.shape(samples).eval(
-                        feed_dict={alpha: np.zeros(alpha_shape)}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2], 1, [1, 2])
-            _test_dynamic([2, 3], 1, [1, 2, 3])
-            _test_dynamic([1, 3], 2, [2, 1, 3])
-            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        test_sample_shape_1parameter_multivariate(
+            self, Dirichlet, np.zeros)
 
     def test_log_prob_shape(self):
-        def _test_static(alpha_shape, given_shape, target_shape):
-            alpha = tf.placeholder(tf.float32, alpha_shape)
-            given = tf.placeholder(tf.float32, given_shape)
-            dist = Dirichlet(alpha)
-            log_p = dist.log_prob(given)
-            if log_p.get_shape():
-                self.assertEqual(log_p.get_shape().as_list(), target_shape)
-            else:
-                self.assertEqual(None, target_shape)
+        def _make_samples(shape):
+            samples = np.ones(shape, dtype=np.float32)
+            return samples / samples.sum(axis=-1, keepdims=True)
 
-        _test_static([2, 3], [2, 3], [2])
-        _test_static([2, 5], [5], [2])
-        _test_static([1, 2, 4], [4], [1, 2])
-        _test_static([3, 1, 5], [1, 4, 5], [3, 4])
-        _test_static([1, 4], [2, 5, 4], [2, 5])
-        _test_static([None, 2, 4], [3, None, 4], [3, 2])
-        _test_static([None, 2], [None, 1, 1, 2], [None, 1, None])
-        _test_static(None, [2, 2], None)
         # TODO: This failed with a bug in Tensorflow, waiting fix.
+        # https://github.com/tensorflow/tensorflow/issues/8391
         # _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
-        with self.assertRaisesRegexp(ValueError, "broadcast to match"):
-            _test_static([2, 3, 5], [1, 2, 5], None)
-
-        with self.test_session(use_gpu=True):
-            def _test_dynamic(alpha_shape, given_shape, target_shape):
-                alpha = tf.placeholder(tf.float32, None)
-                dist = Dirichlet(alpha)
-                given = tf.placeholder(tf.float32, None)
-                log_p = dist.log_prob(given)
-
-                def _make_valid_samples(shape):
-                    samples = np.ones(shape, dtype=np.float32)
-                    return samples / samples.sum(axis=-1, keepdims=True)
-
-                alpha_ = np.ones(alpha_shape)
-                given_ = _make_valid_samples(given_shape)
-                self.assertEqual(
-                    tf.shape(log_p).eval(
-                        feed_dict={alpha: alpha_,
-                                   given: given_}).tolist(),
-                    target_shape)
-
-            _test_dynamic([2, 3, 3], [1, 3], [2, 3])
-            _test_dynamic([1, 3], [2, 2, 3], [2, 2])
-            _test_dynamic([1, 5, 2], [1, 2, 1, 2], [1, 2, 5])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "Incompatible shapes"):
-                _test_dynamic([2, 3, 5], [1, 2, 5], None)
+        test_log_prob_shape_1parameter_multivariate(
+            self, Dirichlet, np.ones, _make_samples)
 
     def test_value(self):
         def dirichlet_logpdf(x, alpha):

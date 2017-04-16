@@ -7,6 +7,7 @@ from __future__ import division
 
 import tensorflow as tf
 import numpy as np
+from zhusuan.distributions.multivariate import Dirichlet
 
 
 def test_dtype_2parameter(test_class, Distribution):
@@ -153,3 +154,344 @@ def test_dtype_1parameter_continuous(test_class, Distribution):
     _test_log_prob_dtype(tf.float16)
     _test_log_prob_dtype(tf.float32)
     _test_log_prob_dtype(tf.float64)
+
+
+def test_batch_shape_2parameter_univariate(
+    test_class, Distribution, make_param1, make_param2):
+    # static
+    def _test_static(param1_shape, param2_shape, target_shape):
+        param1 = tf.placeholder(tf.float32, param1_shape)
+        param2 = tf.placeholder(tf.float32, param2_shape)
+        dist = Distribution(param1, param2)
+        if dist.get_batch_shape():
+            test_class.assertEqual(dist.get_batch_shape().as_list(),
+                                   target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2, 3], [], [2, 3])
+    _test_static([2, 3], [3], [2, 3])
+    _test_static([2, 1, 4], [2, 3, 4], [2, 3, 4])
+    _test_static([2, 3, 5], [3, 1], [2, 3, 5])
+    _test_static([1, 2, 3], [1, 3], [1, 2, 3])
+    _test_static([None, 3, 5], [3, None], [None, 3, 5])
+    _test_static([None, 1, 3], [None, 1], [None, None, 3])
+    _test_static([None, 1, 10], [None, 1, 10], [None, 1, 10])
+    _test_static([2, None], [], [2, None])
+    _test_static(None, [1, 2], None)
+
+    # dynamic
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param1_shape, param2_shape, target_shape):
+            param1 = tf.placeholder(tf.float32, None)
+            param2 = tf.placeholder(tf.float32, None)
+            dist = Distribution(param1, param2)
+            test_class.assertTrue(dist.batch_shape.dtype is tf.int32)
+            test_class.assertEqual(
+                dist.batch_shape.eval(
+                    feed_dict={param1: make_param1(param1_shape),
+                               param2: make_param2(param2_shape)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2, 3], [], [2, 3])
+        _test_dynamic([2, 3], [3], [2, 3])
+        _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
+        _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
+        with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                           "Incompatible shapes"):
+            _test_dynamic([2, 3, 5], [3, 2], None)
+
+
+def test_sample_shape_2parameter_univariate(
+    test_class, Distribution, make_param1, make_param2):
+    def _test_static(param1_shape, param2_shape, n_samples, target_shape):
+        param1 = tf.placeholder(tf.float32, param1_shape)
+        param2 = tf.placeholder(tf.float32, param2_shape)
+        dist = Distribution(param1, param2)
+        samples = dist.sample(n_samples)
+        if samples.get_shape():
+            test_class.assertEqual(samples.get_shape().as_list(), target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2, 3], [], None, [2, 3])
+    _test_static([2, 3], [], 1, [1, 2, 3])
+    _test_static([5], [5], 2, [2, 5])
+    _test_static([2, 1, 4], [1, 2, 4], 3, [3, 2, 2, 4])
+    _test_static([None, 2], [3, None], tf.placeholder(tf.int32, []),
+                 [None, 3, 2])
+    _test_static(None, [1, 2], None, None)
+    _test_static(None, [1, 2], 1, None)
+    _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
+    _test_static([3, None], [3, 1], 2, [2, 3, None])
+
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param1_shape, param2_shape, n_samples,
+                          target_shape):
+            param1 = tf.placeholder(tf.float32, None)
+            param2 = tf.placeholder(tf.float32, None)
+            dist = Distribution(param1, param2)
+            samples = dist.sample(n_samples)
+            test_class.assertEqual(
+                tf.shape(samples).eval(
+                    feed_dict={param1: make_param1(param1_shape),
+                               param2: make_param2(param2_shape)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2, 3], [2, 1], 1, [1, 2, 3])
+        _test_dynamic([1, 3], [], 2, [2, 1, 3])
+        _test_dynamic([2, 1, 5], [3, 1], 3, [3, 2, 3, 5])
+        with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                           "Incompatible shapes"):
+            _test_dynamic([2, 3, 5], [2, 1], 1, None)
+
+
+def test_log_prob_shape_2parameter_univariate(
+    test_class, Distribution, make_param1, make_param2, make_given):
+    def _test_static(param1_shape, param2_shape, given_shape, target_shape):
+        param1 = tf.placeholder(tf.float32, param1_shape)
+        param2 = tf.placeholder(tf.float32, param2_shape)
+        given = tf.placeholder(tf.float32, given_shape)
+        dist = Distribution(param1, param2)
+        log_p = dist.log_prob(given)
+        if log_p.get_shape():
+            test_class.assertEqual(log_p.get_shape().as_list(), target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2, 3], [], [2, 3], [2, 3])
+    _test_static([5], [5], [2, 1], [2, 5])
+    _test_static([None, 2], [3, None], [None, 1, 1], [None, 3, 2])
+    _test_static(None, [1, 2], [2, 2], None)
+    _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
+
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param1_shape, param2_shape, given_shape,
+                          target_shape):
+            param1 = tf.placeholder(tf.float32, None)
+            param2 = tf.placeholder(tf.float32, None)
+            dist = Distribution(param1, param2)
+            given = tf.placeholder(tf.float32, None)
+            log_p = dist.log_prob(given)
+            test_class.assertEqual(
+                tf.shape(log_p).eval(
+                    feed_dict={param1: make_param1(param1_shape),
+                               param2: make_param2(param2_shape),
+                               given: make_given(given_shape)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2, 3], [2, 1], [1, 3], [2, 3])
+        _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
+        _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
+        with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                           "Incompatible shapes"):
+            _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
+
+def test_batch_shape_1parameter(
+    test_class, Distribution, make_param, is_univariate):
+    # static
+    def _test_static(param_shape):
+        param = tf.placeholder(tf.float32, param_shape)
+        dist = Distribution(param)
+        if dist.get_batch_shape():
+            if not is_univariate:
+                param_shape = param_shape[:-1]
+            test_class.assertEqual(dist.get_batch_shape().as_list(),
+                                   param_shape)
+        else:
+            test_class.assertEqual(None, param_shape)
+
+    if is_univariate:
+        _test_static([])
+    _test_static([2])
+    _test_static([2, 3])
+    _test_static([2, 1, 4])
+    _test_static([None])
+    _test_static([None, 3, 5])
+    _test_static([1, None, 3])
+    _test_static(None)
+
+    # dynamic
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param_shape):
+            param = tf.placeholder(tf.float32, None)
+            dist = Distribution(param)
+            test_class.assertTrue(dist.batch_shape.dtype is tf.int32)
+            test_class.assertEqual(
+                dist.batch_shape.eval(
+                    feed_dict={param: make_param(param_shape)}).tolist(),
+                param_shape if is_univariate else param_shape[:-1])
+
+        if is_univariate:
+            _test_dynamic([])
+        _test_dynamic([2])
+        _test_dynamic([2, 3])
+        _test_dynamic([2, 1, 4])
+
+
+def test_sample_shape_1parameter_univariate(
+    test_class, Distribution, make_param):
+    def _test_static(param_shape, n_samples, target_shape):
+        param = tf.placeholder(tf.float32, param_shape)
+        dist = Distribution(param)
+        samples = dist.sample(n_samples)
+        if samples.get_shape():
+            test_class.assertEqual(samples.get_shape().as_list(), target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2, 3], None, [2, 3])
+    _test_static([2, 3], 1, [1, 2, 3])
+    _test_static([5], 2, [2, 5])
+    _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+    _test_static(None, 1, None)
+    _test_static(None, None, None)
+    _test_static([None, 1, 10], None, [None, 1, 10])
+    _test_static([3, None], 2, [2, 3, None])
+
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param_shape, n_samples, target_shape):
+            param = tf.placeholder(tf.float32, None)
+            dist = Distribution(param)
+            samples = dist.sample(n_samples)
+            test_class.assertEqual(
+                tf.shape(samples).eval(
+                    feed_dict={param: make_param(param_shape)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2, 3], 1, [1, 2, 3])
+        _test_dynamic([1, 3], 2, [2, 1, 3])
+        _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+
+
+def test_log_prob_shape_1parameter_univariate(
+    test_class, Distribution, make_param, make_given):
+    def _test_static(param_shape, given_shape, target_shape):
+        param = tf.placeholder(tf.float32, param_shape)
+        dist = Distribution(param)
+        given = tf.placeholder(dist.dtype, given_shape)
+        log_p = dist.log_prob(given)
+        if log_p.get_shape():
+            test_class.assertEqual(log_p.get_shape().as_list(), target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2, 3], [2, 1], [2, 3])
+    _test_static([5], [2, 1], [2, 5])
+    _test_static([None, 2], [3, None], [3, 2])
+    _test_static([None, 2], [None, 1, 1], [None, None, 2])
+    _test_static(None, [2, 2], None)
+    _test_static([3, None], [3, 2, 1, 1], [3, 2, 3, None])
+    with test_class.assertRaisesRegexp(ValueError, "broadcast to match"):
+        _test_static([2, 3, 5], [1, 2, 1], None)
+
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param_shape, given_shape, target_shape):
+            param = tf.placeholder(tf.float32, None)
+            dist = Distribution(param)
+            given = tf.placeholder(dist.dtype, None)
+            log_p = dist.log_prob(given)
+            numpy_given_dtype = dist.dtype.as_numpy_dtype
+            test_class.assertEqual(
+                tf.shape(log_p).eval(
+                    feed_dict={param: make_param(param_shape),
+                               given: make_given(given_shape,
+                                                 numpy_given_dtype)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2, 3], [1, 3], [2, 3])
+        _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
+        _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
+        with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                           "Incompatible shapes"):
+            _test_dynamic([2, 3, 5], [1, 2, 1], None)
+
+
+def test_sample_shape_1parameter_multivariate(
+    test_class, Distribution, make_param):
+    def _test_static(param_shape, n_samples, target_shape):
+        param = tf.placeholder(tf.float32, param_shape)
+        dist = Distribution(param)
+        samples = dist.sample(n_samples)
+        if samples.get_shape():
+            test_class.assertEqual(samples.get_shape().as_list(), target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2], None, [2])
+    _test_static([2], 1, [1, 2])
+    _test_static([2, 3], None, [2, 3])
+    _test_static([2, 3], 1, [1, 2, 3])
+    _test_static([5], 2, [2, 5])
+    _test_static([1, 2, 4], 3, [3, 1, 2, 4])
+    _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+    _test_static(None, None, None)
+    _test_static(None, 1, None)
+    _test_static([None, 1, 10], None, [None, 1, 10])
+    _test_static([3, None], 2, [2, 3, None])
+
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param_shape, n_samples, target_shape):
+            param = tf.placeholder(tf.float32, None)
+            dist = Distribution(param)
+            samples = dist.sample(n_samples)
+            test_class.assertEqual(
+                tf.shape(samples).eval(
+                    feed_dict={param: make_param(param_shape)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2], 1, [1, 2])
+        _test_dynamic([2, 3], 1, [1, 2, 3])
+        _test_dynamic([1, 3], 2, [2, 1, 3])
+        _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+
+
+def test_log_prob_shape_1parameter_multivariate(
+    test_class, Distribution, make_param, make_given):
+    def _test_static(param_shape, given_shape, target_shape):
+        param = tf.placeholder(tf.float32, param_shape)
+        dist = Distribution(param)
+        given = tf.placeholder(dist.dtype, given_shape)
+        log_p = dist.log_prob(given)
+        if log_p.get_shape():
+            test_class.assertEqual(log_p.get_shape().as_list(), target_shape)
+        else:
+            test_class.assertEqual(None, target_shape)
+
+    _test_static([2, 3], [2, 3], [2])
+    _test_static([2, 5], [5], [2])
+    _test_static([1, 2, 4], [4], [1, 2])
+    _test_static([3, 1, 5], [1, 4, 5], [3, 4])
+    _test_static([1, 4], [2, 5, 4], [2, 5])
+    _test_static([None, 2, 4], [3, None, 4], [3, 2])
+    _test_static([None, 2], [None, 1, 1, 2], [None, 1, None])
+    _test_static(None, [2, 2], None)
+    if Distribution != Dirichlet:
+        # TODO: This failed with a bug in Tensorflow in Dirichlet.
+        # https://github.com/tensorflow/tensorflow/issues/8391
+        _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
+        _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
+    with test_class.assertRaisesRegexp(ValueError, "broadcast to match"):
+        _test_static([2, 3, 5], [1, 2, 5], None)
+
+    with test_class.test_session(use_gpu=True):
+        def _test_dynamic(param_shape, given_shape, target_shape):
+            param = tf.placeholder(tf.float32, None)
+            dist = Distribution(param)
+            given = tf.placeholder(dist.dtype, None)
+            log_p = dist.log_prob(given)
+
+            test_class.assertEqual(
+                tf.shape(log_p).eval(
+                    feed_dict={param: make_param(param_shape),
+                               given: make_given(given_shape)}).tolist(),
+                target_shape)
+
+        _test_dynamic([2, 3, 3], [1, 3], [2, 3])
+        _test_dynamic([1, 3], [2, 2, 3], [2, 2])
+        _test_dynamic([1, 5, 2], [1, 2, 1, 1], [1, 2, 5])
+        if Distribution != Dirichlet:
+            _test_dynamic([1, 5, 1], [1, 2, 1, 1], [1, 2, 5])
+        with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                           "Incompatible shapes"):
+            _test_dynamic([2, 3, 5], [1, 2, 5], None)
