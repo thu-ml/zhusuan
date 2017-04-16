@@ -162,6 +162,45 @@ class ExponentialWeightedMovingVariance:
 
 
 class HMC:
+    """
+    Hamiltonian Monte Carlo (Neal, 2011) with adaptation for stepsize 
+    (Hoffman, 2014) and mass. The usage is similar with a Tensorflow
+    optimizer. 
+    
+    The HMC class supports running multiple MCMC chains in parallel.
+    To use the sampler, the user first create a variable storing the 
+    initial sample, whose shape is [chain axes..., data axes...]. There
+    can be arbitary number of chain axes followed by arbitary number of 
+    data axes. Then the user provides a `log_joint` function which returns
+    a [chain axes...] tensor, which is the log joint density for each chain.
+    Finally, the user runs the operation returned by `sample`, that updates
+    the sample stored in the variable.
+    
+    The variable to sample is stored in a `Variable`. 
+    Users first create an :class:`~zhusuan.HMC` class, and
+    then call the `sample` method to create a sampling operation, which
+    updates the variable.
+
+    Note: Currently we do not support invoking the `sample` method 
+    multiple times per :class:`~zhusuan.HMC` class. Please declare one
+    :class:`~zhusuan.HMC` class per each invoke of the `sample` method.
+    
+    Note: When the adaptations are on, the sampler is not reversible. 
+    To guarantee current equilibrium, the user should only turn on 
+    the adaptations during the burnin iterations, and turn them off 
+    when collecting samples.
+
+    :param step_size: Initial step size.
+    :param n_leapfrogs: Number of leapfrog steps.
+    :param adapt_stepsize: A `bool` tensor, indicating whether to adapt the step size. 
+    :param target_acceptance_rate: The desired acceptance rate for adapting the step size.
+    :param gamma: Parameter for adapting the step size, see (Hoffman, 2014).
+    :param t0: Parameter for adapting the step size, see (Hoffman, 2014).
+    :param kappa: Parameter for adapting the step size, see (Hoffman, 2014).
+    :param adapt_mass: A `bool` tensor, indicating whether to adapt the step size. 
+    :param mass_collect_iters: The beginning iteration to change the mass.
+    :param mass_decay: The decay of computing expoential moving variance.
+    """
     def __init__(self, step_size=1, n_leapfrogs=10,
                  adapt_step_size=None, target_acceptance_rate=0.8,
                  gamma=0.05, t0=100, kappa=0.75,
@@ -299,7 +338,23 @@ class HMC:
     # Data shape should not change
     def sample(self, log_joint, observed, latent):
         """
-        sample(log_joint, observed, latent)
+        Creates some operations to update the sample.
+
+        :param log_joint: A function that accepts a dictionary argument of
+            ``(string, Tensor)`` pairs, which are mappings from all
+            `StochasticTensor` names in the model to their observed values. The
+            function should return a Tensor, representing the log joint likelihood
+            of the model.
+        :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
+            names of observed `StochasticTensor` s to their values
+        :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
+            Mapping from names of latent `StochasticTensor` s to their samples and
+            log probabilities.
+        :return: a list of Tensorflow operations: (1) the operation to
+        update the sample, (2) the initial momentum, (3) the initial Hamiltonian,
+        (4) the Hamiltonian of the proposal, (5) the initial log joint density,
+        (6) the updated log joint density, (7) the acceptance rate, (8) the 
+        updated step size.
         """
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
