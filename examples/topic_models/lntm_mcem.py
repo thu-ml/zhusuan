@@ -20,8 +20,6 @@ from examples.utils import dataset
 
 
 # corresponding to eta in LDA. Larger log_delta leads to sparser topic.
-# If we place a Gamma prior on precision, we should be able to sample it
-# analytically.
 log_delta = 10.0
 
 
@@ -54,8 +52,8 @@ if __name__ == "__main__":
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True, 
                  target_acceptance_rate=0.6)
     epoches = 100
-    learning_rate_0 = 0.1
-    t0 = 50
+    learning_rate_0 = 1.0
+    t0 = 10
 
     # Padding
     rem = D - X.shape[0] % D
@@ -67,7 +65,6 @@ if __name__ == "__main__":
     Eta = np.zeros((X.shape[0], K), dtype=np.float32)
     Eta_mean = np.zeros((K), dtype=np.float32)
     Eta_logstd = np.zeros((K), dtype=np.float32)
-
 
     # Build the computation graph
     x = tf.placeholder(tf.float32, shape=[D, V], name='x')
@@ -152,7 +149,7 @@ if __name__ == "__main__":
                                  feed_dict={x: x_batch,
                                             eta_mean: Eta_mean,
                                             eta_logstd: Eta_logstd,
-                                            learning_rate_ph: learning_rate})
+                                            learning_rate_ph: learning_rate * t0 / (t0 + epoch)})
                 lls.append(ll)
 
             # Update hyperparameters
