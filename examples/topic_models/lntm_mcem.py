@@ -26,10 +26,11 @@ log_delta = 10.0
 
 
 @zs.reuse('model')
-def lntm(observed, D, K, V):
+def lntm(observed, D, K, V, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
-        log_alpha = zs.Normal('log_alpha', 0., 0.)
-        eta = zs.Normal('eta', tf.zeros([D, K]), tf.ones([D, K]) * log_alpha, group_event_ndims=1)
+        eta = zs.Normal('eta', tf.tile(tf.expand_dims(eta_mean, 0), [D, 1]),
+                               tf.tile(tf.expand_dims(eta_logstd, 0), [D, 1]),
+                               group_event_ndims=1)
         beta = zs.Normal('beta', tf.zeros([K, V]), tf.ones([K, V]) * log_delta, group_event_ndims=1)
 
     return model
@@ -49,15 +50,12 @@ if __name__ == "__main__":
     D = 100
     K = 100
     V = X.shape[1]
-    current_log_alpha = 0.0
     num_e_steps = 5
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
+    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True, 
                  target_acceptance_rate=0.6)
     epoches = 100
     learning_rate_0 = 0.1
     t0 = 50
-    mh_stdev = 0.1
-    num_mh = 10
 
     # Padding
     rem = D - X.shape[0] % D
@@ -67,10 +65,14 @@ if __name__ == "__main__":
     T = np.sum(X)
     iters = X.shape[0] // D
     Eta = np.zeros((X.shape[0], K), dtype=np.float32)
+    Eta_mean = np.zeros((K), dtype=np.float32)
+    Eta_logstd = np.zeros((K), dtype=np.float32)
+
 
     # Build the computation graph
     x = tf.placeholder(tf.float32, shape=[D, V], name='x')
-    log_alpha = tf.placeholder(tf.float32, shape=[], name='log_alpha')
+    eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
+    eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([D, K]), name='eta')
     eta_ph = tf.placeholder(tf.float32, shape=[D, K], name='eta_ph')
     beta = tf.Variable(tf.zeros([K, V]), name='beta')
@@ -80,10 +82,10 @@ if __name__ == "__main__":
 
 
     def joint_obj(observed):
-        model = lntm(observed, D, K, V)
-        # [D], [K], []
-        log_p_eta, log_p_beta, log_p_alpha = \
-            model.local_log_prob(['eta', 'beta', 'log_alpha'])
+        model = lntm(observed, D, K, V, eta_mean, eta_logstd)
+        # [D], [K], [K]
+        log_p_eta, log_p_beta = \
+            model.local_log_prob(['eta', 'beta'])
 
         theta = tf.nn.softmax(observed['eta'])
         phi = tf.nn.softmax(observed['beta'])
@@ -92,25 +94,22 @@ if __name__ == "__main__":
         # [D]
         log_px = tf.reduce_sum(observed['x'] * tf.log(pred), -1)
 
-        return log_p_eta, log_p_beta, log_px, log_p_alpha
+        return log_p_eta, log_p_beta, log_px
 
 
     def e_obj(observed):
-        log_p_eta, _, log_px, _ = joint_obj(observed)
+        log_p_eta, _, log_px = joint_obj(observed)
         return log_p_eta + log_px
 
 
-    lp_eta, lp_beta, lp_x, lp_alpha = \
-        joint_obj({'x': x, 'eta': eta, 'beta': beta,
-                   'log_alpha': log_alpha})
+    lp_eta, lp_beta, lp_x = \
+        joint_obj({'x': x, 'eta': eta, 'beta': beta})
     log_likelihood = tf.reduce_sum(lp_x)
     log_joint = tf.reduce_sum(lp_beta) + log_likelihood
-    log_hyper_post = lp_alpha + tf.reduce_sum(lp_eta)
 
     # Optimize
-    sample_op = hmc.sample(e_obj, {'x': x, 'beta': beta,
-                                   'log_alpha': log_alpha},
-                           {'eta': eta})
+    sample_op = hmc.sample(e_obj, {'x': x, 'beta': beta}, {'eta': eta})
+
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
     infer = optimizer.minimize(-log_joint, var_list=[beta])
@@ -140,8 +139,9 @@ if __name__ == "__main__":
                 sess.run(init_eta_ph, feed_dict={eta_ph: old_eta})
                 for j in range(num_e_steps):
                     new_eta, _, _, _, _, _, acc, _ = sess.run(
-                        sample_op, feed_dict={x: x_batch,
-                                              log_alpha: current_log_alpha})
+                            sample_op, feed_dict={x: x_batch, 
+                                                  eta_mean: Eta_mean, 
+                                                  eta_logstd: Eta_logstd})
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
@@ -150,28 +150,21 @@ if __name__ == "__main__":
                 # M step
                 _, ll = sess.run([infer, log_likelihood],
                                  feed_dict={x: x_batch,
-                                            learning_rate_ph: learning_rate,
-                                            log_alpha: current_log_alpha})
+                                            eta_mean: Eta_mean,
+                                            eta_logstd: Eta_logstd,
+                                            learning_rate_ph: learning_rate})
                 lls.append(ll)
 
-            # MH step for alpha
-            current_lp = sess.run(log_hyper_post,
-                                  feed_dict={log_alpha: current_log_alpha})
-            for m in range(num_mh):
-                new_log_alpha = current_log_alpha + np.random.randn() * \
-                    mh_stdev
-                new_lp = sess.run(log_hyper_post,
-                                  feed_dict={log_alpha: new_log_alpha})
-                if np.random.rand() < np.exp(min(new_lp - current_lp, 0)):
-                    current_lp = new_lp
-                    current_log_alpha = new_log_alpha
+            # Update hyperparameters
+            Eta_mean = np.mean(Eta, axis=0)
+            Eta_logstd = np.log(np.std(Eta, axis=0) + 1e-6)
 
             time_epoch += time.time()
 
-            print('Epoch {} ({:.1f}s): Perplexity = {}, acc = {}, '
-                  'alpha = {}'.format(
+            print('Epoch {} ({:.1f}s): Perplexity = {:.2f}, acc = {:.3f}, '
+                  'eta mean = {:.2f}, logstd = {:.2f}'.format(
                 epoch, time_epoch, np.exp(-np.sum(lls) / T), np.mean(accs),
-                np.exp(current_log_alpha)))
+                np.mean(Eta_mean), np.mean(Eta_logstd)))
 
         # Output topics
         p = sess.run(phi)
@@ -179,7 +172,8 @@ if __name__ == "__main__":
             rank = zip(list(p[k, :]), range(V))
             rank.sort()
             rank.reverse()
-            sys.stdout.write('Topic {}: '.format(k))
+            sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
+                    .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
             for i in range(10):
                 sys.stdout.write(vocab[rank[i][1]] + ' ')
             sys.stdout.write('\n')
