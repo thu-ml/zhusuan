@@ -165,7 +165,7 @@ def test_batch_shape_2parameter_univariate(
         dist = Distribution(param1, param2)
         if dist.get_batch_shape():
             test_class.assertEqual(dist.get_batch_shape().as_list(),
-                             target_shape)
+                                   target_shape)
         else:
             test_class.assertEqual(None, target_shape)
 
@@ -198,7 +198,7 @@ def test_batch_shape_2parameter_univariate(
         _test_dynamic([2, 1, 4], [2, 3, 4], [2, 3, 4])
         _test_dynamic([2, 3, 5], [3, 1], [2, 3, 5])
         with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                     "Incompatible shapes"):
+                                           "Incompatible shapes"):
             _test_dynamic([2, 3, 5], [3, 2], None)
 
 
@@ -284,7 +284,7 @@ def test_log_prob_shape_2parameter_univariate(
         _test_dynamic([1, 3], [], [2, 1, 3], [2, 1, 3])
         _test_dynamic([1, 5], [3, 1], [1, 2, 1, 1], [1, 2, 3, 5])
         with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                     "Incompatible shapes"):
+                                           "Incompatible shapes"):
             _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
 
 def test_batch_shape_1parameter(
@@ -394,14 +394,14 @@ def test_log_prob_shape_1parameter_univariate(
                 tf.shape(log_p).eval(
                     feed_dict={param: make_param(param_shape),
                                given: make_given(given_shape,
-                                              numpy_given_dtype)}).tolist(),
+                                                 numpy_given_dtype)}).tolist(),
                 target_shape)
 
         _test_dynamic([2, 3], [1, 3], [2, 3])
         _test_dynamic([1, 3], [2, 2, 3], [2, 2, 3])
         _test_dynamic([1, 5], [1, 2, 3, 1], [1, 2, 3, 5])
         with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                     "Incompatible shapes"):
+                                           "Incompatible shapes"):
             _test_dynamic([2, 3, 5], [1, 2, 1], None)
 
 
@@ -466,6 +466,7 @@ def test_log_prob_shape_1parameter_multivariate(
     _test_static(None, [2, 2], None)
     if Distribution != Dirichlet:
         # TODO: This failed with a bug in Tensorflow in Dirichlet, waiting fix.
+        _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
         _test_static([3, None], [3, 2, 1, 1], [3, 2, 3])
     with test_class.assertRaisesRegexp(ValueError, "broadcast to match"):
         _test_static([2, 3, 5], [1, 2, 5], None)
@@ -489,5 +490,5 @@ def test_log_prob_shape_1parameter_multivariate(
         if Distribution != Dirichlet:
             _test_dynamic([1, 5, 1], [1, 2, 1, 1], [1, 2, 5])
         with test_class.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                     "Incompatible shapes"):
+                                           "Incompatible shapes"):
             _test_dynamic([2, 3, 5], [1, 2, 5], None)
