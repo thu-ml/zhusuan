@@ -8,8 +8,8 @@ import tensorflow as tf
 from scipy import misc
 import numpy as np
 
-from .context import zhusuan
 from zhusuan.utils import *
+from zhusuan.utils import add_name_scope, if_raise, log_sum_exp
 
 
 class TestLogSumExp(tf.test.TestCase):

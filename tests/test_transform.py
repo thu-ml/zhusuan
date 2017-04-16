@@ -7,8 +7,8 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 
-from .context import zhusuan
 from zhusuan.transform import *
+from zhusuan.transform import linear_ar, inv_autoregressive_flow
 
 
 class TestPlanarNormalizingFlow(tf.test.TestCase):

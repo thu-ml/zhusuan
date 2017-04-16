@@ -9,7 +9,7 @@ from six.moves import zip, map
 import tensorflow as tf
 import numpy as np
 
-from .utils import log_mean_exp, merge_dicts
+from zhusuan.utils import log_mean_exp, merge_dicts
 
 
 __all__ = [
@@ -24,17 +24,17 @@ def is_loglikelihood(log_joint, observed, latent, axis=None):
     importance sampling.
 
     :param log_joint: A function that accepts a dictionary argument of
-        ``(string, Tensor)`` pairs, which are mappings from all 
-        `StochasticTensor` names in the model to their observed values. The 
-        function should return a Tensor, representing the log joint likelihood 
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
         of the model.
-    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from 
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
         names of observed `StochasticTensor` s to their values
-    :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs. 
-        Mapping from names of latent `StochasticTensor` s to their samples and 
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
         log probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
-        outer expectation in the importance sampling estimation. If None, no 
+        outer expectation in the importance sampling estimation. If None, no
         dimension is reduced.
 
     :return: A Tensor. The estimated log likelihood of observed data.

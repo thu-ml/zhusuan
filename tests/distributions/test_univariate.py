@@ -9,9 +9,9 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc
 
-from tests.context import zhusuan
+from tests.distributions.utils import *
 from zhusuan.distributions.univariate import *
-from .utils import *
+
 
 # TODO: test sample value
 
@@ -1462,6 +1462,7 @@ class TestBinomial(tf.test.TestCase):
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
             Binomial(1., tf.placeholder(tf.float32, []))
 
+
 class TestInverseGamma(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):
@@ -1470,12 +1471,12 @@ class TestInverseGamma(tf.test.TestCase):
                 InverseGamma(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
 
         InverseGamma(tf.placeholder(tf.float32, [None, 1]),
-              tf.placeholder(tf.float32, [None, 1, 3]))
+                     tf.placeholder(tf.float32, [None, 1, 3]))
 
     def test_value_shape(self):
         # static
         inv_gamma = InverseGamma(alpha=tf.placeholder(tf.float32, None),
-                      beta=tf.placeholder(tf.float32, None))
+                                 beta=tf.placeholder(tf.float32, None))
         self.assertEqual(inv_gamma.get_value_shape().as_list(), [])
 
         # dynamic

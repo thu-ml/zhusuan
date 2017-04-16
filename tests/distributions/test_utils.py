@@ -9,7 +9,6 @@ import tensorflow as tf
 import numpy as np
 from scipy import misc
 
-from tests.context import zhusuan
 from zhusuan.distributions.utils import *
 
 

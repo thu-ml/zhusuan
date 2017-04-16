@@ -36,6 +36,7 @@ extensions = ['sphinx.ext.doctest',
               'sphinx.ext.autodoc',
               'sphinxcontrib.bibtex',
               'sphinx.ext.intersphinx']
+
 mathjax_path = 'http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML'
 
 # Add any paths that contain templates here, relative to this directory.
@@ -174,6 +175,3 @@ texinfo_documents = [
      author, 'ZhuSuan', 'One line description of project.',
      'Miscellaneous'),
 ]
-
-
-
