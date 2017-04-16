@@ -69,9 +69,9 @@ if __name__ == "__main__":
 
     # Build the computation graph
     x = tf.placeholder(tf.float32, shape=[D, V], name='x')
-    log_alpha = tf.placeholder(tf.float32, name='log_alpha')
+    log_alpha = tf.placeholder(tf.float32, shape=[], name='log_alpha')
     eta = tf.Variable(tf.zeros([D, K]), name='eta')
-    eta_ph = tf.Variable(tf.zeros([D, K]), name='eta_ph')
+    eta_ph = tf.placeholder(tf.float32, shape=[D, K], name='eta_ph')
     beta = tf.Variable(tf.zeros([K, V]), name='beta')
     phi = tf.nn.softmax(beta)
     init_eta = tf.assign(eta, tf.zeros([D, K]))
@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     def joint_obj(observed):
         model = lntm(observed, D, K, V)
-        # [D, K], [K, V]
+        # [D], [K]
         log_p_eta, log_p_beta, log_p_alpha = \
             model.local_log_prob(['eta', 'beta', 'log_alpha'])
 
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     # Optimize
     sample_op = hmc.sample(e_obj, {'x': x, 'beta': beta,
                                    'log_alpha': log_alpha},
-                           {'eta': eta}, chain_axis=0)
+                           {'eta': eta})
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
     infer = optimizer.minimize(-log_joint, var_list=[beta])
