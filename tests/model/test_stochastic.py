@@ -195,3 +195,37 @@ class TestDirichlet(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [alpha, group_event_ndims]:
             self.assertTrue(i.op in log_p_ops)
+
+
+class TestInverseGamma(tf.test.TestCase):
+    def test_InverseGamma(self):
+        with BayesianNet():
+            alpha = tf.ones([2, 3])
+            beta = tf.ones([2, 3])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = InverseGamma('a', alpha, beta, n_samples, group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [alpha, beta, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3]))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [alpha, beta, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
+
+
+class TestLaplace(tf.test.TestCase):
+    def test_Laplace(self):
+        with BayesianNet():
+            loc = tf.zeros([2, 3])
+            scale = tf.ones([2, 3])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Laplace('a', loc, scale, n_samples, group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [loc, scale, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3]))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [loc, scale, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
