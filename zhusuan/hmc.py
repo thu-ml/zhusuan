@@ -6,7 +6,7 @@ from __future__ import division
 from copy import copy
 
 import six
-from six.moves import zip, map, filter
+from six.moves import zip, map
 import tensorflow as tf
 
 from zhusuan.utils import add_name_scope, merge_dicts
@@ -17,48 +17,36 @@ __all__ = [
 ]
 
 
-def random_momentum(dshapes, mass):
+def random_momentum(shapes, mass):
     return [tf.random_normal(shape=shape) * tf.sqrt(m)
-            for shape, m in zip(dshapes, mass)]
+            for shape, m in zip(shapes, mass)]
 
 
 def velocity(momentum, mass):
     return map(lambda z: z[0] / z[1], zip(momentum, mass))
-    # return map(lambda (x, y): x / y, zip(momentum, mass))
 
 
 def hamiltonian(q, p, log_posterior, mass, data_axes):
-    # (n_particles, n)
     potential = -log_posterior(q)
-    # (n_particles, n)
     kinetic = 0.5 * tf.add_n(
         [tf.reduce_sum(tf.square(momentum) / m, axis)
          for momentum, m, axis in zip(p, mass, data_axes)])
-    # (n_particles, n)
     return potential + kinetic, -potential
-    # return tf.reshape(potential, tf.shape(kinetic)) + \
-    #        tf.Print(kinetic, [q, p, potential, kinetic])
 
 
 def leapfrog_integrator(q, p, step_size1, step_size2, grad, mass):
-    # [(n_particles, n, n_z)]
     q = [x + step_size1 * y for x, y in zip(q, velocity(p, mass))]
     # p = p + epsilon / 2 * gradient q
-    # [(n_particles, n, n_z)]
     grads = grad(q)
-    # [(n_particles, n, n_z)]
     p = [x + step_size2 * y for x, y in zip(p, grads)]
     return q, p
 
 
 def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axes):
-    # (n_particles, n)
     old_hamiltonian, old_log_prob = hamiltonian(
         q, p, log_posterior, mass, data_axes)
-    # (n_particles, n)
     new_hamiltonian, new_log_prob = hamiltonian(
         new_q, new_p, log_posterior, mass, data_axes)
-    # (n_particles, n)
     return old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
         tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
 
@@ -126,7 +114,7 @@ class ExponentialWeightedMovingVariance:
             self.decay = decay
             self.one = tf.constant(1.0, dtype=tf.float32)
             self.num_chain_dims = num_chain_dims
-            self.chain_axes = range(self.num_chain_dims)
+            self.chain_axes = tf.range(self.num_chain_dims)
 
     @add_name_scope
     def update(self, x):
@@ -137,12 +125,12 @@ class ExponentialWeightedMovingVariance:
         incr = [weight * (q - mean) for q, mean in zip(x, self.mean)]
         # mean: (1,...,1 data_dims)
         update_mean = [mean.assign_add(
-            tf.reduce_mean(i, list(self.chain_axes), keep_dims=True))
-                       for mean, i in zip(self.mean, incr)]
+            tf.reduce_mean(i, axis=self.chain_axes, keep_dims=True))
+            for mean, i in zip(self.mean, incr)]
         # var: (1,...,1 data_dims)
         new_var = [
             (1 - weight) * var +
-            tf.reduce_mean(i * (q - mean), list(self.chain_axes),
+            tf.reduce_mean(i * (q - mean), axis=self.chain_axes,
                            keep_dims=True)
             for var, i, q, mean in zip(self.var, incr, x, update_mean)]
 
@@ -168,24 +156,19 @@ class HMC:
     optimizer. 
 
     The :class:`HMC` class supports running multiple MCMC chains in parallel.
-    To use the sampler, the user first create a variable storing the 
-    initial sample, whose shape is [chain axes..., data axes...]. There
+    To use the sampler, the user first create a tensorflow `Variable` storing 
+    the initial sample, whose shape is ``[chain axes, data axes]``. There
     can be arbitrary number of chain axes followed by arbitrary number of 
     data axes. Then the user provides a `log_joint` function which returns
-    a [chain axes...] tensor, which is the log joint density for each chain.
-    Finally, the user runs the operation returned by `sample`, that updates
-    the sample stored in the variable.
-
-    The variable to sample is stored in a `Variable`. 
-    Users first create an :class:`HMC` class, and
-    then call the `sample` method to create a sampling operation, which
-    updates the variable.
+    a tensor of shape ``[chain axes]``, which is the log joint density for 
+    each chain. Finally, the user runs the operation returned by 
+    :meth:`sample`, which updates the sample stored in the variable.
 
     .. note::
 
-        Currently we do not support invoking the `sample` method multiple times 
-        per :class:`HMC` class. Please declare one :class:`HMC` class per each 
-        invoke of the :meth:`sample` method.
+        Currently we do not support invoking the :meth:`sample` method 
+        multiple times per :class:`HMC` class. Please declare one :class:`HMC` 
+        class per each invoke of the :meth:`sample` method.
 
     .. warning::
 
@@ -196,14 +179,14 @@ class HMC:
 
     :param step_size: Initial step size.
     :param n_leapfrogs: Number of leapfrog steps.
-    :param adapt_stepsize: A `bool` tensor, indicating whether to adapt the 
+    :param adapt_step_size: A `bool` Tensor, indicating whether to adapt the 
         step size. 
     :param target_acceptance_rate: The desired acceptance rate for adapting 
         the step size.
     :param gamma: Parameter for adapting the step size, see (Hoffman, 2014).
     :param t0: Parameter for adapting the step size, see (Hoffman, 2014).
     :param kappa: Parameter for adapting the step size, see (Hoffman, 2014).
-    :param adapt_mass: A `bool` tensor, indicating whether to adapt the step 
+    :param adapt_mass: A `bool` Tensor, indicating whether to adapt the step 
         size. 
     :param mass_collect_iters: The beginning iteration to change the mass.
     :param mass_decay: The decay of computing exponential moving variance.
@@ -240,7 +223,7 @@ class HMC:
     @add_name_scope
     def _adapt_mass(self, t, num_chain_dims):
         ewmv = ExponentialWeightedMovingVariance(
-            self.mass_decay, self.data_shape, num_chain_dims)
+            self.mass_decay, self.data_shapes, num_chain_dims)
         new_mass = tf.cond(self.adapt_mass,
                            lambda: ewmv.get_updated_precision(self.q),
                            lambda: ewmv.precision())
@@ -255,7 +238,7 @@ class HMC:
         with tf.control_dependencies(new_mass):
             current_mass = tf.cond(tf.less(t, self.mass_collect_iters),
                                    lambda: [tf.ones(shape) for shape in
-                                            self.data_shape],
+                                            self.data_shapes],
                                    lambda: new_mass)
         if not isinstance(current_mass, list):
             current_mass = [current_mass]
@@ -294,7 +277,7 @@ class HMC:
                 tf.less(acceptance_rate, self.target_acceptance_rate)))
             return [new_step_size, acceptance_rate, cond]
             # return [tf.Print(new_step_size,
-            #                   [new_step_size, acceptance_rate], "Tuning"),
+            #                  [new_step_size, acceptance_rate], "Tuning"),
             #          acceptance_rate, cond]
 
         new_step_size, _, _ = tf.while_loop(
@@ -319,13 +302,11 @@ class HMC:
                                  lambda: step_size,
                                  lambda: step_size / 2)
 
-            # [(n_particles, n, n_z)], [(n_particles, n, n_z)]
             q, p = leapfrog_integrator(q, p, step_size1, step_size2,
                                        lambda q: get_gradient(q), mass)
             return [i + 1, q, p]
 
         i = tf.constant(0)
-        # [(n_particles, n, n_z)], [(n_particles, n, n_z)]
         _, q, p = tf.while_loop(loop_cond,
                                 loop_body,
                                 [i, q, p],
@@ -341,11 +322,9 @@ class HMC:
         update_step_size = tf.assign(self.step_size, new_step_size)
         return tf.stop_gradient(update_step_size)
 
-    # Shape = [ChainShape DataShape]
-    # Data shape should not change
     def sample(self, log_joint, observed, latent):
         """
-        Return the sample `Operation` for doing HMC. Each run of this 
+        Return the sample `Operation` for running HMC. Each run of this 
         operation produces one sample.
 
         :param log_joint: A function that accepts a dictionary argument of
@@ -355,9 +334,9 @@ class HMC:
             likelihood of the model.
         :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping 
             from names of observed `StochasticTensor` s to their values
-        :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-            Mapping from names of latent `StochasticTensor` s to their samples 
-            and log probabilities.
+        :param latent: A dictionary of ``(string, Variable)`` pairs.
+            Mapping from names of latent `StochasticTensor` s to corresponding 
+            tensorflow Variables for storing their initial values and samples.
 
         :return: A list of Tensorflow operations: (1) the operation to
             update the sample, (2) the initial momentum, (3) the initial 
@@ -367,58 +346,49 @@ class HMC:
         """
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
-
+        for i, v in enumerate(latent_v):
+            if not isinstance(v, tf.Variable):
+                raise TypeError("latent['{}'] is not a tensorflow Variable."
+                                .format(latent_k[i]))
         self.q = copy(latent_v)
-        # self.q = [tf.Print(self.q[0], [self.q[0]], "q")]
 
         def get_log_posterior(var_list):
-            # (chain_axis)
             joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
             log_p = log_joint(joint_obs)
             return log_p
 
         def get_gradient(var_list):
             log_p = get_log_posterior(var_list)
-            # (chain_axis data_axis)
             latent_grads = tf.gradients(log_p, var_list)
-            # print('LG = {}'.format(latent_grads))
             return latent_grads
 
-        self.sshapes = [q.get_shape() for q in self.q]
-        self.dshapes = [tf.shape(q) for q in self.q]
-        self.s_chain_shape = get_log_posterior(self.q).get_shape()
-        self.num_chain_dims = len(self.s_chain_shape)
-        # [1, .., 1, data_dims]
-        self.data_shape = [
-            tf.reduce_sum(q, axis=list(range(self.num_chain_dims)),
-                          keep_dims=True).get_shape() for q in self.q]
-        self.data_axes = [list(range(self.num_chain_dims, len(shape)))
-                          for shape in self.data_shape]
+        self.static_shapes = [q.get_shape() for q in self.q]
+        self.dynamic_shapes = [tf.shape(q) for q in self.q]
+        self.static_chain_shape = get_log_posterior(self.q).get_shape()
 
-        # print('Static shape = {}'.format(self.sshapes))
-        # print('Data shape = {}'.format(self.data_shape))
-        # print('Num chain dims = {}, data axes = {}'.
-        #       format(self.num_chain_dims, self.data_axes))
+        if not self.static_chain_shape:
+            raise ValueError(
+                "HMC requires that the static shape of the value returned "
+                "by log joint function should be at least partially defined. "
+                "(shape: {})".format(self.static_chain_shape))
 
+        self.n_chain_dims = len(self.static_chain_shape)
+        self.data_shapes = [
+            tf.TensorShape([1] * self.n_chain_dims).concatenate(
+                q.get_shape()[self.n_chain_dims:]) for q in self.q]
+        self.data_axes = [list(range(self.n_chain_dims, len(data_shape)))
+                          for data_shape in self.data_shapes]
+
+        # Adapt mass
         if self.adapt_mass is not None:
             mass = [tf.stop_gradient(t) for t in
-                    self._adapt_mass(new_t, self.num_chain_dims)]
+                    self._adapt_mass(new_t, self.n_chain_dims)]
         else:
-            mass = [tf.ones(shape) for shape in self.data_shape]
+            mass = [tf.ones(shape) for shape in self.data_shapes]
 
-        # print('Mass shape = {}'.format([m.get_shape() for m in mass]))
-
-        # print('Current mass shape={}'.format(current_mass[0].get_shape()))
-        # print('Expanded mass shape={}'.format(expanded_mass[0].get_shape()))
-
-        p = random_momentum(self.dshapes, mass)
-        # print('P shape = {}'.format([pp.get_shape() for pp in p]))
-        # p = [tf.Print(p[0], [p[0]], "p")]
-
+        p = random_momentum(self.dynamic_shapes, mass)
         current_p = copy(p)
         current_q = copy(self.q)
-        # print('p shape = {}'.format(current_p[0].get_shape()))
-        # print('q shape = {}'.format(current_q[0].get_shape()))
 
         # Initialize step size
         if_initialize_step_size = tf.logical_or(
@@ -428,38 +398,21 @@ class HMC:
             return self._init_step_size(current_q, current_p, mass,
                                         get_gradient, get_log_posterior)
         new_step_size = tf.stop_gradient(
-            tf.cond(if_initialize_step_size, iss, lambda: self.step_size)
-        )
-        # new_step_size = tf.Print(new_step_size, [new_step_size])
+            tf.cond(if_initialize_step_size, iss, lambda: self.step_size))
 
         # Leapfrog
         current_q, current_p = self._leapfrog(
             current_q, current_p, new_step_size, get_gradient, mass)
 
-        # for q in current_q:
-        #     print(q.get_shape())
-        # for pp in current_p:
-        #     print(pp.get_shape())
-        # for q in self.q:
-        #     print(q.get_shape())
-        # for pp in p:
-        #     print(pp.get_shape())
-        # current_q = [tf.Print(current_q[0], [current_q[0]], "cq")]
-        # current_p = [tf.Print(current_p[0], [current_p[0]], "cp")]
-
-        # (n_particles, n)
+        # MH-Test
         with tf.name_scope("MH-test"):
             old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
                 acceptance_rate = get_acceptance_rate(
                     self.q, p, current_q, current_p,
                     get_log_posterior, mass, self.data_axes)
 
-            # (n_particles, n)
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))
             if_accept = tf.less(u01, acceptance_rate)
-
-            # print('Acceptance rate shape = {}'.format(
-            #     acceptance_rate.get_shape()))
 
             new_q = []
             for nq, oq, da in zip(current_q, self.q, self.data_axes):
@@ -467,16 +420,13 @@ class HMC:
                 for i in range(len(da)):
                     expanded_if_accept = tf.expand_dims(expanded_if_accept, -1)
                 expanded_if_accept = tf.logical_and(
-                    expanded_if_accept, tf.ones_like(nq, dtype=tf.bool)
-                )
-                # print('Expanded if accept shape = {}'
-                #     .format(expanded_if_accept.get_shape()))
+                    expanded_if_accept, tf.ones_like(nq, dtype=tf.bool))
                 new_q.append(tf.where(expanded_if_accept, nq, oq))
 
             update_q = [old.assign(new) for old, new in zip(latent_v, new_q)]
-
             new_log_prob = tf.where(if_accept, new_log_prob, old_log_prob)
 
+        # Adapt step size
         if self.adapt_step_size is not None:
             update_step_size = self._adapt_step_size(acceptance_rate,
                                                      if_initialize_step_size)
