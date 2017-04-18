@@ -157,10 +157,10 @@ class HMC:
 
     The :class:`HMC` class supports running multiple MCMC chains in parallel.
     To use the sampler, the user first create a tensorflow `Variable` storing 
-    the initial sample, whose shape is ``[chain axes, data axes]``. There
+    the initial sample, whose shape is ``chain axes + data axes``. There
     can be arbitrary number of chain axes followed by arbitrary number of 
     data axes. Then the user provides a `log_joint` function which returns
-    a tensor of shape ``[chain axes]``, which is the log joint density for 
+    a tensor of shape ``chain axes``, which is the log joint density for 
     each chain. Finally, the user runs the operation returned by 
     :meth:`sample`, which updates the sample stored in the variable.
 
@@ -174,40 +174,45 @@ class HMC:
 
         When the adaptations are on, the sampler is not reversible. 
         To guarantee current equilibrium, the user should only turn on 
-        the adaptations during the burnin iterations, and turn them off 
-        when collecting samples.
+        the adaptations during the burn-in iterations, and turn them off 
+        when collecting samples. To achieve this, the best practice is to
+        set `adapt_step_size` and `adapt_mass` to be placeholders and feed
+        different values (True/False) when needed.
 
-    :param step_size: Initial step size.
-    :param n_leapfrogs: Number of leapfrog steps.
-    :param adapt_step_size: A `bool` Tensor, indicating whether to adapt the 
-        step size. 
-    :param target_acceptance_rate: The desired acceptance rate for adapting 
-        the step size.
-    :param gamma: Parameter for adapting the step size, see (Hoffman, 2014).
-    :param t0: Parameter for adapting the step size, see (Hoffman, 2014).
-    :param kappa: Parameter for adapting the step size, see (Hoffman, 2014).
-    :param adapt_mass: A `bool` Tensor, indicating whether to adapt the step 
-        size. 
-    :param mass_collect_iters: The beginning iteration to change the mass.
-    :param mass_decay: The decay of computing exponential moving variance.
+    :param step_size: A 0-D `float32` Tensor. Initial step size.
+    :param n_leapfrogs: A 0-D `int32` Tensor. Number of leapfrog steps.
+    :param adapt_step_size: A `bool` Tensor, if set, indicating whether to 
+        adapt the step size.
+    :param target_acceptance_rate: A 0-D `float32` Tensor. The desired 
+        acceptance rate for adapting the step size.
+    :param gamma: A 0-D `float32` Tensor. Parameter for adapting the step 
+        size, see (Hoffman, 2014).
+    :param t0: A 0-D `float32` Tensor. Parameter for adapting the step size, 
+        see (Hoffman, 2014).
+    :param kappa: A 0-D `float32` Tensor. Parameter for adapting the step 
+        size, see (Hoffman, 2014).
+    :param adapt_mass: A `bool` Tensor, if set, indicating whether to adapt 
+        the step size. 
+    :param mass_collect_iters: A 0-D `int32` Tensor. The beginning iteration 
+        to change the mass.
+    :param mass_decay: A 0-D `float32` Tensor. The decay of computing 
+        exponential moving variance.
     """
-    def __init__(self, step_size=1, n_leapfrogs=10,
+    def __init__(self, step_size=1., n_leapfrogs=10,
                  adapt_step_size=None, target_acceptance_rate=0.8,
                  gamma=0.05, t0=100, kappa=0.75,
                  adapt_mass=None, mass_collect_iters=10, mass_decay=0.99):
         # TODO: Maintain the variables somewhere else to let the sample be
         # called multiple times
         self.step_size = tf.Variable(step_size, name="step_size",
-                                     trainable=False)
-        self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs,
+                                     trainable=False, dtype=tf.float32)
+        self.n_leapfrogs = tf.convert_to_tensor(n_leapfrogs, tf.int32,
                                                 name="n_leapfrogs")
         self.target_acceptance_rate = tf.convert_to_tensor(
-            target_acceptance_rate, name="target_acceptance_rate")
-        self.t = tf.Variable(0.0, dtype=tf.float32, name="t",
-                             trainable=False)
+            target_acceptance_rate, tf.float32, name="target_acceptance_rate")
+        self.t = tf.Variable(0.0, name="t", trainable=False, dtype=tf.float32)
         self.adapt_step_size = adapt_step_size
         if adapt_step_size is not None:
-            # TODO make sure adapt_step_size is a placeholder
             self.step_size_tuner = StepsizeTuner(
                 step_size, adapt_step_size, gamma, t0, kappa,
                 target_acceptance_rate)
@@ -217,8 +222,10 @@ class HMC:
         else:
             mass_collect_iters = 0
             self.adapt_mass = None
-        self.mass_collect_iters = mass_collect_iters
-        self.mass_decay = mass_decay
+        self.mass_collect_iters = tf.convert_to_tensor(
+            mass_collect_iters, tf.int32, name="mass_collect_iters")
+        self.mass_decay = tf.convert_to_tensor(
+            mass_decay, tf.float32, name="mass_decay")
 
     @add_name_scope
     def _adapt_mass(self, t, num_chain_dims):
@@ -236,10 +243,10 @@ class HMC:
         # print('q={}, NMS={}'.format(self.q[0].get_shape(),
         #                             new_mass[0].get_shape()))
         with tf.control_dependencies(new_mass):
-            current_mass = tf.cond(tf.less(t, self.mass_collect_iters),
-                                   lambda: [tf.ones(shape) for shape in
-                                            self.data_shapes],
-                                   lambda: new_mass)
+            current_mass = tf.cond(
+                tf.less(tf.to_int32(t), self.mass_collect_iters),
+                lambda: [tf.ones(shape) for shape in self.data_shapes],
+                lambda: new_mass)
         if not isinstance(current_mass, list):
             current_mass = [current_mass]
         return current_mass
@@ -392,7 +399,8 @@ class HMC:
 
         # Initialize step size
         if_initialize_step_size = tf.logical_or(
-            tf.equal(new_t, 1), tf.equal(new_t, self.mass_collect_iters))
+            tf.equal(new_t, 1),
+            tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
 
         def iss():
             return self._init_step_size(current_q, current_p, mass,
@@ -434,6 +442,5 @@ class HMC:
             update_step_size = self.step_size
 
         with tf.control_dependencies([update_step_size]):
-            return update_q, p, tf.squeeze(old_hamiltonian), \
-                tf.squeeze(new_hamiltonian), old_log_prob, new_log_prob, \
-                tf.squeeze(acceptance_rate), update_step_size
+            return update_q, p, old_hamiltonian, new_hamiltonian, \
+                old_log_prob, new_log_prob, acceptance_rate, update_step_size
