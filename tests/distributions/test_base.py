@@ -8,13 +8,17 @@ from __future__ import division
 import tensorflow as tf
 import numpy as np
 
-from tests.context import zhusuan
 from zhusuan.distributions.base import *
 
 
 class Dist(Distribution):
-    def __init__(self, group_event_ndims=0, shape_fully_defined=True):
-        super(Dist, self).__init__(tf.float32,
+    def __init__(self,
+                 dtype=tf.float32,
+                 param_dtype=tf.float32,
+                 group_event_ndims=0,
+                 shape_fully_defined=True):
+        super(Dist, self).__init__(dtype,
+                                   param_dtype,
                                    is_continuous=True,
                                    is_reparameterized=True,
                                    group_event_ndims=group_event_ndims)
@@ -49,10 +53,12 @@ class Dist(Distribution):
 class TestDistributions(tf.test.TestCase):
     def test_baseclass(self):
         dist = Distribution(tf.float32,
+                            param_dtype=tf.float32,
                             is_continuous=True,
                             is_reparameterized=True,
                             group_event_ndims=2)
         self.assertEqual(dist.dtype, tf.float32)
+        self.assertEqual(dist.param_dtype, tf.float32)
         self.assertEqual(dist.is_continuous, True)
         self.assertEqual(dist.is_reparameterized, True)
         self.assertEqual(dist.group_event_ndims, 2)
@@ -72,7 +78,7 @@ class TestDistributions(tf.test.TestCase):
             dist._prob(tf.ones([2, 3, 4, 5]))
 
         with self.assertRaisesRegexp(ValueError, "must be non-negative"):
-            dist2 = Distribution(tf.float32, True, True, -1)
+            dist2 = Distribution(tf.float32, tf.float32, True, True, -1)
 
     def test_subclass(self):
         with self.test_session(use_gpu=True):
@@ -171,3 +177,25 @@ class TestDistributions(tf.test.TestCase):
             self.assertAllEqual(static_b_shape.as_list(), [None, 3, 4])
             b_shape = dist3.batch_shape
             self.assertAllEqual(b_shape.eval(), [2, 3, 4])
+
+            # given type of log_prob and prob
+            def _test_log_prob_raise(dtype, given_dtype):
+                dist = Dist(dtype=dtype)
+
+                given = tf.placeholder(given_dtype, None)
+                with self.assertRaises(ValueError):
+                    dist.prob(given)
+
+                with self.assertRaises(ValueError):
+                    dist.log_prob(given)
+
+            _test_log_prob_raise(tf.float32, tf.float64)
+            _test_log_prob_raise(tf.float32, tf.float16)
+            _test_log_prob_raise(tf.float32, tf.int32)
+            _test_log_prob_raise(tf.float32, tf.int64)
+            _test_log_prob_raise(tf.float64, tf.float32)
+            _test_log_prob_raise(tf.float64, tf.int32)
+            _test_log_prob_raise(tf.int32, tf.float32)
+            _test_log_prob_raise(tf.int32, tf.int64)
+            _test_log_prob_raise(tf.int64, tf.int32)
+            _test_log_prob_raise(tf.int64, tf.float64)

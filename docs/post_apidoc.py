@@ -8,10 +8,11 @@ import re
 api_dir = './api'
 
 # add automodule options for distributions and StochasticTensor
-options = [':inherited-members:',]
+options = [':inherited-members:']
 modules = ['zhusuan.distributions.univariate',
            'zhusuan.distributions.multivariate',
            'zhusuan.model.stochastic']
+
 for module in modules:
     module_path = os.path.join(api_dir, module + '.rst')
     with open(module_path, 'r') as f:

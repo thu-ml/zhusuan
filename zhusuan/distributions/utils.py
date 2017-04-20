@@ -8,26 +8,11 @@ import tensorflow as tf
 
 
 __all__ = [
-    'log_factorial',
     'log_combination',
     'explicit_broadcast',
     'maybe_explicit_broadcast',
     'is_same_dynamic_shape',
 ]
-
-
-def log_factorial(n):
-    """
-    Compute the log factorial function.
-
-    .. math:: \\log n!
-
-    :param n: A `int32` Tensor.
-
-    :return: A `float32` Tensor of the same shape as `n`.
-    """
-    n = tf.convert_to_tensor(n, tf.int32)
-    return tf.lgamma(tf.to_float(n + 1))
 
 
 def log_combination(n, ks):
@@ -38,15 +23,13 @@ def log_combination(n, ks):
 
         \\log \\binom{n}{k_1, k_2, \\dots} = \\log n! - \\sum_{i}\\log k_i!
 
-    :param n: A N-D `int32` Tensor. Can broadcast to match `ks[:-1]`.
-    :param ks: A (N + 1)-D `int32` Tensor. Each slice `[i, j, ..., k, :]` is a
-        vector of `[k_1, k_2, ...]`.
+    :param n: A N-D `float` Tensor. Can broadcast to match `ks[:-1]`.
+    :param ks: A (N + 1)-D `float` Tensor. Each slice `[i, j, ..., k, :]` is
+        a vector of `[k_1, k_2, ...]`.
 
-    :return: A N-D Tensor of type `float32`.
+    :return: A N-D Tensor of type same as `n`.
     """
-    n = tf.convert_to_tensor(n, tf.int32)
-    ks = tf.convert_to_tensor(ks, tf.int32)
-    return log_factorial(n) - tf.reduce_sum(log_factorial(ks), axis=-1)
+    return tf.lgamma(n + 1) - tf.reduce_sum(tf.lgamma(ks + 1), axis=-1)
 
 
 def explicit_broadcast(x, y, x_name, y_name):
@@ -111,3 +94,88 @@ def is_same_dynamic_shape(x, y):
             tf.concat([tf.shape(x), tf.shape(y)], 0),
             tf.concat([tf.shape(y), tf.shape(x)], 0))),
         lambda: tf.convert_to_tensor(False, tf.bool))
+
+
+def assert_same_dtype(tensors_with_name, dtype=None):
+    """
+    Whether all types of tensors in `tensors` are the same as `dtype`.
+
+    :param tensors_with_name: A list of (tensor, tensor_name).
+    :param dtype: Expected type. If `None`, depend on the type of tensors.
+    :return: The type of `tensors`.
+    """
+
+    expected_dtype = dtype
+    for tensor, tensor_name in tensors_with_name:
+        tensor_dtype = tensor.dtype
+        if not expected_dtype:
+            expected_dtype = tensor_dtype
+        elif expected_dtype != tensor_dtype:
+            if dtype is None:
+                tensor0, tensor0_name = tensors_with_name[0]
+                raise TypeError(
+                    '%s(%s), must be the same type as %s(%s).' % (
+                        tensor_name, tensor_dtype,
+                        tensor0_name, tensor0.dtype))
+            else:
+                raise TypeError(
+                    '%s(%s), must be %s.' % (
+                        tensor_name, tensor_dtype, expected_dtype))
+
+    return expected_dtype
+
+
+def assert_same_specific_dtype(tensors_with_name, dtypes):
+    """
+    Whether all types of tensors in `tensors` are the same and in `dtypes`.
+
+    :param tensors_with_name: A list of (tensor, tensor_name).
+    :param dtypes: A list of types.
+    :return: The type of `tensors`.
+    """
+    if tensors_with_name is None:
+        return None
+    tensors_dtype = assert_same_dtype(tensors_with_name)
+    if tensors_dtype is not None and tensors_dtype not in dtypes:
+        tensor0, tensor0_name = tensors_with_name[0]
+        raise TypeError('%s(%s), must be in %s.' % (
+            tensor0_name, tensor0.dtype, dtypes))
+    return tensors_dtype
+
+
+def assert_same_float_dtype(tensors_with_name, dtype=None):
+    """
+    Whether all types of tensors in `tensors` are the same and floating type.
+
+    :param tensors_with_name: A list of (tensor, tensor_name).
+    :param dtype: Expected type. If `None`, depend on the type of tensors.
+    :return: The type of `tensors`.
+    """
+
+    floating_types = [tf.float16, tf.float32, tf.float64]
+    if dtype is None:
+        return assert_same_specific_dtype(tensors_with_name, floating_types)
+    elif dtype in floating_types:
+        return assert_same_dtype(tensors_with_name, dtype)
+    else:
+        raise TypeError("The argument 'dtype' must be in %s" % floating_types)
+
+
+def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
+    """
+    Whether all types of tensors in `tensors` are the same and floating (or
+    integer) type.
+
+    :param tensors_with_name: A list of (tensor, tensor_name).
+    :param dtype: Expected type. If `None`, depend on the type of tensors.
+    :return: The type of `tensors`.
+    """
+
+    available_types = [tf.float16, tf.float32, tf.float64,
+                       tf.int16, tf.int32, tf.int64]
+    if dtype is None:
+        return assert_same_specific_dtype(tensors_with_name, available_types)
+    elif dtype in available_types:
+        return assert_same_dtype(tensors_with_name, dtype)
+    else:
+        raise TypeError("The argument 'dtype' must be in %s" % available_types)

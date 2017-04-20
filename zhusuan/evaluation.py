@@ -4,38 +4,37 @@
 from __future__ import absolute_import
 from __future__ import division
 
-import tensorflow as tf
 import six
 from six.moves import zip, map
 import tensorflow as tf
 import numpy as np
 
-from .utils import log_mean_exp, merge_dicts
+from zhusuan.utils import log_mean_exp, merge_dicts
 
 
 __all__ = [
     'is_loglikelihood',
-    'BDMC',
 ]
 
 
-def is_loglikelihood(log_joint, observed, latent, axis=0):
+def is_loglikelihood(log_joint, observed, latent, axis=None):
     """
     Marginal log likelihood (:math:`\log p(x)`) estimates using self-normalized
     importance sampling.
 
     :param log_joint: A function that accepts a dictionary argument of
-        (str, Tensor) pairs, which are mappings from all `StochasticTensor`
-        names in the model to their observed values. The function should
-        return a Tensor, representing the log joint likelihood of the model.
-    :param observed: A dictionary of (str, Tensor) pairs. Mapping from names
-        of observed `StochasticTensor` s to their values, for which to
-        calculate marginal log likelihood.
-    :param latent: A dictionary of (str, (Tensor, Tensor)) pairs. Mapping
-        from names of latent `StochasticTensor` s to their samples and log
-        probabilities.
+        ``(string, Tensor)`` pairs, which are mappings from all
+        `StochasticTensor` names in the model to their observed values. The
+        function should return a Tensor, representing the log joint likelihood
+        of the model.
+    :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
+        names of observed `StochasticTensor` s to their values
+    :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
+        Mapping from names of latent `StochasticTensor` s to their samples and
+        log probabilities.
     :param axis: The sample dimension(s) to reduce when computing the
-        log likelihood.
+        outer expectation in the importance sampling estimation. If None, no
+        dimension is reduced.
 
     :return: A Tensor. The estimated log likelihood of observed data.
     """
@@ -44,7 +43,9 @@ def is_loglikelihood(log_joint, observed, latent, axis=0):
     latent_logpdfs = map(lambda x: x[1], latent_v)
     joint_obs = merge_dicts(observed, latent_outputs)
     log_w = log_joint(joint_obs) - sum(latent_logpdfs)
-    return log_mean_exp(log_w, axis)
+    if axis is not None:
+        return log_mean_exp(log_w, axis)
+    return log_w
 
 
 class BDMC:

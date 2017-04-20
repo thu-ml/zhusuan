@@ -9,29 +9,18 @@ import tensorflow as tf
 import numpy as np
 from scipy import misc
 
-from tests.context import zhusuan
 from zhusuan.distributions.utils import *
-
-
-class TestLogFactorial(tf.test.TestCase):
-    def test_log_factorial(self):
-        with self.test_session(use_gpu=True):
-            for i in [0, 1, 2, 5, 10]:
-                self.assertNear(np.log(misc.factorial(i)),
-                                log_factorial(i).eval(), 1e-6)
-
-            for i in [[2], [[1, 2], [3, 4]]]:
-                self.assertAllClose(np.log(misc.factorial(i)),
-                                    log_factorial(i).eval())
 
 
 class TestLogCombination(tf.test.TestCase):
     def test_log_combination(self):
         with self.test_session(use_gpu=True):
             def _test_func(n, ks):
+                tf_n = tf.convert_to_tensor(n, tf.float32)
+                tf_ks = tf.convert_to_tensor(ks, tf.float32)
                 true_value = np.log(misc.factorial(n)) - \
                     np.sum(np.log(misc.factorial(ks)), axis=-1)
-                test_value = log_combination(n, ks).eval()
+                test_value = log_combination(tf_n, tf_ks).eval()
                 self.assertAllClose(true_value, test_value)
 
             _test_func(10, [1, 2, 3, 4])

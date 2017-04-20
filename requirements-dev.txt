@@ -1,8 +1,9 @@
 -r requirements.txt
 Sphinx
+sphinxcontrib-bibtex
 coverage
 pep8
 scipy
 matplotlib
 mock
-skimage
+scikit-image

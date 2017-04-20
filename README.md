@@ -19,7 +19,7 @@ principled Bayesian inference.
   * __Structured__ posterior: With user specified dependencies.
 
 * Variational objectives we support:
-  * __ADVI__: Automatic Differentiation Variational Inference
+  * __SGVB__: Stochastic gradient variational Bayes
   * __IWAE__: Importance weighted objectives
   * __NVIL__: Score function estimator with variance reduction
   * __VIMCO__: Multi-sample score function estimator with variance reduction
@@ -30,32 +30,59 @@ principled Bayesian inference.
 ### Markov Chain Monte Carlo (MCMC)
 * Hamiltonian Monte Carlo (__HMC__): With step size and mass adaptation.
 
+## Installation
+
+ZhuSuan is still under development. Before the first stable release (1.0),
+please clone the repository and run
+
+`pip install .`
+
+in the main directory. This will install ZhuSuan and its dependencies 
+automatically. 
+
+If you are developing ZhuSuan, you may want to install in an 
+"editable" or "develop" mode. See the Developments section below.
+
 ## Examples
+
+To run the provided examples, you may need extra dependencies to be installed.
+This can be done by
+
+`pip install ".[examples]"`
+
 * Gaussian: 
-[HMC](examples/gaussian.py)
+[HMC](examples/toy_examples/gaussian.py)
 * Toy 2D Intractable Posterior: 
-[ADVI](examples/toy2d.py)
+[SGVB](examples/toy_examples/toy2d.py)
 * Beyesian Neural Networks: 
-[ADVI](examples/bayesian_nn.py)
+[SGVB](examples/bayesian_neural_nets/bayesian_nn.py)
 * Variational Autoencoder (VAE): 
-[ADVI](examples/vae.py), 
-[IWAE](examples/iwae.py)
+[SGVB](examples/variational_autoencoders/vae.py), 
+[IWAE](examples/variational_autoencoders/iwae.py)
 * Convolutional VAE: 
-[ADVI](examples/vae_conv.py)
+[SGVB](examples/variational_autoencoders/vae_conv.py)
 * Semi-supervised VAE (Kingma, 2014): 
-[ADVI](examples/vae_ssl.py),
-[RWS](examples/vae_ssl_rws.py)
+[SGVB](examples/semi_supervised_vae/vae_ssl.py),
+[RWS](examples/semi_supervised_vae/vae_ssl_rws.py)
 * Deep Sigmoid Belief Networks
-[RWS](examples/sbn_rws.py),
-[VIMCO](examples/sbn_vimco.py)
+[RWS](examples/sigmoid_belief_nets/sbn_rws.py),
+[VIMCO](examples/sigmoid_belief_nets/sbn_vimco.py)
 * Logistic Normal Topic Model: 
-[HMC](examples/lntm_mcem.py)
+[HMC](examples/topic_models/lntm_mcem.py)
 
 ## Developments
 
-First install requirements for developments.
+To install ZhuSuan in an "editable" or "develop" mode, run
 
-`pip install -r requirements-dev.txt`
+`pip install -e .`
+
+in the main directory. This installation is removable by
+
+`python setup.py develop --uninstall`
+
+Additional dependencies for developments can be installed by
+
+`pip install ".[dev]"`
 
 ### Tests
 This command will run automatic tests in the main directory.

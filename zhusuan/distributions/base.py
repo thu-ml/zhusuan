@@ -20,44 +20,67 @@ class Distribution(object):
     distributions which support batch inputs, generating batches of samples and
     evaluate probabilities at batches of given values.
 
-    The typical input shapes for a `Distribution` is like
-    `batch_shape + input_shape`. where `input_shape` represents the shape
-    of non-batch input parameter, `batch_shape` represents how many independent
-    inputs are fed into the distribution.
+    The typical input shape for a :class:`Distribution` is like
+    ``batch_shape + input_shape``. where ``input_shape`` represents the shape
+    of non-batch input parameter, :attr:`batch_shape` represents how many
+    independent inputs are fed into the distribution.
 
-    Samples generated are of shape `(n_samples + )batch_shape + value_shape`.
-    The first additional axis is omitted only when passed `n_samples` is None (
-    by default), in which case one sample is generated. `value_shape` is the
-    non-batch value shape of the distribution. For a univariate distribution,
-    its `value_shape` is [].
+    Samples generated are of shape
+    ``([n_samples]+ )batch_shape + value_shape``. The first additional axis
+    is omitted only when passed `n_samples` is None (by default), in which
+    case one sample is generated. :attr:`value_shape` is the non-batch value
+    shape of the distribution. For a univariate distribution, its
+    :attr:`value_shape` is [].
 
     There are cases where a batch of random variables are grouped into a
-    single event so that their probabilities can be computed together. This
+    single event so that their probabilities should be computed together. This
     is achieved by setting `group_event_ndims` argument, which defaults to 0.
-    The last `group_event_ndims` number of axes in `batch_shape` are grouped
-    into a single event. For example, a `Normal(..., group_event_ndims=1) will
-    set the last axis of `batch_shape` to a single event, i.e., a multivariate
-    Normal with identity covariance matrix.
+    The last `group_event_ndims` number of axes in :attr:`batch_shape` are
+    grouped into a single event. For example,
+    ``Normal(..., group_event_ndims=1)`` will set the last axis of its
+    :attr:`batch_shape` to a single event, i.e., a multivariate Normal with
+    identity covariance matrix.
 
-    When evaluating probabilities at given values, the given Tensor can be of
-    shape `(... + )batch_shape + value_shape`. The returned Tensor has shape
-    `(... + )batch_shape[:-group_event_ndims]`.
+    When evaluating probabilities at given values, the given Tensor should be
+    broadcastable to shape ``(... + )batch_shape + value_shape``. The returned
+    Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``.
+
+    .. seealso::
+
+        :doc:`/concepts`
+
+    For both, the parameter `dtype` represents type of samples. For discrete,
+    can be set by user. For continuous, automatically determined from parameter
+    types.
+
+    The value type of `prob` and `log_prob` will be `param_dtype` which is
+    deduced from the parameter(s) when initializating. And `dtype` must be
+    among `int16`, `int32`, `int64`, `float16`, `float32` and `float64`.
+
+    When two or more parameters are tensors and they have different type,
+    `TypeError` will be raised.
 
     :param dtype: The value type of samples from the distribution.
+    :param param_dtype: The parameter(s) type of the distribution.
     :param is_continuous: Whether the distribution is continuous.
     :param is_reparameterized: A bool. Whether the gradients of samples can
         and are allowed to propagate back into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
+        dimensions in :attr:`batch_shape` (counted from the end) that are
+        grouped into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
         See above for more detailed explanation.
     """
 
-    def __init__(self, dtype, is_continuous, is_reparameterized,
+    def __init__(self,
+                 dtype,
+                 param_dtype,
+                 is_continuous,
+                 is_reparameterized,
                  group_event_ndims=0):
         self._dtype = dtype
+        self._param_dtype = param_dtype
         self._is_continuous = is_continuous
         self._is_reparameterized = is_reparameterized
         if isinstance(group_event_ndims, int):
@@ -83,6 +106,11 @@ class Distribution(object):
         return self._dtype
 
     @property
+    def param_dtype(self):
+        """The parameter(s) type of the distribution."""
+        return self._param_dtype
+
+    @property
     def is_continuous(self):
         """Whether the distribution is continuous."""
         return self._is_continuous
@@ -98,7 +126,7 @@ class Distribution(object):
     @property
     def group_event_ndims(self):
         """
-        The number of dimensions in `batch_shape` (counted from the end)
+        The number of dimensions in :attr:`batch_shape` (counted from the end)
         that are grouped into a single event, so that their probabilities are
         calculated together. See `Distribution` for more detailed explanation.
         """
@@ -108,7 +136,7 @@ class Distribution(object):
     def value_shape(self):
         """
         The non-batch value shape of a distribution. For batch inputs, the
-        shape of a generated sample is `batch_shape + value_shape`.
+        shape of a generated sample is ``batch_shape + value_shape``.
         """
         static_value_shape = self.get_value_shape()
         if static_value_shape.is_fully_defined():
@@ -117,13 +145,14 @@ class Distribution(object):
 
     def _value_shape(self):
         """
-        Private method for subclasses to rewrite the `value_shape` property.
+        Private method for subclasses to rewrite the :attr:`value_shape`
+        property.
         """
         raise NotImplementedError()
 
     def get_value_shape(self):
         """
-        Static `value_shape`.
+        Static :attr:`value_shape`.
 
         :return: A `TensorShape` instance.
         """
@@ -131,7 +160,8 @@ class Distribution(object):
 
     def _get_value_shape(self):
         """
-        Private method for subclasses to rewrite the `get_value_shape` method.
+        Private method for subclasses to rewrite the :meth:`get_value_shape`
+        method.
         """
         raise NotImplementedError()
 
@@ -140,7 +170,7 @@ class Distribution(object):
         """
         The shape showing how many independent inputs (which we call batches)
         are fed into the distribution. For batch inputs, the shape of a
-        generated sample is `batch_shape + value_shape`.
+        generated sample is ``batch_shape + value_shape``.
         We borrow this concept from `tf.contrib.distributions`.
         """
         static_batch_shape = self.get_batch_shape()
@@ -150,13 +180,14 @@ class Distribution(object):
 
     def _batch_shape(self):
         """
-        Private method for subclasses to rewrite the `batch_shape` property.
+        Private method for subclasses to rewrite the :attr:`batch_shape`
+        property.
         """
         raise NotImplementedError()
 
     def get_batch_shape(self):
         """
-        Static `batch_shape`.
+        Static :attr:`batch_shape`.
 
         :return: A `TensorShape` instance.
         """
@@ -164,7 +195,8 @@ class Distribution(object):
 
     def _get_batch_shape(self):
         """
-        Private method for subclasses to rewrite the `get_batch_shape` method.
+        Private method for subclasses to rewrite the :meth:`get_batch_shape`
+        method.
         """
         raise NotImplementedError()
 
@@ -174,10 +206,10 @@ class Distribution(object):
         sample(n_samples=None)
 
         Return samples from the distribution. When `n_samples` is None (by
-        default), one sample of shape `batch_shape + value_shape` is generated.
-        For a scalar `n_samples`, the returned Tensor has a new sample
-        dimension with size `n_samples` inserted at `axis=0`, i.e., the shape
-        of samples is `[n_samples] + batch_shape + value_shape`.
+        default), one sample of shape ``batch_shape + value_shape`` is
+        generated. For a scalar `n_samples`, the returned Tensor has a new
+        sample dimension with size `n_samples` inserted at ``axis=0``, i.e.,
+        the shape of samples is ``[n_samples] + batch_shape + value_shape``.
 
         :param n_samples: A 0-D `int32` Tensor or None. How many independent
             samples to draw from the distribution.
@@ -186,7 +218,7 @@ class Distribution(object):
         if n_samples is None:
             samples = self._sample(n_samples=1)
             return tf.squeeze(samples, axis=0)
-        if isinstance(n_samples, int):
+        elif isinstance(n_samples, int):
             return self._sample(n_samples)
         else:
             n_samples = tf.convert_to_tensor(n_samples, dtype=tf.int32)
@@ -199,12 +231,13 @@ class Distribution(object):
 
     def _sample(self, n_samples):
         """
-        Private method for subclasses to rewrite the `sample` method.
+        Private method for subclasses to rewrite the :meth:`sample` method.
         """
         raise NotImplementedError()
 
     def _check_input_shape(self, given):
         given = tf.convert_to_tensor(given, dtype=self.dtype)
+
         err_msg = "The given argument should be able to broadcast to " \
                   "match batch_shape + value_shape of the distribution."
         if (given.get_shape() and self.get_batch_shape() and
@@ -231,8 +264,9 @@ class Distribution(object):
 
         :param given: A Tensor. The value at which to evaluate log probability
             density (mass) function. Must be able to broadcast to have a shape
-            of `(... + )batch_shape + value_shape`.
-        :return: A Tensor of shape `(... + )batch_shape[:-group_event_ndims]`.
+            of ``(... + )batch_shape + value_shape``.
+        :return: A Tensor of shape
+            ``(... + )batch_shape[:-group_event_ndims]``.
         """
         given = self._check_input_shape(given)
         log_p = self._log_prob(given)
@@ -247,8 +281,9 @@ class Distribution(object):
 
         :param given: A Tensor. The value at which to evaluate probability
             density (mass) function. Must be able to broadcast to have a shape
-            of `(... + )batch_shape + value_shape`.
-        :return: A Tensor of shape `(... + )batch_shape[:-group_event_ndims]`.
+            of ``(... + )batch_shape + value_shape``.
+        :return: A Tensor of shape
+            ``(... + )batch_shape[:-group_event_ndims]``.
         """
         given = self._check_input_shape(given)
         p = self._prob(given)
@@ -256,12 +291,12 @@ class Distribution(object):
 
     def _log_prob(self, given):
         """
-        Private method for subclasses to rewrite the `log_prob` method.
+        Private method for subclasses to rewrite the :meth:`log_prob` method.
         """
         raise NotImplementedError()
 
     def _prob(self, given):
         """
-        Private method for subclasses to rewrite the `prob` method.
+        Private method for subclasses to rewrite the :meth:`prob` method.
         """
         raise NotImplementedError()
