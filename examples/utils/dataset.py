@@ -23,15 +23,12 @@ def standardize(data_train, data_test):
     :return: (train_set, test_set, mean, std), The standardized dataset and
         their mean and standard deviation before processing.
     """
-    std = np.std(data_train, 0)
+    std = np.std(data_train, 0, keepdims=True)
     std[std == 0] = 1
-    mean = np.mean(data_train, 0)
-    data_train_standardized \
-        = (data_train - np.full(data_train.shape, mean, dtype='float32')) / \
-        np.full(data_train.shape, std, dtype='float32')
-    data_test_standardized \
-        = (data_test - np.full(data_test.shape, mean, dtype='float32')) / \
-        np.full(data_test.shape, std, dtype='float32')
+    mean = np.mean(data_train, 0, keepdims=True)
+    data_train_standardized = (data_train - mean) / std
+    data_test_standardized = (data_test - mean) / std
+    mean, std = np.squeeze(mean, 0), np.squeeze(std, 0)
     return data_train_standardized, data_test_standardized, mean, std
 
 
@@ -264,7 +261,7 @@ def load_uci_german_credits(path, n_train):
     return x_train, y_train, x_test, y_test
 
 
-def load_uci_boston_housing(path):
+def load_uci_boston_housing(path, dtype=np.float32):
     if not os.path.isfile(path):
         data_dir = os.path.dirname(path)
         if not os.path.exists(os.path.dirname(path)):
@@ -274,6 +271,7 @@ def load_uci_boston_housing(path):
                          path)
 
     data = np.loadtxt(path)
+    data = data.astype(dtype)
     permutation = np.random.choice(np.arange(data.shape[0]),
                                    data.shape[0], replace=False)
     size_train = int(np.round(data.shape[0] * 0.8))

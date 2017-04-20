@@ -72,17 +72,14 @@ if __name__ == '__main__':
     data_path = os.path.join(conf.data_dir, 'housing.data')
     x_train, y_train, x_valid, y_valid, x_test, y_test = \
         dataset.load_uci_boston_housing(data_path)
-    x_train = np.vstack([x_train, x_valid]).astype('float32')
-    y_train = np.hstack([y_train, y_valid]).astype('float32')
-    x_test = x_test.astype('float32')
+    x_train = np.vstack([x_train, x_valid])
+    y_train = np.hstack([y_train, y_valid])
     N, n_x = x_train.shape
 
     # Standardize data
     x_train, x_test, _, _ = dataset.standardize(x_train, x_test)
     y_train, y_test, mean_y_train, std_y_train = dataset.standardize(
-        y_train.reshape((-1, 1)), y_test.reshape((-1, 1)))
-    y_train, y_test = y_train.squeeze(), y_test.squeeze()
-    std_y_train = std_y_train.squeeze()
+        y_train, y_test)
 
     # Define model parameters
     n_hiddens = [50]
@@ -110,8 +107,7 @@ if __name__ == '__main__':
         model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
         log_pws = model.local_log_prob(w_names)
         log_py_xw = model.local_log_prob('y')
-        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1,
-                                                  keep_dims=True) * N
+        return tf.add_n(log_pws) + log_py_xw * N
 
     variational = mean_field_variational(layer_sizes, n_particles)
     qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
@@ -120,7 +116,7 @@ if __name__ == '__main__':
         zs.sgvb(log_joint, {'y': y_obs}, latent, axis=0))
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[])
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
+    optimizer = tf.train.AdamOptimizer(learning_rate_ph)
     grads = optimizer.compute_gradients(-lower_bound)
     infer = optimizer.apply_gradients(grads)
 
