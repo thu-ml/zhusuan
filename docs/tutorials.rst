@@ -6,3 +6,4 @@ Tutorials
 
    vae
    concepts
+   bayesian_nn

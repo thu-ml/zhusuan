@@ -1,9 +1,9 @@
 Variational Autoencoders: Step by Step
 ======================================
 
-Variational AutoEncoders (VAE) :cite:`vae-kingma2013auto` is one of the most
-widely used deep generative models. In this tutorial, we show how to implement
-VAE in ZhuSuan step by step. The full script is at
+**Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
+most widely used deep generative models. In this tutorial, we show how to
+implement VAE in ZhuSuan step by step. The full script is at
 `examples/tutorials/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/tutorials/vae.py>`_.
 
 The generative process of a VAE for modeling binarized
@@ -427,4 +427,5 @@ images to disk. Keep watching them and have fun :)
 
 .. bibliography:: refs.bib
     :style: unsrtalpha
+    :labelprefix: VAE
     :keyprefix: vae-
