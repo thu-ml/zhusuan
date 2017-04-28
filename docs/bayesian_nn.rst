@@ -43,7 +43,13 @@ multivariate standard Normal distribution. With this complex forwarding
 process, the model is enabled to learn complex relationships between the
 input (:math:`x`) and the output (:math:`y`). Finally, some noise is added to
 the output to get a tractable likelihood for the model, which is typically
-a Gaussian noise in regression problems.
+a Gaussian noise in regression problems. A graphical model representation for 
+bayesian neural network is as follows. Combining the observed input (:math:`x`) and 
+the global network parameters (:math:`\{W_i\}_{i=1}^L`), the model outputs
+observed (:math:`y`).
+
+.. image:: ./figures/bayesian_nn.jpg
+    :align: center
 
 Build the Model
 ---------------
