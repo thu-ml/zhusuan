@@ -1,9 +1,9 @@
 Variational Autoencoders: Step by Step
 ======================================
 
-Variational AutoEncoders (VAE) :cite:`vae-kingma2013auto` is one of the most
-widely used deep generative models. In this tutorial, we show how to implement
-VAE in ZhuSuan step by step. The full script is at
+**Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
+most widely used deep generative models. In this tutorial, we show how to
+implement VAE in ZhuSuan step by step. The full script is at
 `examples/tutorials/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/tutorials/vae.py>`_.
 
 The generative process of a VAE for modeling binarized
@@ -88,7 +88,7 @@ likelihood when evaluating the probability of an image::
         # x ~ Bernoulli(x|sigmoid(x_logits))
         x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
 
-.. Note::
+.. note::
 
     The :class:`~zhusuan.model.stochastic.Bernoulli` StochasticTensor
     accepts log-odds of probabilities instead of probabilities of being 1.
@@ -140,7 +140,7 @@ a batch of images ``x_batch``, write::
 In this case, when ``x`` is used in further computation, it will convert to
 the observed value, i.e., ``x_batch``, instead of the sampled tensor.
 
-.. Note::
+.. note::
 
     The observation passed must have the same type and shape as the
     `StochasticTensor`.
@@ -231,7 +231,7 @@ likelihood if and only if :math:`q_{\phi}(z|x) = p_{\theta}(z|x)`, when the
 `Kullback–Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`_
 between them (:math:`\mathrm{KL}(q_{\phi}(z|x)\|p_{\theta}(z|x))`) is zero.
 
-.. Note::
+.. note::
 
     In Bayesian Statistics, the process represented by the Bayes' rule
 
@@ -312,7 +312,7 @@ gradients of ELBO. In ZhuSuan, one can use this estimator by calling the
                 observed={'x': x},
                 latent={'z': [qz_samples, log_qz]}))
 
-.. Note::
+.. note::
 
     For readers who are interested, we provide a detailed explanation of the
     :func:`~zhusuan.variational.sgvb` estimator used here, though this is not
@@ -416,8 +416,16 @@ images to disk. Keep watching them and have fun :)
                 name = "results/vae/vae.epoch.{}.png".format(epoch)
                 save_image_collections(images, name)
 
+.. seealso::
+
+    The example used in this tutorial is simplified for understanding. To see
+    a fully functional example with batch normalization, multi-sample
+    estimation, model storage and reloading, etc., check out
+    `examples/variational_autoencoders/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/variational_autoencoders/vae.py>`_
+
 .. rubric:: References
 
 .. bibliography:: refs.bib
     :style: unsrtalpha
+    :labelprefix: VAE
     :keyprefix: vae-

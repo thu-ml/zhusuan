@@ -14,7 +14,6 @@ from zhusuan.utils import log_mean_exp, merge_dicts
 
 __all__ = [
     'is_loglikelihood',
-    'BDMC',
 ]
 
 

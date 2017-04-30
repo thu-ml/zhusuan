@@ -48,7 +48,7 @@ If you are developing ZhuSuan, you may want to install in an
 To run the provided examples, you may need extra dependencies to be installed.
 This can be done by
 
-`pip install .[examples]`
+`pip install ".[examples]"`
 
 * Gaussian: 
 [HMC](examples/toy_examples/gaussian.py)
@@ -79,6 +79,10 @@ To install ZhuSuan in an "editable" or "develop" mode, run
 in the main directory. This installation is removable by
 
 `python setup.py develop --uninstall`
+
+Additional dependencies for developments can be installed by
+
+`pip install ".[dev]"`
 
 ### Tests
 This command will run automatic tests in the main directory.

@@ -286,7 +286,7 @@ class BayesianNet(Context):
     instantiates :class:`BayesianNet` with different observations, which
     is a common behaviour for probabilistic graphical models.
 
-    .. Note::
+    .. note::
 
         The observation passed must have the same type and shape as the
         `StochasticTensor`.

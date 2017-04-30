@@ -71,7 +71,7 @@ if __name__ == "__main__":
     n_z = 40
 
     # Define training/evaluation parameters
-    lb_samples = 1
+    lb_samples = 10
     ll_samples = 1000
     epoches = 3000
     batch_size = 100
@@ -82,10 +82,7 @@ if __name__ == "__main__":
     test_freq = 10
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
-    test_n_temperatures = 100
-    test_n_leapfrogs = 10
-    test_n_chains = 10
-    save_freq = 100
+    save_freq = 1
     result_path = "results/vae"
 
     # Build the computation graph
@@ -109,29 +106,10 @@ if __name__ == "__main__":
     lower_bound = tf.reduce_mean(
         zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
-    # Importance sampling estimates of log likelihood:
-    # Fast, used for evaluation during training
+    # Importance sampling estimates of marginal log likelihood
     is_log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'z': [qz_samples, log_qz]}, axis=0))
-
-    # Bidirectional Monte Carlo (BDMC) estimates of log likelihood:
-    # Slower than IS estimates, used for evaluation after training
-    # Use q(z|x) as prior in BDMC
-    def log_qz_given_x(observed):
-        z = observed['z']
-        model = q_net({'z': z}, x, n_z, n_particles, is_training)
-        return model.local_log_prob('z')
-
-    prior_samples = {'z': qz_samples}
-    z = tf.Variable(tf.zeros([test_n_chains, test_batch_size, n_z]),
-                    name="z", trainable=False)
-    hmc = zs.HMC(step_size=1e-6, n_leapfrogs=test_n_leapfrogs,
-                 adapt_step_size=True, target_acceptance_rate=0.65,
-                 adapt_mass=True)
-    bdmc = zs.BDMC(log_qz_given_x, log_joint, prior_samples, hmc,
-                   {'x': x_obs}, {'z': z},
-                   n_chains=test_n_chains, n_temperatures=test_n_temperatures)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
@@ -206,25 +184,3 @@ if __name__ == "__main__":
                     os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
                 print('Done')
-
-        # BDMC evaluation
-        print('Start evaluation...')
-        time_bdmc = -time.time()
-        test_ll_lbs = []
-        test_ll_ubs = []
-        for t in range(test_iters):
-            test_x_batch = x_test[t * test_batch_size:
-                                  (t + 1) * test_batch_size]
-            ll_lb, ll_ub = bdmc.run(sess,
-                                    feed_dict={x: test_x_batch,
-                                               n_particles: test_n_chains,
-                                               is_training: False})
-            test_ll_lbs.append(ll_lb)
-            test_ll_ubs.append(ll_ub)
-        time_bdmc += time.time()
-        test_ll_lb = np.mean(test_ll_lbs)
-        test_ll_ub = np.mean(test_ll_ubs)
-        print('>> Test log likelihood (BDMC) ({:.1f}s)\n'
-              '>> lower bound = {}, upper bound = {}, BDMC gap = {}'
-              .format(time_bdmc, test_ll_lb, test_ll_ub,
-                      test_ll_ub - test_ll_lb))

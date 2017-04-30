@@ -3,7 +3,7 @@
 
 """
 Logistic-normal topic models using Monte-Carlo EM
-Dense implementation, O(DKV)
+Sparse implementation, O(DKL + KV)
 """
 
 from __future__ import absolute_import
@@ -38,20 +38,34 @@ def lntm(observed, D, K, V, eta_mean, eta_logstd):
     return model
 
 
+def lil_to_coo(X):
+    ds = []
+    vs = []
+    cs = []
+    for d, row in enumerate(X):
+        for v, c in row:
+            ds.append(d)
+            vs.append(v)
+            cs.append(c)
+    return ds, vs, cs
+
+
 if __name__ == "__main__":
     tf.set_random_seed(1237)
 
     # Load nips dataset
     data_name = 'nips'
     data_path = os.path.join(conf.data_dir, data_name + '.pkl.gz')
-    X, vocab = dataset.load_uci_bow(data_name, data_path)
-    X_train = X[:1200, :]
-    X_test = X[1200:, :]
+    print('Loading data...')
+    X, vocab = dataset.load_uci_bow_sparse(data_name, data_path)
+    print('Finished.')
+    X_train = X[:1200]
+    X_test = X[1200:]
 
     # Define model training/evaluation parameters
     D = 100
     K = 100
-    V = X_train.shape[1]
+    V = len(vocab)
     num_e_steps = 5
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
@@ -59,19 +73,20 @@ if __name__ == "__main__":
     learning_rate_0 = 1.0
     t0 = 10
 
-    # Padding
-    rem = D - X_train.shape[0] % D
-    if rem < D:
-        X_train = np.vstack((X_train, np.zeros((rem, V))))
+    T = 0
+    for row in X_train:
+        for _, c in row:
+            T += c
 
-    T = np.sum(X_train)
-    iters = X_train.shape[0] // D
-    Eta = np.zeros((X_train.shape[0], K), dtype=np.float32)
+    iters = len(X_train) // D
+    Eta = np.zeros((len(X_train), K), dtype=np.float32)
     Eta_mean = np.zeros(K, dtype=np.float32)
     Eta_logstd = np.zeros(K, dtype=np.float32)
 
     # Build the computation graph
-    x = tf.placeholder(tf.float32, shape=[D, V], name='x')
+    ds = tf.placeholder(tf.int32, shape=[None], name='ds')
+    vs = tf.placeholder(tf.int32, shape=[None], name='vs')
+    cs = tf.placeholder(tf.float32, shape=[None], name='cs')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([D, K]), name='eta')
@@ -89,10 +104,13 @@ if __name__ == "__main__":
 
         theta = tf.nn.softmax(observed['eta'])
         phi = tf.nn.softmax(observed['beta'])
-        pred = tf.matmul(theta, phi)
+        phi_t = tf.transpose(phi)
 
-        # [D]
-        log_px = tf.reduce_sum(observed['x'] * tf.log(pred), -1)
+        thetas = tf.gather(theta, ds)
+        phis = tf.gather(phi_t, vs)
+        pred = tf.log(tf.reduce_sum(thetas * phis, -1))
+        indices = tf.expand_dims(ds, 1)
+        log_px = tf.scatter_nd(indices, cs * pred, shape=[D])
 
         return log_p_eta, log_p_beta, log_px
 
@@ -100,10 +118,10 @@ if __name__ == "__main__":
         log_p_eta, _, log_px = joint_obj(observed)
         return log_p_eta + log_px
 
-    lp_eta, lp_beta, lp_x = joint_obj({'x': x, 'eta': eta, 'beta': beta})
+    lp_eta, lp_beta, lp_x = joint_obj({'eta': eta, 'beta': beta})
     log_likelihood = tf.reduce_sum(lp_x)
     log_joint = tf.reduce_sum(lp_beta) + log_likelihood
-    sample_op = hmc.sample(e_obj, {'x': x, 'beta': beta}, {'eta': eta})
+    sample_op = hmc.sample(e_obj, {'beta': beta}, {'eta': eta})
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
@@ -120,23 +138,25 @@ if __name__ == "__main__":
         for epoch in range(1, epoches + 1):
             time_epoch = -time.time()
             learning_rate = learning_rate_0 / (t0 + epoch) * t0
-            perm = list(range(X_train.shape[0]))
+            perm = list(range(len(X_train)))
             np.random.shuffle(perm)
-            X_train = X_train[perm, :]
+            X_train = [X_train[p] for p in perm]
             Eta = Eta[perm, :]
             lls = []
             accs = []
             for t in range(iters):
                 x_batch = X_train[t * D: (t + 1) * D]
                 old_eta = Eta[t * D:(t + 1) * D, :]
+                ds_batch, vs_batch, cs_batch = lil_to_coo(x_batch)
 
                 # E step
                 sess.run(init_eta_ph, feed_dict={eta_ph: old_eta})
                 for j in range(num_e_steps):
                     new_eta, _, _, _, _, _, acc, _ = sess.run(
-                        sample_op, feed_dict={x: x_batch,
-                                              eta_mean: Eta_mean,
-                                              eta_logstd: Eta_logstd})
+                        sample_op,
+                        feed_dict={ds: ds_batch, vs: vs_batch, cs: cs_batch,
+                                   eta_mean: Eta_mean,
+                                   eta_logstd: Eta_logstd})
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
@@ -145,7 +165,8 @@ if __name__ == "__main__":
                 # M step
                 _, ll = sess.run(
                     [infer, log_likelihood],
-                    feed_dict={x: x_batch,
+                    feed_dict={ds: ds_batch, vs: vs_batch,
+                               cs: cs_batch,
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
                                learning_rate_ph: learning_rate * t0 / (

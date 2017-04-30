@@ -23,15 +23,12 @@ def standardize(data_train, data_test):
     :return: (train_set, test_set, mean, std), The standardized dataset and
         their mean and standard deviation before processing.
     """
-    std = np.std(data_train, 0)
+    std = np.std(data_train, 0, keepdims=True)
     std[std == 0] = 1
-    mean = np.mean(data_train, 0)
-    data_train_standardized \
-        = (data_train - np.full(data_train.shape, mean, dtype='float32')) / \
-        np.full(data_train.shape, std, dtype='float32')
-    data_test_standardized \
-        = (data_test - np.full(data_test.shape, mean, dtype='float32')) / \
-        np.full(data_test.shape, std, dtype='float32')
+    mean = np.mean(data_train, 0, keepdims=True)
+    data_train_standardized = (data_train - mean) / std
+    data_test_standardized = (data_test - mean) / std
+    mean, std = np.squeeze(mean, 0), np.squeeze(std, 0)
     return data_train_standardized, data_test_standardized, mean, std
 
 
@@ -264,7 +261,7 @@ def load_uci_german_credits(path, n_train):
     return x_train, y_train, x_test, y_test
 
 
-def load_uci_boston_housing(path):
+def load_uci_boston_housing(path, dtype=np.float32):
     if not os.path.isfile(path):
         data_dir = os.path.dirname(path)
         if not os.path.exists(os.path.dirname(path)):
@@ -274,6 +271,7 @@ def load_uci_boston_housing(path):
                          path)
 
     data = np.loadtxt(path)
+    data = data.astype(dtype)
     permutation = np.random.choice(np.arange(data.shape[0]),
                                    data.shape[0], replace=False)
     size_train = int(np.round(data.shape[0] * 0.8))
@@ -327,6 +325,50 @@ def load_uci_bow(data_name, data_path):
         os.remove(vector_file)
     else:
         data = np.load(numpy_file)
+
+    if not os.path.isfile(vocab_file):
+        download_dataset('{}vocab.{}.txt'.format(uci_url, data_name),
+                         vocab_file)
+
+    with open(vocab_file) as vf:
+        vocab = [v.strip() for v in vf.readlines()]
+
+    return data, vocab
+
+
+def load_uci_bow_sparse(data_name, data_path):
+    """
+    Loads the bag-of-words dataset from UCI machine learning repository.
+
+    :param data_name: Name of the dataset, e.g., nips, NYTimes.
+    :param data_path: Path to the dataset.
+
+    :return: A tuple of (X, vocab), where X is a D * V bag-of-words matrix,
+        whose each row is a document and its elements are count of each word.
+        vocab is a list of words in the vocabulary.
+    """
+    data_dir = os.path.dirname(data_path)
+    if not os.path.exists(os.path.dirname(data_path)):
+        os.makedirs(data_dir)
+
+    uci_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases' \
+              '/bag-of-words/'
+    vector_file = '{}.vector'.format(data_path)
+    vocab_file = '{}.vocab'.format(data_path)
+
+    if not os.path.isfile(vector_file):
+        download_dataset('{}docword.{}.txt.gz'.format(uci_url, data_name),
+                         vector_file)
+
+    with gzip.open(vector_file, 'rb') as f:
+        D = int(f.readline())
+        V = int(f.readline())
+        T = int(f.readline())
+        data = [[] for _ in range(D)]
+
+        for i in range(T):
+            d, v, c = f.readline().split()
+            data[int(d) - 1].append((int(v) - 1, int(c)))
 
     if not os.path.isfile(vocab_file):
         download_dataset('{}vocab.{}.txt'.format(uci_url, data_name),
