@@ -179,25 +179,3 @@ class TensorArithmeticMixin(object):
     # slicing and indexing
     def __getitem__(self, item):
         return (tf.convert_to_tensor(self))[item]
-
-    # disallowed operators
-    def __iter__(self):
-        raise TypeError("Tensor object is not iterable.")
-
-    def __bool__(self):
-        raise TypeError(
-            "Using a tensor as a Python `bool` is not allowed. "
-            "Use `if t is not None:` instead of `if t:` to test if a "
-            "tensor is defined, and use TensorFlow ops such as "
-            "tf.cond to execute subgraphs conditioned on the value of "
-            "a tensor."
-        )
-
-    def __nonzero__(self):
-        raise TypeError(
-            "Using a tensor as a Python `bool` is not allowed. "
-            "Use `if t is not None:` instead of `if t:` to test if a "
-            "tensor is defined, and use TensorFlow ops such as "
-            "tf.cond to execute subgraphs conditioned on the value of "
-            "a tensor."
-        )
