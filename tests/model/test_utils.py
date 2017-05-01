@@ -194,7 +194,7 @@ class ArithMixinTestCase(tf.test.TestCase):
                         (name, res_val, ans_val, x)
             )
 
-        with tf.Graph().as_default(), tf.Session().as_default():
+        with tf.Graph().as_default(), self.test_session(use_gpu=True):
             int_data = np.asarray([1, -2, 3], dtype=np.int32)
             float_data = np.asarray([1.1, -2.2, 3.3], dtype=np.float32)
             bool_data = np.asarray([True, False, True], dtype=np.bool)
@@ -262,7 +262,7 @@ class ArithMixinTestCase(tf.test.TestCase):
             'ge': lambda x, y: x >= y,
         }
 
-        with tf.Graph().as_default(), tf.Session().as_default():
+        with tf.Graph().as_default(), self.test_session(use_gpu=True):
             # arithmetic operators
             run_ops(np.asarray([-4, 5, 6], dtype=np.int32),
                     np.asarray([1, -2, 3], dtype=np.int32),
@@ -325,7 +325,7 @@ class ArithMixinTestCase(tf.test.TestCase):
                 return item
         sg = _SliceGenerator()
 
-        with tf.Graph().as_default(), tf.Session().as_default():
+        with tf.Graph().as_default(), self.test_session(use_gpu=True):
             data = np.asarray([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
             indices_or_slices = [
                 0,
