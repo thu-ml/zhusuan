@@ -351,21 +351,3 @@ class ArithMixinTestCase(tf.test.TestCase):
                     check_getitem(data, s, x_simple_tensor, y_tensor)
                     check_getitem(data, s, x_simple_tensor, y_simple_tensor)
                     check_getitem(data, s, x_tensor, y_simple_tensor)
-
-    def test_disallowed_op(self):
-        with tf.Graph().as_default():
-            with self.assertRaises(TypeError) as cm:
-                _ = iter(_SimpleTensor(tf.constant(1)))
-            self.assertIn('Tensor object is not iterable',
-                          str(cm.exception))
-
-            with self.assertRaises(TypeError) as cm:
-                _ = not _SimpleTensor(tf.constant(1))
-            self.assertIn('Using a tensor as a Python `bool` is not allowed',
-                          str(cm.exception))
-
-            with self.assertRaises(TypeError) as cm:
-                if _SimpleTensor(tf.constant(1)):
-                    pass
-            self.assertIn('Using a tensor as a Python `bool` is not allowed',
-                          str(cm.exception))
