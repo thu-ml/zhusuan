@@ -79,25 +79,20 @@ class TestStochasticTensor(tf.test.TestCase):
 
     def test_disallowed_operator(self):
         with tf.Graph().as_default():
-            with self.assertRaises(TypeError) as cm:
+            with self.assertRaisesRegexp(
+                    TypeError, 'StochasticTensor object is not iterable'):
                 _ = iter(StochasticTensor('a', Mock(dtype=tf.float32), 1))
-            self.assertIn('StochasticTensor object is not iterable',
-                          str(cm.exception))
 
-            with self.assertRaises(TypeError) as cm:
+            with self.assertRaisesRegexp(
+                    TypeError, 'Using a `StochasticTensor` as a Python '
+                               '`bool` is not allowed'):
                 _ = not StochasticTensor('a', Mock(dtype=tf.float32), 1)
-            self.assertIn(
-                'Using a `StochasticTensor` as a Python `bool` is not allowed',
-                str(cm.exception)
-            )
 
-            with self.assertRaises(TypeError) as cm:
+            with self.assertRaisesRegexp(
+                    TypeError, 'Using a `StochasticTensor` as a Python '
+                               '`bool` is not allowed'):
                 if StochasticTensor('a', Mock(dtype=tf.float32), 1):
                     pass
-            self.assertIn(
-                'Using a `StochasticTensor` as a Python `bool` is not allowed',
-                str(cm.exception)
-            )
 
 
 class TestBayesianNet(tf.test.TestCase):
