@@ -5,8 +5,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import OrderedDict
-from functools import wraps
-import re
 
 import six
 from six.moves import zip
@@ -385,24 +383,15 @@ def reuse(scope):
     function. The decorated function will automatically create variables the
     first time they are called and reuse them thereafter.
 
+    .. note::
+
+        This decorator is internally implemented by tensorflow's 
+        :func:`make_template` function. See `its doc
+        <https://www.tensorflow.org/api_docs/python/tf/make_template>_`
+        for requirements on the target function.
+
     :param scope: A string. The scope name passed to tensorflow
         `variable_scope()
         <https://www.tensorflow.org/api_docs/python/tf/variable_scope>`_.
     """
-
-    def reuse_decorator(f):
-        @wraps(f)
-        def _func(*args, **kwargs):
-            try:
-                with tf.variable_scope(scope, reuse=True):
-                    return f(*args, **kwargs)
-            except ValueError as e:
-                if re.search(r'.*not exist.*tf\.get_variable.*', str(e)):
-                    with tf.variable_scope(scope):
-                        return f(*args, **kwargs)
-                else:
-                    raise
-
-        return _func
-
-    return reuse_decorator
+    return lambda f: tf.make_template(scope, f)

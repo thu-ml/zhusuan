@@ -82,7 +82,7 @@ if __name__ == "__main__":
     test_freq = 10
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
-    save_freq = 1
+    save_freq = 100
     result_path = "results/vae"
 
     # Build the computation graph

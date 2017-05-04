@@ -162,5 +162,5 @@ class TestReuse(tf.test.TestCase):
         w1 = f()
         w2 = f()
         w3 = f()
-        assert w1 is w2
-        assert w2 is w3
+        self.assertTrue(w1 is w2)
+        self.assertTrue(w2 is w3)
