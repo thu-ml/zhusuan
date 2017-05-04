@@ -33,8 +33,8 @@ if __name__ == "__main__":
     # Define HMC parameters
     kernel_width = 0.1
     n_chains = 1000
-    n_samples = 200
-    burnin = n_samples // 2
+    n_iters = 200
+    burnin = n_iters // 2
     n_leapfrogs = 5
 
     # Build the computation graph
@@ -55,10 +55,10 @@ if __name__ == "__main__":
         sess.run(tf.global_variables_initializer())
         samples = []
         print('Sampling...')
-        for i in range(n_samples):
+        for i in range(n_iters):
             q, p, oh, nh, ol, nl, ar, ss = sess.run(
-                sample_op, feed_dict={adapt_step_size: i < burnin,
-                                      adapt_mass: i < burnin})
+                sample_op, feed_dict={adapt_step_size: i < burnin // 2,
+                                      adapt_mass: i < burnin // 2})
             print('Sample {}: Acceptance rate = {}, step size = {}'.format(
                 i, np.mean(ar), ss))
             if i >= burnin:
