@@ -97,7 +97,7 @@ html_theme = 'alabaster'
 # documentation.
 #
 html_theme_options = {
-    'github_user': 'thjashin',
+    'github_user': 'thu-ml',
     'github_repo': 'ZhuSuan',
     'github_type': 'star',
     'sidebar_width': '220px',
@@ -151,7 +151,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'ZhuSuan.tex', u'ZhuSuan Documentation',
-     u'Jiaxin Shi, Jianfei Chen', 'manual'),
+     u'ZhuSuan contributors', 'manual'),
 ]
 
 
@@ -172,6 +172,6 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
     (master_doc, 'ZhuSuan', u'ZhuSuan Documentation',
-     author, 'ZhuSuan', 'One line description of project.',
+     author, 'ZhuSuan', 'A Library for Generative Models',
      'Miscellaneous'),
 ]
