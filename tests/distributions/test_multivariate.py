@@ -9,7 +9,7 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc, special
 
-from tests.distributions.utils import *
+from tests.distributions import utils
 from zhusuan.distributions.multivariate import *
 
 
@@ -67,13 +67,13 @@ class TestMultinomial(tf.test.TestCase):
     def test_batch_shape(self):
         def _distribution(param):
             return Multinomial(param, 10)
-        test_batch_shape_1parameter(
+        utils.test_batch_shape_1parameter(
             self, _distribution, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
         def _distribution(param):
             return Multinomial(param, 10)
-        test_sample_shape_1parameter_multivariate(
+        utils.test_sample_shape_1parameter_multivariate(
             self, _distribution, np.zeros)
 
     def test_log_prob_shape(self):
@@ -86,7 +86,7 @@ class TestMultinomial(tf.test.TestCase):
             samples[:, 0] = 1
             return samples.reshape(shape)
 
-        test_log_prob_shape_1parameter_multivariate(
+        utils.test_log_prob_shape_1parameter_multivariate(
             self, _distribution, _make_samples, _make_samples)
 
     def test_value(self):
@@ -116,7 +116,7 @@ class TestMultinomial(tf.test.TestCase):
     def test_dtype(self):
         def _distribution(param, dtype=None):
             return Multinomial(param, 10, dtype)
-        test_dtype_1parameter_discrete(self, _distribution)
+        utils.test_dtype_1parameter_discrete(self, _distribution)
 
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
             Multinomial([1., 1.], tf.placeholder(tf.float32, []))
@@ -158,11 +158,11 @@ class TestOnehotCategorical(tf.test.TestCase):
         self.assertEqual(cat._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_1parameter(
+        utils.test_batch_shape_1parameter(
             self, OnehotCategorical, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        test_sample_shape_1parameter_multivariate(
+        utils.test_sample_shape_1parameter_multivariate(
             self, OnehotCategorical, np.zeros)
 
     def test_log_prob_shape(self):
@@ -172,7 +172,7 @@ class TestOnehotCategorical(tf.test.TestCase):
             samples[:, 0] = 1
             return samples.reshape(shape)
 
-        test_log_prob_shape_1parameter_multivariate(
+        utils.test_log_prob_shape_1parameter_multivariate(
             self, OnehotCategorical, _make_samples, _make_samples)
 
     def test_value(self):
@@ -208,7 +208,7 @@ class TestOnehotCategorical(tf.test.TestCase):
                         np.ones([3, 1, 1], dtype=np.int32))
 
     def test_dtype(self):
-        test_dtype_1parameter_discrete(self, OnehotCategorical)
+        utils.test_dtype_1parameter_discrete(self, OnehotCategorical)
 
 
 class TestDirichlet(tf.test.TestCase):
@@ -252,11 +252,11 @@ class TestDirichlet(tf.test.TestCase):
         self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_1parameter(
+        utils.test_batch_shape_1parameter(
             self, Dirichlet, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        test_sample_shape_1parameter_multivariate(
+        utils.test_sample_shape_1parameter_multivariate(
             self, Dirichlet, np.zeros)
 
     def test_log_prob_shape(self):
@@ -267,7 +267,7 @@ class TestDirichlet(tf.test.TestCase):
         # TODO: This failed with a bug in Tensorflow, waiting fix.
         # https://github.com/tensorflow/tensorflow/issues/8391
         # _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
-        test_log_prob_shape_1parameter_multivariate(
+        utils.test_log_prob_shape_1parameter_multivariate(
             self, Dirichlet, np.ones, _make_samples)
 
     def test_value(self):
@@ -339,4 +339,4 @@ class TestDirichlet(tf.test.TestCase):
                 log_p.eval(feed_dict={alpha: [-1., 1.], given: [0.5, 0.5]})
 
     def test_dtype(self):
-        test_dtype_1parameter_continuous(self, Dirichlet)
+        utils.test_dtype_1parameter_continuous(self, Dirichlet)

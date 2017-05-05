@@ -43,7 +43,13 @@ multivariate standard Normal distribution. With this complex forwarding
 process, the model is enabled to learn complex relationships between the
 input (:math:`x`) and the output (:math:`y`). Finally, some noise is added to
 the output to get a tractable likelihood for the model, which is typically
-a Gaussian noise in regression problems.
+a Gaussian noise in regression problems. A graphical model representation for 
+bayesian neural network is as follows. Combining the observed input (:math:`x`) and 
+the global network parameters (:math:`\{W_i\}_{i=1}^L`), the model outputs
+observed (:math:`y`).
+
+.. image:: ./figures/bayesian_nn.jpg
+    :align: center
 
 Build the Model
 ---------------
@@ -199,7 +205,30 @@ is zero.
 
 This lower bound is usually called Evidence Lower Bound (ELBO). Note that the
 only probabilities we need to evaluate in it is the joint likelihood and
-the probability of the variational posterior.
+the probability of the variational posterior. ELBO can also be rearranged as 
+log conditional likelihood and KL divergence between variational posterior and prior.
+In our setting, both variaional posterior and prior are normal distribution. Their
+KL divergence is easy to compute. The log conditional likelihood is
+
+.. math::
+    \log p(y|x, W) = \sum_{n=1}^N\log p(y_n|x_n, W)
+
+Computing log conditional likelihood for the whole dataset is very time-consuming.
+To solve this problem, we take the idea of ``mini-batch`` to approximate the conditional 
+likelihood
+
+.. math::
+    \log p(y|x, W) \approx \frac{N}{M}\sum_{m=1}^M\log p(y_m| x_m, W)
+
+The dataset :math:`\{(x_m, y_m)\}_{m=1:M}` is a subset of :math:`M` nonrepetitive random samples from the training set 
+:math:`\{(x_n, y_n)\}_{n=1:N}`. By setting :math:`M` relatively small, we can compute the formula
+above efficiently. What's more, using ``mini-batch`` brings us additional benefits.
+Training neural networks has a general problem that the parameters can be stuck in a local
+minimum, which limits the model performance. Therefore, in the training process, 
+we hope the model parameters have the ability to jump out of the local minimum area when stuck at it 
+and search in a bigger space to find the global minimum. ``Mini-batch`` samples brings along
+randomness, which gives the parameters greater chance to search in a bigger space. Therefore, using
+``mini-batch`` in training also helps optimization.
 
 .. Note::
 

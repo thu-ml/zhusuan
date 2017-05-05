@@ -9,7 +9,7 @@ import tensorflow as tf
 import numpy as np
 from scipy import stats, misc
 
-from tests.distributions.utils import *
+from tests.distributions import utils
 from zhusuan.distributions.univariate import *
 
 
@@ -39,11 +39,11 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(norm._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_2parameter_univariate(
+        utils.test_batch_shape_2parameter_univariate(
             self, Normal, np.zeros, np.zeros)
 
     def test_sample_shape(self):
-        test_sample_shape_2parameter_univariate(
+        utils.test_sample_shape_2parameter_univariate(
             self, Normal, np.zeros, np.zeros)
 
     def test_sample_reparameterized(self):
@@ -62,7 +62,7 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(logstd_grads, None)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_2parameter_univariate(
+        utils.test_log_prob_shape_2parameter_univariate(
             self, Normal, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
@@ -91,7 +91,7 @@ class TestNormal(tf.test.TestCase):
                 norm.log_prob(0.).eval()
 
     def test_dtype(self):
-        test_dtype_2parameter(self, Normal)
+        utils.test_dtype_2parameter(self, Normal)
 
 
 class TestBernoulli(tf.test.TestCase):
@@ -108,15 +108,15 @@ class TestBernoulli(tf.test.TestCase):
         self.assertEqual(bernoulli._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_1parameter(
+        utils.test_batch_shape_1parameter(
             self, Bernoulli, np.zeros, is_univariate=True)
 
     def test_sample_shape(self):
-        test_sample_shape_1parameter_univariate(
+        utils.test_sample_shape_1parameter_univariate(
             self, Bernoulli, np.zeros)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_1parameter_univariate(
+        utils.test_log_prob_shape_1parameter_univariate(
             self, Bernoulli, np.zeros, np.zeros)
 
     def test_value(self):
@@ -141,7 +141,7 @@ class TestBernoulli(tf.test.TestCase):
                         np.ones([3, 1, 2, 3], dtype=np.int32))
 
     def test_dtype(self):
-        test_dtype_1parameter_discrete(self, Bernoulli)
+        utils.test_dtype_1parameter_discrete(self, Bernoulli)
 
 
 class TestCategorical(tf.test.TestCase):
@@ -323,7 +323,7 @@ class TestCategorical(tf.test.TestCase):
                         np.ones([3, 1, 1], dtype=np.int32))
 
     def test_dtype(self):
-        test_dtype_1parameter_discrete(self, Categorical)
+        utils.test_dtype_1parameter_discrete(self, Categorical)
 
 
 class TestUniform(tf.test.TestCase):
@@ -350,11 +350,11 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(unif._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_2parameter_univariate(
+        utils.test_batch_shape_2parameter_univariate(
             self, Uniform, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        test_sample_shape_2parameter_univariate(
+        utils.test_sample_shape_2parameter_univariate(
             self, Uniform, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
@@ -373,7 +373,7 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(maxval_grads, None)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_2parameter_univariate(
+        utils.test_log_prob_shape_2parameter_univariate(
             self, Uniform, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
@@ -405,7 +405,7 @@ class TestUniform(tf.test.TestCase):
                 unif.log_prob(0.).eval()
 
     def test_dtype(self):
-        test_dtype_2parameter(self, Uniform)
+        utils.test_dtype_2parameter(self, Uniform)
 
 
 class TestGamma(tf.test.TestCase):
@@ -431,15 +431,15 @@ class TestGamma(tf.test.TestCase):
         self.assertEqual(gamma._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_2parameter_univariate(
+        utils.test_batch_shape_2parameter_univariate(
             self, Gamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        test_sample_shape_2parameter_univariate(
+        utils.test_sample_shape_2parameter_univariate(
             self, Gamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_2parameter_univariate(
+        utils.test_log_prob_shape_2parameter_univariate(
             self, Gamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -481,7 +481,7 @@ class TestGamma(tf.test.TestCase):
                 log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
 
     def test_dtype(self):
-        test_dtype_2parameter(self, Gamma)
+        utils.test_dtype_2parameter(self, Gamma)
 
 
 class TestBeta(tf.test.TestCase):
@@ -507,15 +507,15 @@ class TestBeta(tf.test.TestCase):
         self.assertEqual(dist._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_2parameter_univariate(
+        utils.test_batch_shape_2parameter_univariate(
             self, Beta, np.ones, np.ones)
 
     def test_sample_shape(self):
-        test_sample_shape_2parameter_univariate(
+        utils.test_sample_shape_2parameter_univariate(
             self, Beta, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_2parameter_univariate(
+        utils.test_log_prob_shape_2parameter_univariate(
             self, Beta, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -559,7 +559,7 @@ class TestBeta(tf.test.TestCase):
                 log_p.eval(feed_dict={alpha: 0., beta: 1., given: 0.5})
 
     def test_dtype(self):
-        test_dtype_2parameter(self, Beta)
+        utils.test_dtype_2parameter(self, Beta)
 
 
 class TestPoisson(tf.test.TestCase):
@@ -575,15 +575,15 @@ class TestPoisson(tf.test.TestCase):
         self.assertEqual(poisson._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_1parameter(
+        utils.test_batch_shape_1parameter(
             self, Poisson, np.ones, is_univariate=True)
 
     def test_sample_shape(self):
-        test_sample_shape_1parameter_univariate(
+        utils.test_sample_shape_1parameter_univariate(
             self, Poisson, np.ones)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_1parameter_univariate(
+        utils.test_log_prob_shape_1parameter_univariate(
             self, Poisson, np.ones, np.ones)
 
     def test_value(self):
@@ -622,7 +622,7 @@ class TestPoisson(tf.test.TestCase):
                 log_p.eval(feed_dict={rate: -1., given: 1})
 
     def test_dtype(self):
-        test_dtype_1parameter_discrete(self, Poisson)
+        utils.test_dtype_1parameter_discrete(self, Poisson)
 
 
 class TestBinomial(tf.test.TestCase):
@@ -660,19 +660,19 @@ class TestBinomial(tf.test.TestCase):
     def test_batch_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        test_batch_shape_1parameter(
+        utils.test_batch_shape_1parameter(
             self, _distribution, np.ones, is_univariate=True)
 
     def test_sample_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        test_sample_shape_1parameter_univariate(
+        utils.test_sample_shape_1parameter_univariate(
             self, _distribution, np.ones)
 
     def test_log_prob_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        test_log_prob_shape_1parameter_univariate(
+        utils.test_log_prob_shape_1parameter_univariate(
             self, _distribution, np.ones, np.ones)
 
     def test_value(self):
@@ -721,7 +721,7 @@ class TestBinomial(tf.test.TestCase):
     def test_dtype(self):
         def _distribution(param, dtype=None):
             return Binomial(param, 10, dtype)
-        test_dtype_1parameter_discrete(self, _distribution)
+        utils.test_dtype_1parameter_discrete(self, _distribution)
 
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
             Binomial(1., tf.placeholder(tf.float32, []))
@@ -749,15 +749,15 @@ class TestInverseGamma(tf.test.TestCase):
         self.assertEqual(inv_gamma._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_2parameter_univariate(
+        utils.test_batch_shape_2parameter_univariate(
             self, InverseGamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        test_sample_shape_2parameter_univariate(
+        utils.test_sample_shape_2parameter_univariate(
             self, InverseGamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_2parameter_univariate(
+        utils.test_log_prob_shape_2parameter_univariate(
             self, InverseGamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -798,7 +798,7 @@ class TestInverseGamma(tf.test.TestCase):
                 log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
 
     def test_dtype(self):
-        test_dtype_2parameter(self, InverseGamma)
+        utils.test_dtype_2parameter(self, InverseGamma)
 
 
 class TestLaplace(tf.test.TestCase):
@@ -823,11 +823,11 @@ class TestLaplace(tf.test.TestCase):
         self.assertEqual(laplace._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
-        test_batch_shape_2parameter_univariate(
+        utils.test_batch_shape_2parameter_univariate(
             self, Laplace, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        test_sample_shape_2parameter_univariate(
+        utils.test_sample_shape_2parameter_univariate(
             self, Laplace, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
@@ -846,7 +846,7 @@ class TestLaplace(tf.test.TestCase):
         self.assertEqual(scale_grads, None)
 
     def test_log_prob_shape(self):
-        test_log_prob_shape_2parameter_univariate(
+        utils.test_log_prob_shape_2parameter_univariate(
             self, Laplace, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
@@ -881,4 +881,4 @@ class TestLaplace(tf.test.TestCase):
                 log_p.eval(feed_dict={loc: 1., scale: -1., given: 1.})
 
     def test_dtype(self):
-        test_dtype_2parameter(self, Laplace)
+        utils.test_dtype_2parameter(self, Laplace)

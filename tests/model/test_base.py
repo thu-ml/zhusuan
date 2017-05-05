@@ -24,9 +24,6 @@ class TestStochasticTensor(tf.test.TestCase):
                             log_prob=log_prob_func,
                             prob=prob_func,
                             dtype=tf.int32)
-        with self.assertRaisesRegexp(
-                RuntimeError, "can only be constructed in a BayesianNet"):
-            _ = StochasticTensor('test', distribution, 2)
         with BayesianNet() as model:
             s_tensor = StochasticTensor('test', distribution, 2)
         self.assertEqual(s_tensor.name, 'test')
@@ -44,8 +41,15 @@ class TestStochasticTensor(tf.test.TestCase):
                 "StochasticTensor\(\'a\'\) not compatible.*observed"):
             with BayesianNet(observed={'a': obs_float32}):
                 _ = StochasticTensor('a', distribution, 2).tensor
+        with self.assertRaisesRegexp(
+                ValueError,
+                "StochasticTensor\(\'a\'\) not compatible.*observed"):
+            _ = StochasticTensor(
+                'a', distribution, 2, observed=obs_float32).tensor
         with BayesianNet(observed={'a': obs_int32}):
             s_tensor = StochasticTensor('a', distribution, 2)
+        self.assertTrue(s_tensor.tensor is obs_int32)
+        s_tensor = StochasticTensor('a', distribution, 2, observed=obs_int32)
         self.assertTrue(s_tensor.tensor is obs_int32)
 
     def test_tensor_conversion(self):
@@ -72,6 +76,23 @@ class TestStochasticTensor(tf.test.TestCase):
             # TODO: test all operators
         with self.test_session(use_gpu=True):
             self.assertNear(b.eval(), 2, 1e-6)
+
+    def test_disallowed_operator(self):
+        with tf.Graph().as_default():
+            with self.assertRaisesRegexp(
+                    TypeError, 'StochasticTensor object is not iterable'):
+                _ = iter(StochasticTensor('a', Mock(dtype=tf.float32), 1))
+
+            with self.assertRaisesRegexp(
+                    TypeError, 'Using a `StochasticTensor` as a Python '
+                               '`bool` is not allowed'):
+                _ = not StochasticTensor('a', Mock(dtype=tf.float32), 1)
+
+            with self.assertRaisesRegexp(
+                    TypeError, 'Using a `StochasticTensor` as a Python '
+                               '`bool` is not allowed'):
+                if StochasticTensor('a', Mock(dtype=tf.float32), 1):
+                    pass
 
 
 class TestBayesianNet(tf.test.TestCase):
@@ -141,5 +162,5 @@ class TestReuse(tf.test.TestCase):
         w1 = f()
         w2 = f()
         w3 = f()
-        assert w1 is w2
-        assert w2 is w3
+        self.assertTrue(w1 is w2)
+        self.assertTrue(w2 is w3)

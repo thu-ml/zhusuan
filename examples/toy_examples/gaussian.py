@@ -7,8 +7,6 @@ from __future__ import division
 
 import numpy as np
 from scipy import stats
-import matplotlib as mpl
-mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import zhusuan as zs
@@ -33,8 +31,8 @@ if __name__ == "__main__":
     # Define HMC parameters
     kernel_width = 0.1
     n_chains = 1000
-    n_samples = 200
-    burnin = n_samples // 2
+    n_iters = 200
+    burnin = n_iters // 2
     n_leapfrogs = 5
 
     # Build the computation graph
@@ -48,28 +46,27 @@ if __name__ == "__main__":
                  adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
                  target_acceptance_rate=0.9)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
-    sample_op = hmc.sample(log_joint, {}, {'x': x})
+    sample_op, hmc_info = hmc.sample(log_joint, {}, {'x': x})
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         samples = []
         print('Sampling...')
-        for i in range(n_samples):
-            q, p, oh, nh, ol, nl, ar, ss = sess.run(
-                sample_op, feed_dict={adapt_step_size: i < burnin,
-                                      adapt_mass: i < burnin})
-            print('Sample {}: Acceptance rate = {}, step size = {}'.format(
-                i, np.mean(ar), ss))
+        for i in range(n_iters):
+            _, x_sample, acc, ss = sess.run(
+                [sample_op, hmc_info.samples['x'], hmc_info.acceptance_rate,
+                 hmc_info.updated_step_size],
+                feed_dict={adapt_step_size: i < burnin // 2,
+                           adapt_mass: i < burnin // 2})
+            print('Sample {}: Acceptance rate = {}, updated step size = {}'
+                  .format(i, np.mean(acc), ss))
             if i >= burnin:
-                samples.append(q[0])
+                samples.append(x_sample)
         print('Finished.')
         samples = np.vstack(samples)
 
     # Check & plot the results
-    for i in range(n_x):
-        print(stats.normaltest(samples[:, i]))
-
     print('Expected mean = {}'.format(np.zeros(n_x)))
     print('Sample mean = {}'.format(np.mean(samples, 0)))
     print('Expected stdev = {}'.format(stdev))
