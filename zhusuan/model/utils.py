@@ -83,7 +83,7 @@ def get_backward_ops(seed_tensors, treat_as_inputs=None):
 class TensorArithmeticMixin(object):
     """
     Mixin class for implementing tensor arithmetic operations.
-    
+
     The derived class must support `tf.convert_to_tensor`, in order to
     inherit from this mixin class.
     """

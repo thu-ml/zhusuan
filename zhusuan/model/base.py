@@ -46,7 +46,7 @@ class StochasticTensor(TensorArithmeticMixin):
         this `StochasticTensor`.
     :param observed: A Tensor, which matches the shape of `distribution`.
         If specified, will be used as the value of this stochastic tensor,
-        instead of sampling from the distribution.  This argument will 
+        instead of sampling from the distribution. This argument will
         also overwrite the value provided via BayesianNet context.
     """
 
@@ -385,7 +385,7 @@ def reuse(scope):
 
     .. note::
 
-        This decorator is internally implemented by tensorflow's 
+        This decorator is internally implemented by tensorflow's
         :func:`make_template` function. See `its doc
         <https://www.tensorflow.org/api_docs/python/tf/make_template>_`
         for requirements on the target function.

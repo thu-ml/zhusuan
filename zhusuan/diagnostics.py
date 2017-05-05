@@ -45,11 +45,11 @@ def effective_sample_size(samples, burn_in=100):
     Compute the effective sample size of a chain of vector samples, using the
     algorithm in Stan. Users should flatten their samples as vectors if not so.
 
-    :param samples: A 2-D numpy array of shape ``(M, D)``, where ``M`` is the 
-        number of samples, and ``D`` is the number of dimensions of each 
+    :param samples: A 2-D numpy array of shape ``(M, D)``, where ``M`` is the
+        number of samples, and ``D`` is the number of dimensions of each
         sample.
     :param burn_in: The number of discarded samples.
-    
+
     :return: A 1-D numpy array. The effective sample size.
     """
     current_ess = np.inf

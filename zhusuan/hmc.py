@@ -374,7 +374,7 @@ class HMC:
 
     def sample(self, log_joint, observed, latent):
         """
-        Return the sampling `Operation` that runs a HMC iteration and 
+        Return the sampling `Operation` that runs a HMC iteration and
         the statistics collected during it.
 
         :param log_joint: A function that accepts a dictionary argument of

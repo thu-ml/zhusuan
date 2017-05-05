@@ -7,8 +7,6 @@ from __future__ import division
 
 import numpy as np
 from scipy import stats
-import matplotlib as mpl
-mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import zhusuan as zs

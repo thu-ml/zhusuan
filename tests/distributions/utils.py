@@ -157,7 +157,7 @@ def test_dtype_1parameter_continuous(test_class, Distribution):
 
 
 def test_batch_shape_2parameter_univariate(
-    test_class, Distribution, make_param1, make_param2):
+        test_class, Distribution, make_param1, make_param2):
     # static
     def _test_static(param1_shape, param2_shape, target_shape):
         param1 = tf.placeholder(tf.float32, param1_shape)
@@ -203,7 +203,7 @@ def test_batch_shape_2parameter_univariate(
 
 
 def test_sample_shape_2parameter_univariate(
-    test_class, Distribution, make_param1, make_param2):
+        test_class, Distribution, make_param1, make_param2):
     def _test_static(param1_shape, param2_shape, n_samples, target_shape):
         param1 = tf.placeholder(tf.float32, param1_shape)
         param2 = tf.placeholder(tf.float32, param2_shape)
@@ -247,7 +247,7 @@ def test_sample_shape_2parameter_univariate(
 
 
 def test_log_prob_shape_2parameter_univariate(
-    test_class, Distribution, make_param1, make_param2, make_given):
+        test_class, Distribution, make_param1, make_param2, make_given):
     def _test_static(param1_shape, param2_shape, given_shape, target_shape):
         param1 = tf.placeholder(tf.float32, param1_shape)
         param2 = tf.placeholder(tf.float32, param2_shape)
@@ -287,8 +287,9 @@ def test_log_prob_shape_2parameter_univariate(
                                            "Incompatible shapes"):
             _test_dynamic([2, 3, 5], [], [1, 2, 1], None)
 
+
 def test_batch_shape_1parameter(
-    test_class, Distribution, make_param, is_univariate):
+        test_class, Distribution, make_param, is_univariate):
     # static
     def _test_static(param_shape):
         param = tf.placeholder(tf.float32, param_shape)
@@ -330,7 +331,7 @@ def test_batch_shape_1parameter(
 
 
 def test_sample_shape_1parameter_univariate(
-    test_class, Distribution, make_param):
+        test_class, Distribution, make_param):
     def _test_static(param_shape, n_samples, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
         dist = Distribution(param)
@@ -365,7 +366,7 @@ def test_sample_shape_1parameter_univariate(
 
 
 def test_log_prob_shape_1parameter_univariate(
-    test_class, Distribution, make_param, make_given):
+        test_class, Distribution, make_param, make_given):
     def _test_static(param_shape, given_shape, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
         dist = Distribution(param)
@@ -408,7 +409,7 @@ def test_log_prob_shape_1parameter_univariate(
 
 
 def test_sample_shape_1parameter_multivariate(
-    test_class, Distribution, make_param):
+        test_class, Distribution, make_param):
     def _test_static(param_shape, n_samples, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
         dist = Distribution(param)
@@ -447,7 +448,7 @@ def test_sample_shape_1parameter_multivariate(
 
 
 def test_log_prob_shape_1parameter_multivariate(
-    test_class, Distribution, make_param, make_given):
+        test_class, Distribution, make_param, make_given):
     def _test_static(param_shape, given_shape, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
         dist = Distribution(param)
