@@ -78,7 +78,7 @@ To install ZhuSuan in an "editable" or "develop" mode, run
 
 in the main directory. This installation is removable by
 
-`python setup.py develop --uninstall`
+`pip uninstall zhusuan`
 
 Additional dependencies for developments can be installed by
 
@@ -90,7 +90,7 @@ This command will run automatic tests in the main directory.
 `python -m unittest discover -v`
 
 ##### Test Coverage
-After running tests, to ensure test coverage keeping 100% over the 
+After running tests, to ensure test coverage over the 
 developments, run
 
 `coverage report --include="zhusuan/*"`
