@@ -103,7 +103,8 @@ if __name__ == "__main__":
     lp_eta, lp_beta, lp_x = joint_obj({'x': x, 'eta': eta, 'beta': beta})
     log_likelihood = tf.reduce_sum(lp_x)
     log_joint = tf.reduce_sum(lp_beta) + log_likelihood
-    sample_op = hmc.sample(e_obj, {'x': x, 'beta': beta}, {'eta': eta})
+    sample_op, hmc_info = hmc.sample(
+        e_obj, observed={'x': x, 'beta': beta}, latent={'eta': eta})
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
@@ -133,14 +134,16 @@ if __name__ == "__main__":
                 # E step
                 sess.run(init_eta_ph, feed_dict={eta_ph: old_eta})
                 for j in range(num_e_steps):
-                    new_eta, _, _, _, _, _, acc, _ = sess.run(
-                        sample_op, feed_dict={x: x_batch,
-                                              eta_mean: Eta_mean,
-                                              eta_logstd: Eta_logstd})
+                    _, new_eta, acc = sess.run(
+                        [sample_op, hmc_info.samples['eta'],
+                         hmc_info.acceptance_rate],
+                        feed_dict={x: x_batch,
+                                   eta_mean: Eta_mean,
+                                   eta_logstd: Eta_logstd})
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
-                        Eta[t * D:(t + 1) * D, :] = new_eta[0]
+                        Eta[t * D:(t + 1) * D, :] = new_eta
 
                 # M step
                 _, ll = sess.run(

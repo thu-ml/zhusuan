@@ -48,7 +48,7 @@ if __name__ == "__main__":
                  adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
                  target_acceptance_rate=0.9)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
-    sample_op = hmc.sample(log_joint, {}, {'x': x})
+    sample_op, hmc_info = hmc.sample(log_joint, {}, {'x': x})
 
     # Run the inference
     with tf.Session() as sess:
@@ -56,20 +56,19 @@ if __name__ == "__main__":
         samples = []
         print('Sampling...')
         for i in range(n_iters):
-            q, p, oh, nh, ol, nl, ar, ss = sess.run(
-                sample_op, feed_dict={adapt_step_size: i < burnin // 2,
-                                      adapt_mass: i < burnin // 2})
-            print('Sample {}: Acceptance rate = {}, step size = {}'.format(
-                i, np.mean(ar), ss))
+            _, x_sample, acc, ss = sess.run(
+                [sample_op, hmc_info.samples['x'], hmc_info.acceptance_rate,
+                 hmc_info.updated_step_size],
+                feed_dict={adapt_step_size: i < burnin // 2,
+                           adapt_mass: i < burnin // 2})
+            print('Sample {}: Acceptance rate = {}, updated step size = {}'
+                  .format(i, np.mean(acc), ss))
             if i >= burnin:
-                samples.append(q[0])
+                samples.append(x_sample)
         print('Finished.')
         samples = np.vstack(samples)
 
     # Check & plot the results
-    for i in range(n_x):
-        print(stats.normaltest(samples[:, i]))
-
     print('Expected mean = {}'.format(np.zeros(n_x)))
     print('Sample mean = {}'.format(np.mean(samples, 0)))
     print('Expected stdev = {}'.format(stdev))
