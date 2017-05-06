@@ -23,10 +23,27 @@ principled Bayesian inference.
    :maxdepth: 2
 
 
-Getting Started
----------------
+Installation
+------------
 
-An easy Normal case here for getting started.
+ZhuSuan is still under development. Before the first stable release (1.0),
+please clone the `GitHub repository <https://github.com/thu-ml/zhusuan>`_ and
+run::
+
+   pip install .
+
+in the main directory. This will install ZhuSuan and its dependencies
+automatically.
+
+If you are developing ZhuSuan, you may want to install in an "editable" or
+"develop" mode. See the Developments section in
+`README <https://github.com/thu-ml/zhusuan/blob/master/README.md>`_.
+
+After installation, open your python console and type::
+
+   >>> import zhusuan as zs
+
+If no error occurs, you've successfully installed ZhuSuan.
 
 
 Tutorials
