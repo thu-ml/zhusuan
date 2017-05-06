@@ -1,5 +1,5 @@
-zhusuan\.variational 
-===========================
+zhusuan.variational 
+==========================
 
 .. automodule:: zhusuan.variational
     :members:
