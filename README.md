@@ -43,6 +43,10 @@ automatically.
 If you are developing ZhuSuan, you may want to install in an 
 "editable" or "develop" mode. See the Developments section below.
 
+## Documentation
+
+Documentation is available online: [zhusuan.readthedocs.io](http://zhusuan.readthedocs.io)
+
 ## Examples
 
 To run the provided examples, you may need extra dependencies to be installed.
