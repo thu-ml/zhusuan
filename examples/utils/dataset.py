@@ -9,6 +9,7 @@ import gzip
 import tarfile
 
 import numpy as np
+import six
 from six.moves import urllib, range
 from six.moves import cPickle as pickle
 
@@ -70,7 +71,10 @@ def load_mnist_realval(path, one_hot=True, dequantify=False):
                          '/mnist.pkl.gz', path)
 
     f = gzip.open(path, 'rb')
-    train_set, valid_set, test_set = pickle.load(f, encoding='latin1')
+    if six.PY2:
+        train_set, valid_set, test_set = pickle.load(f)
+    else:
+        train_set, valid_set, test_set = pickle.load(f, encoding='latin1')
     f.close()
     x_train, t_train = train_set[0], train_set[1]
     x_valid, t_valid = valid_set[0], valid_set[1]
@@ -173,7 +177,10 @@ def load_cifar10(path, normalize=True, dequantify=False, one_hot=True):
     for i in range(1, 6):
         batch_file = os.path.join(batch_dir, 'data_batch_' + str(i))
         with open(batch_file, 'rb') as f:
-            data = pickle.load(f, encoding='latin1')
+            if six.PY2:
+                data = pickle.load(f)
+            else:
+                data = pickle.load(f, encoding='latin1')
             train_x.append(data['data'])
             train_y.append(data['labels'])
     train_x = np.vstack(train_x)
@@ -181,7 +188,10 @@ def load_cifar10(path, normalize=True, dequantify=False, one_hot=True):
 
     test_batch_file = os.path.join(batch_dir, 'test_batch')
     with open(test_batch_file, 'rb') as f:
-        data = pickle.load(f, encoding='latin1')
+        if six.PY2:
+            data = pickle.load(f)
+        else:
+            data = pickle.load(f, encoding='latin1')
         test_x = data['data']
         test_y = np.asarray(data['labels'])
 
