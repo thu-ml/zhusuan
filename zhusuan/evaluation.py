@@ -74,7 +74,8 @@ class BDMC:
 
             self.log_fn = log_fn
             self.log_fn_val = log_fn(merge_dicts(observed, latent))
-            self.sample_op = hmc.sample(log_fn, observed, latent)
+            self.sample_op, self.hmc_info = hmc.sample(
+                log_fn, observed, latent)
             self.init_latent = [tf.assign(z, z_s)
                                 for z, z_s in zip(latent.values(),
                                                   self.prior_sampler.values())]
@@ -92,27 +93,29 @@ class BDMC:
             current_temperature = 1.0 / self.n_temperatures * (num_t + 1)
             new_feed_dict = feed_dict.copy()
             new_feed_dict[self.temperature] = current_temperature
-            _, _, _, _, oldp, newp, acc, ss = sess.run(self.sample_op,
-                                                       feed_dict=new_feed_dict)
+            _, old_log_p, new_log_p = sess.run(
+                [self.sample_op, self.hmc_info.orig_log_prob,
+                 self.hmc_info.log_prob], feed_dict=new_feed_dict)
             if num_t + 1 < self.n_temperatures:
-                log_weights += oldp - newp
+                log_weights += old_log_p - new_log_p
             else:
-                log_weights += oldp
+                log_weights += old_log_p
 
         ll_lb = np.mean(self.get_lower_bound(log_weights))
 
         # Backward AIS
-        log_weights = -newp
+        log_weights = -new_log_p
         for num_t in range(self.n_temperatures):
             current_temperature = 1.0 - 1.0 / self.n_temperatures * (num_t + 1)
-            _, _, _, _, oldp, newp, acc, ss = sess.run(
-                self.sample_op,
+            _, old_log_p, new_log_p = sess.run(
+                [self.sample_op, self.hmc_info.orig_log_prob,
+                 self.hmc_info.log_prob],
                 feed_dict=merge_dicts(feed_dict,
                                       {self.temperature: current_temperature}))
             if num_t + 1 < self.n_temperatures:
-                log_weights += oldp - newp
+                log_weights += old_log_p - new_log_p
             else:
-                log_weights += oldp
+                log_weights += old_log_p
 
         ll_ub = -np.mean(self.get_lower_bound(log_weights))
 
