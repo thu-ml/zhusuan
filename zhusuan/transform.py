@@ -137,6 +137,7 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
 
     input_x = tf.convert_to_tensor(samples, dtype=tf.float32)
     log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
+    log_probs = tf.reshape(log_probs, [-1])
     static_x_shape = input_x.get_shape()
     if not static_x_shape[-1:].is_fully_defined():
         raise ValueError(
@@ -192,6 +193,7 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
         log_probs -= tf.log(det_ja)
         z = z + tf.matmul(activation, param_u, name='update')
     z = tf.reshape(z, tf.shape(input_x))
+    log_probs = tf.reshape(log_probs, tf.shape(input_x)[:-1])
 
     return z, log_probs
 
