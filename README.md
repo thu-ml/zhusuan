@@ -73,7 +73,7 @@ This can be done by
 * Logistic Normal Topic Model:
 [HMC](examples/topic_models/lntm_mcem.py)
 
-## Developments
+## Contribution
 
 To install ZhuSuan in an "editable" or "develop" mode, run
 
