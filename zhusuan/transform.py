@@ -106,7 +106,7 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
         raise ValueError('log_probs should have rank (N-1), while N is the '
                          'rank of samples')
     try:
-        tf.broadcast_static_shape(static_sample_shape,
+        tf.broadcast_static_shape(static_sample_shape[:-1],
                                   static_logprob_shape)
     except ValueError:
         raise ValueError(
@@ -242,7 +242,7 @@ def inv_autoregressive_flow(samples, hidden, log_probs, autoregressive_nn,
         raise ValueError('log_probs should have rank (N-1), while N is the '
                          'rank of samples')
     try:
-        tf.broadcast_static_shape(static_sample_shape,
+        tf.broadcast_static_shape(static_sample_shape[:-1],
                                   static_logprob_shape)
     except ValueError:
         raise ValueError(
