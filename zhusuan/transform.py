@@ -106,7 +106,7 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
         raise ValueError('log_probs should have rank (N-1), while N is the '
                          'rank of samples')
     try:
-        tf.broadcast_static_shape(static_sample_shape,
+        tf.broadcast_static_shape(static_sample_shape[:-1],
                                   static_logprob_shape)
     except ValueError:
         raise ValueError(
@@ -137,6 +137,7 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
 
     input_x = tf.convert_to_tensor(samples, dtype=tf.float32)
     log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
+    log_probs = tf.reshape(log_probs, [-1])
     static_x_shape = input_x.get_shape()
     if not static_x_shape[-1:].is_fully_defined():
         raise ValueError(
@@ -192,6 +193,7 @@ def planar_normalizing_flow(samples, log_probs, n_iters):
         log_probs -= tf.log(det_ja)
         z = z + tf.matmul(activation, param_u, name='update')
     z = tf.reshape(z, tf.shape(input_x))
+    log_probs = tf.reshape(log_probs, tf.shape(input_x)[:-1])
 
     return z, log_probs
 
@@ -240,7 +242,7 @@ def inv_autoregressive_flow(samples, hidden, log_probs, autoregressive_nn,
         raise ValueError('log_probs should have rank (N-1), while N is the '
                          'rank of samples')
     try:
-        tf.broadcast_static_shape(static_sample_shape,
+        tf.broadcast_static_shape(static_sample_shape[:-1],
                                   static_logprob_shape)
     except ValueError:
         raise ValueError(
