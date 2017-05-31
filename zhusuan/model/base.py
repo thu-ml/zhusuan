@@ -182,6 +182,14 @@ class StochasticTensor(TensorArithmeticMixin):
             raise ValueError("{}: Ref type not supported.".format(value))
         return value.tensor
 
+    def _as_graph_element(self, allow_tensor=True, allow_operation=True):
+        # this method brings support to ``session.run(...)`` and other
+        # related methods which expects a graph element.
+        if not allow_tensor:
+            raise RuntimeError('Can not convert a `StochasticTensor` into a '
+                               'Operation.')
+        return self.tensor
+
 
 tf.register_tensor_conversion_function(
     StochasticTensor, StochasticTensor._to_tensor)

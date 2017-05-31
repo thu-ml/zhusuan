@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 from mock import Mock
+import numpy as np
 import tensorflow as tf
 
 from zhusuan.model.base import *
@@ -93,6 +94,26 @@ class TestStochasticTensor(tf.test.TestCase):
                                '`bool` is not allowed'):
                 if StochasticTensor('a', Mock(dtype=tf.float32), 1):
                     pass
+
+    def test_session_run(self):
+        with self.test_session(use_gpu=True) as sess:
+            samples = tf.constant([1, 2, 3])
+            log_probs = Mock()
+            probs = Mock()
+            sample_func = Mock(return_value=samples)
+            log_prob_func = Mock(return_value=log_probs)
+            prob_func = Mock(return_value=probs)
+            distribution = Mock(sample=sample_func,
+                                log_prob=log_prob_func,
+                                prob=prob_func,
+                                dtype=tf.int32)
+            t = StochasticTensor('t', distribution, 1, samples)
+            self.assertAllEqual(sess.run(t), np.asarray([1, 2, 3]))
+
+            with self.assertRaisesRegexp(
+                    RuntimeError, 'Can not convert a `StochasticTensor` into a '
+                                  'Operation.'):
+                _ = t._as_graph_element(allow_tensor=False)
 
 
 class TestBayesianNet(tf.test.TestCase):
