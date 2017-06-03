@@ -124,7 +124,7 @@ if __name__ == "__main__":
     # sum over y
     lb_z = tf.reshape(lb_z, [-1, n_y])
     qy_logits_u = qy_x(x_unlabeled_ph, n_y)
-    qy_u = tf.reshape(tf.nn.softmax(qy_logits_u), [-1, n_y])
+    qy_u = tf.nn.softmax(qy_logits_u)
     qy_u += 1e-8
     qy_u /= tf.reduce_sum(qy_u, 1, keep_dims=True)
     log_qy_u = tf.log(qy_u)
