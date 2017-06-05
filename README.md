@@ -59,7 +59,7 @@ This can be done by
 * Gaussian:
 [HMC](examples/toy_examples/gaussian.py)
 * Toy 2D Intractable Posterior:
-[SGVB](examples/toy_examples/toy2d.py)
+[SGVB](examples/toy_examples/toy2d_intractable.py)
 * Bayesian Neural Networks:
 [SGVB](examples/bayesian_neural_nets/bayesian_nn.py)
 * Variational Autoencoder (VAE):
