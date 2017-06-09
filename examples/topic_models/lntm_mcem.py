@@ -31,9 +31,10 @@ def lntm(observed, D, K, V, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
         eta = zs.Normal('eta',
                         tf.tile(tf.expand_dims(eta_mean, 0), [D, 1]),
-                        tf.tile(tf.expand_dims(eta_logstd, 0), [D, 1]),
+                        logstd=tf.tile(tf.expand_dims(eta_logstd, 0), [D, 1]),
                         group_event_ndims=1)
-        beta = zs.Normal('beta', tf.zeros([K, V]), tf.ones([K, V]) * log_delta,
+        beta = zs.Normal('beta', tf.zeros([K, V]),
+                         logstd=tf.ones([K, V]) * log_delta,
                          group_event_ndims=1)
     return model
 

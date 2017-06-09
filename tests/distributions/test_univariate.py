@@ -16,19 +16,33 @@ from zhusuan.distributions.univariate import *
 # TODO: test sample value
 
 class TestNormal(tf.test.TestCase):
-    def test_init_check_shape(self):
+    def test_init(self):
         with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(
+                    ValueError, "Either.*should be passed but not both"):
+                Normal(mean=tf.ones([2, 1]))
+            with self.assertRaisesRegexp(
+                    ValueError, "Either.*should be passed but not both"):
+                Normal(mean=tf.ones([2, 1]), std=1., logstd=0.)
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 Normal(mean=tf.ones([2, 1]), logstd=tf.zeros([2, 4, 3]))
+            with self.assertRaisesRegexp(ValueError,
+                                         "should be broadcastable to match"):
+                Normal(mean=tf.ones([2, 1]), std=tf.ones([2, 4, 3]))
 
-        Normal(tf.placeholder(tf.float32, [None, 1]),
-               tf.placeholder(tf.float32, [None, 1, 3]))
+        Normal(mean=tf.placeholder(tf.float32, [None, 1]),
+               logstd=tf.placeholder(tf.float32, [None, 1, 3]))
+        Normal(mean=tf.placeholder(tf.float32, [None, 1]),
+               std=tf.placeholder(tf.float32, [None, 1, 3]))
 
     def test_value_shape(self):
         # static
         norm = Normal(mean=tf.placeholder(tf.float32, None),
                       logstd=tf.placeholder(tf.float32, None))
+        self.assertEqual(norm.get_value_shape().as_list(), [])
+        norm = Normal(mean=tf.placeholder(tf.float32, None),
+                      std=tf.placeholder(tf.float32, None))
         self.assertEqual(norm.get_value_shape().as_list(), [])
 
         # dynamic
@@ -67,28 +81,48 @@ class TestNormal(tf.test.TestCase):
 
     def test_value(self):
         with self.test_session(use_gpu=True):
-            def _test_value(mean, logstd, given):
+            def _test_value(given, mean, logstd):
                 mean = np.array(mean, np.float32)
-                logstd = np.array(logstd, np.float32)
                 given = np.array(given, np.float32)
-                norm = Normal(mean, logstd)
-                log_p = norm.log_prob(given)
+                logstd = np.array(logstd, np.float32)
+                std = np.exp(logstd)
                 target_log_p = stats.norm.logpdf(given, mean, np.exp(logstd))
-                self.assertAllClose(log_p.eval(), target_log_p)
-                p = norm.prob(given)
                 target_p = stats.norm.pdf(given, mean, np.exp(logstd))
-                self.assertAllClose(p.eval(), target_p)
+
+                norm1 = Normal(mean, logstd=logstd)
+                log_p1 = norm1.log_prob(given)
+                self.assertAllClose(log_p1.eval(), target_log_p)
+                p1 = norm1.prob(given)
+                self.assertAllClose(p1.eval(), target_p)
+
+                norm2 = Normal(mean, std=std)
+                log_p2 = norm2.log_prob(given)
+                self.assertAllClose(log_p2.eval(), target_log_p)
+                p2 = norm2.prob(given)
+                self.assertAllClose(p2.eval(), target_p)
 
             _test_value(0., 0., 0.)
-            _test_value(1., [-10., -1., 1., 10.], [0.99, 0.9, 9., 99.])
-            _test_value([0., 4.], [[1., 2.], [3., 5.]], [7.])
+            _test_value([0.99, 0.9, 9., 99.], 1., [-10., -1., 1., 10.])
+            _test_value([7.], [0., 4.], [[1., 2.], [3., 5.]])
 
     def test_check_numerics(self):
-        norm = Normal(tf.ones([1, 2]), -1e10, check_numerics=True)
+        norm1 = Normal(tf.ones([1, 2]), logstd=-1e10, check_numerics=True)
         with self.test_session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "precision.*Tensor had Inf"):
-                norm.log_prob(0.).eval()
+                norm1.log_prob(0.).eval()
+
+        norm2 = Normal(tf.ones([1, 2]), logstd=1e3, check_numerics=True)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "exp\(logstd\).*Tensor had Inf"):
+                norm2.sample().eval()
+
+        norm3 = Normal(tf.ones([1, 2]), std=0., check_numerics=True)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(std\).*Tensor had Inf"):
+                norm3.log_prob(0.).eval()
 
     def test_dtype(self):
         utils.test_dtype_2parameter(self, Normal)

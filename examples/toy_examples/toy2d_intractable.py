@@ -14,8 +14,8 @@ import zhusuan as zs
 
 def toy2d_intractable_posterior(observed, n_particles):
     with zs.BayesianNet(observed=observed) as model:
-        z2 = zs.Normal('z2', 0., tf.log(1.35), n_samples=n_particles)
-        z1 = zs.Normal('z1', 0., z2)
+        z2 = zs.Normal('z2', 0., logstd=tf.log(1.35), n_samples=n_particles)
+        z1 = zs.Normal('z1', 0., logstd=z2)
     return model
 
 
@@ -25,7 +25,7 @@ def mean_field_variational(n_particles):
         for i in range(2):
             z_mean.append(tf.Variable(-2.))
             z_logstd.append(tf.Variable(-5.))
-            _ = zs.Normal('z' + str(i + 1), z_mean[i], z_logstd[i],
+            _ = zs.Normal('z' + str(i + 1), z_mean[i], logstd=z_logstd[i],
                           n_samples=n_particles)
     return variational, z_mean, z_logstd
 

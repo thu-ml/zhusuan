@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import
 from __future__ import division
+import warnings
 
 import numpy as np
 import tensorflow as tf
@@ -38,6 +39,8 @@ class Normal(Distribution):
         Should be broadcastable to match `logstd`.
     :param logstd: A `float` Tensor. The log standard deviation of the Normal
         distribution. Should be broadcastable to match `mean`.
+    :param std: A `float` Tensor. The standard deviation of the Normal
+        distribution. Should be positive and broadcastable to match `mean`.
     :param group_event_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -52,24 +55,47 @@ class Normal(Distribution):
 
     def __init__(self,
                  mean=0.,
-                 logstd=0.,
+                 logstd=None,
+                 std=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
                  check_numerics=False):
         self._mean = tf.convert_to_tensor(mean)
-        self._logstd = tf.convert_to_tensor(logstd)
-        dtype = assert_same_float_dtype(
-            [(self._mean, 'Normal.mean'),
-             (self._logstd, 'Normal.logstd')])
+        warnings.warn("Normal: The order of arguments logstd/std will change "
+                      "to std/logstd in the coming version.")
+        if (logstd is None) == (std is None):
+            raise ValueError("Either std or logstd should be passed but not "
+                             "both of them.")
+        elif logstd is None:
+            self._std = tf.convert_to_tensor(std)
+            dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
+                                             (self._std, 'Normal.std')])
+            logstd = tf.log(self._std)
+            if check_numerics:
+                with tf.control_dependencies(
+                        [tf.check_numerics(logstd, "log(std)")]):
+                    logstd = tf.identity(logstd)
+            self._logstd = logstd
+        else:
+            # std is None
+            self._logstd = tf.convert_to_tensor(logstd)
+            dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
+                                             (self._logstd, 'Normal.logstd')])
+            std = tf.exp(self._logstd)
+            if check_numerics:
+                with tf.control_dependencies(
+                        [tf.check_numerics(std, "exp(logstd)")]):
+                    std = tf.identity(std)
+            self._std = std
 
         try:
             tf.broadcast_static_shape(self._mean.get_shape(),
-                                      self._logstd.get_shape())
+                                      self._std.get_shape())
         except ValueError:
             raise ValueError(
-                "mean and logstd should be broadcastable to match each "
+                "mean and std/logstd should be broadcastable to match each "
                 "other. ({} vs. {})".format(
-                    self._mean.get_shape(), self._logstd.get_shape()))
+                    self._mean.get_shape(), self._std.get_shape()))
         self._check_numerics = check_numerics
         super(Normal, self).__init__(
             dtype=dtype,
@@ -88,6 +114,11 @@ class Normal(Distribution):
         """The log standard deviation of the Normal distribution."""
         return self._logstd
 
+    @property
+    def std(self):
+        """The standard deviation of the Normal distribution."""
+        return self._std
+
     def _value_shape(self):
         return tf.constant([], dtype=tf.int32)
 
@@ -96,20 +127,19 @@ class Normal(Distribution):
 
     def _batch_shape(self):
         return tf.broadcast_dynamic_shape(tf.shape(self.mean),
-                                          tf.shape(self.logstd))
+                                          tf.shape(self.std))
 
     def _get_batch_shape(self):
         return tf.broadcast_static_shape(self.mean.get_shape(),
-                                         self.logstd.get_shape())
+                                         self.std.get_shape())
 
     def _sample(self, n_samples):
-        mean, logstd = self.mean, self.logstd
+        mean, std = self.mean, self.std
         if not self.is_reparameterized:
             mean = tf.stop_gradient(mean)
-            logstd = tf.stop_gradient(logstd)
+            std = tf.stop_gradient(std)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.random_normal(shape, dtype=self.dtype) * \
-            tf.exp(logstd) + mean
+        samples = tf.random_normal(shape, dtype=self.dtype) * std + mean
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(

@@ -18,16 +18,22 @@ class TestNormal(tf.test.TestCase):
         with BayesianNet():
             mean = tf.zeros([2, 3])
             logstd = tf.zeros([2, 3])
+            std = tf.exp(logstd)
             n_samples = tf.placeholder(tf.int32, shape=[])
             group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Normal('a', mean, logstd, n_samples, group_event_ndims)
-        sample_ops = set(get_backward_ops(a.tensor))
-        for i in [mean, logstd, n_samples]:
-            self.assertTrue(i.op in sample_ops)
-        log_p = a.log_prob(np.ones([2, 3]))
-        log_p_ops = set(get_backward_ops(log_p))
-        for i in [mean, logstd, group_event_ndims]:
-            self.assertTrue(i.op in log_p_ops)
+            a = Normal('a', mean, logstd=logstd, n_samples=n_samples,
+                       group_event_ndims=group_event_ndims)
+            b = Normal('b', mean, std=std, n_samples=n_samples,
+                       group_event_ndims=group_event_ndims)
+
+        for st in [a, b]:
+            sample_ops = set(get_backward_ops(st.tensor))
+            for i in [mean, logstd, n_samples]:
+                self.assertTrue(i.op in sample_ops)
+            log_p = st.log_prob(np.ones([2, 3]))
+            log_p_ops = set(get_backward_ops(log_p))
+            for i in [mean, logstd, group_event_ndims]:
+                self.assertTrue(i.op in log_p_ops)
 
 
 class TestBernoulli(tf.test.TestCase):
