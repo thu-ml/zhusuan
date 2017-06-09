@@ -24,7 +24,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
                                               layer_sizes[1:])):
             w_mu = tf.zeros([1, n_out, n_in + 1])
             w_logstd = tf.zeros([1, n_out, n_in + 1])
-            ws.append(zs.Normal('w' + str(i), w_mu, w_logstd,
+            ws.append(zs.Normal('w' + str(i), w_mu, logstd=w_logstd,
                                 n_samples=n_particles, group_event_ndims=2))
 
         # forward
@@ -42,7 +42,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
         y_mean = tf.squeeze(ly_x, [2, 3])
         y_logstd = tf.get_variable('y_logstd', shape=[],
                                    initializer=tf.constant_initializer(0.))
-        y = zs.Normal('y', y_mean, y_logstd)
+        y = zs.Normal('y', y_mean, logstd=y_logstd)
 
     return model, y_mean
 
@@ -59,7 +59,7 @@ def mean_field_variational(layer_sizes, n_particles):
                 'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
                 initializer=tf.constant_initializer(0.))
             ws.append(
-                zs.Normal('w' + str(i), w_mean, w_logstd,
+                zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
                           n_samples=n_particles, group_event_ndims=2))
     return variational
 

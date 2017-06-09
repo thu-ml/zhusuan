@@ -24,7 +24,7 @@ def vae_conv(observed, n, n_x, n_z, n_particles, is_training):
                              'updates_collections': None}
         z_mean = tf.zeros([n, n_z])
         z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, n_samples=n_particles,
+        z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
                       group_event_ndims=1)
         lx_z = tf.reshape(z, [-1, 1, 1, n_z])
         lx_z = layers.conv2d_transpose(
@@ -68,7 +68,7 @@ def q_net(x, n_xl, n_z, n_particles, is_training):
         lz_x = tf.reshape(lz_x, [-1, 128 * 3 * 3])
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Normal('z', lz_mean, lz_logstd, n_samples=n_particles,
+        z = zs.Normal('z', lz_mean, logstd=lz_logstd, n_samples=n_particles,
                       group_event_ndims=1)
     return variational
 
