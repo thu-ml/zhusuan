@@ -35,6 +35,11 @@ class Normal(Distribution):
     The class of univariate Normal distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
+    .. warning::
+
+         The order of arguments `logstd`/`std` will change to `std`/`logstd`
+         in the coming version.
+
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
     :param logstd: A `float` Tensor. The log standard deviation of the Normal

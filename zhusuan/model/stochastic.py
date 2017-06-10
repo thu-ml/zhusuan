@@ -33,6 +33,11 @@ class Normal(StochasticTensor):
     The class of univariate Normal `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
+    .. warning::
+
+         The order of arguments `logstd`/`std` will change to `std`/`logstd`
+         in the coming version.
+
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
     :param mean: A `float` Tensor. The mean of the Normal distribution.
