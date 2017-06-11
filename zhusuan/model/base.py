@@ -225,7 +225,7 @@ class BayesianNet(Context):
 
         def bayesian_linear_regression(x, alpha, beta):
             with zs.BayesianNet() as model:
-                w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+                w = zs.Normal('w', mean=0., logstd=tf.log(alpha))
                 y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
                 y = zs.Normal('y', y_mean, tf.log(beta))
             return model
@@ -237,7 +237,7 @@ class BayesianNet(Context):
 
         def bayesian_linear_regression(observed, x, alpha, beta):
             with zs.BayesianNet(observed=observed) as model:
-                w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+                w = zs.Normal('w', mean=0., logstd=tf.log(alpha))
                 y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
                 y = zs.Normal('y', y_mean, tf.log(beta))
             return model
