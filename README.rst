@@ -1,7 +1,9 @@
 ZhuSuan
 =======
 
-ZhuSuan is a python	library	for	**Generative Models**, built upon Tensorflow.
+|docs| |license|
+
+ZhuSuan is a python library	for	**Generative Models**, built upon Tensorflow.
 Unlike existing deep learning libraries, which are mainly designed for
 supervised tasks, ZhuSuan is featured for its deep root into Bayesian
 Inference, thus supporting various kinds of generative models: both the
@@ -19,15 +21,17 @@ Supported Inference
 (Stochastic) Variational Inference (VI & SVI)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-* Kinds of variational posteriors we support:
-  - **Mean-field** posterior: Fully-factorized.
-  - **Structured** posterior: With user specified dependencies.
+Kinds of variational posteriors we support:
 
-* Variational objectives we support:
-  - **SGVB**: Stochastic gradient variational Bayes.
-  - **IWAE**: Importance weighted objectives.
-  - **NVIL**: Score function estimator with variance reduction.
-  - **VIMC**: Multi-sample score function estimator with variance reduction.
+* **Mean-field** posterior: Fully-factorized.
+* **Structured** posterior: With user specified dependencies.
+
+Variational objectives we support:
+
+* **SGVB**: Stochastic gradient variational Bayes.
+* **IWAE**: Importance weighted objectives.
+* **NVIL**: Score function estimator with variance reduction.
+* **VIMC**: Multi-sample score function estimator with variance reduction.
 
 Adaptive Importance Sampling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -38,15 +42,16 @@ Markov Chain Monte Carlo (MCMC)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 * Hamiltonian Monte Carlo (**HMC**): Parallel chains, step size and mass
-adaptation.
+  adaptation.
 
 Installation
 ------------
 
 ZhuSuan is still under development. Before the first stable release (1.0),
 please clone the repository and run
+::
 
-`pip install .`
+    pip install .
 
 in the main directory. This will install ZhuSuan and its dependencies
 automatically. ZhuSuan also requires Tensorflow version 1.0 or later. Because
@@ -72,29 +77,30 @@ This can be done by::
     pip install ".[examples]"
 
 * Gaussian:
-`HMC <examples/toy_examples/gaussian.py>`_
+  `HMC <examples/toy_examples/gaussian.py>`_
 * Toy 2D Intractable Posterior:
-`SGVB <examples/toy_examples/toy2d_intractable.py>`_
+  `SGVB <examples/toy_examples/toy2d_intractable.py>`_
 * Bayesian Neural Networks:
-`SGVB <examples/bayesian_neural_nets/bayesian_nn.py>`_
+  `SGVB <examples/bayesian_neural_nets/bayesian_nn.py>`_
 * Variational Autoencoder (VAE):
-`SGVB <examples/variational_autoencoders/vae.py>`_,
-`IWAE <examples/variational_autoencoders/iwae.py>`_
+  `SGVB <examples/variational_autoencoders/vae.py>`_,
+  `IWAE <examples/variational_autoencoders/iwae.py>`_
 * Convolutional VAE:
-`SGVB <examples/variational_autoencoders/vae_conv.py>`_
+  `SGVB <examples/variational_autoencoders/vae_conv.py>`_
 * Semi-supervised VAE (Kingma, 2014):
-`SGVB <examples/semi_supervised_vae/vae_ssl.py>`_,
-`RWS <examples/semi_supervised_vae/vae_ssl_rws.py>`_
+  `SGVB <examples/semi_supervised_vae/vae_ssl.py>`_,
+  `RWS <examples/semi_supervised_vae/vae_ssl_rws.py>`_
 * Deep Sigmoid Belief Networks
-`RWS <examples/sigmoid_belief_nets/sbn_rws.py>`_,
-`VIMCO <examples/sigmoid_belief_nets/sbn_vimco.py>`_
+  `RWS <examples/sigmoid_belief_nets/sbn_rws.py>`_,
+  `VIMCO <examples/sigmoid_belief_nets/sbn_vimco.py>`_
 * Logistic Normal Topic Model:
-`HMC <examples/topic_models/lntm_mcem.py>`_
+  `HMC <examples/topic_models/lntm_mcem.py>`_
 
 Contribution
 ------------
 
-To install ZhuSuan in an "editable" or "develop" mode, run::
+To install ZhuSuan in an "editable" or "develop" mode, run
+::
 
     pip install -e .
 
@@ -141,9 +147,19 @@ directory and should be regenerated each time when any code changes::
 
     make api
 
-To compile docs into webpages, Run::
+To compile docs into webpages, Run
+::
 
     make html
 
 under ``docs/`` directory. The generated webpages are in ``docs/_build`` and
 can be viewed with browsers.
+
+
+.. |docs| image:: https://readthedocs.org/projects/docs/badge/?version=latest
+    :alt: Documentation Status
+    :scale: 100%
+    :target: http://zhusuan.readthedocs.io/en/latest/?badge=latest
+    
+.. |license| image:: https://img.shields.io/badge/license-MIT-blue.svg
+    :target: https://github.com/thu-ml/zhusuan/blob/master/LICENSE
