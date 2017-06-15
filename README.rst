@@ -31,7 +31,7 @@ Variational objectives we support:
 * **SGVB**: Stochastic gradient variational Bayes.
 * **IWAE**: Importance weighted objectives.
 * **NVIL**: Score function estimator with variance reduction.
-* **VIMC**: Multi-sample score function estimator with variance reduction.
+* **VIMCO**: Multi-sample score function estimator with variance reduction.
 
 Adaptive Importance Sampling
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^

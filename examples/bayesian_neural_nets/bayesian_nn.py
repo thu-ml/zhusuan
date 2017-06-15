@@ -23,8 +23,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
             w_mu = tf.zeros([1, n_out, n_in + 1])
-            w_logstd = tf.zeros([1, n_out, n_in + 1])
-            ws.append(zs.Normal('w' + str(i), w_mu, logstd=w_logstd,
+            ws.append(zs.Normal('w' + str(i), w_mu, std=1.,
                                 n_samples=n_particles, group_event_ndims=2))
 
         # forward

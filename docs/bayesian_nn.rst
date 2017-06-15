@@ -68,9 +68,8 @@ for all the data. So we need only one copy of them, that is, we need a
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
             w_mu = tf.zeros([1, n_out, n_in + 1])
-            w_logstd = tf.zeros([1, n_out, n_in + 1])
             ws.append(
-                zs.Normal('w' + str(i), w_mu, w_logstd,
+                zs.Normal('w' + str(i), w_mu, std=1.,
                           n_samples=n_particles, group_event_ndims=2))
 
 To make the probabilities of weights in each layer evaluated together,
@@ -103,7 +102,7 @@ likelihood when evaluating the probability::
         y_logstd = tf.get_variable(
             'y_logstd', shape=[],
             initializer=tf.constant_initializer(0.))
-        y = zs.Normal('y', y_mean, y_logstd)
+        y = zs.Normal('y', y_mean, logstd=y_logstd)
 
 Putting together, the code for constructing a BayesianNN is::
 
@@ -117,9 +116,8 @@ Putting together, the code for constructing a BayesianNN is::
             for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                                   layer_sizes[1:])):
                 w_mu = tf.zeros([1, n_out, n_in + 1])
-                w_logstd = tf.zeros([1, n_out, n_in + 1])
                 ws.append(
-                    zs.Normal('w' + str(i), w_mu, w_logstd,
+                    zs.Normal('w' + str(i), w_mu, std=1.,
                               n_samples=n_particles, group_event_ndims=2))
 
             # forward
@@ -138,7 +136,7 @@ Putting together, the code for constructing a BayesianNN is::
             y_logstd = tf.get_variable(
                 'y_logstd', shape=[],
                 initializer=tf.constant_initializer(0.))
-            y = zs.Normal('y', y_mean, y_logstd)
+            y = zs.Normal('y', y_mean, logstd=y_logstd)
 
         return model, y_mean
 
@@ -181,7 +179,7 @@ The code for above definition is::
                     'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
                     initializer=tf.constant_initializer(0.))
                 ws.append(
-                    zs.Normal('w' + str(i), w_mean, w_logstd,
+                    zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
                               n_samples=n_particles, group_event_ndims=2))
         return variational
 

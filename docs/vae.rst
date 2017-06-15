@@ -50,22 +50,23 @@ need the Normal to generate samples of shape ``[n, n_z]``::
     with zs.BayesianNet() as model:
         # z ~ N(z|0, I)
         z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, group_event_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
 
-
-The shape of ``z_mean`` and ``z_logstd`` is ``[n, n_z]``, which means that
+The shape of ``z_mean`` is ``[n, n_z]``, which means that
 we have ``[n, n_z]`` independent inputs fed into the univariate
-:class:`~zhusuan.model.stochastic.Normal` StochasticTensor. Thus the
-shape of samples and probabilities evaluated at this node should be of
-shape ``[n, n_z]``. However, what we want in modeling MNIST data, is a batch of
-``[n]`` independent events, with each one producing samples of ``z`` that is of
-shape ``[n_z]``, which is the dimension of latent representations. And the
-probabilities in every single event in the batch should be evaluated together,
-so the shape of local probabilities should be ``[n]`` instead of ``[n, n_z]``.
-In ZhuSuan, the way to achieve this is by setting ``group_event_ndims``,
-as we do in the above model definition code. To understand this, see
-:ref:`dist-and-stochastic`.
+:class:`~zhusuan.model.stochastic.Normal` StochasticTensor. Because
+input parameters are allowed to
+`broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
+to match each other's shape, the standard deviation ``std`` is simply set to
+1. Thus the shape of samples and probabilities evaluated at this node should
+be of shape ``[n, n_z]``. However, what we want in modeling MNIST data, is a
+batch of ``[n]`` independent events, with each one producing samples of ``z``
+that is of shape ``[n_z]``, which is the dimension of latent representations.
+And the probabilities in every single event in the batch should be evaluated
+together, so the shape of local probabilities should be ``[n]`` instead of
+``[n, n_z]``. In ZhuSuan, the way to achieve this is by setting
+``group_event_ndims``, as we do in the above model definition code. To
+understand this, see :ref:`dist-and-stochastic`.
 
 Then we build a neural network of two fully-connected layers with :math:`z` as
 the input, which is supposed to learn the complex transformation that
@@ -104,8 +105,7 @@ Putting together, the code for constructing a VAE is::
 
     with zs.BayesianNet() as model:
         z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, z_logstd, group_event_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
 
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)
@@ -156,8 +156,7 @@ ZhuSuan is to wrap it in a function, like this::
     def vae(observed, n, n_x, n_z):
         with zs.BayesianNet(observed=observed) as model:
             z_mean = tf.zeros([n, n_z])
-            z_logstd = tf.zeros([n, n_z])
-            z = zs.Normal('z', z_mean, z_logstd, group_event_ndims=1)
+            z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
             lx_z = layers.fully_connected(z, 500)
             lx_z = layers.fully_connected(lx_z, 500)
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
@@ -269,7 +268,7 @@ In ZhuSuan, the variational posterior can also be defined as a
             lz_x = layers.fully_connected(lz_x, 500)
             z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
             z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            z = zs.Normal('z', z_mean, z_logstd, group_event_ndims=1)
+            z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1)
         return variational
 
 There are many ways to optimize this lower bound. One of the easiest way is

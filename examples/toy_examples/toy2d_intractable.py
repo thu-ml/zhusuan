@@ -14,7 +14,7 @@ import zhusuan as zs
 
 def toy2d_intractable_posterior(observed, n_particles):
     with zs.BayesianNet(observed=observed) as model:
-        z2 = zs.Normal('z2', 0., logstd=tf.log(1.35), n_samples=n_particles)
+        z2 = zs.Normal('z2', 0., std=1.35, n_samples=n_particles)
         z1 = zs.Normal('z1', 0., logstd=z2)
     return model
 

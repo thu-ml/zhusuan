@@ -25,8 +25,7 @@ from examples.utils import dataset, makedirs
 def vae(observed, n, n_x, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
+        z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
                       group_event_ndims=1)
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)

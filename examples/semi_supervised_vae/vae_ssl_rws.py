@@ -21,8 +21,7 @@ from examples.utils import dataset
 def M2(observed, n, n_x, n_y, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, n_z])
-        z_logstd = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
+        z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
                       group_event_ndims=1)
         y_logits = tf.zeros([n, n_y])
         y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)

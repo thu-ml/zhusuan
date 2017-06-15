@@ -31,8 +31,7 @@ def main():
     def vae(observed, n, n_x, n_z):
         with zs.BayesianNet(observed=observed) as model:
             z_mean = tf.zeros([n, n_z])
-            z_logstd = tf.zeros([n, n_z])
-            z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1)
+            z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
             lx_z = layers.fully_connected(z, 500)
             lx_z = layers.fully_connected(lx_z, 500)
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)

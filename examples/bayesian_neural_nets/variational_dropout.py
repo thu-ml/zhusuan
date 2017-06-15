@@ -25,9 +25,8 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
                              'updates_collections': None}
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             eps_mean = tf.ones([n, n_in])
-            eps_logstd = tf.zeros([n, n_in])
             eps = zs.Normal(
-                'layer' + str(i) + '/eps', eps_mean, logstd=eps_logstd,
+                'layer' + str(i) + '/eps', eps_mean, std=1.,
                 n_samples=n_particles, group_event_ndims=1)
             h = layers.fully_connected(
                 h * eps, n_out, normalizer_fn=layers.batch_norm,
