@@ -106,7 +106,7 @@ To install ZhuSuan in an "editable" or "develop" mode, run
 
 in the main directory. This installation is removable by::
 
-    pip uninstall zhusuan
+    python setup.py develop --uninstall
 
 Additional dependencies for developments can be installed by::
 
