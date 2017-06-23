@@ -156,7 +156,7 @@ under ``docs/`` directory. The generated webpages are in ``docs/_build`` and
 can be viewed with browsers.
 
 
-.. |docs| image:: https://readthedocs.org/projects/docs/badge/?version=latest
+.. |docs| image:: https://readthedocs.org/projects/zhusuan/badge/?version=latest
     :alt: Documentation Status
     :scale: 100%
     :target: http://zhusuan.readthedocs.io/en/latest/?badge=latest
