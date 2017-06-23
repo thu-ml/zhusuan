@@ -64,7 +64,7 @@ if __name__ == "__main__":
     # Define training/evaluation parameters
     lb_samples = 50
     ll_samples = 1000
-    epoches = 3000
+    epochs = 3000
     batch_size = 1000
     iters = x_train.shape[0] // batch_size
     learning_rate = 0.001
@@ -119,7 +119,7 @@ if __name__ == "__main__":
             begin_epoch = int(ckpt_file.split('.')[-2]) + 1
             saver.restore(sess, ckpt_file)
 
-        for epoch in range(begin_epoch, epoches + 1):
+        for epoch in range(begin_epoch, epochs + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate

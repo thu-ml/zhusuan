@@ -116,7 +116,7 @@ def main():
     # Define training/evaluation parameters
     lb_samples = 10
     ll_samples = 5000
-    epoches = 500
+    epochs = 500
     batch_size = 10
     iters = int(np.floor(x_train.shape[0] / float(batch_size)))
     test_freq = 10
@@ -124,7 +124,7 @@ def main():
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        for epoch in range(1, epoches + 1):
+        for epoch in range(1, epochs + 1):
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]

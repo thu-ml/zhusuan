@@ -73,7 +73,7 @@ def main():
     x_gen = tf.reshape(tf.sigmoid(x_logits), [-1, 28, 28, 1])
 
     # Define training parameters
-    epoches = 500
+    epochs = 500
     batch_size = 128
     iters = x_train.shape[0] // batch_size
     save_freq = 1
@@ -81,7 +81,7 @@ def main():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for epoch in range(1, epoches + 1):
+        for epoch in range(1, epochs + 1):
             np.random.shuffle(x_train)
             lbs = []
             for t in range(iters):

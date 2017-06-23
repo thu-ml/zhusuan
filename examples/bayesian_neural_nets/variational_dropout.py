@@ -67,7 +67,7 @@ if __name__ == '__main__':
     n_class = 10
 
     # Define training/evaluation parameters
-    epoches = 500
+    epochs = 500
     batch_size = 1000
     lb_samples = 10
     ll_samples = 100
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        for epoch in range(1, epoches + 1):
+        for epoch in range(1, epochs + 1):
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             time_epoch = -time.time()

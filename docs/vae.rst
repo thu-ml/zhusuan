@@ -398,7 +398,7 @@ images to disk. Keep watching them and have fun :)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for epoch in range(1, epoches + 1):
+        for epoch in range(1, epochs + 1):
             np.random.shuffle(x_train)
             lbs = []
             for t in range(iters):

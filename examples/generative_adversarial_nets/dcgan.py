@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 1
-    epoches = 1000
+    epochs = 1000
     batch_size = 32 * FLAGS.num_gpus
     gen_size = 100
     iters = x_train.shape[0] // batch_size
@@ -147,7 +147,7 @@ if __name__ == "__main__":
     # Run the inference
     with multi_gpu.create_session() as sess:
         sess.run(tf.global_variables_initializer())
-        for epoch in range(1, epoches + 1):
+        for epoch in range(1, epochs + 1):
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
