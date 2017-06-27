@@ -9,6 +9,7 @@ from collections import OrderedDict
 import six
 from six.moves import zip
 import tensorflow as tf
+from tensorflow.python.client.session import register_session_run_conversion_functions
 
 from zhusuan.model.utils import Context, TensorArithmeticMixin
 
@@ -182,17 +183,18 @@ class StochasticTensor(TensorArithmeticMixin):
             raise ValueError("{}: Ref type not supported.".format(value))
         return value.tensor
 
-    def _as_graph_element(self, allow_tensor=True, allow_operation=True):
-        # this method brings support to ``session.run(...)`` and other
-        # related methods which expects a graph element.
-        if not allow_tensor:
-            raise RuntimeError('Can not convert a `StochasticTensor` into a '
-                               'Operation.')
-        return self.tensor
-
 
 tf.register_tensor_conversion_function(
     StochasticTensor, StochasticTensor._to_tensor)
+
+# bring support for session.run(StochasticTensor), and for using as keys
+# in feed_dict.
+register_session_run_conversion_functions(
+    StochasticTensor,
+    fetch_function=lambda t: ([t.tensor], lambda val: val[0]),
+    feed_function=lambda t, v: [(t.tensor, v)],
+    feed_function_for_partial_run=lambda t: [t.tensor]
+)
 
 
 class BayesianNet(Context):
