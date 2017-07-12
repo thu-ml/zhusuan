@@ -617,7 +617,7 @@ class BinConcrete(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics,
         )
-        super(BinConcrete, self).__init__(name, BinConcrete, n_samples)
+        super(BinConcrete, self).__init__(name, bin_concrete, n_samples)
 
 
 class ExpConcrete(StochasticTensor):

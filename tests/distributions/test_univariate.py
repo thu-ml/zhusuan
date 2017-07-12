@@ -1012,3 +1012,18 @@ class TestBinConcrete(tf.test.TestCase):
         _test_temperature_dtype_raise(tf.constant(1, tf.int32), tf.float32)
         _test_temperature_dtype_raise(tf.constant(1., tf.float64), tf.float32)
         _test_temperature_dtype_raise(tf.constant(1., tf.float32), tf.float64)
+
+    def test_sample_reparameterized(self):
+        temperature = tf.ones([])
+        logits = tf.ones([2, 3])
+        con_rep = BinConcrete(temperature, logits)
+        samples = con_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
+        self.assertTrue(t_grads is not None)
+        self.assertTrue(logits_grads is not None)
+
+        con_no_rep = BinConcrete(temperature, logits, is_reparameterized=False)
+        samples = con_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
+        self.assertEqual(t_grads, None)
+        self.assertEqual(logits_grads, None)

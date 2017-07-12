@@ -452,14 +452,15 @@ class ExpConcrete(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        logits = self.logits
+        logits, temperature = self.logits, self.temperature
         if not self.is_reparameterized:
             logits = tf.stop_gradient(logits)
+            temperature = tf.stop_gradient(temperature)
         shape = tf.concat([[n_samples], tf.shape(self.logits)], 0)
 
         uniform = random_open_interval_uniform(shape, self.dtype)
         gumbel = -tf.log(-tf.log(uniform))
-        samples = tf.nn.log_softmax((logits + gumbel) / self.temperature)
+        samples = tf.nn.log_softmax((logits + gumbel) / temperature)
 
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(

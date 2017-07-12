@@ -1192,14 +1192,15 @@ class BinConcrete(Distribution):
         return self.logits.get_shape()
 
     def _sample(self, n_samples):
-        logits = self.logits
+        logits, temperature = self.logits, self.temperature
         if not self.is_reparameterized:
             logits = tf.stop_gradient(logits)
+            temperature = tf.stop_gradient(temperature)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
 
         uniform = random_open_interval_uniform(shape, self.dtype)
         logistic = tf.log(uniform) - tf.log(1 - uniform)
-        samples = tf.sigmoid((logits + logistic) / self.temperature)
+        samples = tf.sigmoid((logits + logistic) / temperature)
 
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
