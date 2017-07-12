@@ -916,3 +916,99 @@ class TestLaplace(tf.test.TestCase):
 
     def test_dtype(self):
         utils.test_dtype_2parameter(self, Laplace)
+
+
+class TestBinConcrete(tf.test.TestCase):
+    def test_init_temperature(self):
+        with self.assertRaisesRegexp(ValueError,
+                                     "should be a scalar"):
+            BinConcrete([1.], [1., 2.])
+        with self.assertRaisesRegexp(ValueError,
+                                     "must be positive"):
+            BinConcrete(-1., [1., 2.])
+
+        with self.test_session(use_gpu=True):
+            temperature = tf.placeholder(tf.float32, None)
+            con = BinConcrete(temperature, [1., 2.])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "should be a scalar"):
+                con.temperature.eval(feed_dict={temperature: [1.]})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "must be positive"):
+                con.temperature.eval(feed_dict={temperature: -1.})
+
+    def test_value_shape(self):
+        # static
+        con = BinConcrete(1., logits=tf.placeholder(tf.float32, None))
+        self.assertEqual(con.get_value_shape().as_list(), [])
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            self.assertEqual(con._value_shape().eval().tolist(), [])
+        self.assertEqual(con._value_shape().dtype, tf.int32)
+
+    def test_batch_shape(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+        utils.test_batch_shape_1parameter(
+            self, _proxy_distribution, np.zeros, is_univariate=True)
+
+    def test_sample_shape(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+        utils.test_sample_shape_1parameter_univariate(
+            self, _proxy_distribution, np.zeros)
+
+    def test_log_prob_shape(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+
+        utils.test_log_prob_shape_1parameter_univariate(
+            self, _proxy_distribution, np.ones, np.ones)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(given, temperature, logits):
+                given = np.array(given, np.float32)
+                logits = np.array(logits, np.float32)
+
+                target_log_p = np.log(temperature) + logits - \
+                    (temperature + 1) * np.log(given) - \
+                    (temperature + 1) * np.log(1 - given) - \
+                    2 * np.log(np.exp(logits) * (given ** -temperature) + \
+                               (1 - given) ** -temperature)
+
+                con = BinConcrete(temperature, logits=logits)
+                log_p = con.log_prob(given)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = con.prob(given)
+                self.assertAllClose(p.eval(), np.exp(target_log_p))
+
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 0.1, 0.1)
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 0.01, 0.5)
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 0.66, 0.9)
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 1., 0.99)
+
+    def test_dtype(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+        utils.test_dtype_1parameter_continuous(self, _proxy_distribution)
+
+        # test temperature dtype
+        def _test_temperature_dtype(value, dtype):
+            con = BinConcrete(value, tf.convert_to_tensor([1., 2.], dtype))
+            self.assertEqual(con.temperature.dtype, dtype)
+
+        _test_temperature_dtype(1, tf.float32)
+        _test_temperature_dtype(1., tf.float32)
+        _test_temperature_dtype(1., tf.float64)
+        _test_temperature_dtype(tf.constant(1., tf.float32), tf.float32)
+        _test_temperature_dtype(tf.constant(1., tf.float64), tf.float64)
+
+        def _test_temperature_dtype_raise(value, dtype):
+            with self.assertRaises(TypeError):
+                _test_temperature_dtype(value, dtype)
+
+        _test_temperature_dtype_raise(tf.constant(1, tf.int32), tf.float32)
+        _test_temperature_dtype_raise(tf.constant(1., tf.float64), tf.float32)
+        _test_temperature_dtype_raise(tf.constant(1., tf.float32), tf.float64)

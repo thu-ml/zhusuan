@@ -12,7 +12,10 @@ from zhusuan.distributions.base import *
 from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
-        assert_same_float_and_int_dtype
+        assert_same_float_and_int_dtype, \
+        assert_scalar_and_positivity, \
+        assert_rank_at_least_one, \
+        random_open_interval_uniform
 
 
 __all__ = [
@@ -27,6 +30,7 @@ __all__ = [
     'Binomial',
     'InverseGamma',
     'Laplace',
+    'BinConcrete',
 ]
 
 
@@ -270,19 +274,9 @@ class Categorical(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
+        self._logits, self._n_categories = assert_rank_at_least_one(
+            self._logits, 'Categorical.logits')
         static_logits_shape = self._logits.get_shape()
-        shape_err_msg = "logits should have rank >= 1."
-        if static_logits_shape and (static_logits_shape.ndims < 1):
-            raise ValueError(shape_err_msg)
-        elif static_logits_shape and (
-                static_logits_shape[-1].value is not None):
-            self._n_categories = static_logits_shape[-1].value
-        else:
-            _assert_shape_op = tf.assert_rank_at_least(
-                self._logits, 1, message=shape_err_msg)
-            with tf.control_dependencies([_assert_shape_op]):
-                self._logits = tf.identity(self._logits)
-            self._n_categories = tf.shape(self._logits)[-1]
 
         super(Categorical, self).__init__(
             dtype=dtype,
@@ -1124,6 +1118,113 @@ class Laplace(Distribution):
                     [tf.check_numerics(log_scale, "log(scale)")]):
                 log_scale = tf.identity(log_scale)
         return -np.log(2.) - log_scale - tf.abs(given - self.loc) / self.scale
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class BinConcrete(Distribution):
+    """
+    The class of univariate BinConcrete distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
+        distribution. The temperature should be positive.
+    :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
+
+        .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
+
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 temperature,
+                 logits,
+                 group_event_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'BinConcrete.logits')])
+
+        self._temperature = assert_scalar_and_positivity(
+            temperature, float, param_dtype, 'BinConcrete.temperature')
+        if isinstance(self._temperature, float):
+            self._temperature = tf.constant(self._temperature, param_dtype)
+
+        self._check_numerics = check_numerics
+        super(BinConcrete, self).__init__(
+            dtype=param_dtype,
+            param_dtype=param_dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def temperature(self):
+        """The temperature of BinConcrete."""
+        return self._temperature
+
+    @property
+    def logits(self):
+        """The log-odds of probabilities."""
+        return self._logits
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.shape(self.logits)
+
+    def _get_batch_shape(self):
+        return self.logits.get_shape()
+
+    def _sample(self, n_samples):
+        logits = self.logits
+        if not self.is_reparameterized:
+            logits = tf.stop_gradient(logits)
+        shape = tf.concat([[n_samples], self.batch_shape], 0)
+
+        uniform = random_open_interval_uniform(shape, self.dtype)
+        logistic = tf.log(uniform) - tf.log(1 - uniform)
+        samples = tf.sigmoid((logits + logistic) / self.temperature)
+
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).concatenate(
+                self.get_batch_shape()))
+        return samples
+
+    def _log_prob(self, given):
+        temperature, logits = self.temperature, self.logits
+        log_given = tf.log(given)
+        log_1_minus_given = tf.log(1 - given)
+        log_temperature = tf.log(temperature)
+        logistic_given = log_given - log_1_minus_given
+
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_given, "log(given)"),
+                     tf.check_numerics(log_1_minus_given, "log(1 - given)"),
+                     tf.check_numerics(log_temperature, "log(temperature)")]):
+                log_given = tf.identity(log_given)
+
+        temp = temperature * logistic_given - logits
+
+        return log_temperature - log_given - log_1_minus_given + \
+            temp - 2 * tf.nn.softplus(temp)
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))

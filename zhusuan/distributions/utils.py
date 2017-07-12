@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
+import numpy as np
 
 
 __all__ = [
@@ -179,3 +180,73 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
         return assert_same_dtype(tensors_with_name, dtype)
     else:
         raise TypeError("The argument 'dtype' must be in %s" % available_types)
+
+
+def assert_rank_at_least_one(tensor, name):
+    """
+    Whether the rank of `tensor` is at least one.
+
+    :param tensor: A tensor.
+    :param name: The name of `tensor` for error message.
+    :return: (`tensor`, the last dimension of `tensor`).
+    """
+    static_shape = tensor.get_shape()
+    shape_err_msg = name + " should have rank >= 1."
+    if static_shape and (static_shape.ndims < 1):
+        raise ValueError(shape_err_msg)
+    elif static_shape and (static_shape[-1].value is not None):
+        return tensor, static_shape[-1].value
+    else:
+        _assert_shape_op = tf.assert_rank_at_least(
+            tensor, 1, message=shape_err_msg)
+        with tf.control_dependencies([_assert_shape_op]):
+            tensor = tf.identity(tensor)
+        return tensor, tf.shape(tensor)[-1]
+
+
+def assert_scalar_and_positivity(value, value_type, dtype, name):
+    """
+    Whether `value` is a scalar (or 0-D tensor) and positive.
+    If `value` is the instance of `value_type`, it will be check directly,
+    Otherwise it will be converted to a `dtype` tensor and checked.
+
+    :param value: The value to be checked.
+    :param value_type: The built-in type of value.
+    :param dtype: The tensor dtype.
+    :param name: The name of `value` used in error message.
+    :return value
+    """
+    sign_err_msg = name + " must be positive"
+    if isinstance(value, value_type):
+        if value <= 0:
+            raise ValueError(sign_err_msg)
+        return value
+    else:
+        try:
+            tensor = tf.convert_to_tensor(value, dtype)
+        except ValueError:
+            raise TypeError(name + ' must be ' + str(dtype))
+        _assert_rank_op = tf.assert_rank(
+            tensor, 0,
+            message=name + " should be a scalar (0-D Tensor).")
+        _assert_positive_op = tf.assert_greater(
+            tensor, tf.constant(0, dtype), message=sign_err_msg)
+        with tf.control_dependencies([_assert_rank_op,
+                                      _assert_positive_op]):
+            tensor = tf.identity(tensor)
+        return tensor
+
+
+def random_open_interval_uniform(shape, dtype):
+    """
+    Return samples from uniform distribution in unit open interval (0, 1).
+
+    :param shape: The shape of generated samples.
+    :param dtype: The dtype of generated samples.
+    :return: A Tensor of samples.
+    """
+    return tf.random_uniform(
+        shape=shape,
+        minval=np.finfo(dtype.as_numpy_dtype).tiny,
+        maxval=1.,
+        dtype=dtype)
