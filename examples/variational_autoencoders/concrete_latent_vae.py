@@ -21,12 +21,6 @@ temperature_prior = 0.5
 temperature_posterior = 0.666
 
 
-def stacked_logits(logits):
-    logits0 = tf.log_sigmoid(-logits)
-    logits1 = tf.log_sigmoid(logits)
-    return tf.stack([logits0, logits1], axis=-1)
-
-
 @zs.reuse('model')
 def vae(observed, n, n_x, n_z, n_k, n_particles, is_training, relaxed):
     with zs.BayesianNet(observed=observed) as model:
