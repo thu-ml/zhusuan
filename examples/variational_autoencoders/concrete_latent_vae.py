@@ -28,17 +28,16 @@ def vae(observed, n, n_x, n_z, n_k, n_particles, is_training, relaxed):
                              'updates_collections': None}
         z_logits = tf.get_variable('z_logits', [n_z * n_k])
         z_logits = tf.tile(tf.expand_dims(z_logits, 0), [n, 1])
-        z_stacked_logits = tf.reshape(z_logits, [-1, n, n_z, n_k])
+        z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', temperature_prior, z_stacked_logits,
                                n_samples=n_particles, group_event_ndims=1)
-            z = tf.exp(tf.reshape(z, [-1, n, n_z * n_k]))
+            z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
             z = zs.OnehotCategorical('z', z_stacked_logits,
-                             n_samples=n_particles, group_event_ndims=1)
-            z = tf.to_float(tf.reshape(z, [-1, n, n_z * n_k]))
-        #lx_z = layers.fully_connected(z, 500, activation_fn=tf.tanh)
-        #lx_z = layers.fully_connected(lx_z, 500, activation_fn=tf.tanh)
+                                     n_samples=n_particles,
+                                     group_event_ndims=1)
+            z = tf.to_float(tf.reshape(z, [n_particles, n, n_z * n_k]))
         lx_z = layers.fully_connected(
             z, 500, activation_fn=tf.tanh,
             normalizer_fn=layers.batch_norm,
@@ -57,9 +56,6 @@ def q_net(observed, x, n_z, n_k, n_particles, is_training, relaxed):
     with zs.BayesianNet(observed=observed) as variational:
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
-        #lz_x = layers.fully_connected(
-        #    tf.to_float(x), 500, activation_fn=tf.tanh)
-        #lz_x = layers.fully_connected(lz_x, 500, activation_fn=tf.tanh)
         lz_x = layers.fully_connected(
             tf.to_float(x), 500, activation_fn=tf.tanh,
             normalizer_fn=layers.batch_norm,
@@ -69,13 +65,14 @@ def q_net(observed, x, n_z, n_k, n_particles, is_training, relaxed):
             normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
         z_logits = layers.fully_connected(lz_x, n_z * n_k, activation_fn=None)
-        z_stacked_logits = tf.reshape(z_logits, [-1, n, n_z, n_k])
+        z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', temperature_posterior, z_stacked_logits,
                                n_samples=n_particles, group_event_ndims=1)
         else:
             z = zs.OnehotCategorical('z', z_stacked_logits,
-                             n_samples=n_particles, group_event_ndims=1)
+                                     n_samples=n_particles,
+                                     group_event_ndims=1)
     return variational
 
 
@@ -93,7 +90,7 @@ if __name__ == '__main__':
     # Define parameters
     n_z, n_k = 100, 2   # number of latent variables, categories
     n_x = x_train.shape[1]
-    lb_samples = 5
+    lb_samples = 1
     ll_samples = 500
     epochs = 10000
     batch_size = 100
