@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 from __future__ import division
 
+import numpy as np
 import tensorflow as tf
 
 from zhusuan.distributions.base import Distribution
@@ -23,6 +24,7 @@ __all__ = [
     'OnehotDiscrete',
     'Dirichlet',
     'ExpConcrete',
+    'Concrete',
 ]
 
 
@@ -475,6 +477,119 @@ class ExpConcrete(Distribution):
 
         return tf.lgamma(n) + (n - 1) * tf.log(temperature) + \
             tf.reduce_sum(temp, axis=-1) - \
+            n * tf.reduce_logsumexp(temp, axis=-1)
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class Concrete(Distribution):
+    """
+    The class of Concrete distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
+        distribution. The temperature should be positive.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
+
+        .. math:: \\mathrm{logits} \\propto \\log p
+
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 temperature,
+                 logits,
+                 group_event_ndims=0,
+                 is_reparameterized=True):
+        self._logits = tf.convert_to_tensor(logits)
+        param_dtype = assert_same_float_dtype(
+            [(self._logits, 'Concrete.logits')])
+
+        self._logits, self._n_categories = assert_rank_at_least_one(
+            self._logits, 'Concrete.logits')
+
+        self._temperature = assert_scalar_and_positivity(
+            temperature, float, param_dtype, 'Concrete.temperature')
+        if isinstance(self._temperature, float):
+            self._temperature = tf.constant(self._temperature, param_dtype)
+
+        super(Concrete, self).__init__(
+            dtype=param_dtype,
+            param_dtype=param_dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            group_event_ndims=group_event_ndims)
+
+    @property
+    def temperature(self):
+        """The temperature of Concrete."""
+        return self._temperature
+
+    @property
+    def logits(self):
+        """The un-normalized log probabilities."""
+        return self._logits
+
+    @property
+    def n_categories(self):
+        """The number of categories in the distribution."""
+        return self._n_categories
+
+    def _value_shape(self):
+        return tf.convert_to_tensor([self.n_categories], tf.int32)
+
+    def _get_value_shape(self):
+        if isinstance(self.n_categories, int):
+            return tf.TensorShape([self.n_categories])
+        return tf.TensorShape([None])
+
+    def _batch_shape(self):
+        return tf.shape(self.logits)[:-1]
+
+    def _get_batch_shape(self):
+        if self.logits.get_shape():
+            return self.logits.get_shape()[:-1]
+        return tf.TensorShape(None)
+
+    def _sample(self, n_samples):
+        logits, temperature = self.logits, self.temperature
+        if not self.is_reparameterized:
+            logits = tf.stop_gradient(logits)
+            temperature = tf.stop_gradient(temperature)
+        shape = tf.concat([[n_samples], tf.shape(self.logits)], 0)
+
+        uniform = random_open_interval_uniform(shape, self.dtype)
+        gumbel = -tf.log(-tf.log(uniform))
+        samples = tf.nn.softmax((logits + gumbel) / temperature)
+
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).concatenate(logits.get_shape()))
+        return samples
+
+    def _log_prob(self, given):
+        tiny = np.finfo(self.dtype.as_numpy_dtype).tiny
+
+        logits, temperature = self.logits, self.temperature
+        log_given = tf.log(given + tiny)
+        n = tf.cast(self.n_categories, self.dtype)
+
+        temp = logits - temperature * log_given
+
+        return tf.lgamma(n) + (n - 1) * tf.log(temperature) + \
+            tf.reduce_sum(temp - log_given, axis=-1) - \
             n * tf.reduce_logsumexp(temp, axis=-1)
 
     def _prob(self, given):
