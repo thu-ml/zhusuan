@@ -17,20 +17,12 @@ from examples import conf
 from examples.utils import dataset, save_image_collections
 
 
-temperature_prior = 0.5
-temperature_posterior = 0.666
-
-
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_k, n_particles, is_training, relaxed):
+def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed):
     with zs.BayesianNet(observed=observed) as model:
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        z_logits = tf.get_variable('z_logits', [n_z * n_k])
-        z_logits = tf.tile(tf.expand_dims(z_logits, 0), [n, 1])
-        z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
+        z_stacked_logits = tf.zeros([n, n_z, n_k])
         if relaxed:
-            z = zs.ExpConcrete('z', temperature_prior, z_stacked_logits,
+            z = zs.ExpConcrete('z', tau, z_stacked_logits,
                                n_samples=n_particles, group_event_ndims=1)
             z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
@@ -38,42 +30,29 @@ def vae(observed, n, n_x, n_z, n_k, n_particles, is_training, relaxed):
                                      n_samples=n_particles,
                                      group_event_ndims=1)
             z = tf.to_float(tf.reshape(z, [n_particles, n, n_z * n_k]))
-        lx_z = layers.fully_connected(
-            z, 500, activation_fn=tf.tanh,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lx_z = layers.fully_connected(
-            lx_z, 500, activation_fn=tf.tanh,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
+        lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
+        lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
-    return model
+    return model, x_logits
 
 
 @zs.reuse('variational')
-def q_net(observed, x, n_z, n_k, n_particles, is_training, relaxed):
+def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed):
     with zs.BayesianNet(observed=observed) as variational:
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
         lz_x = layers.fully_connected(
-            tf.to_float(x), 500, activation_fn=tf.tanh,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
-        lz_x = layers.fully_connected(
-            lz_x, 500, activation_fn=tf.tanh,
-            normalizer_fn=layers.batch_norm,
-            normalizer_params=normalizer_params)
+            tf.to_float(x), 200, activation_fn=tf.tanh)
+        lz_x = layers.fully_connected(lz_x, 200, activation_fn=tf.tanh)
         z_logits = layers.fully_connected(lz_x, n_z * n_k, activation_fn=None)
         z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
         if relaxed:
-            z = zs.ExpConcrete('z', temperature_posterior, z_stacked_logits,
+            z = zs.ExpConcrete('z', tau, z_stacked_logits,
                                n_samples=n_particles, group_event_ndims=1)
         else:
             z = zs.OnehotCategorical('z', z_stacked_logits,
                                      n_samples=n_particles,
                                      group_event_ndims=1)
-    return variational
+    return variational, z.distribution.logits
 
 
 if __name__ == '__main__':
@@ -88,24 +67,26 @@ if __name__ == '__main__':
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
 
     # Define parameters
-    n_z, n_k = 100, 2   # number of latent variables, categories
+    n_z, n_k = 20, 10   # number of latent variables, categories
     n_x = x_train.shape[1]
-    lb_samples = 1
+    temperature_prior = 0.5
+    temperature_posterior = 0.5
+
+    lb_samples = 5
     ll_samples = 500
-    epochs = 10000
-    batch_size = 100
+    epochs = 3000
+    batch_size = 64
     iters = x_train.shape[0] // batch_size
-    learning_rate = 0.001
-    anneal_lr_freq = 200
-    anneal_lr_rate = 1.0
-    test_freq = 50
+    learning_rate = 0.0001
+    test_freq = 25
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
-    save_freq = 20
+    save_freq = 50
     result_path = "results/vae"
 
     # Build the computation graph
-    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
+    tau_prior = tf.placeholder(tf.float32, shape=[], name="tau_prior")
+    tau_posterior = tf.placeholder(tf.float32, shape=[], name="tau_posterior")
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
@@ -115,24 +96,38 @@ if __name__ == '__main__':
     n = tf.shape(x)[0]
 
     def lower_bound_and_log_likelihood(relaxed):
-        def log_joint(observed):
-            model = vae(observed, n, n_x, n_z, n_k,
-                        n_particles, is_training, relaxed)
-            log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-            return log_pz + log_px_z
-
-        variational = q_net({}, x, n_z, n_k, n_particles, is_training, relaxed)
+        variational, z_logits = q_net({}, x, n_z, n_k,
+                                      tau_posterior, n_particles, relaxed)
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
-        lower_bound = tf.reduce_mean(zs.sgvb(
-            log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        if not relaxed:
+            def log_joint(observed):
+                model, _ = vae(observed, n, n_x, n_z, n_k,
+                               tau_prior, n_particles, relaxed)
+                log_pz, log_px_z = model.local_log_prob(['z', 'x'])
+                return log_pz + log_px_z
 
-        # Importance sampling estimates of marginal log likelihood
-        is_log_likelihood = tf.reduce_mean(
-            zs.is_loglikelihood(log_joint, {'x': x_obs},
-                                {'z': [qz_samples, log_qz]}, axis=0))
+            lower_bound = tf.reduce_mean(zs.sgvb(
+                log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
-        return lower_bound, is_log_likelihood
+            # Importance sampling estimates of marginal log likelihood
+            is_log_likelihood = tf.reduce_mean(
+                zs.is_loglikelihood(log_joint, {'x': x_obs},
+                                    {'z': [qz_samples, log_qz]}, axis=0))
+
+            return lower_bound, is_log_likelihood
+        else:
+            model, _ = vae({'z': qz_samples, 'x': x_obs}, n, n_x, n_z, n_k,
+                           tau_prior, n_particles, relaxed)
+
+            q_z = tf.nn.softmax(z_logits)
+            log_qz = tf.log(q_z + np.finfo(np.float32).tiny)
+            kl_tmp = tf.reshape(q_z * (log_qz + tf.log(1. * n_k)),
+                                [-1, n_z, n_k])
+            kl = tf.reduce_sum(kl_tmp, [1, 2])
+            log_px = model.local_log_prob('x')
+            lower_bound = tf.reduce_mean(log_px - kl)
+            return lower_bound, None
 
     # For training
     relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
@@ -146,8 +141,7 @@ if __name__ == '__main__':
 
     # Generate images
     n_gen = 100
-    model = vae({}, n_gen, n_x, n_z, n_k, 1, is_training, False)
-    x_logits = model._stochastic_tensors['x'].distribution.logits
+    model, x_logits = vae({}, n_gen, n_x, n_z, n_k, tau_prior, 1, False)
     x_gen = tf.reshape(tf.sigmoid(x_logits), [-1, 28, 28, 1])
 
     params = tf.trainable_variables()
@@ -170,18 +164,18 @@ if __name__ == '__main__':
 
         for epoch in range(begin_epoch, epochs + 1):
             time_epoch = -time.time()
-            if epoch % anneal_lr_freq == 0:
-                learning_rate *= anneal_lr_rate
             np.random.shuffle(x_train)
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
+                feed_dict = {x: x_batch_bin,
+                             learning_rate_ph: learning_rate,
+                             n_particles: lb_samples,
+                             tau_prior: temperature_prior,
+                             tau_posterior: temperature_posterior}
                 _, lb = sess.run([infer, relaxed_lower_bound],
-                                 feed_dict={x: x_batch_bin,
-                                            learning_rate_ph: learning_rate,
-                                            n_particles: lb_samples,
-                                            is_training: True})
+                                 feed_dict=feed_dict)
                 lbs.append(lb)
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
@@ -194,14 +188,14 @@ if __name__ == '__main__':
                 for t in range(test_iters):
                     test_x_batch = x_test[t * test_batch_size:
                                           (t + 1) * test_batch_size]
-                    test_lb = sess.run(lower_bound,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples,
-                                                  is_training: False})
-                    test_ll = sess.run(is_log_likelihood,
-                                       feed_dict={x: test_x_batch,
-                                                  n_particles: ll_samples,
-                                                  is_training: False})
+                    feed_dict = {x: x_batch_bin,
+                                 n_particles: ll_samples,
+                                 tau_prior: temperature_prior,
+                                 tau_posterior: temperature_posterior}
+
+                    test_lb, test_ll = sess.run(
+                        [lower_bound, is_log_likelihood], feed_dict=feed_dict)
+
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()
@@ -218,7 +212,10 @@ if __name__ == '__main__':
                     os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
 
-                images = sess.run(x_gen, feed_dict={is_training: False})
+                feed_dict = {tau_prior: temperature_prior,
+                             tau_posterior: temperature_posterior}
+
+                images = sess.run(x_gen, feed_dict=feed_dict)
                 name = "results/vae/vae.epoch.{}.png".format(epoch)
                 save_image_collections(images, name)
                 print('Done')
