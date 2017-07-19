@@ -375,7 +375,7 @@ class Dirichlet(Distribution):
 
 class ExpConcrete(Distribution):
     """
-    The class of ExpConcrete distribution.
+    The class of ExpConcrete distribution from (Maddison, 2016).
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
@@ -395,7 +395,6 @@ class ExpConcrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
-    :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
@@ -485,7 +484,7 @@ class ExpConcrete(Distribution):
 
 class Concrete(Distribution):
     """
-    The class of Concrete distribution.
+    The class of Concrete distribution from (Maddison, 2016).
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
@@ -512,7 +511,8 @@ class Concrete(Distribution):
                  temperature,
                  logits,
                  group_event_ndims=0,
-                 is_reparameterized=True):
+                 is_reparameterized=True,
+                 check_numerics=False):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Concrete.logits')])
@@ -525,6 +525,7 @@ class Concrete(Distribution):
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)
 
+        self._check_numerics = check_numerics
         super(Concrete, self).__init__(
             dtype=param_dtype,
             param_dtype=param_dtype,
@@ -580,11 +581,14 @@ class Concrete(Distribution):
         return samples
 
     def _log_prob(self, given):
-        tiny = np.finfo(self.dtype.as_numpy_dtype).tiny
-
         logits, temperature = self.logits, self.temperature
-        log_given = tf.log(given + tiny)
+        log_given = tf.log(given)
         n = tf.cast(self.n_categories, self.dtype)
+
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_given, "log(given)")]):
+                log_given = tf.identity(log_given)
 
         temp = logits - temperature * log_given
 

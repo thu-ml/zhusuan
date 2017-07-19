@@ -1125,7 +1125,7 @@ class Laplace(Distribution):
 
 class BinConcrete(Distribution):
     """
-    The class of univariate BinConcrete distribution.
+    The class of univariate BinConcrete distribution from (Maddison, 2016).
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
@@ -1218,8 +1218,7 @@ class BinConcrete(Distribution):
         if self._check_numerics:
             with tf.control_dependencies(
                     [tf.check_numerics(log_given, "log(given)"),
-                     tf.check_numerics(log_1_minus_given, "log(1 - given)"),
-                     tf.check_numerics(log_temperature, "log(temperature)")]):
+                     tf.check_numerics(log_1_minus_given, "log(1 - given)")]):
                 log_given = tf.identity(log_given)
 
         temp = temperature * logistic_given - logits

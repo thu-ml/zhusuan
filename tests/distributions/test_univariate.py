@@ -1027,3 +1027,23 @@ class TestBinConcrete(tf.test.TestCase):
         t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
         self.assertEqual(t_grads, None)
         self.assertEqual(logits_grads, None)
+
+    def test_check_numerics(self):
+        tau = tf.placeholder(tf.float32, None)
+        logits = tf.placeholder(tf.float32, None)
+        given = tf.placeholder(tf.float32, None)
+        dist = BinConcrete(tau, logits, check_numerics=True)
+        log_p = dist.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(given\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: -1.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(given\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: 0.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(1 - given\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: 2.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(1 - given\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: 1.})

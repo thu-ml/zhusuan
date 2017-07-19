@@ -687,6 +687,7 @@ class Concrete(StochasticTensor):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
@@ -695,11 +696,13 @@ class Concrete(StochasticTensor):
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
-                 is_reparameterized=True):
+                 is_reparameterized=True,
+                 check_numerics=False):
         concrete = distributions.Concrete(
             temperature,
             logits,
             group_event_ndims=group_event_ndims,
-            is_reparameterized=is_reparameterized
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics
         )
         super(Concrete, self).__init__(name, concrete, n_samples)

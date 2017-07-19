@@ -14,7 +14,7 @@ import numpy as np
 import zhusuan as zs
 
 from examples import conf
-from examples.utils import dataset, save_image_collections
+from examples.utils import dataset
 
 
 @zs.reuse('model')
@@ -67,12 +67,15 @@ if __name__ == '__main__':
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
 
     # Define parameters
-    n_z, n_k = 20, 10   # number of latent variables, categories
+    n_z, n_k = 100, 2   # number of latent variables, categories
     n_x = x_train.shape[1]
-    temperature_prior = 0.5
-    temperature_posterior = 0.5
 
-    lb_samples = 5
+    temperature_prior = 1.0
+    temperature_posterior = 1.0
+    anneal_tau_freq = 25
+    anneal_tau_rate = 0.95
+
+    lb_samples = 1
     ll_samples = 500
     epochs = 3000
     batch_size = 64
@@ -96,38 +99,26 @@ if __name__ == '__main__':
     n = tf.shape(x)[0]
 
     def lower_bound_and_log_likelihood(relaxed):
+        def log_joint(observed):
+            model, _ = vae(observed, n, n_x, n_z, n_k,
+                           tau_prior, n_particles, relaxed)
+            log_pz, log_px_z = model.local_log_prob(['z', 'x'])
+            return log_pz + log_px_z
+
         variational, z_logits = q_net({}, x, n_z, n_k,
                                       tau_posterior, n_particles, relaxed)
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
-        if not relaxed:
-            def log_joint(observed):
-                model, _ = vae(observed, n, n_x, n_z, n_k,
-                               tau_prior, n_particles, relaxed)
-                log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-                return log_pz + log_px_z
 
-            lower_bound = tf.reduce_mean(zs.sgvb(
-                log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        lower_bound = tf.reduce_mean(zs.sgvb(
+            log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
 
-            # Importance sampling estimates of marginal log likelihood
-            is_log_likelihood = tf.reduce_mean(
-                zs.is_loglikelihood(log_joint, {'x': x_obs},
-                                    {'z': [qz_samples, log_qz]}, axis=0))
+        # Importance sampling estimates of marginal log likelihood
+        is_log_likelihood = tf.reduce_mean(
+            zs.is_loglikelihood(log_joint, {'x': x_obs},
+                                {'z': [qz_samples, log_qz]}, axis=0))
 
-            return lower_bound, is_log_likelihood
-        else:
-            model, _ = vae({'z': qz_samples, 'x': x_obs}, n, n_x, n_z, n_k,
-                           tau_prior, n_particles, relaxed)
-
-            q_z = tf.nn.softmax(z_logits)
-            log_qz = tf.log(q_z + np.finfo(np.float32).tiny)
-            kl_tmp = tf.reshape(q_z * (log_qz + tf.log(1. * n_k)),
-                                [-1, n_z, n_k])
-            kl = tf.reduce_sum(kl_tmp, [1, 2])
-            log_px = model.local_log_prob('x')
-            lower_bound = tf.reduce_mean(log_px - kl)
-            return lower_bound, None
+        return lower_bound, is_log_likelihood
 
     # For training
     relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
@@ -138,11 +129,6 @@ if __name__ == '__main__':
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     grads = optimizer.compute_gradients(-relaxed_lower_bound)
     infer = optimizer.apply_gradients(grads)
-
-    # Generate images
-    n_gen = 100
-    model, x_logits = vae({}, n_gen, n_x, n_z, n_k, tau_prior, 1, False)
-    x_gen = tf.reshape(tf.sigmoid(x_logits), [-1, 28, 28, 1])
 
     params = tf.trainable_variables()
     for i in params:
@@ -165,6 +151,13 @@ if __name__ == '__main__':
         for epoch in range(begin_epoch, epochs + 1):
             time_epoch = -time.time()
             np.random.shuffle(x_train)
+
+            if epoch % anneal_tau_freq == 0:
+                temperature_prior = max(0.5, temperature_prior
+                                        * anneal_tau_rate)
+                temperature_posterior = max(0.666, temperature_posterior
+                                            * anneal_tau_rate)
+
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
@@ -211,11 +204,4 @@ if __name__ == '__main__':
                 if not os.path.exists(os.path.dirname(save_path)):
                     os.makedirs(os.path.dirname(save_path))
                 saver.save(sess, save_path)
-
-                feed_dict = {tau_prior: temperature_prior,
-                             tau_posterior: temperature_posterior}
-
-                images = sess.run(x_gen, feed_dict=feed_dict)
-                name = "results/vae/vae.epoch.{}.png".format(epoch)
-                save_image_collections(images, name)
                 print('Done')
