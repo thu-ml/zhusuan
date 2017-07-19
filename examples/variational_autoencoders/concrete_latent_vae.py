@@ -34,7 +34,7 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed):
         lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
         x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
-    return model, x_logits
+    return model
 
 
 @zs.reuse('variational')
@@ -52,7 +52,7 @@ def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed):
             z = zs.OnehotCategorical('z', z_stacked_logits,
                                      n_samples=n_particles,
                                      group_event_ndims=1)
-    return variational, z.distribution.logits
+    return variational
 
 
 if __name__ == '__main__':
@@ -100,13 +100,13 @@ if __name__ == '__main__':
 
     def lower_bound_and_log_likelihood(relaxed):
         def log_joint(observed):
-            model, _ = vae(observed, n, n_x, n_z, n_k,
+            model = vae(observed, n, n_x, n_z, n_k,
                            tau_prior, n_particles, relaxed)
             log_pz, log_px_z = model.local_log_prob(['z', 'x'])
             return log_pz + log_px_z
 
-        variational, z_logits = q_net({}, x, n_z, n_k,
-                                      tau_posterior, n_particles, relaxed)
+        variational = q_net({}, x, n_z, n_k,
+                            tau_posterior, n_particles, relaxed)
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
 
