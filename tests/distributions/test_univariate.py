@@ -975,7 +975,7 @@ class TestBinConcrete(tf.test.TestCase):
                 target_log_p = np.log(temperature) + logits - \
                     (temperature + 1) * np.log(given) - \
                     (temperature + 1) * np.log(1 - given) - \
-                    2 * np.log(np.exp(logits) * (given ** -temperature) + \
+                    2 * np.log(np.exp(logits) * (given ** -temperature) +
                                (1 - given) ** -temperature)
 
                 con = BinConcrete(temperature, logits=logits)
