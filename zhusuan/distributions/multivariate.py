@@ -13,7 +13,7 @@ from zhusuan.distributions.utils import \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
         assert_rank_at_least_one, \
-        assert_posivity_integer, \
+        assert_positive_integer, \
         open_interval_standard_uniform, \
         log_combination
 
@@ -69,7 +69,7 @@ class Multinomial(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
 
-        self._n_experiments = assert_posivity_integer(
+        self._n_experiments = assert_positive_integer(
             n_experiments, int, tf.int32, 'Multinomial.n_experiments')
 
         super(Multinomial, self).__init__(
@@ -409,7 +409,7 @@ class ExpConcrete(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'ExpConcrete.logits')
 
-        self._temperature = assert_posivity_integer(
+        self._temperature = assert_positive_integer(
             temperature, float, param_dtype, 'ExpConcrete.temperature')
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)
@@ -520,7 +520,7 @@ class Concrete(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Concrete.logits')
 
-        self._temperature = assert_posivity_integer(
+        self._temperature = assert_positive_integer(
             temperature, float, param_dtype, 'Concrete.temperature')
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)

@@ -204,7 +204,7 @@ def assert_rank_at_least_one(checked_tensor, name):
         return checked_tensor, tf.shape(checked_tensor)[-1]
 
 
-def assert_posivity_integer(checked_value, value_type, dtype, name):
+def assert_positive_integer(checked_value, value_type, dtype, name):
     """
     Whether `checked_value` is a scalar (or 0-D tensor) and positive.
     If `checked_value` is the instance of `value_type`, it will be check

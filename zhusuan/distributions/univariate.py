@@ -13,7 +13,7 @@ from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
-        assert_posivity_integer, \
+        assert_positive_integer, \
         assert_rank_at_least_one, \
         open_interval_standard_uniform
 
@@ -1156,7 +1156,7 @@ class BinConcrete(Distribution):
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'BinConcrete.logits')])
 
-        self._temperature = assert_posivity_integer(
+        self._temperature = assert_positive_integer(
             temperature, float, param_dtype, 'BinConcrete.temperature')
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)
