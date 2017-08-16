@@ -1,5 +1,5 @@
-zhusuan.distributions.multivariate 
-=========================================
+zhusuan\.distributions\.multivariate 
+===========================================
 
 .. automodule:: zhusuan.distributions.multivariate
     :members:

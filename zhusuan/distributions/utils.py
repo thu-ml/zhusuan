@@ -182,15 +182,15 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
         raise TypeError("The argument 'dtype' must be in %s" % available_types)
 
 
-def assert_rank_at_least_one(tensor, name):
+def assert_rank_at_least_one(checked_tensor, name):
     """
     Whether the rank of `tensor` is at least one.
 
-    :param tensor: A tensor.
-    :param name: The name of `tensor` for error message.
-    :return: (`tensor`, the last dimension of `tensor`).
+    :param checked_tensor: A tensor to be checked.
+    :param name: The name of `checked_tensor` for error message.
+    :return: (`checked_tensor`, the last dimension of `checked_tensor`).
     """
-    static_shape = tensor.get_shape()
+    static_shape = checked_tensor.get_shape()
     shape_err_msg = name + " should have rank >= 1."
     if static_shape and (static_shape.ndims < 1):
         raise ValueError(shape_err_msg)
@@ -198,32 +198,32 @@ def assert_rank_at_least_one(tensor, name):
         return tensor, static_shape[-1].value
     else:
         _assert_shape_op = tf.assert_rank_at_least(
-            tensor, 1, message=shape_err_msg)
+            checked_tensor, 1, message=shape_err_msg)
         with tf.control_dependencies([_assert_shape_op]):
-            tensor = tf.identity(tensor)
-        return tensor, tf.shape(tensor)[-1]
+            checked_tensor = tf.identity(checked_tensor)
+        return checked_tensor, tf.shape(checked_tensor)[-1]
 
 
-def assert_scalar_and_positivity(value, value_type, dtype, name):
+def assert_posivity_integer(checked_value, value_type, dtype, name):
     """
-    Whether `value` is a scalar (or 0-D tensor) and positive.
-    If `value` is the instance of `value_type`, it will be check directly,
-    Otherwise it will be converted to a `dtype` tensor and checked.
+    Whether `checked_value` is a scalar (or 0-D tensor) and positive.
+    If `checked_value` is the instance of `value_type`, it will be check
+    directly, Otherwise it will be converted to a `dtype` tensor and checked.
 
-    :param value: The value to be checked.
+    :param checked_value: The value to be checked.
     :param value_type: The built-in type of value.
     :param dtype: The tensor dtype.
-    :param name: The name of `value` used in error message.
-    :return value
+    :param name: The name of `checked_value` used in error message.
+    :return: checked_value
     """
     sign_err_msg = name + " must be positive"
-    if isinstance(value, value_type):
-        if value <= 0:
+    if isinstance(checked_value, value_type):
+        if checked_value <= 0:
             raise ValueError(sign_err_msg)
-        return value
+        return checked_value
     else:
         try:
-            tensor = tf.convert_to_tensor(value, dtype)
+            tensor = tf.convert_to_tensor(checked_value, dtype)
         except ValueError:
             raise TypeError(name + ' must be ' + str(dtype))
         _assert_rank_op = tf.assert_rank(
@@ -237,7 +237,7 @@ def assert_scalar_and_positivity(value, value_type, dtype, name):
         return tensor
 
 
-def random_open_interval_uniform(shape, dtype):
+def open_interval_standard_uniform(shape, dtype):
     """
     Return samples from uniform distribution in unit open interval (0, 1).
 

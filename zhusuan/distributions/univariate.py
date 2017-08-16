@@ -13,9 +13,9 @@ from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
-        assert_scalar_and_positivity, \
+        assert_posivity_integer, \
         assert_rank_at_least_one, \
-        random_open_interval_uniform
+        open_interval_standard_uniform
 
 
 __all__ = [
@@ -1156,7 +1156,7 @@ class BinConcrete(Distribution):
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'BinConcrete.logits')])
 
-        self._temperature = assert_scalar_and_positivity(
+        self._temperature = assert_posivity_integer(
             temperature, float, param_dtype, 'BinConcrete.temperature')
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)
@@ -1198,7 +1198,7 @@ class BinConcrete(Distribution):
             temperature = tf.stop_gradient(temperature)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
 
-        uniform = random_open_interval_uniform(shape, self.dtype)
+        uniform = open_interval_standard_uniform(shape, self.dtype)
         logistic = tf.log(uniform) - tf.log(1 - uniform)
         samples = tf.sigmoid((logits + logistic) / temperature)
 

@@ -13,8 +13,8 @@ from zhusuan.distributions.utils import \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
         assert_rank_at_least_one, \
-        assert_scalar_and_positivity, \
-        random_open_interval_uniform, \
+        assert_posivity_integer, \
+        open_interval_standard_uniform, \
         log_combination
 
 
@@ -69,7 +69,7 @@ class Multinomial(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
 
-        self._n_experiments = assert_scalar_and_positivity(
+        self._n_experiments = assert_posivity_integer(
             n_experiments, int, tf.int32, 'Multinomial.n_experiments')
 
         super(Multinomial, self).__init__(
@@ -409,7 +409,7 @@ class ExpConcrete(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'ExpConcrete.logits')
 
-        self._temperature = assert_scalar_and_positivity(
+        self._temperature = assert_posivity_integer(
             temperature, float, param_dtype, 'ExpConcrete.temperature')
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)
@@ -459,7 +459,7 @@ class ExpConcrete(Distribution):
             temperature = tf.stop_gradient(temperature)
         shape = tf.concat([[n_samples], tf.shape(self.logits)], 0)
 
-        uniform = random_open_interval_uniform(shape, self.dtype)
+        uniform = open_interval_standard_uniform(shape, self.dtype)
         gumbel = -tf.log(-tf.log(uniform))
         samples = tf.nn.log_softmax((logits + gumbel) / temperature)
 
@@ -520,7 +520,7 @@ class Concrete(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Concrete.logits')
 
-        self._temperature = assert_scalar_and_positivity(
+        self._temperature = assert_posivity_integer(
             temperature, float, param_dtype, 'Concrete.temperature')
         if isinstance(self._temperature, float):
             self._temperature = tf.constant(self._temperature, param_dtype)
@@ -571,7 +571,7 @@ class Concrete(Distribution):
             temperature = tf.stop_gradient(temperature)
         shape = tf.concat([[n_samples], tf.shape(self.logits)], 0)
 
-        uniform = random_open_interval_uniform(shape, self.dtype)
+        uniform = open_interval_standard_uniform(shape, self.dtype)
         gumbel = -tf.log(-tf.log(uniform))
         samples = tf.nn.softmax((logits + gumbel) / temperature)
 
