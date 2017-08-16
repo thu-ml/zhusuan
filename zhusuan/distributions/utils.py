@@ -195,7 +195,7 @@ def assert_rank_at_least_one(checked_tensor, name):
     if static_shape and (static_shape.ndims < 1):
         raise ValueError(shape_err_msg)
     elif static_shape and (static_shape[-1].value is not None):
-        return tensor, static_shape[-1].value
+        return checked_tensor, static_shape[-1].value
     else:
         _assert_shape_op = tf.assert_rank_at_least(
             checked_tensor, 1, message=shape_err_msg)
