@@ -70,7 +70,7 @@ class Multinomial(Distribution):
             self._logits, 'Multinomial.logits')
 
         self._n_experiments = assert_positive_integer(
-            n_experiments, int, tf.int32, 'Multinomial.n_experiments')
+            n_experiments, tf.int32, 'Multinomial.n_experiments')
 
         super(Multinomial, self).__init__(
             dtype=dtype,
@@ -410,8 +410,8 @@ class ExpConcrete(Distribution):
             self._logits, 'ExpConcrete.logits')
 
         self._temperature = assert_positive_integer(
-            temperature, float, param_dtype, 'ExpConcrete.temperature')
-        if isinstance(self._temperature, float):
+            temperature, param_dtype, 'ExpConcrete.temperature')
+        if isinstance(self._temperature, (int, float)):
             self._temperature = tf.constant(self._temperature, param_dtype)
 
         super(ExpConcrete, self).__init__(
@@ -521,8 +521,8 @@ class Concrete(Distribution):
             self._logits, 'Concrete.logits')
 
         self._temperature = assert_positive_integer(
-            temperature, float, param_dtype, 'Concrete.temperature')
-        if isinstance(self._temperature, float):
+            temperature, param_dtype, 'Concrete.temperature')
+        if isinstance(self._temperature, (int, float)):
             self._temperature = tf.constant(self._temperature, param_dtype)
 
         self._check_numerics = check_numerics

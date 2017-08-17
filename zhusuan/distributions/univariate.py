@@ -1157,8 +1157,8 @@ class BinConcrete(Distribution):
             [(self._logits, 'BinConcrete.logits')])
 
         self._temperature = assert_positive_integer(
-            temperature, float, param_dtype, 'BinConcrete.temperature')
-        if isinstance(self._temperature, float):
+            temperature, param_dtype, 'BinConcrete.temperature')
+        if isinstance(self._temperature, (int, float)):
             self._temperature = tf.constant(self._temperature, param_dtype)
 
         self._check_numerics = check_numerics

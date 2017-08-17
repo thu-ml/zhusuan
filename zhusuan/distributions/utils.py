@@ -204,20 +204,19 @@ def assert_rank_at_least_one(checked_tensor, name):
         return checked_tensor, tf.shape(checked_tensor)[-1]
 
 
-def assert_positive_integer(checked_value, value_type, dtype, name):
+def assert_positive_integer(checked_value, dtype, name):
     """
     Whether `checked_value` is a scalar (or 0-D tensor) and positive.
-    If `checked_value` is the instance of `value_type`, it will be check
+    If `checked_value` is the instance of built-in type, it will be check
     directly, Otherwise it will be converted to a `dtype` tensor and checked.
 
     :param checked_value: The value to be checked.
-    :param value_type: The built-in type of value.
     :param dtype: The tensor dtype.
     :param name: The name of `checked_value` used in error message.
     :return: checked_value
     """
     sign_err_msg = name + " must be positive"
-    if isinstance(checked_value, value_type):
+    if isinstance(checked_value, (int, float)):
         if checked_value <= 0:
             raise ValueError(sign_err_msg)
         return checked_value
