@@ -578,7 +578,8 @@ class Laplace(StochasticTensor):
 
 class BinConcrete(StochasticTensor):
     """
-    The class of univariate BinConcrete `StochasticTensor`.
+    The class of univariate BinConcrete `StochasticTensor` from
+    (Maddison, 2016). It is the binary case of :class:`~Concrete`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
@@ -623,7 +624,8 @@ class BinConcrete(StochasticTensor):
 
 class ExpConcrete(StochasticTensor):
     """
-    The class of ExpConcrete `StochasticTensor`.
+    The class of ExpConcrete `StochasticTensor` from (Maddison, 2016),
+    transformed from :class:`~Concrete` by taking logarithm.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
@@ -665,7 +667,8 @@ class ExpConcrete(StochasticTensor):
 
 class Concrete(StochasticTensor):
     """
-    The class of Concrete `StochasticTensor`.
+    The class of Concrete `StochasticTensor` from (Maddison, 2016), served as
+    the continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed

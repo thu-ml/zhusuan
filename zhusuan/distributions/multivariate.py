@@ -14,6 +14,7 @@ from zhusuan.distributions.utils import \
         assert_same_float_and_int_dtype, \
         assert_rank_at_least_one, \
         assert_positive_integer, \
+        assert_positive_int32_integer, \
         open_interval_standard_uniform, \
         log_combination
 
@@ -69,8 +70,8 @@ class Multinomial(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
 
-        self._n_experiments = assert_positive_integer(
-            n_experiments, tf.int32, 'Multinomial.n_experiments')
+        self._n_experiments = assert_positive_int32_integer(
+            n_experiments, 'Multinomial.n_experiments')
 
         super(Multinomial, self).__init__(
             dtype=dtype,
@@ -375,7 +376,8 @@ class Dirichlet(Distribution):
 
 class ExpConcrete(Distribution):
     """
-    The class of ExpConcrete distribution from (Maddison, 2016).
+    The class of ExpConcrete distribution from (Maddison, 2016), transformed
+    from :class:`~Concrete` by taking logarithm.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
@@ -484,7 +486,8 @@ class ExpConcrete(Distribution):
 
 class Concrete(Distribution):
     """
-    The class of Concrete distribution from (Maddison, 2016).
+    The class of Concrete distribution from (Maddison, 2016), served as the
+    continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed

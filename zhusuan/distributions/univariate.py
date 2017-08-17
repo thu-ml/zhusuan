@@ -1126,6 +1126,8 @@ class Laplace(Distribution):
 class BinConcrete(Distribution):
     """
     The class of univariate BinConcrete distribution from (Maddison, 2016).
+    It is the binary case of
+    :class:`~zhusuan.distributions.multivariate.Concrete`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
