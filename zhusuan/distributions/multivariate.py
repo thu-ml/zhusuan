@@ -13,7 +13,7 @@ from zhusuan.distributions.utils import \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
         assert_rank_at_least_one, \
-        assert_positive_integer, \
+        assert_scalar, \
         assert_positive_int32_integer, \
         open_interval_standard_uniform, \
         log_combination
@@ -380,6 +380,11 @@ class ExpConcrete(Distribution):
     from :class:`~Concrete` by taking logarithm.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
+    .. seealso::
+
+        :class:`~zhusuan.distributions.univariate.BinConcrete` and
+        :class:`~Concrete`
+
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
@@ -397,25 +402,28 @@ class ExpConcrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
                  temperature,
                  logits,
                  group_event_ndims=0,
-                 is_reparameterized=True):
+                 is_reparameterized=True,
+                 check_numerics=False):
         self._logits = tf.convert_to_tensor(logits)
+        self._temperature = tf.convert_to_tensor(temperature)
         param_dtype = assert_same_float_dtype(
-            [(self._logits, 'ExpConcrete.logits')])
+            [(self._logits, 'ExpConcrete.logits'),
+             (self._temperature, 'ExpConcrete.temperature')])
 
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'ExpConcrete.logits')
 
-        self._temperature = assert_positive_integer(
-            temperature, param_dtype, 'ExpConcrete.temperature')
-        if isinstance(self._temperature, (int, float)):
-            self._temperature = tf.constant(self._temperature, param_dtype)
+        self._temperature = assert_scalar(
+            self._temperature, 'ExpConcrete.temperature')
 
+        self._check_numerics = check_numerics
         super(ExpConcrete, self).__init__(
             dtype=param_dtype,
             param_dtype=param_dtype,
@@ -473,10 +481,16 @@ class ExpConcrete(Distribution):
     def _log_prob(self, given):
         logits, temperature = self.logits, self.temperature
         n = tf.cast(self.n_categories, self.dtype)
+        log_temperature = tf.log(temperature)
+
+        if self._check_numerics:
+            with tf.control_dependencies(
+                    [tf.check_numerics(log_temperature, "log(temperature)")]):
+                log_temperature = tf.identity(log_temperature)
 
         temp = logits - temperature * given
 
-        return tf.lgamma(n) + (n - 1) * tf.log(temperature) + \
+        return tf.lgamma(n) + (n - 1) * log_temperature + \
             tf.reduce_sum(temp, axis=-1) - \
             n * tf.reduce_logsumexp(temp, axis=-1)
 
@@ -489,6 +503,11 @@ class Concrete(Distribution):
     The class of Concrete distribution from (Maddison, 2016), served as the
     continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    .. seealso::
+
+        :class:`~zhusuan.distributions.univariate.BinConcrete` and
+        :class:`~ExpConcrete`
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
@@ -517,16 +536,16 @@ class Concrete(Distribution):
                  is_reparameterized=True,
                  check_numerics=False):
         self._logits = tf.convert_to_tensor(logits)
+        self._temperature = tf.convert_to_tensor(temperature)
         param_dtype = assert_same_float_dtype(
-            [(self._logits, 'Concrete.logits')])
+            [(self._logits, 'Concrete.logits'),
+             (self._temperature, 'Concrete.temperature')])
 
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Concrete.logits')
 
-        self._temperature = assert_positive_integer(
-            temperature, param_dtype, 'Concrete.temperature')
-        if isinstance(self._temperature, (int, float)):
-            self._temperature = tf.constant(self._temperature, param_dtype)
+        self._temperature = assert_scalar(
+            self._temperature, 'Concrete.temperature')
 
         self._check_numerics = check_numerics
         super(Concrete, self).__init__(
@@ -586,16 +605,18 @@ class Concrete(Distribution):
     def _log_prob(self, given):
         logits, temperature = self.logits, self.temperature
         log_given = tf.log(given)
+        log_temperature = tf.log(temperature)
         n = tf.cast(self.n_categories, self.dtype)
 
         if self._check_numerics:
             with tf.control_dependencies(
-                    [tf.check_numerics(log_given, "log(given)")]):
+                    [tf.check_numerics(log_given, "log(given)"),
+                     tf.check_numerics(log_temperature, "log(temperature)")]):
                 log_given = tf.identity(log_given)
 
         temp = logits - temperature * log_given
 
-        return tf.lgamma(n) + (n - 1) * tf.log(temperature) + \
+        return tf.lgamma(n) + (n - 1) * log_temperature + \
             tf.reduce_sum(temp - log_given, axis=-1) - \
             n * tf.reduce_logsumexp(temp, axis=-1)
 

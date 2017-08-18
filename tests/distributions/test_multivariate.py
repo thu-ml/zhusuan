@@ -366,9 +366,6 @@ class TestExpConcrete(tf.test.TestCase):
         with self.assertRaisesRegexp(ValueError,
                                      "should be a scalar"):
             ExpConcrete([1.], [1., 2.])
-        with self.assertRaisesRegexp(ValueError,
-                                     "must be positive"):
-            ExpConcrete(-1., [1., 2.])
 
         with self.test_session(use_gpu=True):
             temperature = tf.placeholder(tf.float32, None)
@@ -376,9 +373,6 @@ class TestExpConcrete(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "should be a scalar"):
                 con.temperature.eval(feed_dict={temperature: [1.]})
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "must be positive"):
-                con.temperature.eval(feed_dict={temperature: -1.})
 
     def test_value_shape(self):
         # static
@@ -445,28 +439,7 @@ class TestExpConcrete(tf.test.TestCase):
                         [[1., 1., 1.], [.5, .5, .4]])
 
     def test_dtype(self):
-        def _proxy_distribution(logits):
-            return ExpConcrete(1., logits)
-        utils.test_dtype_1parameter_continuous(self, _proxy_distribution)
-
-        # test temperature dtype
-        def _test_temperature_dtype(value, dtype):
-            con = ExpConcrete(value, tf.convert_to_tensor([1., 2.], dtype))
-            self.assertEqual(con.temperature.dtype, dtype)
-
-        _test_temperature_dtype(1, tf.float32)
-        _test_temperature_dtype(1., tf.float32)
-        _test_temperature_dtype(1., tf.float64)
-        _test_temperature_dtype(tf.constant(1., tf.float32), tf.float32)
-        _test_temperature_dtype(tf.constant(1., tf.float64), tf.float64)
-
-        def _test_temperature_dtype_raise(value, dtype):
-            with self.assertRaises(TypeError):
-                _test_temperature_dtype(value, dtype)
-
-        _test_temperature_dtype_raise(tf.constant(1, tf.int32), tf.float32)
-        _test_temperature_dtype_raise(tf.constant(1., tf.float64), tf.float32)
-        _test_temperature_dtype_raise(tf.constant(1., tf.float32), tf.float64)
+        utils.test_dtype_2parameter(self, ExpConcrete)
 
     def test_sample_reparameterized(self):
         temperature = tf.ones([])
@@ -482,6 +455,22 @@ class TestExpConcrete(tf.test.TestCase):
         t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
         self.assertEqual(t_grads, None)
         self.assertEqual(logits_grads, None)
+
+    def test_check_numerics(self):
+        tau = tf.placeholder(tf.float32, None)
+        logits = tf.placeholder(tf.float32, None)
+        given = tf.placeholder(tf.float32, None)
+        dist = ExpConcrete(tau, logits, check_numerics=True)
+        log_p = dist.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(temperature\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 0., logits: np.ones([2]),
+                                      given: [1., 1.]})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(temperature\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: -1., logits: np.ones([2]),
+                                      given: [1., 1.]})
 
 
 class TestConcrete(tf.test.TestCase):
@@ -508,9 +497,6 @@ class TestConcrete(tf.test.TestCase):
         with self.assertRaisesRegexp(ValueError,
                                      "should be a scalar"):
             Concrete([1.], [1., 2.])
-        with self.assertRaisesRegexp(ValueError,
-                                     "must be positive"):
-            Concrete(-1., [1., 2.])
 
         with self.test_session(use_gpu=True):
             temperature = tf.placeholder(tf.float32, None)
@@ -518,9 +504,6 @@ class TestConcrete(tf.test.TestCase):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "should be a scalar"):
                 con.temperature.eval(feed_dict={temperature: [1.]})
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "must be positive"):
-                con.temperature.eval(feed_dict={temperature: -1.})
 
     def test_value_shape(self):
         # static
@@ -587,28 +570,7 @@ class TestConcrete(tf.test.TestCase):
                         [[1., 1., 1.], [.5, .5, .4]])
 
     def test_dtype(self):
-        def _proxy_distribution(logits):
-            return Concrete(1., logits)
-        utils.test_dtype_1parameter_continuous(self, _proxy_distribution)
-
-        # test temperature dtype
-        def _test_temperature_dtype(value, dtype):
-            con = Concrete(value, tf.convert_to_tensor([1., 2.], dtype))
-            self.assertEqual(con.temperature.dtype, dtype)
-
-        _test_temperature_dtype(1, tf.float32)
-        _test_temperature_dtype(1., tf.float32)
-        _test_temperature_dtype(1., tf.float64)
-        _test_temperature_dtype(tf.constant(1., tf.float32), tf.float32)
-        _test_temperature_dtype(tf.constant(1., tf.float64), tf.float64)
-
-        def _test_temperature_dtype_raise(value, dtype):
-            with self.assertRaises(TypeError):
-                _test_temperature_dtype(value, dtype)
-
-        _test_temperature_dtype_raise(tf.constant(1, tf.int32), tf.float32)
-        _test_temperature_dtype_raise(tf.constant(1., tf.float64), tf.float32)
-        _test_temperature_dtype_raise(tf.constant(1., tf.float32), tf.float64)
+        utils.test_dtype_2parameter(self, Concrete)
 
     def test_sample_reparameterized(self):
         temperature = tf.ones([])
@@ -640,3 +602,11 @@ class TestConcrete(tf.test.TestCase):
                                          "log\(given\).*Tensor had NaN"):
                 log_p.eval(feed_dict={tau: 1., logits: np.ones([2]),
                                       given: [1., -1.]})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(temperature\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 0., logits: np.ones([2]),
+                                      given: [1., 1.]})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(temperature\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: -1., logits: np.ones([2]),
+                                      given: [1., 1.]})

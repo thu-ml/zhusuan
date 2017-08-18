@@ -13,7 +13,7 @@ from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
-        assert_positive_integer, \
+        assert_scalar, \
         assert_rank_at_least_one, \
         open_interval_standard_uniform
 
@@ -1130,6 +1130,11 @@ class BinConcrete(Distribution):
     :class:`~zhusuan.distributions.multivariate.Concrete`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
+    .. seealso::
+
+        :class:`~zhusuan.distributions.multivariate.Concrete` and
+        :class:`~zhusuan.distributions.multivariate.ExpConcrete`
+
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
@@ -1155,13 +1160,13 @@ class BinConcrete(Distribution):
                  is_reparameterized=True,
                  check_numerics=False):
         self._logits = tf.convert_to_tensor(logits)
+        self._temperature = tf.convert_to_tensor(temperature)
         param_dtype = assert_same_float_dtype(
-            [(self._logits, 'BinConcrete.logits')])
+            [(self._logits, 'BinConcrete.logits'),
+             (self._temperature, 'BinConcrete.temperature')])
 
-        self._temperature = assert_positive_integer(
-            temperature, param_dtype, 'BinConcrete.temperature')
-        if isinstance(self._temperature, (int, float)):
-            self._temperature = tf.constant(self._temperature, param_dtype)
+        self._temperature = assert_scalar(
+            self._temperature, 'BinConcrete.temperature')
 
         self._check_numerics = check_numerics
         super(BinConcrete, self).__init__(
@@ -1201,6 +1206,7 @@ class BinConcrete(Distribution):
         shape = tf.concat([[n_samples], self.batch_shape], 0)
 
         uniform = open_interval_standard_uniform(shape, self.dtype)
+        # TODO: add Logistic distribution
         logistic = tf.log(uniform) - tf.log(1 - uniform)
         samples = tf.sigmoid((logits + logistic) / temperature)
 
@@ -1215,14 +1221,15 @@ class BinConcrete(Distribution):
         log_given = tf.log(given)
         log_1_minus_given = tf.log(1 - given)
         log_temperature = tf.log(temperature)
-        logistic_given = log_given - log_1_minus_given
 
         if self._check_numerics:
             with tf.control_dependencies(
                     [tf.check_numerics(log_given, "log(given)"),
-                     tf.check_numerics(log_1_minus_given, "log(1 - given)")]):
+                     tf.check_numerics(log_1_minus_given, "log(1 - given)"),
+                     tf.check_numerics(log_temperature, "log(temperature)")]):
                 log_given = tf.identity(log_given)
 
+        logistic_given = log_given - log_1_minus_given
         temp = temperature * logistic_given - logits
 
         return log_temperature - log_given - log_1_minus_given + \

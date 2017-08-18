@@ -182,47 +182,66 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
         raise TypeError("The argument 'dtype' must be in %s" % available_types)
 
 
-def assert_rank_at_least_one(checked_tensor, name):
+def assert_rank_at_least_one(tensor, name):
     """
     Whether the rank of `tensor` is at least one.
 
-    :param checked_tensor: A tensor to be checked.
-    :param name: The name of `checked_tensor` for error message.
-    :return: (`checked_tensor`, the last dimension of `checked_tensor`).
+    :param tensor: A tensor to be checked.
+    :param name: The name of `tensor` for error message.
+    :return: (checked tensor, the last dimension of `tensor`).
     """
-    static_shape = checked_tensor.get_shape()
+    static_shape = tensor.get_shape()
     shape_err_msg = name + " should have rank >= 1."
     if static_shape and (static_shape.ndims < 1):
         raise ValueError(shape_err_msg)
     elif static_shape and (static_shape[-1].value is not None):
-        return checked_tensor, static_shape[-1].value
+        return tensor, static_shape[-1].value
     else:
         _assert_shape_op = tf.assert_rank_at_least(
-            checked_tensor, 1, message=shape_err_msg)
+            tensor, 1, message=shape_err_msg)
         with tf.control_dependencies([_assert_shape_op]):
-            checked_tensor = tf.identity(checked_tensor)
-        return checked_tensor, tf.shape(checked_tensor)[-1]
+            tensor = tf.identity(tensor)
+        return tensor, tf.shape(tensor)[-1]
 
 
-def assert_positive_integer(checked_value, dtype, name):
+def assert_scalar(tensor, name):
     """
-    Whether `checked_value` is a scalar (or 0-D tensor) and positive.
-    If `checked_value` is the instance of built-in type, it will be checked
+    Whether the `tensor` is a scalar (0-D tensor).
+
+    :param tensor: A tensor to be checked.
+    :param name: The name of `tensor` for error message.
+    :return: The checked tensor.
+    """
+    static_shape = tensor.get_shape()
+    shape_err_msg = name + " should be a scalar (0-D tensor)."
+    if static_shape and (static_shape.ndims >= 1):
+        raise ValueError(shape_err_msg)
+    else:
+        _assert_shape_op = tf.assert_rank(tensor, 0, message=shape_err_msg)
+        with tf.control_dependencies([_assert_shape_op]):
+            tensor = tf.identity(tensor)
+        return tensor
+
+
+def assert_positive_integer(value, dtype, name):
+    """
+    Whether `value` is a scalar (or 0-D tensor) and positive.
+    If `value` is the instance of built-in type, it will be checked
     directly. Otherwise, it will be converted to a `dtype` tensor and checked.
 
-    :param checked_value: The value to be checked.
+    :param value: The value to be checked.
     :param dtype: The tensor dtype.
-    :param name: The name of `checked_value` used in error message.
-    :return: `checked_value`
+    :param name: The name of `value` used in error message.
+    :return: The checked value.
     """
     sign_err_msg = name + " must be positive"
-    if isinstance(checked_value, (int, float)):
-        if checked_value <= 0:
+    if isinstance(value, (int, float)):
+        if value <= 0:
             raise ValueError(sign_err_msg)
-        return checked_value
+        return value
     else:
         try:
-            tensor = tf.convert_to_tensor(checked_value, dtype)
+            tensor = tf.convert_to_tensor(value, dtype)
         except ValueError:
             raise TypeError(name + ' must be ' + str(dtype))
         _assert_rank_op = tf.assert_rank(
@@ -236,19 +255,19 @@ def assert_positive_integer(checked_value, dtype, name):
         return tensor
 
 
-def assert_positive_int32_integer(checked_value, name):
+def assert_positive_int32_integer(value, name):
     """
-    Whether `checked_value` is a scalar (or 0-D tensor) and positive.
-    If `checked_value` is the instance of int, it will be checked directly.
+    Whether `value` is a scalar (or 0-D tensor) and positive.
+    If `value` is the instance of int, it will be checked directly.
     Otherwise, it will be converted to a `int32` tensor and checked.
 
-    :param checked_value: The value to be checked.
-    :param name: The name of `checked_value` used in error message.
-    :return: `checked_value`
+    :param value: The value to be checked.
+    :param name: The name of `value` used in error message.
+    :return: The checked value.
     """
-    if isinstance(checked_value, float):
+    if isinstance(value, float):
         raise TypeError(name + ' must be an integer.')
-    return assert_positive_integer(checked_value, tf.int32, name)
+    return assert_positive_integer(value, tf.int32, name)
 
 
 def open_interval_standard_uniform(shape, dtype):

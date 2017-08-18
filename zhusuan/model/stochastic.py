@@ -582,6 +582,10 @@ class BinConcrete(StochasticTensor):
     (Maddison, 2016). It is the binary case of :class:`~Concrete`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
+    .. seealso::
+
+        :class:`~Concrete` and :class:`~ExpConcrete`
+
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
@@ -628,6 +632,10 @@ class ExpConcrete(StochasticTensor):
     transformed from :class:`~Concrete` by taking logarithm.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
+    .. seealso::
+
+        :class:`~BinConcrete` and :class:`~Concrete`
+
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
@@ -647,6 +655,7 @@ class ExpConcrete(StochasticTensor):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
@@ -655,12 +664,14 @@ class ExpConcrete(StochasticTensor):
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
-                 is_reparameterized=True):
+                 is_reparameterized=True,
+                 check_numerics=False):
         exp_concrete = distributions.ExpConcrete(
             temperature,
             logits,
             group_event_ndims=group_event_ndims,
-            is_reparameterized=is_reparameterized
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics
         )
         super(ExpConcrete, self).__init__(name, exp_concrete, n_samples)
 
@@ -670,6 +681,10 @@ class Concrete(StochasticTensor):
     The class of Concrete `StochasticTensor` from (Maddison, 2016), served as
     the continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
+
+    .. seealso::
+
+        :class:`~BinConcrete` and :class:`~ExpConcrete`
 
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
