@@ -55,11 +55,13 @@ class AIS:
     using annealed importance sampling(AIS).
     """
     def __init__(self, log_prior, log_joint, prior_sampler,
-                 hmc, observed, latent, n_chains, n_temperatures):
+                 hmc, observed, latent, n_chains=25, n_temperatures=1000,
+                 verbose=False):
         # Shape of latent: [chain_axis, num_data, data dims]
         # Construct the tempered objective
         self.n_chains = n_chains
         self.n_temperatures = n_temperatures
+        self.verbose = verbose
 
         with tf.name_scope("AIS"):
             self.temperature = tf.placeholder(tf.float32, shape=[],
@@ -80,19 +82,22 @@ class AIS:
     def map_t(self, t):
         return 1. / (1. + np.exp(-4*(2*t / self.n_temperatures - 1)))
 
+    def get_schedule_t(self, t):
+        return (self.map_t(t) - self.map_t(0)) \
+                / (self.map_t(self.n_temperatures) - self.map_t(0))
+
     def run(self, sess, feed_dict):
         # Help adapt the hmc size
-        n_adapt = 30
-        adapt_num_t = 2 if self.n_temperatures > 1 else 1
-        adapt_t = (self.map_t(adapt_num_t) - self.map_t(0)) \
-                            / (self.map_t(self.n_temperatures) - self.map_t(0))
+        n_adp = 30
+        adp_num_t = 2 if self.n_temperatures > 1 else 1
+        adp_t = self.get_schedule_t(adp_num_t)
         sess.run(self.init_latent, feed_dict=feed_dict)
-        for i in range(n_adapt):
+        for i in range(n_adp):
             _, acc = sess.run([self.sample_op, self.hmc_info.acceptance_rate],
                               feed_dict=merge_dicts(feed_dict,
-                                                    {self.temperature: adapt_t}))
+                                                    {self.temperature: adp_t}))
             print('Adaptation iter {}, acc = {:.3f}'.format(i, np.mean(acc)))
-        
+
         # Draw a sample from the prior
         sess.run(self.init_latent, feed_dict=feed_dict)
         prior_density = sess.run(self.log_fn_val,
@@ -102,9 +107,7 @@ class AIS:
 
         for num_t in range(self.n_temperatures):
             # current_temperature = 1.0 / self.n_temperatures * (num_t + 1)
-            current_temperature = (self.map_t(num_t+1) - self.map_t(0)) \
-                                  / (self.map_t(self.n_temperatures) -
-                                     self.map_t(0))
+            current_temperature = self.get_schedule_t(num_t + 1)
 
             _, old_log_p, new_log_p, acc = sess.run(
                 [self.sample_op, self.hmc_info.orig_log_prob,
@@ -116,9 +119,10 @@ class AIS:
                 log_weights += old_log_p - new_log_p
             else:
                 log_weights += old_log_p
-
-            print('Finished step {}, Temperature = {:.4f}, acc = {:.3f}'
-                  .format(num_t+1, current_temperature, np.mean(acc)))
+            
+            if self.verbose:
+                print('Finished step {}, Temperature = {:.4f}, acc = {:.3f}'
+                      .format(num_t+1, current_temperature, np.mean(acc)))
 
         return np.mean(self.get_lower_bound(log_weights))
 
