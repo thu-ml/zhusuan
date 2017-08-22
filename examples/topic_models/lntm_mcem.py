@@ -216,8 +216,6 @@ if __name__ == "__main__":
                           np.mean(Eta_logstd)))
 
         # Run AIS
-        print('Start evaluation! {} temperatures, {} chains'
-              .format(_n_temperatures, _n_chains))
         time_ais = -time.time()
 
         ll_lb = _ais.run(sess, feed_dict={_x: X_test,
