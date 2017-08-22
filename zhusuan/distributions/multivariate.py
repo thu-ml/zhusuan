@@ -594,6 +594,7 @@ class Concrete(Distribution):
         shape = tf.concat([[n_samples], tf.shape(self.logits)], 0)
 
         uniform = open_interval_standard_uniform(shape, self.dtype)
+        # TODO: Add Gumbel distribution
         gumbel = -tf.log(-tf.log(uniform))
         samples = tf.nn.softmax((logits + gumbel) / temperature)
 
