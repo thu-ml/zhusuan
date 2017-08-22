@@ -58,8 +58,6 @@ class AIS:
                  hmc, observed, latent, n_chains, n_temperatures):
         # Shape of latent: [chain_axis, num_data, data dims]
         # Construct the tempered objective
-        self.prior_sampler = prior_sampler
-        self.latent = latent
         self.n_chains = n_chains
         self.n_temperatures = n_temperatures
 
@@ -77,12 +75,24 @@ class AIS:
                 log_fn, observed, latent)
             self.init_latent = [tf.assign(z, z_s)
                                 for z, z_s in zip(latent.values(),
-                                                  self.prior_sampler.values())]
+                                                  prior_sampler.values())]
 
     def map_t(self, t):
         return 1. / (1. + np.exp(-4*(2*t / self.n_temperatures - 1)))
 
     def run(self, sess, feed_dict):
+        # Help adapt the hmc size
+        n_adapt = 30
+        adapt_num_t = 2 if self.n_temperatures > 1 else 1
+        adapt_t = (self.map_t(adapt_num_t) - self.map_t(0)) \
+                            / (self.map_t(self.n_temperatures) - self.map_t(0))
+        sess.run(self.init_latent, feed_dict=feed_dict)
+        for i in range(n_adapt):
+            _, acc = sess.run([self.sample_op, self.hmc_info.acceptance_rate],
+                              feed_dict=merge_dicts(feed_dict,
+                                                    {self.temperature: adapt_t}))
+            print('Adaptation iter {}, acc = {:.3f}'.format(i, np.mean(acc)))
+        
         # Draw a sample from the prior
         sess.run(self.init_latent, feed_dict=feed_dict)
         prior_density = sess.run(self.log_fn_val,
@@ -107,9 +117,8 @@ class AIS:
             else:
                 log_weights += old_log_p
 
-            if (num_t % 10 == 9):
-                print('Finished steps: {}, Temperature = {:.4f}, acc = {:.4f}'
-                      .format(num_t+1, current_temperature, np.mean(acc)))
+            print('Finished step {}, Temperature = {:.4f}, acc = {:.3f}'
+                  .format(num_t+1, current_temperature, np.mean(acc)))
 
         return np.mean(self.get_lower_bound(log_weights))
 

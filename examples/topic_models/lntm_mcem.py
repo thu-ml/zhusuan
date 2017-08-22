@@ -29,13 +29,15 @@ log_delta = 10.0
 @zs.reuse('model')
 def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
+        D_multiple = tf.stack([D, 1])
+        n_chains_multiple = tf.stack([n_chains, 1, 1])
         eta = zs.Normal('eta',
                         tf.tile(tf.expand_dims(
-                            tf.tile(tf.expand_dims(eta_mean, 0), [D, 1]),
-                            0), [n_chains, 1, 1]),
+                            tf.tile(tf.expand_dims(eta_mean, 0), D_multiple),
+                            0), n_chains_multiple),
                         logstd=tf.tile(tf.expand_dims(
-                            tf.tile(tf.expand_dims(eta_logstd, 0), [D, 1]),
-                            0), [n_chains, 1, 1]),
+                            tf.tile(tf.expand_dims(eta_logstd, 0), D_multiple),
+                            0), n_chains_multiple),
                         group_event_ndims=1)
         beta = zs.Normal('beta', tf.zeros([K, V]),
                          logstd=tf.ones([K, V]) * log_delta,
@@ -87,20 +89,22 @@ if __name__ == "__main__":
     phi = tf.nn.softmax(beta)
     init_eta_ph = tf.assign(eta, eta_ph)
 
+    D_ph = tf.placeholder(tf.int32, shape=[], name='D_ph')
+    n_chains_ph = tf.placeholder(tf.int32, shape=[], name='n_chains_ph')
+
     def joint_obj(observed):
-        model = lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd)
+        model = lntm(observed, n_chains_ph, D_ph, K, V, eta_mean, eta_logstd)
 
         log_p_eta, log_p_beta = \
             model.local_log_prob(['eta', 'beta'])
 
         theta = tf.nn.softmax(observed['eta'])
+        theta = tf.reshape(theta, [-1, K])
         phi = tf.nn.softmax(observed['beta'])
-        tiled_phi = tf.tile(tf.expand_dims(phi, 0), [n_chains, 1, 1])
-        pred = tf.matmul(theta, tiled_phi)
-
-        tiled_x = tf.tile(tf.expand_dims(observed['x'], 0), [n_chains, 1, 1])
-
-        log_px = tf.reduce_sum(tiled_x * tf.log(pred), -1)
+        pred = tf.matmul(theta, phi)
+        pred = tf.reshape(pred, tf.stack([n_chains_ph, D_ph, V]))
+        x = tf.expand_dims(observed['x'], 0)
+        log_px = tf.reduce_sum(x * tf.log(pred), -1)
 
         # Shape:
         # log_p_eta, log_px: [n_chains, D]
@@ -138,23 +142,8 @@ if __name__ == "__main__":
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta')
 
     def _log_prior(observed):
-        _model = lntm(observed, _n_chains, _D, K, V, eta_mean, eta_logstd)
-        return _model.local_log_prob('eta')
-
-    def _log_joint(observed):
-        _model = lntm(observed, _n_chains, _D, K, V, eta_mean, eta_logstd)
-        _log_prior = _model.local_log_prob('eta')
-
-        _theta = tf.nn.softmax(observed['eta'])
-        phi = tf.nn.softmax(observed['beta'])
-        tiled_phi = tf.tile(tf.expand_dims(phi, 0), [_n_chains, 1, 1])
-        _pred = tf.matmul(_theta, tiled_phi)
-
-        tiled_x = tf.tile(tf.expand_dims(observed['x'], 0), [_n_chains, 1, 1])
-
-        _log_px = tf.reduce_sum(tiled_x * tf.log(_pred), -1)
-
-        return _log_prior + _log_px
+        log_p_eta, _, _ = joint_obj(observed)
+        return log_p_eta
 
     _prior_samples = {'eta': lntm({}, _n_chains, _D, K, V,
                       eta_mean, eta_logstd).outputs('eta')}
@@ -162,7 +151,7 @@ if __name__ == "__main__":
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)
 
-    _ais = zs.evaluation.AIS(_log_prior, _log_joint, _prior_samples, _hmc,
+    _ais = zs.evaluation.AIS(_log_prior, e_obj, _prior_samples, _hmc,
                              observed={'x': _x, 'beta': beta},
                              latent={'eta': _eta},
                              n_chains=_n_chains,
@@ -195,7 +184,9 @@ if __name__ == "__main__":
                          hmc_info.acceptance_rate],
                         feed_dict={x: x_batch,
                                    eta_mean: Eta_mean,
-                                   eta_logstd: Eta_logstd})
+                                   eta_logstd: Eta_logstd,
+                                   D_ph: D,
+                                   n_chains_ph: n_chains})
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
@@ -208,7 +199,9 @@ if __name__ == "__main__":
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
                                learning_rate_ph: learning_rate * t0 / (
-                                   t0 + epoch)})
+                                   t0 + epoch),
+                               D_ph: D,
+                               n_chains_ph: n_chains})
                 lls.append(ll)
 
             # Update hyper-parameters
@@ -229,7 +222,9 @@ if __name__ == "__main__":
 
         ll_lb = _ais.run(sess, feed_dict={_x: X_test,
                                           eta_mean: Eta_mean,
-                                          eta_logstd: Eta_logstd})
+                                          eta_logstd: Eta_logstd,
+                                          D_ph: _D,
+                                          n_chains_ph: _n_chains})
 
         time_ais += time.time()
 
