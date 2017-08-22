@@ -96,7 +96,8 @@ class AIS:
             _, acc = sess.run([self.sample_op, self.hmc_info.acceptance_rate],
                               feed_dict=merge_dicts(feed_dict,
                                                     {self.temperature: adp_t}))
-            print('Adaptation iter {}, acc = {:.3f}'.format(i, np.mean(acc)))
+            if self.verbose:
+                print('Adapt iter {}, acc = {:.3f}'.format(i, np.mean(acc)))
 
         # Draw a sample from the prior
         sess.run(self.init_latent, feed_dict=feed_dict)
