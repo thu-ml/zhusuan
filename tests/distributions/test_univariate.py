@@ -57,7 +57,7 @@ class TestNormal(tf.test.TestCase):
             self, Normal, np.zeros, np.zeros)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Normal, np.zeros, np.zeros)
 
     def test_sample_reparameterized(self):
@@ -76,7 +76,7 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(logstd_grads, None)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Normal, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
@@ -146,11 +146,11 @@ class TestBernoulli(tf.test.TestCase):
             self, Bernoulli, np.zeros, is_univariate=True)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, Bernoulli, np.zeros)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, Bernoulli, np.zeros, np.zeros)
 
     def test_value(self):
@@ -388,7 +388,7 @@ class TestUniform(tf.test.TestCase):
             self, Uniform, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Uniform, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
@@ -407,7 +407,7 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(maxval_grads, None)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Uniform, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
@@ -469,11 +469,11 @@ class TestGamma(tf.test.TestCase):
             self, Gamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Gamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Gamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -545,11 +545,11 @@ class TestBeta(tf.test.TestCase):
             self, Beta, np.ones, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Beta, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Beta, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -613,11 +613,11 @@ class TestPoisson(tf.test.TestCase):
             self, Poisson, np.ones, is_univariate=True)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, Poisson, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, Poisson, np.ones, np.ones)
 
     def test_value(self):
@@ -700,13 +700,13 @@ class TestBinomial(tf.test.TestCase):
     def test_sample_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, _distribution, np.ones)
 
     def test_log_prob_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, _distribution, np.ones, np.ones)
 
     def test_value(self):
@@ -787,11 +787,11 @@ class TestInverseGamma(tf.test.TestCase):
             self, InverseGamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, InverseGamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, InverseGamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -861,7 +861,7 @@ class TestLaplace(tf.test.TestCase):
             self, Laplace, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Laplace, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
@@ -880,7 +880,7 @@ class TestLaplace(tf.test.TestCase):
         self.assertEqual(scale_grads, None)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Laplace, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
@@ -950,14 +950,14 @@ class TestBinConcrete(tf.test.TestCase):
     def test_sample_shape(self):
         def _proxy_distribution(logits):
             return BinConcrete(1., logits)
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, _proxy_distribution, np.zeros)
 
     def test_log_prob_shape(self):
         def _proxy_distribution(logits):
             return BinConcrete(1., logits)
 
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, _proxy_distribution, np.ones, np.ones)
 
     def test_value(self):

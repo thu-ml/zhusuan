@@ -18,7 +18,7 @@ from examples.utils import dataset
 
 
 @zs.reuse('model')
-def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed):
+def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
     with zs.BayesianNet(observed=observed) as model:
         z_stacked_logits = tf.zeros([n, n_z, n_k])
         if relaxed:
@@ -27,9 +27,10 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed):
             z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
             z = zs.OnehotCategorical('z', z_stacked_logits,
+                                     dtype=tf.float32,
                                      n_samples=n_particles,
                                      group_event_ndims=1)
-            z = tf.to_float(tf.reshape(z, [n_particles, n, n_z * n_k]))
+            z = tf.reshape(z, [n_particles, n, n_z * n_k])
         lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
         lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
@@ -38,7 +39,7 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed):
 
 
 @zs.reuse('variational')
-def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed):
+def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
     with zs.BayesianNet(observed=observed) as variational:
         lz_x = layers.fully_connected(
             tf.to_float(x), 200, activation_fn=tf.tanh)
@@ -50,6 +51,7 @@ def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed):
                                n_samples=n_particles, group_event_ndims=1)
         else:
             z = zs.OnehotCategorical('z', z_stacked_logits,
+                                     dtype=tf.float32,
                                      n_samples=n_particles,
                                      group_event_ndims=1)
     return variational
@@ -70,8 +72,8 @@ if __name__ == '__main__':
     n_z, n_k = 100, 2   # number of latent variables, categories
     n_x = x_train.shape[1]
 
-    temperature_prior = 1.0
-    temperature_posterior = 1.0
+    tau_p0 = 1.0
+    tau_q0 = 1.0
     anneal_tau_freq = 25
     anneal_tau_rate = 0.95
 
@@ -85,11 +87,11 @@ if __name__ == '__main__':
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
     save_freq = 50
-    result_path = "results/vae"
+    result_path = "results/concrete-vae"
 
     # Build the computation graph
-    tau_prior = tf.placeholder(tf.float32, shape=[], name="tau_prior")
-    tau_posterior = tf.placeholder(tf.float32, shape=[], name="tau_posterior")
+    tau_p = tf.placeholder(tf.float32, shape=[], name="tau_p")
+    tau_q = tf.placeholder(tf.float32, shape=[], name="tau_q")
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_orig = tf.placeholder(tf.float32, shape=[None, n_x], name='x')
     x_bin = tf.cast(tf.less(tf.random_uniform(tf.shape(x_orig), 0, 1), x_orig),
@@ -98,15 +100,15 @@ if __name__ == '__main__':
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     n = tf.shape(x)[0]
 
-    def lower_bound_and_log_likelihood(relaxed):
+    def lower_bound_and_log_likelihood(relaxed=False):
         def log_joint(observed):
             model = vae(observed, n, n_x, n_z, n_k,
-                           tau_prior, n_particles, relaxed)
+                        tau_p, n_particles, relaxed)
             log_pz, log_px_z = model.local_log_prob(['z', 'x'])
             return log_pz + log_px_z
 
         variational = q_net({}, x, n_z, n_k,
-                            tau_posterior, n_particles, relaxed)
+                            tau_q, n_particles, relaxed)
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
 
@@ -153,10 +155,8 @@ if __name__ == '__main__':
             np.random.shuffle(x_train)
 
             if epoch % anneal_tau_freq == 0:
-                temperature_prior = max(0.5, temperature_prior
-                                        * anneal_tau_rate)
-                temperature_posterior = max(0.666, temperature_posterior
-                                            * anneal_tau_rate)
+                tau_p0 = max(0.5, tau_p0 * anneal_tau_rate)
+                tau_q0 = max(0.666, tau_q0 * anneal_tau_rate)
 
             lbs = []
             for t in range(iters):
@@ -165,8 +165,8 @@ if __name__ == '__main__':
                 feed_dict = {x: x_batch_bin,
                              learning_rate_ph: learning_rate,
                              n_particles: lb_samples,
-                             tau_prior: temperature_prior,
-                             tau_posterior: temperature_posterior}
+                             tau_p: tau_p0,
+                             tau_q: tau_q0}
                 _, lb = sess.run([infer, relaxed_lower_bound],
                                  feed_dict=feed_dict)
                 lbs.append(lb)
@@ -183,8 +183,8 @@ if __name__ == '__main__':
                                           (t + 1) * test_batch_size]
                     feed_dict = {x: x_batch_bin,
                                  n_particles: ll_samples,
-                                 tau_prior: temperature_prior,
-                                 tau_posterior: temperature_posterior}
+                                 tau_p: tau_p0,
+                                 tau_q: tau_q0}
 
                     test_lb, test_ll = sess.run(
                         [lower_bound, is_log_likelihood], feed_dict=feed_dict)
