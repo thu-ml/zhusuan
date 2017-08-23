@@ -1,5 +1,5 @@
-zhusuan.distributions.utils 
-==================================
+zhusuan\.distributions\.utils 
+====================================
 
 .. automodule:: zhusuan.distributions.utils
     :members:

@@ -1,5 +1,5 @@
-zhusuan.model 
-=====================
+zhusuan\.model 
+======================
 
 .. automodule:: zhusuan.model
     :members:

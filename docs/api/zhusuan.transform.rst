@@ -1,5 +1,5 @@
-zhusuan.transform 
-========================
+zhusuan\.transform 
+=========================
 
 .. automodule:: zhusuan.transform
     :members:

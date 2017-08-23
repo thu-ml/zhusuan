@@ -1,5 +1,5 @@
-zhusuan.utils 
-====================
+zhusuan\.utils 
+=====================
 
 .. automodule:: zhusuan.utils
     :members:

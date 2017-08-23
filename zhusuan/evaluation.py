@@ -52,7 +52,7 @@ def is_loglikelihood(log_joint, observed, latent, axis=None):
 class AIS:
     """
     Estimates a stochastic lower bound of the marginal log likelihood
-    using annealed importance sampling(AIS).
+    using annealed importance sampling (AIS).
     """
     def __init__(self, log_prior, log_joint, prior_sampler,
                  hmc, observed, latent, n_chains=25, n_temperatures=1000,
@@ -69,7 +69,7 @@ class AIS:
 
             def log_fn(observed):
                 return log_prior(observed) * (1 - self.temperature) + \
-                       log_joint(observed) * self.temperature
+                    log_joint(observed) * self.temperature
 
             self.log_fn = log_fn
             self.log_fn_val = log_fn(merge_dicts(observed, latent))
@@ -84,7 +84,7 @@ class AIS:
 
     def get_schedule_t(self, t):
         return (self.map_t(t) - self.map_t(0)) \
-                / (self.map_t(self.n_temperatures) - self.map_t(0))
+            / (self.map_t(self.n_temperatures) - self.map_t(0))
 
     def run(self, sess, feed_dict):
         # Help adapt the hmc size
@@ -120,7 +120,7 @@ class AIS:
                 log_weights += old_log_p - new_log_p
             else:
                 log_weights += old_log_p
-            
+
             if self.verbose:
                 print('Finished step {}, Temperature = {:.4f}, acc = {:.3f}'
                       .format(num_t+1, current_temperature, np.mean(acc)))
@@ -128,4 +128,5 @@ class AIS:
         return np.mean(self.get_lower_bound(log_weights))
 
     def get_lower_bound(self, log_weights):
+        # TODO: remove dependencies on scipy
         return logsumexp(log_weights, axis=0) - np.log(self.n_chains)

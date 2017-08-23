@@ -1,5 +1,5 @@
-zhusuan.hmc 
-==================
+zhusuan\.hmc 
+===================
 
 .. automodule:: zhusuan.hmc
     :members:

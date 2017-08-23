@@ -1,5 +1,5 @@
-zhusuan.diagnostics 
-==========================
+zhusuan\.diagnostics 
+===========================
 
 .. automodule:: zhusuan.diagnostics
     :members:

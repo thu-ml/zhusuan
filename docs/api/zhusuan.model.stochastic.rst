@@ -1,5 +1,5 @@
-zhusuan.model.stochastic 
-===============================
+zhusuan\.model\.stochastic 
+=================================
 
 .. automodule:: zhusuan.model.stochastic
     :members:

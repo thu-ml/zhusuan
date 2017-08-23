@@ -1,5 +1,5 @@
-zhusuan.evaluation 
-=========================
+zhusuan\.evaluation 
+==========================
 
 .. automodule:: zhusuan.evaluation
     :members:
