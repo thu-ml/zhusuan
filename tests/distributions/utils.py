@@ -408,7 +408,7 @@ def test_1parameter_log_prob_shape_same(
             _test_dynamic([2, 3, 5], [1, 2, 1], None)
 
 
-def test_1parameter_sample_shape_one_rank_least(
+def test_1parameter_sample_shape_one_rank_less(
         test_class, Distribution, make_param):
     def _test_static(param_shape, n_samples, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
@@ -447,7 +447,7 @@ def test_1parameter_sample_shape_one_rank_least(
         _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
 
-def test_1parameter_log_prob_shape_one_rank_least(
+def test_1parameter_log_prob_shape_one_rank_less(
         test_class, Distribution, make_param, make_given):
     def _test_static(param_shape, given_shape, target_shape):
         param = tf.placeholder(tf.float32, param_shape)

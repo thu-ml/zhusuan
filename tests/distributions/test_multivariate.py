@@ -73,7 +73,7 @@ class TestMultinomial(tf.test.TestCase):
     def test_sample_shape(self):
         def _distribution(param):
             return Multinomial(param, 10)
-        utils.test_1parameter_sample_shape_one_rank_least(
+        utils.test_1parameter_sample_shape_one_rank_less(
             self, _distribution, np.zeros)
 
     def test_log_prob_shape(self):
@@ -86,7 +86,7 @@ class TestMultinomial(tf.test.TestCase):
             samples[:, 0] = 1
             return samples.reshape(shape)
 
-        utils.test_1parameter_log_prob_shape_one_rank_least(
+        utils.test_1parameter_log_prob_shape_one_rank_less(
             self, _distribution, _make_samples, _make_samples)
 
     def test_value(self):
@@ -162,7 +162,7 @@ class TestOnehotCategorical(tf.test.TestCase):
             self, OnehotCategorical, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        utils.test_1parameter_sample_shape_one_rank_least(
+        utils.test_1parameter_sample_shape_one_rank_less(
             self, OnehotCategorical, np.zeros)
 
     def test_log_prob_shape(self):
@@ -172,7 +172,7 @@ class TestOnehotCategorical(tf.test.TestCase):
             samples[:, 0] = 1
             return samples.reshape(shape)
 
-        utils.test_1parameter_log_prob_shape_one_rank_least(
+        utils.test_1parameter_log_prob_shape_one_rank_less(
             self, OnehotCategorical, _make_samples, _make_samples)
 
     def test_value(self):
@@ -256,7 +256,7 @@ class TestDirichlet(tf.test.TestCase):
             self, Dirichlet, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
-        utils.test_1parameter_sample_shape_one_rank_least(
+        utils.test_1parameter_sample_shape_one_rank_less(
             self, Dirichlet, np.zeros)
 
     def test_log_prob_shape(self):
@@ -267,7 +267,7 @@ class TestDirichlet(tf.test.TestCase):
         # TODO: This failed with a bug in Tensorflow, waiting fix.
         # https://github.com/tensorflow/tensorflow/issues/8391
         # _test_static([3, None], [3, 2, 1, None], [3, 2, 3])
-        utils.test_1parameter_log_prob_shape_one_rank_least(
+        utils.test_1parameter_log_prob_shape_one_rank_less(
             self, Dirichlet, np.ones, _make_samples)
 
     def test_value(self):
@@ -398,7 +398,7 @@ class TestExpConcrete(tf.test.TestCase):
     def test_sample_shape(self):
         def _proxy_distribution(logits):
             return ExpConcrete(1., logits)
-        utils.test_1parameter_sample_shape_one_rank_least(
+        utils.test_1parameter_sample_shape_one_rank_less(
             self, _proxy_distribution, np.zeros)
 
     def test_log_prob_shape(self):
@@ -409,7 +409,7 @@ class TestExpConcrete(tf.test.TestCase):
             samples = np.ones(shape, dtype=np.float32)
             return np.log(samples / samples.sum(axis=-1, keepdims=True))
 
-        utils.test_1parameter_log_prob_shape_one_rank_least(
+        utils.test_1parameter_log_prob_shape_one_rank_less(
             self, _proxy_distribution, np.ones, _make_samples)
 
     def test_value(self):
@@ -529,7 +529,7 @@ class TestConcrete(tf.test.TestCase):
     def test_sample_shape(self):
         def _proxy_distribution(logits):
             return Concrete(1., logits)
-        utils.test_1parameter_sample_shape_one_rank_least(
+        utils.test_1parameter_sample_shape_one_rank_less(
             self, _proxy_distribution, np.zeros)
 
     def test_log_prob_shape(self):
@@ -540,7 +540,7 @@ class TestConcrete(tf.test.TestCase):
             samples = np.ones(shape, dtype=np.float32)
             return np.log(samples / samples.sum(axis=-1, keepdims=True))
 
-        utils.test_1parameter_log_prob_shape_one_rank_least(
+        utils.test_1parameter_log_prob_shape_one_rank_less(
             self, _proxy_distribution, np.ones, _make_samples)
 
     def test_value(self):
