@@ -1,2 +1,3 @@
+Sphinx>=1.6.3
 tensorflow
 sphinxcontrib-bibtex
