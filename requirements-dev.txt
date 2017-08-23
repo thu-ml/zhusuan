@@ -3,7 +3,6 @@ Sphinx
 sphinxcontrib-bibtex
 coverage
 pep8
-scipy
 matplotlib
 mock
 scikit-image
