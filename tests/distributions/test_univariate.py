@@ -57,7 +57,7 @@ class TestNormal(tf.test.TestCase):
             self, Normal, np.zeros, np.zeros)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Normal, np.zeros, np.zeros)
 
     def test_sample_reparameterized(self):
@@ -76,7 +76,7 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(logstd_grads, None)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Normal, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
@@ -146,11 +146,11 @@ class TestBernoulli(tf.test.TestCase):
             self, Bernoulli, np.zeros, is_univariate=True)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, Bernoulli, np.zeros)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, Bernoulli, np.zeros, np.zeros)
 
     def test_value(self):
@@ -388,7 +388,7 @@ class TestUniform(tf.test.TestCase):
             self, Uniform, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Uniform, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
@@ -407,7 +407,7 @@ class TestUniform(tf.test.TestCase):
         self.assertEqual(maxval_grads, None)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Uniform, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
@@ -469,11 +469,11 @@ class TestGamma(tf.test.TestCase):
             self, Gamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Gamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Gamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -545,11 +545,11 @@ class TestBeta(tf.test.TestCase):
             self, Beta, np.ones, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Beta, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Beta, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -613,11 +613,11 @@ class TestPoisson(tf.test.TestCase):
             self, Poisson, np.ones, is_univariate=True)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, Poisson, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, Poisson, np.ones, np.ones)
 
     def test_value(self):
@@ -700,13 +700,13 @@ class TestBinomial(tf.test.TestCase):
     def test_sample_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        utils.test_sample_shape_1parameter_univariate(
+        utils.test_1parameter_sample_shape_same(
             self, _distribution, np.ones)
 
     def test_log_prob_shape(self):
         def _distribution(param):
             return Binomial(param, 10)
-        utils.test_log_prob_shape_1parameter_univariate(
+        utils.test_1parameter_log_prob_shape_same(
             self, _distribution, np.ones, np.ones)
 
     def test_value(self):
@@ -787,11 +787,11 @@ class TestInverseGamma(tf.test.TestCase):
             self, InverseGamma, np.ones, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, InverseGamma, np.ones, np.ones)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, InverseGamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
@@ -861,7 +861,7 @@ class TestLaplace(tf.test.TestCase):
             self, Laplace, np.zeros, np.ones)
 
     def test_sample_shape(self):
-        utils.test_sample_shape_2parameter_univariate(
+        utils.test_2parameter_sample_shape_same(
             self, Laplace, np.zeros, np.ones)
 
     def test_sample_reparameterized(self):
@@ -880,7 +880,7 @@ class TestLaplace(tf.test.TestCase):
         self.assertEqual(scale_grads, None)
 
     def test_log_prob_shape(self):
-        utils.test_log_prob_shape_2parameter_univariate(
+        utils.test_2parameter_log_prob_shape_same(
             self, Laplace, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
@@ -916,3 +916,113 @@ class TestLaplace(tf.test.TestCase):
 
     def test_dtype(self):
         utils.test_dtype_2parameter(self, Laplace)
+
+
+class TestBinConcrete(tf.test.TestCase):
+    def test_init_temperature(self):
+        with self.assertRaisesRegexp(ValueError,
+                                     "should be a scalar"):
+            BinConcrete([1.], [1., 2.])
+
+        with self.test_session(use_gpu=True):
+            temperature = tf.placeholder(tf.float32, None)
+            con = BinConcrete(temperature, [1., 2.])
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "should be a scalar"):
+                con.temperature.eval(feed_dict={temperature: [1.]})
+
+    def test_value_shape(self):
+        # static
+        con = BinConcrete(1., logits=tf.placeholder(tf.float32, None))
+        self.assertEqual(con.get_value_shape().as_list(), [])
+
+        # dynamic
+        with self.test_session(use_gpu=True):
+            self.assertEqual(con._value_shape().eval().tolist(), [])
+        self.assertEqual(con._value_shape().dtype, tf.int32)
+
+    def test_batch_shape(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+        utils.test_batch_shape_1parameter(
+            self, _proxy_distribution, np.zeros, is_univariate=True)
+
+    def test_sample_shape(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+        utils.test_1parameter_sample_shape_same(
+            self, _proxy_distribution, np.zeros)
+
+    def test_log_prob_shape(self):
+        def _proxy_distribution(logits):
+            return BinConcrete(1., logits)
+
+        utils.test_1parameter_log_prob_shape_same(
+            self, _proxy_distribution, np.ones, np.ones)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(given, temperature, logits):
+                given = np.array(given, np.float32)
+                logits = np.array(logits, np.float32)
+
+                target_log_p = np.log(temperature) + logits - \
+                    (temperature + 1) * np.log(given) - \
+                    (temperature + 1) * np.log(1 - given) - \
+                    2 * np.log(np.exp(logits) * (given ** -temperature) +
+                               (1 - given) ** -temperature)
+
+                con = BinConcrete(temperature, logits=logits)
+                log_p = con.log_prob(given)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = con.prob(given)
+                self.assertAllClose(p.eval(), np.exp(target_log_p))
+
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 0.1, 0.1)
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 0.01, 0.5)
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 0.66, 0.9)
+            _test_value([0.001, 0.01, 0.1, 0.5, 0.9, 0.99, 0.999], 1., 0.99)
+
+    def test_dtype(self):
+        utils.test_dtype_2parameter(self, BinConcrete)
+
+    def test_sample_reparameterized(self):
+        temperature = tf.ones([])
+        logits = tf.ones([2, 3])
+        con_rep = BinConcrete(temperature, logits)
+        samples = con_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
+        self.assertTrue(t_grads is not None)
+        self.assertTrue(logits_grads is not None)
+
+        con_no_rep = BinConcrete(temperature, logits, is_reparameterized=False)
+        samples = con_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
+        self.assertEqual(t_grads, None)
+        self.assertEqual(logits_grads, None)
+
+    def test_check_numerics(self):
+        tau = tf.placeholder(tf.float32, None)
+        logits = tf.placeholder(tf.float32, None)
+        given = tf.placeholder(tf.float32, None)
+        dist = BinConcrete(tau, logits, check_numerics=True)
+        log_p = dist.log_prob(given)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(given\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: -1.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(given\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: 0.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(1 - given\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: 2.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(1 - given\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 1., logits: 0., given: 1.})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(temperature\).*Tensor had NaN"):
+                log_p.eval(feed_dict={tau: -1., logits: 1., given: .5})
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(temperature\).*Tensor had Inf"):
+                log_p.eval(feed_dict={tau: 0., logits: 1., given: .5})

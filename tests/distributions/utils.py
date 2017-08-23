@@ -202,7 +202,7 @@ def test_batch_shape_2parameter_univariate(
             _test_dynamic([2, 3, 5], [3, 2], None)
 
 
-def test_sample_shape_2parameter_univariate(
+def test_2parameter_sample_shape_same(
         test_class, Distribution, make_param1, make_param2):
     def _test_static(param1_shape, param2_shape, n_samples, target_shape):
         param1 = tf.placeholder(tf.float32, param1_shape)
@@ -246,7 +246,7 @@ def test_sample_shape_2parameter_univariate(
             _test_dynamic([2, 3, 5], [2, 1], 1, None)
 
 
-def test_log_prob_shape_2parameter_univariate(
+def test_2parameter_log_prob_shape_same(
         test_class, Distribution, make_param1, make_param2, make_given):
     def _test_static(param1_shape, param2_shape, given_shape, target_shape):
         param1 = tf.placeholder(tf.float32, param1_shape)
@@ -330,7 +330,7 @@ def test_batch_shape_1parameter(
         _test_dynamic([2, 1, 4])
 
 
-def test_sample_shape_1parameter_univariate(
+def test_1parameter_sample_shape_same(
         test_class, Distribution, make_param):
     def _test_static(param_shape, n_samples, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
@@ -365,7 +365,7 @@ def test_sample_shape_1parameter_univariate(
         _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
 
-def test_log_prob_shape_1parameter_univariate(
+def test_1parameter_log_prob_shape_same(
         test_class, Distribution, make_param, make_given):
     def _test_static(param_shape, given_shape, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
@@ -408,7 +408,7 @@ def test_log_prob_shape_1parameter_univariate(
             _test_dynamic([2, 3, 5], [1, 2, 1], None)
 
 
-def test_sample_shape_1parameter_multivariate(
+def test_1parameter_sample_shape_one_rank_less(
         test_class, Distribution, make_param):
     def _test_static(param_shape, n_samples, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
@@ -447,7 +447,7 @@ def test_sample_shape_1parameter_multivariate(
         _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
 
-def test_log_prob_shape_1parameter_multivariate(
+def test_1parameter_log_prob_shape_one_rank_less(
         test_class, Distribution, make_param, make_given):
     def _test_static(param_shape, given_shape, target_shape):
         param = tf.placeholder(tf.float32, param_shape)

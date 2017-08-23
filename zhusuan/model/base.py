@@ -300,6 +300,18 @@ class BayesianNet(Context):
         else:
             self._stochastic_tensors[s_tensor.name] = s_tensor
 
+    def get(self, name_or_names):
+        """
+        Get the `StochasticTensor` in the network by their names.
+
+        :param name_or_names: A string or a list of strings. Names of
+            `StochasticTensor` s in the network.
+        """
+        if isinstance(name_or_names, (tuple, list)):
+            return [self._stochastic_tensors[name] for name in name_or_names]
+        else:
+            return self._stochastic_tensors[name_or_names]
+
     def outputs(self, name_or_names):
         """
         Get the outputs of :class:`StochasticTensor` s by their names,

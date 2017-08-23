@@ -235,3 +235,54 @@ class TestLaplace(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [loc, scale, group_event_ndims]:
             self.assertTrue(i.op in log_p_ops)
+
+
+class TestBinConcrete(tf.test.TestCase):
+    def test_BinConcrete(self):
+        with BayesianNet():
+            logits = tf.zeros([2, 3])
+            tau = tf.ones([])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = BinConcrete('a', tau, logits, n_samples, group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [logits, tau, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3]))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [logits, tau, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
+
+
+class TestConcrete(tf.test.TestCase):
+    def test_Concrete(self):
+        with BayesianNet():
+            logits = tf.zeros([2, 3])
+            tau = tf.ones([])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Concrete('a', tau, logits, n_samples, group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [logits, tau, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3]))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [logits, tau, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
+
+
+class TestExpConcrete(tf.test.TestCase):
+    def test_ExpConcrete(self):
+        with BayesianNet():
+            logits = tf.zeros([2, 3])
+            tau = tf.ones([])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            a = ExpConcrete('a', tau, logits, n_samples, group_event_ndims)
+        sample_ops = set(get_backward_ops(a.tensor))
+        for i in [logits, tau, n_samples]:
+            self.assertTrue(i.op in sample_ops)
+        log_p = a.log_prob(np.ones([2, 3]))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [logits, tau, group_event_ndims]:
+            self.assertTrue(i.op in log_p_ops)
