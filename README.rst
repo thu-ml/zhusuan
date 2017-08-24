@@ -1,7 +1,7 @@
 ZhuSuan
 =======
 
-|docs| |license|
+|build| |docs| |license|
 
 ZhuSuan is a python library	for	**Generative Models**, built upon Tensorflow.
 Unlike existing deep learning libraries, which are mainly designed for
@@ -160,6 +160,9 @@ can be viewed with browsers.
     :alt: Documentation Status
     :scale: 100%
     :target: http://zhusuan.readthedocs.io/en/latest/?badge=latest
-    
+
 .. |license| image:: https://img.shields.io/badge/license-MIT-blue.svg
     :target: https://github.com/thu-ml/zhusuan/blob/master/LICENSE
+
+.. |build| image:: https://travis-ci.org/thu-ml/zhusuan.svg?branch=master
+    :target: https://travis-ci.org/thu-ml/zhusuan
