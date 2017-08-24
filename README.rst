@@ -1,6 +1,10 @@
 ZhuSuan
 =======
 
+.. image:: https://badges.gitter.im/thu-ml/zhusuan.svg
+   :alt: Join the chat at https://gitter.im/thu-ml/zhusuan
+   :target: https://gitter.im/thu-ml/zhusuan?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
+
 |build| |docs| |license|
 
 ZhuSuan is a python library	for	**Generative Models**, built upon Tensorflow.
