@@ -1,11 +1,8 @@
 ZhuSuan
 =======
 
-.. image:: https://badges.gitter.im/thu-ml/zhusuan.svg
-   :alt: Join the chat at https://gitter.im/thu-ml/zhusuan
-   :target: https://gitter.im/thu-ml/zhusuan?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
 
-|build| |docs| |license|
+|gitter| |build| |docs| |license|
 
 ZhuSuan is a python library	for	**Generative Models**, built upon Tensorflow.
 Unlike existing deep learning libraries, which are mainly designed for
@@ -170,3 +167,7 @@ can be viewed with browsers.
 
 .. |build| image:: https://travis-ci.org/thu-ml/zhusuan.svg?branch=master
     :target: https://travis-ci.org/thu-ml/zhusuan
+
+.. |gitter| image:: https://badges.gitter.im/thu-ml/zhusuan.svg
+   :alt: Join the chat at https://gitter.im/thu-ml/zhusuan
+   :target: https://gitter.im/thu-ml/zhusuan?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
