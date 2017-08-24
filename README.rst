@@ -2,7 +2,7 @@ ZhuSuan
 =======
 
 
-|gitter| |build| |docs| |license|
+|build| |docs| |license| |gitter|
 
 ZhuSuan is a python library	for	**Generative Models**, built upon Tensorflow.
 Unlike existing deep learning libraries, which are mainly designed for
