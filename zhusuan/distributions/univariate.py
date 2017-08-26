@@ -746,13 +746,13 @@ class Poisson(Distribution):
         return self.rate.get_shape()
 
     def _sample(self, n_samples):
-        if "random_poisson" in dir(tf):
+        try:
             # tf.random_poisson is implemented after v1.2
             samples = tf.random_poisson(self.rate, [n_samples],
                                         dtype=self.param_dtype)
             if self.param_dtype != self.dtype:
                 samples = tf.cast(samples, self.dtype)
-        else:
+        except AttributeError:
             # This algorithm to generate random Poisson-distributed numbers is
             # given by Kunth [1]
             # [1]: https://en.wikipedia.org/wiki/
