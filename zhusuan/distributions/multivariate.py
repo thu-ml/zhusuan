@@ -363,10 +363,8 @@ class Dirichlet(Distribution):
             lbeta_alpha.set_shape(alpha.get_shape()[:-1])
         log_given = tf.log(given)
         if self._check_numerics:
-            with tf.control_dependencies(
-                    [tf.check_numerics(lbeta_alpha, "lbeta(alpha)"),
-                     tf.check_numerics(log_given, "log(given)")]):
-                log_given = tf.identity(log_given)
+            lbeta_alpha = tf.check_numerics(lbeta_alpha, "lbeta(alpha)")
+            log_given = tf.check_numerics(log_given, "log(given)")
         log_p = -lbeta_alpha + tf.reduce_sum((alpha - 1) * log_given, -1)
         return log_p
 
@@ -484,9 +482,8 @@ class ExpConcrete(Distribution):
         log_temperature = tf.log(temperature)
 
         if self._check_numerics:
-            with tf.control_dependencies(
-                    [tf.check_numerics(log_temperature, "log(temperature)")]):
-                log_temperature = tf.identity(log_temperature)
+            log_temperature = tf.check_numerics(
+                log_temperature, "log(temperature)")
 
         temp = logits - temperature * given
 
@@ -610,10 +607,9 @@ class Concrete(Distribution):
         n = tf.cast(self.n_categories, self.dtype)
 
         if self._check_numerics:
-            with tf.control_dependencies(
-                    [tf.check_numerics(log_given, "log(given)"),
-                     tf.check_numerics(log_temperature, "log(temperature)")]):
-                log_given = tf.identity(log_given)
+            log_given = tf.check_numerics(log_given, "log(given)")
+            log_temperature = tf.check_numerics(
+                log_temperature, "log(temperature)")
 
         temp = logits - temperature * log_given
 
