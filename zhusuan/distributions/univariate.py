@@ -748,10 +748,7 @@ class Poisson(Distribution):
     def _sample(self, n_samples):
         try:
             # tf.random_poisson is implemented after v1.2
-            samples = tf.random_poisson(self.rate, [n_samples],
-                                        dtype=self.param_dtype)
-            if self.param_dtype != self.dtype:
-                samples = tf.cast(samples, self.dtype)
+            random_poisson = tf.random_poisson
         except AttributeError:
             # This algorithm to generate random Poisson-distributed numbers is
             # given by Kunth [1]
@@ -779,6 +776,11 @@ class Poisson(Distribution):
                 shape_invariants=[static_shape, static_shape])
 
             samples.set_shape(static_shape)
+        else:
+            samples = random_poisson(self.rate, [n_samples],
+                                     dtype=self.param_dtype)
+            if self.param_dtype != self.dtype:
+                samples = tf.cast(samples, self.dtype)
         return samples
 
     def _log_prob(self, given):
