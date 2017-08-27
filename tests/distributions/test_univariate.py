@@ -511,8 +511,8 @@ class TestGamma(tf.test.TestCase):
                                          "log\(beta\).*Tensor had NaN"):
                 log_p.eval(feed_dict={alpha: 1., beta: -1., given: 1.})
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "log\(alpha\).*Tensor had NaN"):
-                log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
+                                         "lgamma\(alpha\).*Tensor had Inf"):
+                log_p.eval(feed_dict={alpha: 0., beta: 1., given: 1.})
 
     def test_dtype(self):
         utils.test_dtype_2parameter(self, Gamma)
@@ -828,8 +828,8 @@ class TestInverseGamma(tf.test.TestCase):
                                          "log\(beta\).*Tensor had NaN"):
                 log_p.eval(feed_dict={alpha: 1., beta: -1., given: 1.})
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "log\(alpha\).*Tensor had NaN"):
-                log_p.eval(feed_dict={alpha: -1.5, beta: 1., given: 1.})
+                                         "lgamma\(alpha\).*Tensor had Inf"):
+                log_p.eval(feed_dict={alpha: 0., beta: 1., given: 1.})
 
     def test_dtype(self):
         utils.test_dtype_2parameter(self, InverseGamma)

@@ -300,6 +300,22 @@ class BayesianNet(Context):
         else:
             self._stochastic_tensors[s_tensor.name] = s_tensor
 
+    def _check_names_exist(self, name_or_names):
+        """
+        Check whether the stochastic tensors are in the network
+
+        :param name_or_names: A string or a list of strings. Names of
+            `StochasticTensor` s in the network.
+        """
+        if isinstance(name_or_names, (tuple, list)):
+            names = name_or_names
+        else:
+            names = [name_or_names]
+        for name in names:
+            if name not in self._stochastic_tensors:
+                raise ValueError("There is no StochasticTensor named '{}' in "
+                                 "the BayesianNet.".format(name))
+
     def get(self, name_or_names):
         """
         Get the `StochasticTensor` in the network by their names.
@@ -307,6 +323,7 @@ class BayesianNet(Context):
         :param name_or_names: A string or a list of strings. Names of
             `StochasticTensor` s in the network.
         """
+        self._check_names_exist(name_or_names)
         if isinstance(name_or_names, (tuple, list)):
             return [self._stochastic_tensors[name] for name in name_or_names]
         else:
@@ -323,6 +340,7 @@ class BayesianNet(Context):
             `StochasticTensor` s in the network.
         :return: A Tensor or a list of Tensors.
         """
+        self._check_names_exist(name_or_names)
         if isinstance(name_or_names, (tuple, list)):
             return [self._stochastic_tensors[name].tensor
                     for name in name_or_names]
@@ -340,6 +358,7 @@ class BayesianNet(Context):
             `StochasticTensor` s in the network.
         :return: A Tensor or a list of Tensors.
         """
+        self._check_names_exist(name_or_names)
         if isinstance(name_or_names, (tuple, list)):
             ret = []
             for name in name_or_names:
@@ -370,6 +389,7 @@ class BayesianNet(Context):
 
         :return: Tuple of Tensors or a list of tuples of Tensors.
         """
+        self._check_names_exist(name_or_names)
         ret = []
         if outputs:
             ret.append(self.outputs(name_or_names))
