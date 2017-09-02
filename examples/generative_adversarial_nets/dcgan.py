@@ -26,7 +26,7 @@ def generator(observed, n, n_z, is_training):
         ngf = 64
         z_min = -tf.ones([n, n_z])
         z_max = tf.ones([n, n_z])
-        z = zs.Uniform('z', z_min, z_max)
+        z = zs.Uniform(z_min, z_max, name='z')
         lx_z = layers.fully_connected(z, num_outputs=ngf*8*4*4,
                                       normalizer_fn=layers.batch_norm,
                                       normalizer_params=normalizer_params)

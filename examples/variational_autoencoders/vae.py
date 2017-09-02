@@ -23,8 +23,8 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
         normalizer_params = {'is_training': is_training,
                              'updates_collections': None}
         z_mean = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
-                      group_event_ndims=1)
+        z = zs.Normal(z_mean, std=1., n_samples=n_particles,
+                      group_event_ndims=1, name='z')
         lx_z = layers.fully_connected(
             z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
@@ -32,7 +32,7 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
             lx_z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli(x_logits, group_event_ndims=1, name='x')
     return model
 
 
@@ -49,8 +49,8 @@ def q_net(observed, x, n_z, n_particles, is_training):
             normalizer_params=normalizer_params)
         z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
+        z = zs.Normal(z_mean, logstd=z_logstd, n_samples=n_particles,
+                      group_event_ndims=1, name='z')
     return variational
 
 

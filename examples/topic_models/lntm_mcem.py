@@ -31,17 +31,15 @@ def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
         D_multiple = tf.stack([D, 1])
         n_chains_multiple = tf.stack([n_chains, 1, 1])
-        eta = zs.Normal('eta',
-                        tf.tile(tf.expand_dims(
+        eta = zs.Normal(tf.tile(tf.expand_dims(
                             tf.tile(tf.expand_dims(eta_mean, 0), D_multiple),
                             0), n_chains_multiple),
                         logstd=tf.tile(tf.expand_dims(
                             tf.tile(tf.expand_dims(eta_logstd, 0), D_multiple),
                             0), n_chains_multiple),
-                        group_event_ndims=1)
-        beta = zs.Normal('beta', tf.zeros([K, V]),
-                         logstd=tf.ones([K, V]) * log_delta,
-                         group_event_ndims=1)
+                        group_event_ndims=1, name='eta')
+        beta = zs.Normal(tf.zeros([K, V]), logstd=tf.ones([K, V]) * log_delta,
+                         group_event_ndims=1, name='beta')
     return model
 
 

@@ -7,6 +7,7 @@ from __future__ import division
 
 from zhusuan import distributions
 from zhusuan.model.base import StochasticTensor
+from zhusuan.model.utils import overload_name_param
 
 
 __all__ = [
@@ -41,8 +42,6 @@ class Normal(StochasticTensor):
          The order of arguments `logstd`/`std` will change to `std`/`logstd`
          in the coming version.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
     :param logstd: A `float` Tensor. The log standard deviation of the Normal
@@ -61,17 +60,27 @@ class Normal(StochasticTensor):
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Normal')
     def __init__(self,
-                 name,
                  mean=0.,
                  logstd=None,
                  std=None,
                  n_samples=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         norm = distributions.Normal(
             mean,
             logstd=logstd,
@@ -80,7 +89,8 @@ class Normal(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics
         )
-        super(Normal, self).__init__(name, norm, n_samples)
+        super(Normal, self).__init__(
+            norm, n_samples, name=name, observed=observed)
 
 
 class Bernoulli(StochasticTensor):
@@ -88,8 +98,6 @@ class Bernoulli(StochasticTensor):
     The class of univariate Bernoulli `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
 
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
@@ -103,20 +111,31 @@ class Bernoulli(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Bernoulli')
     def __init__(self,
-                 name,
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
-                 dtype=None):
+                 dtype=None,
+                 observed=None,
+                 name=None):
         bernoulli = distributions.Bernoulli(
             logits,
             group_event_ndims=group_event_ndims,
             dtype=dtype,
         )
-        super(Bernoulli, self).__init__(name, bernoulli, n_samples)
+        super(Bernoulli, self).__init__(
+            bernoulli, n_samples, name=name, observed=observed)
 
 
 class Categorical(StochasticTensor):
@@ -124,8 +143,6 @@ class Categorical(StochasticTensor):
     The class of univariate Categorical `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
         un-normalized log probabilities for all categories.
@@ -141,23 +158,34 @@ class Categorical(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
 
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
     """
 
+    @overload_name_param('Categorical')
     def __init__(self,
-                 name,
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
-                 dtype=None):
+                 dtype=None,
+                 observed=None,
+                 name=None):
         cat = distributions.Categorical(
             logits,
             group_event_ndims=group_event_ndims,
             dtype=dtype,
         )
-        super(Categorical, self).__init__(name, cat, n_samples)
+        super(Categorical, self).__init__(
+            cat, n_samples, name=name, observed=observed)
 
 
 Discrete = Categorical
@@ -168,8 +196,6 @@ class Uniform(StochasticTensor):
     The class of univariate Uniform `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param minval: A `float` Tensor. The lower bound on the range of the
         uniform distribution. Should be broadcastable to match `maxval`.
     :param maxval: A `float` Tensor. The upper bound on the range of the
@@ -186,16 +212,26 @@ class Uniform(StochasticTensor):
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Uniform')
     def __init__(self,
-                 name,
                  minval=0.,
                  maxval=1.,
                  n_samples=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         uniform = distributions.Uniform(
             minval,
             maxval,
@@ -203,7 +239,8 @@ class Uniform(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics
         )
-        super(Uniform, self).__init__(name, uniform, n_samples)
+        super(Uniform, self).__init__(
+            uniform, n_samples, name=name, observed=observed)
 
 
 class Gamma(StochasticTensor):
@@ -211,8 +248,6 @@ class Gamma(StochasticTensor):
     The class of univariate Gamma `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param alpha: A `float` Tensor. The shape parameter of the Gamma
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The inverse scale parameter of the Gamma
@@ -226,22 +261,33 @@ class Gamma(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Gamma')
     def __init__(self,
-                 name,
                  alpha,
                  beta,
                  n_samples=None,
                  group_event_ndims=0,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         gamma = distributions.Gamma(
             alpha,
             beta,
             group_event_ndims=group_event_ndims,
             check_numerics=check_numerics
         )
-        super(Gamma, self).__init__(name, gamma, n_samples)
+        super(Gamma, self).__init__(
+            gamma, n_samples, name=name, observed=observed)
 
 
 class Beta(StochasticTensor):
@@ -249,8 +295,6 @@ class Beta(StochasticTensor):
     The class of univariate Beta `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param alpha: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
         `beta`.
@@ -266,22 +310,33 @@ class Beta(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Beta')
     def __init__(self,
-                 name,
                  alpha,
                  beta,
                  n_samples=None,
                  group_event_ndims=0,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         beta = distributions.Beta(
             alpha,
             beta,
             group_event_ndims=group_event_ndims,
             check_numerics=check_numerics
         )
-        super(Beta, self).__init__(name, beta, n_samples)
+        super(Beta, self).__init__(
+            beta, n_samples, name=name, observed=observed)
 
 
 class Poisson(StochasticTensor):
@@ -289,8 +344,6 @@ class Poisson(StochasticTensor):
     The class of univariate Poisson `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
     :param n_samples: A 0-D `int32` Tensor or None. Number of samples
@@ -303,22 +356,33 @@ class Poisson(StochasticTensor):
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Poisson')
     def __init__(self,
-                 name,
                  rate,
                  n_samples=None,
                  group_event_ndims=0,
                  dtype=None,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         poisson = distributions.Poisson(
             rate,
             group_event_ndims=group_event_ndims,
             dtype=dtype,
             check_numerics=check_numerics
         )
-        super(Poisson, self).__init__(name, poisson, n_samples)
+        super(Poisson, self).__init__(
+            poisson, n_samples, name=name, observed=observed)
 
 
 class Binomial(StochasticTensor):
@@ -326,8 +390,6 @@ class Binomial(StochasticTensor):
     The class of univariate Binomial `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param logits: A `float` Tensor. The log-odds of probabilities.
 
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
@@ -344,16 +406,26 @@ class Binomial(StochasticTensor):
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Binomial')
     def __init__(self,
-                 name,
                  logits,
                  n_experiments,
                  n_samples=None,
                  group_event_ndims=0,
                  dtype=None,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         binomial = distributions.Binomial(
             logits,
             n_experiments,
@@ -361,7 +433,8 @@ class Binomial(StochasticTensor):
             dtype=dtype,
             check_numerics=check_numerics
         )
-        super(Binomial, self).__init__(name, binomial, n_samples)
+        super(Binomial, self).__init__(
+            binomial, n_samples, name=name, observed=observed)
 
 
 class Multinomial(StochasticTensor):
@@ -369,8 +442,6 @@ class Multinomial(StochasticTensor):
     The class of Multinomial `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
         un-normalized log probabilities for all categories.
@@ -388,25 +459,36 @@ class Multinomial(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a vector of counts for all categories.
     """
 
+    @overload_name_param('Multinomial')
     def __init__(self,
-                 name,
                  logits,
                  n_experiments,
                  n_samples=None,
                  group_event_ndims=0,
-                 dtype=None):
+                 dtype=None,
+                 observed=None,
+                 name=None):
         multinomial = distributions.Multinomial(
             logits,
             n_experiments,
             group_event_ndims=group_event_ndims,
             dtype=dtype,
         )
-        super(Multinomial, self).__init__(name, multinomial, n_samples)
+        super(Multinomial, self).__init__(
+            multinomial, n_samples, name=name, observed=observed)
 
 
 class OnehotCategorical(StochasticTensor):
@@ -414,8 +496,6 @@ class OnehotCategorical(StochasticTensor):
     The class of one-hot Categorical `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j, ..., k, :]` represents the
         un-normalized log probabilities for all categories.
@@ -431,23 +511,34 @@ class OnehotCategorical(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a one-hot vector of the selected category.
     """
 
+    @overload_name_param('OnehotCategorical')
     def __init__(self,
-                 name,
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
-                 dtype=None):
+                 dtype=None,
+                 observed=None,
+                 name=None):
         onehot_cat = distributions.OnehotCategorical(
             logits,
             group_event_ndims=group_event_ndims,
             dtype=dtype,
         )
-        super(OnehotCategorical, self).__init__(name, onehot_cat, n_samples)
+        super(OnehotCategorical, self).__init__(
+            onehot_cat, n_samples, name=name, observed=observed)
 
 
 OnehotDiscrete = OnehotCategorical
@@ -458,8 +549,6 @@ class Dirichlet(StochasticTensor):
     The class of Dirichlet `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param alpha: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
         of a Dirichlet distribution. Should be positive.
@@ -472,6 +561,14 @@ class Dirichlet(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
 
     A single sample is a N-D Tensor with the same shape as alpha. Each slice
     `[i, j, ..., k, :]` of the sample is a vector of probabilities of a
@@ -481,18 +578,21 @@ class Dirichlet(StochasticTensor):
 
     """
 
+    @overload_name_param('Dirichlet')
     def __init__(self,
-                 name,
                  alpha,
                  n_samples=None,
                  group_event_ndims=0,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         dirichlet = distributions.Dirichlet(
             alpha,
             group_event_ndims=group_event_ndims,
             check_numerics=check_numerics,
         )
-        super(Dirichlet, self).__init__(name, dirichlet, n_samples)
+        super(Dirichlet, self).__init__(
+            dirichlet, n_samples, name=name, observed=observed)
 
 
 class InverseGamma(StochasticTensor):
@@ -500,8 +600,6 @@ class InverseGamma(StochasticTensor):
     The class of univariate InverseGamma `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param alpha: A `float` Tensor. The shape parameter of the InverseGamma
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The scale parameter of the InverseGamma
@@ -515,22 +613,33 @@ class InverseGamma(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('InverseGamma')
     def __init__(self,
-                 name,
                  alpha,
                  beta,
                  n_samples=None,
                  group_event_ndims=0,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         inv_gamma = distributions.InverseGamma(
             alpha,
             beta,
             group_event_ndims=group_event_ndims,
             check_numerics=check_numerics,
         )
-        super(InverseGamma, self).__init__(name, inv_gamma, n_samples)
+        super(InverseGamma, self).__init__(
+            inv_gamma, n_samples, name=name, observed=observed)
 
 
 class Laplace(StochasticTensor):
@@ -538,8 +647,6 @@ class Laplace(StochasticTensor):
     The class of univariate Laplace `StochasticTensor`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param loc: A `float` Tensor. The location parameter of the Laplace
         distribution. Should be broadcastable to match `scale`.
     :param scale: A `float` Tensor. The scale parameter of the Laplace
@@ -556,16 +663,26 @@ class Laplace(StochasticTensor):
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Laplace')
     def __init__(self,
-                 name,
                  loc,
                  scale,
                  n_samples=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         laplace = distributions.Laplace(
             loc,
             scale,
@@ -573,7 +690,8 @@ class Laplace(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics,
         )
-        super(Laplace, self).__init__(name, laplace, n_samples)
+        super(Laplace, self).__init__(
+            laplace, n_samples, name=name, observed=observed)
 
 
 class BinConcrete(StochasticTensor):
@@ -586,8 +704,6 @@ class BinConcrete(StochasticTensor):
 
         :class:`~Concrete` and :class:`~ExpConcrete`
 
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
@@ -606,16 +722,26 @@ class BinConcrete(StochasticTensor):
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('BinConcrete')
     def __init__(self,
-                 name,
                  temperature,
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         bin_concrete = distributions.BinConcrete(
             temperature,
             logits,
@@ -623,7 +749,8 @@ class BinConcrete(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics,
         )
-        super(BinConcrete, self).__init__(name, bin_concrete, n_samples)
+        super(BinConcrete, self).__init__(
+            bin_concrete, n_samples, name=name, observed=observed)
 
 
 class ExpConcrete(StochasticTensor):
@@ -656,16 +783,26 @@ class ExpConcrete(StochasticTensor):
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('ExpConcrete')
     def __init__(self,
-                 name,
                  temperature,
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         exp_concrete = distributions.ExpConcrete(
             temperature,
             logits,
@@ -673,7 +810,8 @@ class ExpConcrete(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics
         )
-        super(ExpConcrete, self).__init__(name, exp_concrete, n_samples)
+        super(ExpConcrete, self).__init__(
+            exp_concrete, n_samples, name=name, observed=observed)
 
 
 class Concrete(StochasticTensor):
@@ -706,16 +844,26 @@ class Concrete(StochasticTensor):
         `StochasticTensor` are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
     :param check_numerics: Bool. Whether to check numeric issues.
+    :param observed: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param name: A string. The name of the stochastic tensor. If specified, and
+        the stochastic tensor is created in a BayesianNet context, the tensor
+        will be added into that BayesianNet. The name must be unique in a
+        BayesianNet context.
     """
 
+    @overload_name_param('Concrete')
     def __init__(self,
-                 name,
                  temperature,
                  logits,
                  n_samples=None,
                  group_event_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 observed=None,
+                 name=None):
         concrete = distributions.Concrete(
             temperature,
             logits,
@@ -723,4 +871,5 @@ class Concrete(StochasticTensor):
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics
         )
-        super(Concrete, self).__init__(name, concrete, n_samples)
+        super(Concrete, self).__init__(
+            concrete, n_samples, name=name, observed=observed)

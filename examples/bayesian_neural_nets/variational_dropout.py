@@ -26,14 +26,14 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
         for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
             eps_mean = tf.ones([n, n_in])
             eps = zs.Normal(
-                'layer' + str(i) + '/eps', eps_mean, std=1.,
-                n_samples=n_particles, group_event_ndims=1)
+                eps_mean, std=1., n_samples=n_particles,
+                group_event_ndims=1, name='layer' + str(i) + '/eps')
             h = layers.fully_connected(
                 h * eps, n_out, normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params)
             if i < len(net_size) - 2:
                 h = tf.nn.relu(h)
-        y = zs.OnehotCategorical('y', h)
+        y = zs.OnehotCategorical(h, name='y')
     return model, h
 
 
@@ -46,9 +46,9 @@ def q(observed, n, net_size, n_particles):
 
             alpha = tf.nn.sigmoid(logit_alpha)
             alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
-            eps = zs.Normal('layer' + str(i) + '/eps',
-                            1., logstd=0.5 * tf.log(alpha + 1e-10),
-                            n_samples=n_particles, group_event_ndims=1)
+            eps = zs.Normal(1., logstd=0.5 * tf.log(alpha + 1e-10),
+                            n_samples=n_particles, group_event_ndims=1,
+                            name='layer' + str(i) + '/eps')
     return variational
 
 

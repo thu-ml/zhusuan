@@ -21,17 +21,17 @@ from examples.utils import dataset
 def sbn(observed, n, n_x, n_h, n_particles, is_training):
     with zs.BayesianNet(observed=observed) as model:
         h3_logits = tf.zeros([n, n_h])
-        h3 = zs.Bernoulli('h3', h3_logits, n_samples=n_particles,
-                          group_event_ndims=1)
+        h3 = zs.Bernoulli(h3_logits, n_samples=n_particles,
+                          group_event_ndims=1, name='h3')
         h2_logits = layers.fully_connected(
             tf.to_float(h3), n_h, activation_fn=None)
-        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1)
+        h2 = zs.Bernoulli(h2_logits, group_event_ndims=1, name='h2')
         h1_logits = layers.fully_connected(
             tf.to_float(h2), n_h, activation_fn=None)
-        h1 = zs.Bernoulli('h1', h1_logits, group_event_ndims=1)
+        h1 = zs.Bernoulli(h1_logits, group_event_ndims=1, name='h1')
         x_logits = layers.fully_connected(
             tf.to_float(h1), n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli(x_logits, group_event_ndims=1, name='x')
     return model
 
 
@@ -39,14 +39,14 @@ def q_net(x, n_h, n_particles, is_training):
     with zs.BayesianNet() as variational:
         h1_logits = layers.fully_connected(
             tf.to_float(x), n_h, activation_fn=None)
-        h1 = zs.Bernoulli('h1', h1_logits, n_samples=n_particles,
-                          group_event_ndims=1)
+        h1 = zs.Bernoulli(h1_logits, n_samples=n_particles,
+                          group_event_ndims=1, name='h1')
         h2_logits = layers.fully_connected(
             tf.to_float(h1), n_h, activation_fn=None)
-        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1)
+        h2 = zs.Bernoulli(h2_logits, group_event_ndims=1, name='h2')
         h3_logits = layers.fully_connected(
             tf.to_float(h2), n_h, activation_fn=None)
-        h3 = zs.Bernoulli('h3', h3_logits, group_event_ndims=1)
+        h3 = zs.Bernoulli(h3_logits, group_event_ndims=1, name='h3')
     return variational
 
 

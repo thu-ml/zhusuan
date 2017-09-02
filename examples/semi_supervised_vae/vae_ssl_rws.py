@@ -21,14 +21,14 @@ from examples.utils import dataset
 def M2(observed, n, n_x, n_y, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
-                      group_event_ndims=1)
+        z = zs.Normal(z_mean, std=1., n_samples=n_particles,
+                      group_event_ndims=1, name='z')
         y_logits = tf.zeros([n, n_y])
-        y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
+        y = zs.OnehotCategorical(y_logits, n_samples=n_particles, name='y')
         lx_zy = layers.fully_connected(tf.concat([z, tf.to_float(y)], 2), 500)
         lx_zy = layers.fully_connected(lx_zy, 500)
         x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli(x_logits, group_event_ndims=1, name='x')
     return model
 
 
@@ -52,19 +52,19 @@ def qy_x(x, n_y):
 def labeled_proposal(x, y, n_z, n_particles):
     with zs.BayesianNet() as proposal:
         z_mean, z_logstd = qz_xy(x, y, n_z)
-        z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
-                      group_event_ndims=1, is_reparameterized=False)
+        z = zs.Normal(z_mean, logstd=z_logstd, n_samples=n_particles,
+                      group_event_ndims=1, is_reparameterized=False, name='z')
     return proposal
 
 
 def unlabeled_proposal(x, n_y, n_z, n_particles):
     with zs.BayesianNet() as proposal:
         y_logits = qy_x(x, n_y)
-        y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
+        y = zs.OnehotCategorical(y_logits, n_samples=n_particles, name='y')
         x_tiled = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
         z_mean, z_logstd = qz_xy(x_tiled, y, n_z)
-        z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1,
-                      is_reparameterized=False)
+        z = zs.Normal(z_mean, logstd=z_logstd, group_event_ndims=1,
+                      is_reparameterized=False, name='z')
     return proposal
 
 

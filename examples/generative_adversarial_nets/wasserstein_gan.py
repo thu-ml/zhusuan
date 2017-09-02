@@ -25,7 +25,7 @@ def generator(observed, n, n_z, is_training):
                              'updates_collections': None}
         z_min = -tf.ones([n, n_z])
         z_max = tf.ones([n, n_z])
-        z = zs.Uniform('z', z_min, z_max)
+        z = zs.Uniform(z_min, z_max, name='z')
         lx_z = tf.reshape(z, [-1, 1, 1, n_z])
         ngf = 32
         lx_z = layers.conv2d_transpose(lx_z, ngf*4, 3, padding='VALID',

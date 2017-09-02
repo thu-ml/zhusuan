@@ -184,9 +184,9 @@ A Bayesian Linear Regression example:
 
     def bayesian_linear_regression(x, alpha, beta):
         with zs.BayesianNet() as model:
-            w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+            w = zs.Normal(mean=0., logstd=tf.log(alpha), name='w')
             y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
-            y = zs.Normal('y', y_mean, tf.log(beta))
+            y = zs.Normal(y_mean, tf.log(beta), name='y')
         return model
 
 To observe any stochastic nodes in the network, pass a dictionary mapping of
@@ -196,9 +196,9 @@ to corresponding :class:`~zhusuan.model.base.StochasticTensor` s. For example::
 
     def bayesian_linear_regression(observed, x, alpha, beta):
         with zs.BayesianNet(observed=observed) as model:
-            w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
+            w = zs.Normal(mean=0., logstd=tf.log(alpha), name='w')
             y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
-            y = zs.Normal('y', y_mean, tf.log(beta))
+            y = zs.Normal(y_mean, tf.log(beta), name='y')
         return model
 
     model = bayesian_linear_regression({'w': w_obs}, ...)

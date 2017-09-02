@@ -22,19 +22,18 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
     with zs.BayesianNet(observed=observed) as model:
         z_stacked_logits = tf.zeros([n, n_z, n_k])
         if relaxed:
-            z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+            z = zs.ExpConcrete(tau, z_stacked_logits, n_samples=n_particles,
+                               group_event_ndims=1, name='z')
             z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
+            z = zs.OnehotCategorical(z_stacked_logits, dtype=tf.float32,
                                      n_samples=n_particles,
-                                     group_event_ndims=1)
+                                     group_event_ndims=1, name='z')
             z = tf.reshape(z, [n_particles, n, n_z * n_k])
         lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
         lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli(x_logits, group_event_ndims=1, name='x')
     return model
 
 
@@ -47,13 +46,12 @@ def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
         z_logits = layers.fully_connected(lz_x, n_z * n_k, activation_fn=None)
         z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
         if relaxed:
-            z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+            z = zs.ExpConcrete(tau, z_stacked_logits, n_samples=n_particles,
+                               group_event_ndims=1, name='z')
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
+            z = zs.OnehotCategorical(z_stacked_logits, dtype=tf.float32,
                                      n_samples=n_particles,
-                                     group_event_ndims=1)
+                                     group_event_ndims=1, name='z')
     return variational
 
 

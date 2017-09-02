@@ -41,8 +41,8 @@ def main():
                                                   layer_sizes[1:])):
                 w_mu = tf.zeros([1, n_out, n_in + 1])
                 ws.append(
-                    zs.Normal('w' + str(i), w_mu, std=1.,
-                              n_samples=n_particles, group_event_ndims=2))
+                    zs.Normal(w_mu, std=1., n_samples=n_particles,
+                              group_event_ndims=2, name='w' + str(i)))
 
             # forward
             ly_x = tf.expand_dims(
@@ -59,7 +59,7 @@ def main():
             y_mean = tf.squeeze(ly_x, [2, 3])
             y_logstd = tf.get_variable('y_logstd', shape=[],
                                        initializer=tf.constant_initializer(0.))
-            y = zs.Normal('y', y_mean, logstd=y_logstd)
+            y = zs.Normal(y_mean, logstd=y_logstd, name='y')
 
         return model, y_mean
 
@@ -75,8 +75,8 @@ def main():
                     'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
                     initializer=tf.constant_initializer(0.))
                 ws.append(
-                    zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                              n_samples=n_particles, group_event_ndims=2))
+                    zs.Normal(w_mean, logstd=w_logstd, n_samples=n_particles,
+                              group_event_ndims=2, name='w' + str(i)))
         return variational
 
     # Build the computation graph

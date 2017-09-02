@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import deque, OrderedDict
+import warnings
 
 import tensorflow as tf
 
@@ -181,3 +182,25 @@ class TensorArithmeticMixin(object):
     # slicing and indexing
     def __getitem__(self, item):
         return (tf.convert_to_tensor(self))[item]
+
+
+def overload_name_param(class_name):
+    """
+    A decorator for compatibility of the `name` parameter.
+    """
+    def decorator(init_func):
+        def init_func_dispatcher(self, *types, **kwargs):
+            if len(types) >= 1 and isinstance(types[0], str):
+                tensor_name = types[0]
+                others = types[1:]
+                if 'name' in kwargs:
+                    raise ValueError(
+                        class_name + ": name cannot be specified twice")
+                else: kwargs['name'] = tensor_name
+                warnings.warn(class_name + ": It is deprecated that the first "
+                              "parameter is the name of the stochastic tensor."
+                              " Please pass it as the named parameter.")
+                init_func(self, *others, **kwargs)
+            else: init_func(self, *types, **kwargs)
+        return init_func_dispatcher
+    return decorator
