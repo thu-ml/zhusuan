@@ -388,3 +388,48 @@ def load_uci_bow_sparse(data_name, data_path):
         vocab = [v.strip() for v in vf.readlines()]
 
     return data, vocab
+
+
+def load_movielens1m(path):
+    """
+    Loads the movielens 1M dataset.
+
+    :param path: Path to the dataset.
+    :return: The movielens 1M dataset.
+    """
+    if not os.path.isfile(path):
+        data_dir = os.path.dirname(path)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(data_dir)
+        download_dataset(
+            'http://files.grouplens.org/datasets/movielens/ml-1m.zip', path)
+
+    zp = zipfile.ZipFile(path, 'r')
+    content = zp.read('ml-1m/ratings.dat')
+    data_list = content.split('\n')
+
+    num_users = 0
+    num_movies = 0
+    corpus = []
+    for item in data_list:
+        term = item.split('::')
+        if len(term) < 3:
+            continue
+        user_id = int(term[0]) - 1
+        movie_id = int(term[1]) - 1
+        rating = int(term[2])
+        corpus.append((user_id, movie_id, rating))
+        num_users = max(num_users, user_id + 1)
+        num_movies = max(num_movies, movie_id + 1)
+
+    corpus_data = np.array(corpus)
+    np.random.shuffle(corpus_data)
+    np.random.shuffle(corpus_data)
+    N = np.shape(corpus_data)[0]
+    Ndv = N // 20 * 17
+    Ndv2 = N // 10 * 9
+    train = corpus_data[:Ndv, :]
+    valid = corpus_data[Ndv:Ndv2, :]
+    test = corpus_data[Ndv2:, :]
+
+    return num_movies, num_users, train, valid, test
