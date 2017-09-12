@@ -13,6 +13,7 @@ from tensorflow.python.training import moving_averages
 from zhusuan.utils import log_mean_exp, merge_dicts
 from zhusuan.evaluation import is_loglikelihood
 
+
 __all__ = [
     'sgvb',
     'iwae',

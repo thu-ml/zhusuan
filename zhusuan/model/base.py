@@ -9,9 +9,11 @@ from collections import OrderedDict
 import six
 from six.moves import zip
 import tensorflow as tf
-from tensorflow.python.client.session import register_session_run_conversion_functions
+from tensorflow.python.client.session import \
+    register_session_run_conversion_functions
 
-from zhusuan.model.utils import Context, TensorArithmeticMixin
+from zhusuan.model.utils import Context
+from zhusuan.utils import TensorArithmeticMixin
 
 
 __all__ = [
@@ -70,6 +72,7 @@ class StochasticTensor(TensorArithmeticMixin):
             self._net._add_stochastic_tensor(self)
         except RuntimeError:
             self._net = None
+        super(StochasticTensor, self).__init__()
 
     @property
     def name(self):
@@ -142,36 +145,6 @@ class StochasticTensor(TensorArithmeticMixin):
         :return: A Tensor. The probability density (mass) value.
         """
         return self._distribution.prob(given)
-
-    def __hash__(self):
-        # Necessary to support Python's collection membership operators
-        return id(self)
-
-    def __eq__(self, other):
-        # Necessary to support Python's collection membership operators
-        return id(self) == id(other)
-
-    # disallowed operators
-    def __iter__(self):
-        raise TypeError("StochasticTensor object is not iterable.")
-
-    def __bool__(self):
-        raise TypeError(
-            "Using a `StochasticTensor` as a Python `bool` is not allowed. "
-            "Use `if t is not None:` instead of `if t:` to test if a "
-            "tensor is defined, and use TensorFlow ops such as "
-            "tf.cond to execute subgraphs conditioned on the value of "
-            "a tensor."
-        )
-
-    def __nonzero__(self):
-        raise TypeError(
-            "Using a `StochasticTensor` as a Python `bool` is not allowed. "
-            "Use `if t is not None:` instead of `if t:` to test if a "
-            "tensor is defined, and use TensorFlow ops such as "
-            "tf.cond to execute subgraphs conditioned on the value of "
-            "a tensor."
-        )
 
     @staticmethod
     def _to_tensor(value, dtype=None, name=None, as_ref=False):
@@ -285,6 +258,7 @@ class BayesianNet(Context):
     def __init__(self, observed=None):
         self.observed = observed if observed else {}
         self._stochastic_tensors = OrderedDict()
+        super(BayesianNet, self).__init__()
 
     def _add_stochastic_tensor(self, s_tensor):
         """

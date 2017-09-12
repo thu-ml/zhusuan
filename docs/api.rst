@@ -15,3 +15,4 @@ Information on specific functions, classes, and methods.
    api/zhusuan.transform
    api/zhusuan.diagnostics
    api/zhusuan.utils
+   api/zhusuan.legacy

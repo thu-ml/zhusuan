@@ -78,7 +78,7 @@ language = None
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'api/zhusuan.rst']
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+# pygments_style = 'sphinx'
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
@@ -97,11 +97,15 @@ html_theme = 'alabaster'
 # documentation.
 #
 html_theme_options = {
+    'description': 'A library for Bayesian Deep Learning.',
     'github_user': 'thu-ml',
-    'github_repo': 'ZhuSuan',
+    'github_repo': 'zhusuan',
     'github_type': 'star',
     'sidebar_width': '220px',
     'page_width': '980px',
+    'travis_button': True,
+    'link': '#3782BE',
+    'link_hover': '#3782BE',
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,

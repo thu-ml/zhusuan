@@ -79,23 +79,6 @@ class TestStochasticTensor(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertNear(b.eval(), 2, 1e-6)
 
-    def test_disallowed_operator(self):
-        with tf.Graph().as_default():
-            with self.assertRaisesRegexp(
-                    TypeError, 'StochasticTensor object is not iterable'):
-                _ = iter(StochasticTensor('a', Mock(dtype=tf.float32), 1))
-
-            with self.assertRaisesRegexp(
-                    TypeError, 'Using a `StochasticTensor` as a Python '
-                               '`bool` is not allowed'):
-                _ = not StochasticTensor('a', Mock(dtype=tf.float32), 1)
-
-            with self.assertRaisesRegexp(
-                    TypeError, 'Using a `StochasticTensor` as a Python '
-                               '`bool` is not allowed'):
-                if StochasticTensor('a', Mock(dtype=tf.float32), 1):
-                    pass
-
     def test_session_run(self):
         with self.test_session(use_gpu=True) as sess:
             samples = tf.constant([1, 2, 3])
