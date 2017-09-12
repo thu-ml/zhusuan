@@ -270,7 +270,6 @@ class Categorical(Distribution):
 
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Categorical.logits')
-        static_logits_shape = self._logits.get_shape()
 
         super(Categorical, self).__init__(
             dtype=dtype,
@@ -309,10 +308,11 @@ class Categorical(Distribution):
         else:
             logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
         samples_flat = tf.transpose(tf.multinomial(logits_flat, n_samples))
+        samples_flat = tf.cast(samples_flat, self.dtype)
         if self.logits.get_shape().ndims == 2:
             return samples_flat
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.cast(tf.reshape(samples_flat, shape), self.dtype)
+        samples = tf.reshape(samples_flat, shape)
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
