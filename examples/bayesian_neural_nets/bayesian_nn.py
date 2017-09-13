@@ -111,13 +111,14 @@ if __name__ == '__main__':
     variational = mean_field_variational(layer_sizes, n_particles)
     qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
     latent = dict(zip(w_names, qw_outputs))
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'y': y_obs}, latent, axis=0))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'y': y_obs}, latent=latent, axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[])
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(cost)
 
     # prediction: rmse & log likelihood
     observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
@@ -145,7 +146,7 @@ if __name__ == '__main__':
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
                 _, lb = sess.run(
-                    [infer, lower_bound],
+                    [infer_op, lower_bound],
                     feed_dict={n_particles: lb_samples,
                                learning_rate_ph: learning_rate,
                                x: x_batch, y: y_batch})

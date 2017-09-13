@@ -93,17 +93,14 @@ if __name__ == "__main__":
     variational = q_net({}, x, n_z, n_particles)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.iwae(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+    lower_bound = zs.variational.importance_weighted_objective(
+        log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
-
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
+    infer_op = optimizer.minimize(cost)
 
     saver = tf.train.Saver(max_to_keep=10)
 
@@ -128,7 +125,7 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb = sess.run([infer, lower_bound],
+                _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples})

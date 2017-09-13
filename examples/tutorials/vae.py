@@ -59,13 +59,13 @@ def main():
     variational = q_net(x, n_z)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint,
-                observed={'x': x},
-                latent={'z': [qz_samples, log_qz]}))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'x': x}, latent={'z': [qz_samples, log_qz]})
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     optimizer = tf.train.AdamOptimizer(0.001)
-    infer = optimizer.minimize(-lower_bound)
+    infer_op = optimizer.minimize(cost)
 
     # Generate images
     n_gen = 100
@@ -86,7 +86,7 @@ def main():
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
-                _, lb = sess.run([infer, lower_bound],
+                _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x: x_batch})
                 lbs.append(lb)
 
