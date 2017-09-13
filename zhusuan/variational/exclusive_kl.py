@@ -141,7 +141,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
         :return: A Tensor. The surrogate cost for Tensorflow optimizers to
             minimize.
         """
-        return self.tensor
+        return -self.tensor
 
     def reinforce(self,
                   baseline=None,

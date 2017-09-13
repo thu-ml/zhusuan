@@ -113,7 +113,7 @@ class ImportanceWeightedObjective(VariationalObjective):
     """
 
     def __init__(self, log_joint, observed, latent, axis=None):
-        if self._axis is None:
+        if axis is None:
             raise ValueError(
                 "ImportanceWeightedObjective is a multi-sample objective, "
                 "the `axis` argument must be specified.")
@@ -148,7 +148,7 @@ class ImportanceWeightedObjective(VariationalObjective):
         :return: A Tensor. The surrogate cost for Tensorflow optimizers to
             minimize.
         """
-        return self.tensor
+        return -self.tensor
 
     def vimco(self):
         """
