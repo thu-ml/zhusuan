@@ -561,11 +561,11 @@ class TestConcrete(tf.test.TestCase):
                 p = con.prob(given)
                 self.assertAllClose(p.eval(), np.exp(target_log_p))
 
-            _test_value([np.log(0.25), np.log(0.25), np.log(0.5)],
+            _test_value([0.25, 0.25, 0.5],
                         0.1,
                         [1., 1., 1.2])
-            _test_value([[np.log(0.25), np.log(0.25), np.log(0.5)],
-                        [np.log(0.1), np.log(0.5), np.log(0.4)]],
+            _test_value([[0.25, 0.25, 0.5],
+                        [0.1, 0.5, 0.4]],
                         0.5,
                         [[1., 1., 1.], [.5, .5, .4]])
 
