@@ -103,8 +103,10 @@ if __name__ == "__main__":
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     labeled_lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
-                {'z': [qz_samples, log_qz]}, axis=0))
+        zs.variational.elbo(log_joint,
+                            observed={'x': x_labeled_obs, 'y': y_labeled_obs},
+                            latent={'z': [qz_samples, log_qz]},
+                            axis=0))
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.int32, shape=[None, n_x], name='x_u')
@@ -118,8 +120,11 @@ if __name__ == "__main__":
     variational = qz_xy(x_u, y_u, n_z, n_particles)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lb_z = zs.sgvb(log_joint, {'x': x_unlabeled_obs, 'y': y_unlabeled_obs},
-                   {'z': [qz_samples, log_qz]}, axis=0)
+    lb_z = zs.variational.elbo(log_joint,
+                               observed={'x': x_unlabeled_obs,
+                                         'y': y_unlabeled_obs},
+                               latent={'z': [qz_samples, log_qz]},
+                               axis=0)
     # sum over y
     lb_z = tf.reshape(lb_z, [-1, n_y])
     qy_logits_u = qy_x(x_unlabeled_ph, n_y)

@@ -102,12 +102,15 @@ if __name__ == "__main__":
                                              local_log_prob=True)
     qh1_samples, log_qh1 = variational.query('h1', outputs=True,
                                              local_log_prob=True)
-    cost, lower_bound = zs.vimco(log_joint, {'x': x_obs},
-                                 {'h3': [qh3_samples, log_qh3],
-                                  'h2': [qh2_samples, log_qh2],
-                                  'h1': [qh1_samples, log_qh1]}, axis=0)
+
+    lower_bound = zs.variational.importance_weighted_objective(
+        log_joint, observed={'x': x_obs},
+        latent={'h3': [qh3_samples, log_qh3],
+                'h2': [qh2_samples, log_qh2],
+                'h1': [qh1_samples, log_qh1]}, axis=0)
+    cost = tf.reduce_mean(lower_bound.vimco())
     lower_bound = tf.reduce_mean(lower_bound)
-    cost = tf.reduce_mean(cost)
+
     log_likelihood = tf.reduce_mean(
         zs.is_loglikelihood(log_joint, {'x': x_obs},
                             {'h3': [qh3_samples, log_qh3],
@@ -116,8 +119,7 @@ if __name__ == "__main__":
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(cost)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(cost)
 
     params = tf.trainable_variables()
     for i in params:
@@ -135,7 +137,7 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb = sess.run([infer, lower_bound],
+                _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples,

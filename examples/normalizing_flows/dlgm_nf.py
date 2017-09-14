@@ -112,8 +112,12 @@ if __name__ == "__main__":
     qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
                                                     n_iters=n_planar_flows)
 
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+    lower_bound = zs.variational.elbo(log_joint,
+                                      observed={'x': x_obs},
+                                      latent={'z': [qz_samples, log_qz]},
+                                      axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training
@@ -123,8 +127,7 @@ if __name__ == "__main__":
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(cost)
 
     params = tf.trainable_variables()
     for i in params:
@@ -153,7 +156,7 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb = sess.run([infer, lower_bound],
+                _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples,

@@ -112,25 +112,28 @@ if __name__ == '__main__':
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
 
-        lower_bound = tf.reduce_mean(zs.sgvb(
-            log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        lower_bound = zs.variational.elbo(log_joint,
+                                          observed={'x': x_obs},
+                                          latent={'z': [qz_samples, log_qz]},
+                                          axis=0)
+        cost = tf.reduce_mean(lower_bound.sgvb())
+        lower_bound = tf.reduce_mean(lower_bound)
 
         # Importance sampling estimates of marginal log likelihood
         is_log_likelihood = tf.reduce_mean(
             zs.is_loglikelihood(log_joint, {'x': x_obs},
                                 {'z': [qz_samples, log_qz]}, axis=0))
 
-        return lower_bound, is_log_likelihood
+        return cost, lower_bound, is_log_likelihood
 
     # For training
-    relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
+    relaxed_cost, relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
     # For testing and generating
-    lower_bound, is_log_likelihood = lower_bound_and_log_likelihood(False)
+    _, lower_bound, is_log_likelihood = lower_bound_and_log_likelihood(False)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-relaxed_lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(relaxed_cost)
 
     params = tf.trainable_variables()
     for i in params:
@@ -167,7 +170,7 @@ if __name__ == '__main__':
                              n_particles: lb_samples,
                              tau_p: tau_p0,
                              tau_q: tau_q0}
-                _, lb = sess.run([infer, relaxed_lower_bound],
+                _, lb = sess.run([infer_op, relaxed_lower_bound],
                                  feed_dict=feed_dict)
                 lbs.append(lb)
             time_epoch += time.time()
