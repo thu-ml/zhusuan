@@ -42,7 +42,7 @@ class Normal(Distribution):
     .. warning::
 
          The order of arguments `logstd`/`std` will change to `std`/`logstd`
-         in the coming version.
+         in the coming version (0.3.1).
 
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
@@ -71,7 +71,7 @@ class Normal(Distribution):
                  check_numerics=False):
         self._mean = tf.convert_to_tensor(mean)
         warnings.warn("Normal: The order of arguments logstd/std will change "
-                      "to std/logstd in the coming version.")
+                      "to std/logstd in the coming version.", FutureWarning)
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")

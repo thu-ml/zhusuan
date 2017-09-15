@@ -13,6 +13,7 @@ from zhusuan.variational.base import VariationalObjective
 
 __all__ = [
     'importance_weighted_objective',
+    'iw_objective',
     'ImportanceWeightedObjective',
 ]
 
@@ -238,3 +239,7 @@ def importance_weighted_objective(log_joint, observed, latent, axis=None):
     :return: An :class:`ImportanceWeightedObjective` instance.
     """
     return ImportanceWeightedObjective(log_joint, observed, latent, axis=axis)
+
+
+# alias
+iw_objective = importance_weighted_objective
