@@ -84,7 +84,7 @@ class InclusiveKLObjective(VariationalObjective):
 
     def _objective(self):
         raise NotImplementedError(
-            "The inclusive KL objective (klpq) can only be optimized instead"
+            "The inclusive KL objective (klpq) can only be optimized instead "
             "of being evaluated.")
 
     def rws(self):
