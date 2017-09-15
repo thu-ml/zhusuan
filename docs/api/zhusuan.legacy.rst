@@ -11,5 +11,5 @@ Submodules
 
 .. toctree::
 
-   zhusuan.legacy.variational
+   zhusuan.legacy.variational_legacy
 
