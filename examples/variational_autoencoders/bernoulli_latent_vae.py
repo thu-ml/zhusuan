@@ -110,8 +110,8 @@ if __name__ == "__main__":
                                       observed={'x': x_obs},
                                       latent={'z': [qz_samples, log_qz]},
                                       axis=0)
-    cost = tf.reduce_mean(lower_bound.reinforce(baseline=cx,
-                                                variance_normalization=False))
+    cost, baseline_cost = lower_bound.reinforce(baseline=cx)
+    cost = tf.reduce_mean(cost + baseline_cost)
     lower_bound = tf.reduce_mean(lower_bound)
 
     is_log_likelihood = tf.reduce_mean(

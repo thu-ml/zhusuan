@@ -49,35 +49,50 @@ class VariationalObjective(TensorArithmeticMixin):
         self._latent_logpdfs = dict(
             zip(latent_k, map(lambda x: x[1], latent_v)))
         self._joint_obs = merge_dicts(observed, self._latent_outputs)
-        self._dict_key = (log_joint,
-                          frozenset(latent_k),
-                          frozenset(map(tuple, latent_v)),
-                          frozenset(six.iteritems(observed)))
+        try:
+            self._dict_key = (log_joint,
+                              frozenset(latent_k),
+                              frozenset(map(tuple, latent_v)),
+                              frozenset(six.iteritems(observed)))
+        except TypeError:
+            # Unhashable type
+            self._dict_key = None
 
     @classmethod
     def _get_log_p_cache(cls):
-        if not hasattr(cls, '_log_p'):
-            cls._log_p = {}
-        return cls._log_p
+        if not hasattr(cls, '_global_log_p'):
+            cls._global_log_p = {}
+        return cls._global_log_p
 
     @classmethod
     def _get_log_q_cache(cls):
-        if not hasattr(cls, '_log_q'):
-            cls._log_q = {}
-        return cls._log_q
+        if not hasattr(cls, '_global_log_q'):
+            cls._global_log_q = {}
+        return cls._global_log_q
 
     def _log_joint_term(self):
-        log_p_cache = type(self)._get_log_p_cache()
-        if self._dict_key not in log_p_cache:
-            log_p_cache[self._dict_key] = self._log_joint(self._joint_obs)
-        return log_p_cache[self._dict_key]
+        if self._dict_key is not None:
+            log_p_cache = VariationalObjective._get_log_p_cache();
+            if self._dict_key not in log_p_cache:
+                log_p_cache[self._dict_key] = self._log_joint(self._joint_obs)
+            return log_p_cache[self._dict_key]
+        else:
+            if not hasattr(self, '_log_p'):
+                self._log_p = self._log_joint(self._joint_obs)
+            return self._log_p
 
     def _entropy_term(self):
-        log_q_cache = type(self)._get_log_q_cache()
-        if self._dict_key not in log_q_cache:
-            log_q_cache[self._dict_key] = -tf.add_n(
-                list(six.itervalues(self._latent_logpdfs)))
-        return log_q_cache[self._dict_key]
+        if self._dict_key is not None:
+            log_q_cache = VariationalObjective._get_log_q_cache();
+            if self._dict_key not in log_q_cache:
+                log_q_cache[self._dict_key] = -tf.add_n(
+                    list(six.itervalues(self._latent_logpdfs)))
+            return log_q_cache[self._dict_key]
+        else:
+            if not hasattr(self, '_log_q'):
+                self._log_q = -tf.add_n(
+                    list(six.itervalues(self._latent_logpdfs)))
+            return self._log_q
 
     def _objective(self):
         """
