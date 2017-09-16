@@ -191,6 +191,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
 
             # TODO: extend to non-scalar.
             bc = tf.reduce_mean(l_signal)
+            # TODO: fix get variable failure for repeated calls.
             moving_mean = tf.get_variable(
                 'moving_mean', shape=[],
                 initializer=tf.constant_initializer(0.),

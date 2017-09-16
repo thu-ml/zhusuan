@@ -91,12 +91,14 @@ class TestEvidenceLowerBound(tf.test.TestCase):
 
             lower_bound = elbo(log_joint, observed={},
                                latent={'x': [qx_samples, log_qx]}, axis=0)
-            reinforce_cost = lower_bound.reinforce()
+            # TODO: Check grads when use variance reduction and baseline
+            reinforce_cost = lower_bound.reinforce(variance_reduction=False)
             reinforce_grads = tf.gradients(reinforce_cost, [mu, sigma])
             true_cost = _kl_normal_normal(mu, sigma, x_mean, x_std)
             true_grads = tf.gradients(true_cost, [mu, sigma])
 
             with self.test_session(use_gpu=True) as sess:
+                sess.run(tf.global_variables_initializer())
                 g1 = sess.run(reinforce_grads)
                 g2 = sess.run(true_grads)
                 # print('reinforce_grads:', g1)
