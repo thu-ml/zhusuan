@@ -179,13 +179,16 @@ class EvidenceLowerBoundObjective(VariationalObjective):
             minimize.
         """
         l_signal = self._log_joint_term() + self._entropy_term()
-
-        if baseline is not None:
-            baseline_cost = 0.5 * tf.square(
-                tf.stop_gradient(l_signal) - baseline)
-            l_signal = l_signal - baseline
+        baseline_cost = None
 
         if variance_reduction:
+            if baseline is not None:
+                baseline_cost = 0.5 * tf.square(
+                    tf.stop_gradient(l_signal) - baseline)
+                if self._axis is not None:
+                    baseline_cost = tf.reduce_mean(baseline_cost, self._axis)
+                l_signal = l_signal - baseline
+
             # TODO: extend to non-scalar.
             bc = tf.reduce_mean(l_signal)
             moving_mean = tf.get_variable(
@@ -204,10 +207,8 @@ class EvidenceLowerBoundObjective(VariationalObjective):
 
         if self._axis is not None:
             cost = tf.reduce_mean(cost, self._axis)
-            if baseline is not None:
-                baseline_cost = tf.reduce_mean(baseline_cost, self._axis)
 
-        if baseline is not None:
+        if baseline_cost is not None:
             return cost, baseline_cost
         else:
             return cost
