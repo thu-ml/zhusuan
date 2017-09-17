@@ -90,9 +90,9 @@ if __name__ == "__main__":
 
     def log_joint(observed):
         model = sbn(observed, n, n_x, n_h, n_particles)
-        log_ph3, log_ph2_h3, log_ph1_h2, log_px_h1 = model.local_log_prob(
-            ['h3', 'h2', 'h1', 'x'])
-        return log_ph3 + log_ph2_h3 + log_ph1_h2 + log_px_h1
+        log_phs = model.local_log_prob(h_names)
+        log_px_h1 = model.local_log_prob('x')
+        return tf.add_n(log_phs) + log_px_h1
 
     variational = q_net(x, n_h, n_particles)
     qh_outputs = variational.query(h_names, outputs=True, local_log_prob=True)
