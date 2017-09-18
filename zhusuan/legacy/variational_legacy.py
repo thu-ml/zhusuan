@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+import warnings
 
 import tensorflow as tf
 import six
@@ -12,6 +13,7 @@ from tensorflow.python.training import moving_averages
 
 from zhusuan.utils import log_mean_exp, merge_dicts
 from zhusuan.evaluation import is_loglikelihood
+
 
 __all__ = [
     'sgvb',
@@ -44,6 +46,12 @@ def sgvb(log_joint, observed, latent, axis=None):
 
     :return: A Tensor. The variational lower bound.
     """
+    warnings.warn("sgvb(): This function will be deprecated in the coming "
+                  "version (0.3.1). Variational utilities are moving to "
+                  "`zs.variational`. The new sgvb gradient estimator can be "
+                  "accessed by first constructing the elbo objective (using "
+                  "`zs.variational.elbo` and then calling its sgvb() method.",
+                  category=FutureWarning)
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
@@ -76,6 +84,12 @@ def iwae(log_joint, observed, latent, axis=None):
 
     :return: A Tensor. The importance weighted lower bound.
     """
+    warnings.warn("iwae(): This function will be deprecated in the coming "
+                  "version (0.3.1). Variational utilities are moving to "
+                  "`zs.variational`. The new iwae gradient estimator can be "
+                  "accessed by first constructing the importance weighted "
+                  "objective (using `zs.variational.iw_objective` and then "
+                  "calling its sgvb() method.", category=FutureWarning)
     return is_loglikelihood(log_joint, observed, latent, axis)
 
 
@@ -101,6 +115,16 @@ def rws(log_joint, observed, latent, axis=None):
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. Estimated log likelihoods.
     """
+    warnings.warn("rws(): This function will be deprecated in the coming "
+                  "version (0.3.1). Variational utilities are moving to "
+                  "`zs.variational`. Features of the original rws() can be "
+                  "achieved by two new variational objectives. For learning "
+                  "model parameters, please use the importance weighted "
+                  "objective: `zs.variational.iw_objective()`. For adapting "
+                  "the proposal, the new rws gradient estimator can be "
+                  "accessed by first constructing the inclusive KL divergence "
+                  "objective using `zs.variational.klpq` and then calling "
+                  "its rws() method.", category=FutureWarning)
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
@@ -159,6 +183,12 @@ def nvil(log_joint,
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
     """
+    warnings.warn("nvil(): This function will be deprecated in the coming "
+                  "version (0.3.1). Variational utilities are moving to "
+                  "`zs.variational`. The new nvil gradient estimator can be "
+                  "accessed by first constructing the elbo objective (using "
+                  "`zs.variational.elbo` and then calling its reinforce() "
+                  "method.", category=FutureWarning)
     latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
     latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
     latent_logpdfs = map(lambda x: x[1], latent_v)
@@ -231,6 +261,12 @@ def vimco(log_joint, observed, latent, axis=None):
     :return: A Tensor. The surrogate cost to minimize.
     :return: A Tensor. The variational lower bound.
     """
+    warnings.warn("vimco(): This function will be deprecated in the coming "
+                  "version (0.3.1). Variational utilities are moving to "
+                  "`zs.variational`. The new vimco gradient estimator can be "
+                  "accessed by first constructing the importance weighted "
+                  "objective (using `zs.variational.iw_objective` and then "
+                  "calling its vimco() method.", category=FutureWarning)
     if axis is None:
         raise ValueError("vimco is a multi-sample objective, "
                          "the 'axis' argument must be specified.")

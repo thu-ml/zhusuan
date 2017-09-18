@@ -12,7 +12,9 @@ Subpackages
 .. toctree::
 
     zhusuan.distributions
+    zhusuan.legacy
     zhusuan.model
+    zhusuan.variational
 
 Submodules
 ----------
@@ -24,5 +26,4 @@ Submodules
    zhusuan.hmc
    zhusuan.transform
    zhusuan.utils
-   zhusuan.variational
 

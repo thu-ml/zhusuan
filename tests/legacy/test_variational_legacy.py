@@ -6,7 +6,7 @@ from __future__ import division
 
 import tensorflow as tf
 
-from zhusuan.variational import *
+from zhusuan.legacy.variational_legacy import *
 
 
 class TestSgvb(tf.test.TestCase):

@@ -11,7 +11,10 @@ api_dir = './api'
 options = [':inherited-members:']
 modules = ['zhusuan.distributions.univariate',
            'zhusuan.distributions.multivariate',
-           'zhusuan.model.stochastic']
+           'zhusuan.model.stochastic',
+           'zhusuan.variational.exclusive_kl',
+           'zhusuan.variational.monte_carlo',
+           'zhusuan.variational.inclusive_kl']
 
 for module in modules:
     module_path = os.path.join(api_dir, module + '.rst')

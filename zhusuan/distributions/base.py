@@ -3,6 +3,7 @@
 
 from __future__ import absolute_import
 from __future__ import division
+import warnings
 
 import tensorflow as tf
 
@@ -34,16 +35,16 @@ class Distribution(object):
 
     There are cases where a batch of random variables are grouped into a
     single event so that their probabilities should be computed together. This
-    is achieved by setting `group_event_ndims` argument, which defaults to 0.
-    The last `group_event_ndims` number of axes in :attr:`batch_shape` are
+    is achieved by setting `group_ndims` argument, which defaults to 0.
+    The last `group_ndims` number of axes in :attr:`batch_shape` are
     grouped into a single event. For example,
-    ``Normal(..., group_event_ndims=1)`` will set the last axis of its
+    ``Normal(..., group_ndims=1)`` will set the last axis of its
     :attr:`batch_shape` to a single event, i.e., a multivariate Normal with
     identity covariance matrix.
 
     When evaluating probabilities at given values, the given Tensor should be
     broadcastable to shape ``(... + )batch_shape + value_shape``. The returned
-    Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``.
+    Tensor has shape ``(... + )batch_shape[:-group_ndims]``.
 
     .. seealso::
 
@@ -66,7 +67,7 @@ class Distribution(object):
     :param is_reparameterized: A bool. Whether the gradients of samples can
         and are allowed to propagate back into inputs, using the
         reparametrization trick from (Kingma, 2013).
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in :attr:`batch_shape` (counted from the end) that are
         grouped into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -78,27 +79,34 @@ class Distribution(object):
                  param_dtype,
                  is_continuous,
                  is_reparameterized,
-                 group_event_ndims=0):
+                 group_ndims=0,
+                 **kwargs):
+        if 'group_event_ndims' in kwargs:
+            warnings.warn(
+                "The argument `group_event_ndims` has been deprecated and "
+                "will be removed in the coming version (0.3.1). Please use "
+                "`group_ndims` instead.", FutureWarning)
+            group_ndims = kwargs['group_event_ndims']
+
         self._dtype = dtype
         self._param_dtype = param_dtype
         self._is_continuous = is_continuous
         self._is_reparameterized = is_reparameterized
-        if isinstance(group_event_ndims, int):
-            if group_event_ndims < 0:
-                raise ValueError("group_event_ndims must be non-negative.")
-            self._group_event_ndims = group_event_ndims
+        if isinstance(group_ndims, int):
+            if group_ndims < 0:
+                raise ValueError("group_ndims must be non-negative.")
+            self._group_ndims = group_ndims
         else:
-            group_event_ndims = tf.convert_to_tensor(
-                group_event_ndims, tf.int32)
+            group_ndims = tf.convert_to_tensor(group_ndims, tf.int32)
             _assert_rank_op = tf.assert_rank(
-                group_event_ndims, 0,
-                message="group_event_ndims should be a scalar (0-D Tensor).")
+                group_ndims, 0,
+                message="group_ndims should be a scalar (0-D Tensor).")
             _assert_nonnegative_op = tf.assert_greater_equal(
-                group_event_ndims, 0,
-                message="group_event_ndims must be non-negative.")
+                group_ndims, 0,
+                message="group_ndims must be non-negative.")
             with tf.control_dependencies([_assert_rank_op,
                                           _assert_nonnegative_op]):
-                self._group_event_ndims = tf.identity(group_event_ndims)
+                self._group_ndims = tf.identity(group_ndims)
 
     @property
     def dtype(self):
@@ -124,13 +132,13 @@ class Distribution(object):
         return self._is_reparameterized
 
     @property
-    def group_event_ndims(self):
+    def group_ndims(self):
         """
         The number of dimensions in :attr:`batch_shape` (counted from the end)
         that are grouped into a single event, so that their probabilities are
         calculated together. See `Distribution` for more detailed explanation.
         """
-        return self._group_event_ndims
+        return self._group_ndims
 
     @property
     def value_shape(self):
@@ -265,12 +273,11 @@ class Distribution(object):
         :param given: A Tensor. The value at which to evaluate log probability
             density (mass) function. Must be able to broadcast to have a shape
             of ``(... + )batch_shape + value_shape``.
-        :return: A Tensor of shape
-            ``(... + )batch_shape[:-group_event_ndims]``.
+        :return: A Tensor of shape ``(... + )batch_shape[:-group_ndims]``.
         """
         given = self._check_input_shape(given)
         log_p = self._log_prob(given)
-        return tf.reduce_sum(log_p, tf.range(-self._group_event_ndims, 0))
+        return tf.reduce_sum(log_p, tf.range(-self._group_ndims, 0))
 
     @add_name_scope
     def prob(self, given):
@@ -282,12 +289,11 @@ class Distribution(object):
         :param given: A Tensor. The value at which to evaluate probability
             density (mass) function. Must be able to broadcast to have a shape
             of ``(... + )batch_shape + value_shape``.
-        :return: A Tensor of shape
-            ``(... + )batch_shape[:-group_event_ndims]``.
+        :return: A Tensor of shape ``(... + )batch_shape[:-group_ndims]``.
         """
         given = self._check_input_shape(given)
         p = self._prob(given)
-        return tf.reduce_prod(p, tf.range(-self._group_event_ndims, 0))
+        return tf.reduce_prod(p, tf.range(-self._group_ndims, 0))
 
     def _log_prob(self, given):
         """

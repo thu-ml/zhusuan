@@ -70,10 +70,10 @@ for all the data. So we need only one copy of them, that is, we need a
             w_mu = tf.zeros([1, n_out, n_in + 1])
             ws.append(
                 zs.Normal('w' + str(i), w_mu, std=1.,
-                          n_samples=n_particles, group_event_ndims=2))
+                          n_samples=n_particles, group_ndims=2))
 
 To make the probabilities of weights in each layer evaluated together,
-``group_event_ndims`` is set to 2. For those who are not familiar with this
+``group_ndims`` is set to 2. For those who are not familiar with this
 property, see :ref:`dist-and-stochastic`.
 
 Then we write the feedforward process of neural networks, through which the
@@ -118,7 +118,7 @@ Putting together, the code for constructing a BayesianNN is::
                 w_mu = tf.zeros([1, n_out, n_in + 1])
                 ws.append(
                     zs.Normal('w' + str(i), w_mu, std=1.,
-                              n_samples=n_particles, group_event_ndims=2))
+                              n_samples=n_particles, group_ndims=2))
 
             # forward
             ly_x = tf.expand_dims(
@@ -180,7 +180,7 @@ The code for above definition is::
                     initializer=tf.constant_initializer(0.))
                 ws.append(
                     zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                              n_samples=n_particles, group_event_ndims=2))
+                              n_samples=n_particles, group_ndims=2))
         return variational
 
 In Variational Inference, to make :math:`q_{\phi}(W)` approximate

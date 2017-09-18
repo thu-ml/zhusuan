@@ -23,18 +23,17 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
         z_stacked_logits = tf.zeros([n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+                               n_samples=n_particles, group_ndims=1)
             z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
-                                     n_samples=n_particles,
-                                     group_event_ndims=1)
+            z = zs.OnehotCategorical(
+                'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
+                dtype=tf.float32)
             z = tf.reshape(z, [n_particles, n, n_z * n_k])
         lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
         lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
@@ -48,12 +47,11 @@ def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
         z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+                               n_samples=n_particles, group_ndims=1)
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
-                                     n_samples=n_particles,
-                                     group_event_ndims=1)
+            z = zs.OnehotCategorical(
+                'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
+                dtype=tf.float32)
     return variational
 
 
@@ -112,25 +110,28 @@ if __name__ == '__main__':
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
 
-        lower_bound = tf.reduce_mean(zs.sgvb(
-            log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        lower_bound = zs.variational.elbo(log_joint,
+                                          observed={'x': x_obs},
+                                          latent={'z': [qz_samples, log_qz]},
+                                          axis=0)
+        cost = tf.reduce_mean(lower_bound.sgvb())
+        lower_bound = tf.reduce_mean(lower_bound)
 
         # Importance sampling estimates of marginal log likelihood
         is_log_likelihood = tf.reduce_mean(
             zs.is_loglikelihood(log_joint, {'x': x_obs},
                                 {'z': [qz_samples, log_qz]}, axis=0))
 
-        return lower_bound, is_log_likelihood
+        return cost, lower_bound, is_log_likelihood
 
     # For training
-    relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
+    relaxed_cost, relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
     # For testing and generating
-    lower_bound, is_log_likelihood = lower_bound_and_log_likelihood(False)
+    _, lower_bound, is_log_likelihood = lower_bound_and_log_likelihood(False)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-relaxed_lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(relaxed_cost)
 
     params = tf.trainable_variables()
     for i in params:
@@ -167,7 +168,7 @@ if __name__ == '__main__':
                              n_particles: lb_samples,
                              tau_p: tau_p0,
                              tau_q: tau_q0}
-                _, lb = sess.run([infer, relaxed_lower_bound],
+                _, lb = sess.run([infer_op, relaxed_lower_bound],
                                  feed_dict=feed_dict)
                 lbs.append(lb)
             time_epoch += time.time()

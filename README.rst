@@ -4,9 +4,9 @@ ZhuSuan
 
 |build| |docs| |license| |gitter|
 
-ZhuSuan is a python library	for	**Generative Models**, built upon Tensorflow.
-Unlike existing deep learning libraries, which are mainly designed for
-supervised tasks, ZhuSuan is featured for its deep root into Bayesian
+ZhuSuan is a python library	for	**Bayesian Deep Learning**, built upon
+Tensorflow. Unlike existing deep learning libraries, which are mainly designed
+for supervised tasks, ZhuSuan is featured for its deep root into Bayesian
 Inference, thus supporting various kinds of generative models: both the
 traditional **hierarchical Bayesian models** and recent
 **deep generative models**.

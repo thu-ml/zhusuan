@@ -42,7 +42,7 @@ class Normal(Distribution):
     .. warning::
 
          The order of arguments `logstd`/`std` will change to `std`/`logstd`
-         in the coming version.
+         in the coming version (0.3.1).
 
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
@@ -50,7 +50,7 @@ class Normal(Distribution):
         distribution. Should be broadcastable to match `mean`.
     :param std: A `float` Tensor. The standard deviation of the Normal
         distribution. Should be positive and broadcastable to match `mean`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -66,12 +66,13 @@ class Normal(Distribution):
                  mean=0.,
                  logstd=None,
                  std=None,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 **kwargs):
         self._mean = tf.convert_to_tensor(mean)
         warnings.warn("Normal: The order of arguments logstd/std will change "
-                      "to std/logstd in the coming version.")
+                      "to std/logstd in the coming version.", FutureWarning)
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")
@@ -107,7 +108,8 @@ class Normal(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def mean(self):
@@ -172,7 +174,7 @@ class Bernoulli(Distribution):
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
 
     :param dtype: The value type of samples from the distribution.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -180,7 +182,7 @@ class Bernoulli(Distribution):
         explanation.
     """
 
-    def __init__(self, logits, dtype=None, group_event_ndims=0):
+    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Bernoulli.logits')])
@@ -194,7 +196,8 @@ class Bernoulli(Distribution):
             param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def logits(self):
@@ -248,7 +251,7 @@ class Categorical(Distribution):
         .. math:: \\mathrm{logits} \\propto \\log p
 
     :param dtype: The value type of samples from the distribution.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -259,7 +262,7 @@ class Categorical(Distribution):
     [0, n_categories).
     """
 
-    def __init__(self, logits, dtype=None, group_event_ndims=0):
+    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Categorical.logits')])
@@ -276,7 +279,8 @@ class Categorical(Distribution):
             param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def logits(self):
@@ -391,7 +395,7 @@ class Uniform(Distribution):
         uniform distribution. Should be broadcastable to match `maxval`.
     :param maxval: A `float` Tensor. The upper bound on the range of the
         uniform distribution. Should be element-wise bigger than `minval`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -406,9 +410,10 @@ class Uniform(Distribution):
     def __init__(self,
                  minval=0.,
                  maxval=1.,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 **kwargs):
         self._minval = tf.convert_to_tensor(minval)
         self._maxval = tf.convert_to_tensor(maxval)
         dtype = assert_same_float_dtype(
@@ -429,7 +434,8 @@ class Uniform(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def minval(self):
@@ -494,7 +500,7 @@ class Gamma(Distribution):
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The inverse scale parameter of the Gamma
         distribution. Should be positive and broadcastable to match `alpha`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -506,8 +512,9 @@ class Gamma(Distribution):
     def __init__(self,
                  alpha,
                  beta,
-                 group_event_ndims=0,
-                 check_numerics=False):
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
         self._alpha = tf.convert_to_tensor(alpha)
         self._beta = tf.convert_to_tensor(beta)
         dtype = assert_same_float_dtype(
@@ -528,7 +535,8 @@ class Gamma(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def alpha(self):
@@ -585,7 +593,7 @@ class Beta(Distribution):
     :param beta: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
         `alpha`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -598,8 +606,9 @@ class Beta(Distribution):
                  alpha,
                  beta,
                  dtype=None,
-                 group_event_ndims=0,
-                 check_numerics=False):
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
         self._alpha = tf.convert_to_tensor(alpha)
         self._beta = tf.convert_to_tensor(beta)
         dtype = assert_same_float_dtype(
@@ -620,7 +629,8 @@ class Beta(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def alpha(self):
@@ -685,7 +695,7 @@ class Poisson(Distribution):
     :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
     :param dtype: The value type of samples from the distribution.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -697,8 +707,9 @@ class Poisson(Distribution):
     def __init__(self,
                  rate,
                  dtype=None,
-                 group_event_ndims=0,
-                 check_numerics=False):
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
         self._rate = tf.convert_to_tensor(rate)
         param_dtype = assert_same_float_dtype(
             [(self._rate, 'Poisson.rate')])
@@ -714,7 +725,8 @@ class Poisson(Distribution):
             param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def rate(self):
@@ -800,7 +812,7 @@ class Binomial(Distribution):
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
     :param dtype: The value type of samples from the distribution.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -813,8 +825,9 @@ class Binomial(Distribution):
                  logits,
                  n_experiments,
                  dtype=None,
-                 group_event_ndims=0,
-                 check_numerics=False):
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Binomial.logits')])
@@ -848,7 +861,8 @@ class Binomial(Distribution):
             param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def n_experiments(self):
@@ -926,7 +940,7 @@ class InverseGamma(Distribution):
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The scale parameter of the InverseGamma
         distribution. Should be positive and broadcastable to match `alpha`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -938,8 +952,9 @@ class InverseGamma(Distribution):
     def __init__(self,
                  alpha,
                  beta,
-                 group_event_ndims=0,
-                 check_numerics=False):
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
         self._alpha = tf.convert_to_tensor(alpha)
         self._beta = tf.convert_to_tensor(beta)
         dtype = assert_same_float_dtype(
@@ -960,7 +975,8 @@ class InverseGamma(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def alpha(self):
@@ -1018,7 +1034,7 @@ class Laplace(Distribution):
         distribution. Should be broadcastable to match `scale`.
     :param scale: A `float` Tensor. The scale parameter of the Laplace
         distribution. Should be positive and broadcastable to match `loc`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -1033,9 +1049,10 @@ class Laplace(Distribution):
     def __init__(self,
                  loc,
                  scale,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 **kwargs):
         self._loc = tf.convert_to_tensor(loc)
         self._scale = tf.convert_to_tensor(scale)
         dtype = assert_same_float_dtype(
@@ -1056,7 +1073,8 @@ class Laplace(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def loc(self):
@@ -1131,7 +1149,7 @@ class BinConcrete(Distribution):
 
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
 
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -1146,9 +1164,10 @@ class BinConcrete(Distribution):
     def __init__(self,
                  temperature,
                  logits,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         self._temperature = tf.convert_to_tensor(temperature)
         param_dtype = assert_same_float_dtype(
@@ -1164,7 +1183,8 @@ class BinConcrete(Distribution):
             param_dtype=param_dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def temperature(self):

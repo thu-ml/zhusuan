@@ -16,7 +16,7 @@ def gaussian(observed, n_x, stdev, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         x_mean = tf.zeros([n_x])
         x = zs.Normal('x', x_mean, std=stdev, n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
     return model
 
 
