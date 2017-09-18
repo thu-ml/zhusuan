@@ -104,7 +104,7 @@ likelihood when evaluating the probability::
             initializer=tf.constant_initializer(0.))
         y = zs.Normal('y', y_mean, logstd=y_logstd)
 
-Putting together, the code for constructing a BayesianNN is::
+Putting together and adding model reuse, the code for constructing a BayesianNN is::
 
     import tensorflow as tf
     import zhusuan as zs
@@ -256,16 +256,16 @@ The code for this part is::
         return tf.add_n(log_pws) + log_py_xw * N
 
     variational = mean_field_variational(layer_sizes, n_particles)
-    qw_outputs = variational.query(w_names, outputs=True,
-                                   local_log_prob=True)
+    qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
     latent = dict(zip(w_names, qw_outputs))
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'y': y_obs}, latent, axis=0))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'y': y_obs}, latent=latent, axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(cost)
 
 Evaluation
 ----------
@@ -299,7 +299,7 @@ on new data
 
 .. math::
 
-    y^{pred} = \mathbb{E}_{p(y|x, D)} y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)}y\quad W^i \sim q(W)
+    y^{pred} = \mathbb{E}_{p(y|x, D)} \; y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)} \; y \quad W^i \sim q(W)
 
 First we need to pass the data placeholder and sampled latent parameters to the
 BayesianNN model ::

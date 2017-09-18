@@ -292,8 +292,9 @@ Here we are using the **Stochastic Gradient Variational Bayes** (SGVB)
 estimator from the original paper of variational autoencoders
 :cite:`vae-kingma2013auto`. This estimator takes benefits of a clever
 reparameterization trick to greatly reduce the variance when estimating the
-gradients of ELBO. In ZhuSuan, one can use this estimator by calling the
-:func:`~zhusuan.variational.sgvb` function. The code for this part is::
+gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
+:func:`~sgvb` of the output of :func:`~zhusuan.variational.elbo`.
+The code for this part is::
 
     x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
     n = tf.shape(x)[0]
@@ -306,15 +307,15 @@ gradients of ELBO. In ZhuSuan, one can use this estimator by calling the
     variational = q_net(x, n_z)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint,
-                observed={'x': x},
-                latent={'z': [qz_samples, log_qz]}))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'x': x}, latent={'z': [qz_samples, log_qz]})
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
 .. note::
 
     For readers who are interested, we provide a detailed explanation of the
-    :func:`~zhusuan.variational.sgvb` estimator used here, though this is not
+    :func:`~sgvb` estimator used here, though this is not
     required for you to use ZhuSuan's variational functionality.
 
     The key of SGVB estimator is a reparameterization trick, i.e., they
@@ -359,7 +360,7 @@ society. Here we are going to use Tensorflow's Adam optimizer to do the
 learning::
 
     optimizer = tf.train.AdamOptimizer(0.001)
-    infer = optimizer.minimize(-lower_bound)
+    infer_op = optimizer.minimize(cost)
 
 Generate Images
 ---------------
