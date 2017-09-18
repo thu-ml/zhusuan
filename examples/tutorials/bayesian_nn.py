@@ -42,7 +42,7 @@ def main():
                 w_mu = tf.zeros([1, n_out, n_in + 1])
                 ws.append(
                     zs.Normal('w' + str(i), w_mu, std=1.,
-                              n_samples=n_particles, group_event_ndims=2))
+                              n_samples=n_particles, group_ndims=2))
 
             # forward
             ly_x = tf.expand_dims(
@@ -76,7 +76,7 @@ def main():
                     initializer=tf.constant_initializer(0.))
                 ws.append(
                     zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                              n_samples=n_particles, group_event_ndims=2))
+                              n_samples=n_particles, group_ndims=2))
         return variational
 
     # Build the computation graph

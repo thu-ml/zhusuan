@@ -26,11 +26,11 @@ def vae(observed, n, n_x, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, n_z])
         z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
@@ -42,7 +42,7 @@ def q_net(observed, x, n_z, n_particles):
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = zs.Normal('z', lz_mean, logstd=lz_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
     return variational
 
 

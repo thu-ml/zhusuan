@@ -23,18 +23,17 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
         z_stacked_logits = tf.zeros([n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+                               n_samples=n_particles, group_ndims=1)
             z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
-                                     n_samples=n_particles,
-                                     group_event_ndims=1)
+            z = zs.OnehotCategorical(
+                'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
+                dtype=tf.float32)
             z = tf.reshape(z, [n_particles, n, n_z * n_k])
         lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
         lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
@@ -48,12 +47,11 @@ def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
         z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+                               n_samples=n_particles, group_ndims=1)
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
-                                     n_samples=n_particles,
-                                     group_event_ndims=1)
+            z = zs.OnehotCategorical(
+                'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
+                dtype=tf.float32)
     return variational
 
 

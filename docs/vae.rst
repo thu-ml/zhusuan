@@ -50,7 +50,7 @@ need the Normal to generate samples of shape ``[n, n_z]``::
     with zs.BayesianNet() as model:
         # z ~ N(z|0, I)
         z_mean = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
 
 The shape of ``z_mean`` is ``[n, n_z]``, which means that
 we have ``[n, n_z]`` independent inputs fed into the univariate
@@ -65,7 +65,7 @@ that is of shape ``[n_z]``, which is the dimension of latent representations.
 And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, n_z]``. In ZhuSuan, the way to achieve this is by setting
-``group_event_ndims``, as we do in the above model definition code. To
+``group_ndims``, as we do in the above model definition code. To
 understand this, see :ref:`dist-and-stochastic`.
 
 Then we build a neural network of two fully-connected layers with :math:`z` as
@@ -87,7 +87,7 @@ likelihood when evaluating the probability of an image::
     with zs.BayesianNet() as model:
         ...
         # x ~ Bernoulli(x|sigmoid(x_logits))
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
 
 .. note::
 
@@ -105,13 +105,13 @@ Putting together, the code for constructing a VAE is::
 
     with zs.BayesianNet() as model:
         z_mean = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
 
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
 
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
 
 Reuse the Model
 ---------------
@@ -135,7 +135,7 @@ a batch of images ``x_batch``, write::
 
     with zs.BayesianNet(observed={'x': x_batch}):
         ...
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
 
 In this case, when ``x`` is used in further computation, it will convert to
 the observed value, i.e., ``x_batch``, instead of the sampled tensor.
@@ -156,11 +156,11 @@ ZhuSuan is to wrap it in a function, like this::
     def vae(observed, n, n_x, n_z):
         with zs.BayesianNet(observed=observed) as model:
             z_mean = tf.zeros([n, n_z])
-            z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+            z = zs.Normal('z', z_mean, std=1., group_ndims=1)
             lx_z = layers.fully_connected(z, 500)
             lx_z = layers.fully_connected(lx_z, 500)
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+            x = zs.Bernoulli('x', x_logits, group_ndims=1)
         return model
 
 Each time the function is called, a different observation assignment can be
@@ -268,7 +268,7 @@ In ZhuSuan, the variational posterior can also be defined as a
             lz_x = layers.fully_connected(lz_x, 500)
             z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
             z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1)
+            z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1)
         return variational
 
 There are many ways to optimize this lower bound. One of the easiest way is
@@ -376,7 +376,7 @@ the direct output of the neural network (``x_logits``)::
         with zs.BayesianNet(observed=observed) as model:
             ...
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+            x = zs.Bernoulli('x', x_logits, group_ndims=1)
         # before change: return model
         return model, x_logits
 

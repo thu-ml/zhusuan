@@ -92,10 +92,10 @@ Example of multivariate distributions
 
 There are cases where a batch of random variables are grouped into a
 single event so that their probabilities can be computed together. This
-is achieved by setting `group_event_ndims` argument, which defaults to 0.
-The last `group_event_ndims` number of axes in
+is achieved by setting `group_ndims` argument, which defaults to 0.
+The last `group_ndims` number of axes in
 :attr:`~.Distribution.batch_shape` are grouped into a single event.
-For example, ``Normal(..., group_event_ndims=1)`` will
+For example, ``Normal(..., group_ndims=1)`` will
 set the last axis of its :attr:`~.Distribution.batch_shape` to a single event,
 i.e., a multivariate Normal with identity covariance matrix.
 
@@ -104,16 +104,16 @@ values to :meth:`~zhusuan.distributions.base.Distribution.log_prob` method of
 distribution objects.
 In that case, the given Tensor should be
 broadcastable to shape ``(... + )batch_shape + value_shape``. The returned
-Tensor has shape ``(... + )batch_shape[:-group_event_ndims]``. For example::
+Tensor has shape ``(... + )batch_shape[:-group_ndims]``. For example::
 
     >>> d = zs.distributions.Normal([[-1., 1.], [0., -2.]], 0.,
-    ...                             group_event_ndims=1)
+    ...                             group_ndims=1)
 
     >>> d.log_prob(0.).eval()
     array([-2.83787704, -3.83787727], dtype=float32)
 
     >>> e = zs.distributions.Normal(tf.zeros([2, 1, 3]), 0.,
-    ...                             group_event_ndims=2)
+    ...                             group_ndims=2)
 
     >>> tf.shape(e.log_prob(tf.zeros([5, 1, 1, 3]))).eval()
     array([5, 2], dtype=int32)

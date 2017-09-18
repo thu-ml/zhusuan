@@ -109,8 +109,7 @@ class TestStochasticTensor(tf.test.TestCase):
         with zs.BayesianNet(observed={}) as model:
             x_mean = tf.zeros([1, 2])
             x_logstd = tf.zeros([1, 2])
-            x = zs.Normal('x', mean=x_mean, logstd=x_logstd,
-                          group_event_ndims=1)
+            x = zs.Normal('x', mean=x_mean, logstd=x_logstd, group_ndims=1)
 
         with self.test_session(use_gpu=True) as sess:
             sess.run(tf.global_variables_initializer())

@@ -22,15 +22,13 @@ def sbn(observed, n, n_x, n_h, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         h3_logits = tf.zeros([n, n_h])
         h3 = zs.Bernoulli('h3', h3_logits, n_samples=n_particles,
-                          group_event_ndims=1, dtype=tf.float32)
+                          group_ndims=1, dtype=tf.float32)
         h2_logits = layers.fully_connected(h3, n_h, activation_fn=None)
-        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1,
-                          dtype=tf.float32)
+        h2 = zs.Bernoulli('h2', h2_logits, group_ndims=1, dtype=tf.float32)
         h1_logits = layers.fully_connected(h2, n_h, activation_fn=None)
-        h1 = zs.Bernoulli('h1', h1_logits, group_event_ndims=1,
-                          dtype=tf.float32)
+        h1 = zs.Bernoulli('h1', h1_logits, group_ndims=1, dtype=tf.float32)
         x_logits = layers.fully_connected(h1, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
@@ -39,13 +37,11 @@ def q_net(x, n_h, n_particles):
         h1_logits = layers.fully_connected(
             tf.to_float(x), n_h, activation_fn=None)
         h1 = zs.Bernoulli('h1', h1_logits, n_samples=n_particles,
-                          group_event_ndims=1, dtype=tf.float32)
+                          group_ndims=1, dtype=tf.float32)
         h2_logits = layers.fully_connected(h1, n_h, activation_fn=None)
-        h2 = zs.Bernoulli('h2', h2_logits, group_event_ndims=1,
-                          dtype=tf.float32)
+        h2 = zs.Bernoulli('h2', h2_logits, group_ndims=1, dtype=tf.float32)
         h3_logits = layers.fully_connected(h2, n_h, activation_fn=None)
-        h3 = zs.Bernoulli('h3', h3_logits, group_event_ndims=1,
-                          dtype=tf.float32)
+        h3 = zs.Bernoulli('h3', h3_logits, group_ndims=1, dtype=tf.float32)
     return variational
 
 
