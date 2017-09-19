@@ -4,7 +4,7 @@ Variational Autoencoders: Step by Step
 **Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
 most widely used deep generative models. In this tutorial, we show how to
 implement VAE in ZhuSuan step by step. The full script is at
-`examples/tutorials/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/tutorials/vae.py>`_.
+`examples/tutorials/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/vae.py>`_.
 
 The generative process of a VAE for modeling binarized
 `MNIST <https://www.tensorflow.org/get_started/mnist/beginners>`_ data is as
@@ -421,7 +421,7 @@ images to disk. Keep watching them and have fun :)
     The example used in this tutorial is simplified for understanding. To see
     a fully functional example with batch normalization, multi-sample
     estimation, model storage and reloading, etc., check out
-    `examples/variational_autoencoders/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/variational_autoencoders/vae.py>`_
+    `examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/variational_autoencoders/vae.py>`_
 
 .. rubric:: References
 
