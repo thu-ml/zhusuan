@@ -11,6 +11,7 @@ from zhusuan.model.base import StochasticTensor
 
 __all__ = [
     'Normal',
+    'HalfNormal',
     'Bernoulli',
     'Categorical',
     'OnehotCategorical',
@@ -84,6 +85,54 @@ class Normal(StochasticTensor):
         )
         super(Normal, self).__init__(name, norm, n_samples)
 
+#TODO: changed
+class HalfNormal(StochasticTensor):
+    """
+    The class of univariate HalfNormal distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    .. warning::
+
+         The order of arguments `logstd`/`std` will change to `std`/`logstd`
+         in the coming version.
+
+    :param mean: A `float` Tensor. The mean of the HalfNormal distribution.
+        The mean value must be 0.
+        Should be broadcastable to match `logstd`.
+    :param logstd: A `float` Tensor. The log standard deviation of the HalfNormal
+        distribution. Should be broadcastable to match `mean`.
+    :param std: A `float` Tensor. The standard deviation of the HalfNormal
+        distribution. Should be positive and broadcastable to match `mean`.
+    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 name,
+                 mean=0.,
+                 logstd=None,
+                 std=None,
+                 n_samples=None,
+                 group_event_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False):
+        norm = distributions.HalfNormal(
+            mean,
+            logstd=logstd,
+            std=std,
+            group_event_ndims=group_event_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics
+        )
+        super(HalfNormal, self).__init__(name, norm, n_samples)
 
 class Bernoulli(StochasticTensor):
     """
