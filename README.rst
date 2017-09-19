@@ -4,46 +4,23 @@ ZhuSuan
 
 |build| |docs| |license| |gitter|
 
-ZhuSuan is a python library	for	**Bayesian Deep Learning**, built upon
-Tensorflow. Unlike existing deep learning libraries, which are mainly designed
-for supervised tasks, ZhuSuan is featured for its deep root into Bayesian
-Inference, thus supporting various kinds of generative models: both the
-traditional **hierarchical Bayesian models** and recent
-**deep generative models**.
+**ZhuSuan** is a python probabilistic programming library for Bayesian deep
+learning, which conjoins the complimentary advantages of Bayesian methods and
+deep learning. ZhuSuan is built upon
+`Tensorflow <https://www.tensorflow.org>`_. Unlike existing deep
+learning libraries, which are mainly designed for deterministic neural
+networks and supervised tasks, ZhuSuan provides deep learning style primitives
+and algorithms for building probabilistic models and applying Bayesian
+inference. The supported inference algorithms include:
 
-With ZhuSuan, users can enjoy powerful fitting and multi-GPU training of deep
-learning, while at the same time they can use generative models to model the
-complex world, exploit unlabeled data and deal with uncertainty by performing
-principled Bayesian inference.
+* **Variational inference** with programmable variational posteriors, various
+  objectives and advanced gradient estimators (SGVB, REINFORCE, VIMCO, etc.).
 
-Supported Inference
--------------------
+* **Importance sampling** for learning and evaluating models, with programmable
+  proposals.
 
-(Stochastic) Variational Inference (VI & SVI)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Kinds of variational posteriors we support:
-
-* **Mean-field** posterior: Fully-factorized.
-* **Structured** posterior: With user specified dependencies.
-
-Variational objectives we support:
-
-* **SGVB**: Stochastic gradient variational Bayes.
-* **IWAE**: Importance weighted objectives.
-* **NVIL**: Score function estimator with variance reduction.
-* **VIMCO**: Multi-sample score function estimator with variance reduction.
-
-Adaptive Importance Sampling
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-* Reweighted Wake-sleep (**RWS**): With user specified adaptive proposal.
-
-Markov Chain Monte Carlo (MCMC)
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-* Hamiltonian Monte Carlo (**HMC**): Parallel chains, step size and mass
-  adaptation.
+* **Hamiltonian Monte Carlo** (HMC) with parallel chains, and optional
+  automatic parameter tuning.
 
 Installation
 ------------
@@ -71,6 +48,9 @@ Documentation is available online:
 
 Examples
 --------
+
+We provide examples on traditional hierarchical Bayesian models and recent
+deep generative models.
 
 To run the provided examples, you may need extra dependencies to be installed.
 This can be done by::
