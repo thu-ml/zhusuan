@@ -128,6 +128,120 @@ class TestNormal(tf.test.TestCase):
         utils.test_dtype_2parameter(self, Normal)
 
 
+class TestFoldNormal(tf.test.TestCase):
+    def test_init(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(
+                    ValueError, "Either.*should be passed but not both"):
+                FoldNormal(mean=tf.ones([2, 1]))
+            with self.assertRaisesRegexp(
+                    ValueError, "Either.*should be passed but not both"):
+                FoldNormal(mean=tf.ones([2, 1]), std=1., logstd=0.)
+            with self.assertRaisesRegexp(ValueError,
+                                         "should be broadcastable to match"):
+                FoldNormal(mean=tf.ones([2, 1]), logstd=tf.zeros([2, 4, 3]))
+            with self.assertRaisesRegexp(ValueError,
+                                         "should be broadcastable to match"):
+                FoldNormal(mean=tf.ones([2, 1]), std=tf.ones([2, 4, 3]))
+
+        FoldNormal(mean=tf.placeholder(tf.float32, [None, 1]),
+               logstd=tf.placeholder(tf.float32, [None, 1, 3]))
+        FoldNormal(mean=tf.placeholder(tf.float32, [None, 1]),
+               std=tf.placeholder(tf.float32, [None, 1, 3]))
+
+    def test_value_shape(self):
+        # static
+        norm = FoldNormal(mean=tf.placeholder(tf.float32, None),
+                      logstd=tf.placeholder(tf.float32, None))
+        self.assertEqual(norm.get_value_shape().as_list(), [])
+        norm = FoldNormal(mean=tf.placeholder(tf.float32, None),
+                      std=tf.placeholder(tf.float32, None))
+        self.assertEqual(norm.get_value_shape().as_list(), [])
+
+        # dynamic
+        self.assertTrue(norm._value_shape().dtype is tf.int32)
+        with self.test_session(use_gpu=True):
+            self.assertEqual(norm._value_shape().eval().tolist(), [])
+
+        self.assertEqual(norm._value_shape().dtype, tf.int32)
+
+    def test_batch_shape(self):
+        utils.test_batch_shape_2parameter_univariate(
+            self, FoldNormal, np.zeros, np.zeros)
+
+    def test_sample_shape(self):
+        utils.test_2parameter_sample_shape_same(
+            self, FoldNormal, np.zeros, np.zeros)
+
+    def test_sample_reparameterized(self):
+        mean = tf.ones([2, 3])
+        logstd = tf.ones([2, 3])
+        norm_rep = FoldNormal(mean, logstd)
+        samples = norm_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
+        self.assertTrue(mean_grads is not None)
+        self.assertTrue(logstd_grads is not None)
+
+        norm_no_rep = FoldNormal(mean, logstd, is_reparameterized=False)
+        samples = norm_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
+        self.assertEqual(mean_grads, None)
+        self.assertEqual(logstd_grads, None)
+
+    def test_log_prob_shape(self):
+        utils.test_2parameter_log_prob_shape_same(
+            self, FoldNormal, np.zeros, np.zeros, np.zeros)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(given, mean, logstd):
+                mean = np.array(mean, np.float32)
+                given = np.array(given, np.float32)
+                logstd = np.array(logstd, np.float32)
+                std = np.exp(logstd)
+                target_log_p = stats.foldnorm.logpdf(given, mean / np.exp(logstd), 0, np.exp(logstd))
+                target_p = stats.foldnorm.pdf(given, mean / np.exp(logstd), 0, np.exp(logstd))
+
+                norm1 = FoldNormal(mean, logstd=logstd)
+                log_p1 = norm1.log_prob(given)
+
+                self.assertAllClose(log_p1.eval(), target_log_p)
+                p1 = norm1.prob(given)
+                self.assertAllClose(p1.eval(), target_p)
+
+                norm2 = FoldNormal(mean, std=std)
+                log_p2 = norm2.log_prob(given)
+                self.assertAllClose(log_p2.eval(), target_log_p)
+                p2 = norm2.prob(given)
+                self.assertAllClose(p2.eval(), target_p)
+
+            _test_value([0.99, 0.9, 9., 99.], 1., [-3., -1., 1., 10.])
+            _test_value(0., 0., 0.)
+            _test_value([7.], [0., 4.], [[1., 2.], [3., 5.]])
+
+    def test_check_numerics(self):
+        norm1 = FoldNormal(tf.ones([1, 2]), logstd=-1e10, check_numerics=True)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "precision.*Tensor had Inf"):
+                norm1.log_prob(0.).eval()
+
+        norm2 = FoldNormal(tf.ones([1, 2]), logstd=1e3, check_numerics=True)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "exp\(logstd\).*Tensor had Inf"):
+                norm2.sample().eval()
+
+        norm3 = FoldNormal(tf.ones([1, 2]), std=0., check_numerics=True)
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "log\(std\).*Tensor had Inf"):
+                norm3.log_prob(0.).eval()
+
+    def test_dtype(self):
+        utils.test_dtype_2parameter(self, FoldNormal)
+
+
 class TestBernoulli(tf.test.TestCase):
     def test_value_shape(self):
         # static

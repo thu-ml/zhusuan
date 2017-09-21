@@ -20,7 +20,7 @@ from zhusuan.distributions.utils import \
 
 __all__ = [
     'Normal',
-    'HalfNormal',
+    'FoldNormal',
     'Bernoulli',
     'Categorical',
     'Discrete',
@@ -39,12 +39,9 @@ class Normal(Distribution):
     """
     The class of univariate Normal distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     .. warning::
-
          The order of arguments `logstd`/`std` will change to `std`/`logstd`
          in the coming version (0.3.1).
-
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
     :param logstd: A `float` Tensor. The log standard deviation of the Normal
@@ -164,24 +161,18 @@ class Normal(Distribution):
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
 
-class HalfNormal(Distribution):
+
+class FoldNormal(Distribution):
     """
-    The class of univariate HalfNormal distribution.
+    The class of univariate FoldNormal distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
-    .. warning::
-
-         The order of arguments `logstd`/`std` will change to `std`/`logstd`
-         in the coming version.
-
-    :param mean: A `float` Tensor. The mean of the HalfNormal distribution.
-        The mean value must be 0.
+    :param mean: A `float` Tensor. The mean of the FoldNormal distribution.
         Should be broadcastable to match `logstd`.
-    :param logstd: A `float` Tensor. The log standard deviation of the HalfNormal
+    :param logstd: A `float` Tensor. The log standard deviation of the FoldNormal
         distribution. Should be broadcastable to match `mean`.
-    :param std: A `float` Tensor. The standard deviation of the HalfNormal
+    :param std: A `float` Tensor. The standard deviation of the FoldNormal
         distribution. Should be positive and broadcastable to match `mean`.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -197,31 +188,28 @@ class HalfNormal(Distribution):
                  mean=0.,
                  logstd=None,
                  std=None,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 check_numerics=False,
+                 **kwargs):
         self._mean = tf.convert_to_tensor(mean)
-        warnings.warn("Normal: The order of arguments logstd/std will change "
-                      "to std/logstd in the coming version.")
-        if mean != 0.:
-            raise ValueError("The mean of HalfNormal must be 0.")
 
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")
         elif logstd is None:
             self._std = tf.convert_to_tensor(std)
-            dtype = assert_same_float_dtype([(self._mean, 'HalfNormal.mean'),
-                                             (self._std, 'HalfNormal.std')])
-            logstd = tf.abs(tf.log(self._std))
+            dtype = assert_same_float_dtype([(self._mean, 'FoldNormal.mean'),
+                                             (self._std, 'FoldNormal.std')])
+            logstd = tf.log(self._std)
             if check_numerics:
                 logstd = tf.check_numerics(logstd, "log(std)")
             self._logstd = logstd
         else:
             # std is None
             self._logstd = tf.convert_to_tensor(logstd)
-            dtype = assert_same_float_dtype([(self._mean, 'HalfNormal.mean'),
-                                             (self._logstd, 'HalfNormal.logstd')])
+            dtype = assert_same_float_dtype([(self._mean, 'FoldNormal.mean'),
+                                             (self._logstd, 'FoldNormal.logstd')])
             std = tf.exp(self._logstd)
             if check_numerics:
                 std = tf.check_numerics(std, "exp(logstd)")
@@ -236,26 +224,27 @@ class HalfNormal(Distribution):
                 "other. ({} vs. {})".format(
                     self._mean.get_shape(), self._std.get_shape()))
         self._check_numerics = check_numerics
-        super(HalfNormal, self).__init__(
+        super(FoldNormal, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def mean(self):
-        """The mean of the Normal distribution."""
+        """The mean of the FoldNormal distribution."""
         return self._mean
 
     @property
     def logstd(self):
-        """The log standard deviation of the Normal distribution."""
+        """The log standard deviation of the FoldNormal distribution."""
         return self._logstd
 
     @property
     def std(self):
-        """The standard deviation of the Normal distribution."""
+        """The standard deviation of the FoldNormal distribution."""
         return self._std
 
     def _value_shape(self):
@@ -278,23 +267,22 @@ class HalfNormal(Distribution):
             mean = tf.stop_gradient(mean)
             std = tf.stop_gradient(std)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.abs(tf.random_normal(shape, dtype=self.dtype) * std + mean)
+        samples = tf.random_normal(shape, dtype=self.dtype) * std + mean
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
                 self.get_batch_shape()))
         return samples
 
-    def _log_prob(self, given):
-        #TODO: Raise Error
-        c = -0.5 * np.log(2 * np.pi)
-        precision = tf.exp(-1 * self.logstd)
+    def _log_prob(self, given):        
+        c = -0.5 * (np.log(2.0) + np.log(np.pi))
+        precision = tf.exp(-2.0 * self.logstd)
         if self._check_numerics:
             precision = tf.check_numerics(precision, "precision")
-        temp = given >= 0
-        temp = tf.cast(temp, tf.float32)
-        #return c - self.logstd - 0.5 * precision * tf.square(given - self.mean)
-        return (0.5 * (tf.log(2.0) - tf.log(np.pi)) - self.logstd - 0.5 * tf.square(given * tf.exp(-1 * self.logstd))) + tf.log(temp)
+        mask = tf.log(tf.cast(given >= 0., dtype=precision.dtype))
+        return (c - (self.logstd + 0.5 * precision * tf.square(given - self.mean)) + \
+                tf.log(1.0 + tf.exp(-2.0 * self.mean * given * precision))) + mask
+
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
 
@@ -303,11 +291,8 @@ class Bernoulli(Distribution):
     """
     The class of univariate Bernoulli distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
-
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
-
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -378,13 +363,10 @@ class Categorical(Distribution):
     """
     The class of univariate Categorical distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
         un-normalized log probabilities for all categories.
-
         .. math:: \\mathrm{logits} \\propto \\log p
-
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -392,7 +374,6 @@ class Categorical(Distribution):
         together. Default is 0, which means a single value is an event.
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
-
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
     """
@@ -525,7 +506,6 @@ class Uniform(Distribution):
     """
     The class of univariate Uniform distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param minval: A `float` Tensor. The lower bound on the range of the
         uniform distribution. Should be broadcastable to match `maxval`.
     :param maxval: A `float` Tensor. The upper bound on the range of the
@@ -630,7 +610,6 @@ class Gamma(Distribution):
     """
     The class of univariate Gamma distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param alpha: A `float` Tensor. The shape parameter of the Gamma
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The inverse scale parameter of the Gamma
@@ -721,7 +700,6 @@ class Beta(Distribution):
     """
     The class of univariate Beta distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param alpha: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
         `beta`.
@@ -826,7 +804,6 @@ class Poisson(Distribution):
     """
     The class of univariate Poisson distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
     :param dtype: The value type of samples from the distribution.
@@ -939,11 +916,8 @@ class Binomial(Distribution):
     """
     The class of univariate Binomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param logits: A `float` Tensor. The log-odds of probabilities.
-
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
-
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
     :param dtype: The value type of samples from the distribution.
@@ -1070,7 +1044,6 @@ class InverseGamma(Distribution):
     """
     The class of univariate InverseGamma distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param alpha: A `float` Tensor. The shape parameter of the InverseGamma
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The scale parameter of the InverseGamma
@@ -1164,7 +1137,6 @@ class Laplace(Distribution):
     """
     The class of univariate Laplace distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     :param loc: A `float` Tensor. The location parameter of the Laplace
         distribution. Should be broadcastable to match `scale`.
     :param scale: A `float` Tensor. The scale parameter of the Laplace
@@ -1272,18 +1244,13 @@ class BinConcrete(Distribution):
     It is the binary case of
     :class:`~zhusuan.distributions.multivariate.Concrete`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
-
     .. seealso::
-
         :class:`~zhusuan.distributions.multivariate.Concrete` and
         :class:`~zhusuan.distributions.multivariate.ExpConcrete`
-
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
-
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
-
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
