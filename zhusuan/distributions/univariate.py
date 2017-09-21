@@ -39,9 +39,12 @@ class Normal(Distribution):
     """
     The class of univariate Normal distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     .. warning::
+
          The order of arguments `logstd`/`std` will change to `std`/`logstd`
          in the coming version (0.3.1).
+
     :param mean: A `float` Tensor. The mean of the Normal distribution.
         Should be broadcastable to match `logstd`.
     :param logstd: A `float` Tensor. The log standard deviation of the Normal
@@ -166,6 +169,12 @@ class FoldNormal(Distribution):
     """
     The class of univariate FoldNormal distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    .. warning::
+
+         The order of arguments `logstd`/`std` will change to `std`/`logstd`
+         in the coming version (0.3.1).
+
     :param mean: A `float` Tensor. The mean of the FoldNormal distribution.
         Should be broadcastable to match `logstd`.
     :param logstd: A `float` Tensor. The log standard deviation of the FoldNormal
@@ -193,7 +202,8 @@ class FoldNormal(Distribution):
                  check_numerics=False,
                  **kwargs):
         self._mean = tf.convert_to_tensor(mean)
-
+        warnings.warn("FoldNormal: The order of arguments logstd/std will change "
+                      "to std/logstd in the coming version.", FutureWarning)
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")
@@ -281,7 +291,7 @@ class FoldNormal(Distribution):
             precision = tf.check_numerics(precision, "precision")
         mask = tf.log(tf.cast(given >= 0., dtype=precision.dtype))
         return (c - (self.logstd + 0.5 * precision * tf.square(given - self.mean)) + \
-                tf.log(1.0 + tf.exp(-2.0 * self.mean * given * precision))) + mask
+                tf.nn.softplus(-2.0 * self.mean * given * precision)) + mask
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -291,8 +301,11 @@ class Bernoulli(Distribution):
     """
     The class of univariate Bernoulli distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
+
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
+
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -363,10 +376,13 @@ class Categorical(Distribution):
     """
     The class of univariate Categorical distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
         un-normalized log probabilities for all categories.
+
         .. math:: \\mathrm{logits} \\propto \\log p
+
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -374,6 +390,7 @@ class Categorical(Distribution):
         together. Default is 0, which means a single value is an event.
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
+
     A single sample is a (N-1)-D Tensor with `tf.int32` values in range
     [0, n_categories).
     """
@@ -506,6 +523,7 @@ class Uniform(Distribution):
     """
     The class of univariate Uniform distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param minval: A `float` Tensor. The lower bound on the range of the
         uniform distribution. Should be broadcastable to match `maxval`.
     :param maxval: A `float` Tensor. The upper bound on the range of the
@@ -610,6 +628,7 @@ class Gamma(Distribution):
     """
     The class of univariate Gamma distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param alpha: A `float` Tensor. The shape parameter of the Gamma
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The inverse scale parameter of the Gamma
@@ -700,6 +719,7 @@ class Beta(Distribution):
     """
     The class of univariate Beta distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param alpha: A `float` Tensor. One of the two shape parameters of the
         Beta distribution. Should be positive and broadcastable to match
         `beta`.
@@ -804,6 +824,7 @@ class Poisson(Distribution):
     """
     The class of univariate Poisson distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
     :param dtype: The value type of samples from the distribution.
@@ -916,8 +937,11 @@ class Binomial(Distribution):
     """
     The class of univariate Binomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param logits: A `float` Tensor. The log-odds of probabilities.
+
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
+
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
     :param dtype: The value type of samples from the distribution.
@@ -1044,6 +1068,7 @@ class InverseGamma(Distribution):
     """
     The class of univariate InverseGamma distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param alpha: A `float` Tensor. The shape parameter of the InverseGamma
         distribution. Should be positive and broadcastable to match `beta`.
     :param beta: A `float` Tensor. The scale parameter of the InverseGamma
@@ -1137,6 +1162,7 @@ class Laplace(Distribution):
     """
     The class of univariate Laplace distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     :param loc: A `float` Tensor. The location parameter of the Laplace
         distribution. Should be broadcastable to match `scale`.
     :param scale: A `float` Tensor. The scale parameter of the Laplace
@@ -1244,13 +1270,18 @@ class BinConcrete(Distribution):
     It is the binary case of
     :class:`~zhusuan.distributions.multivariate.Concrete`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
+
     .. seealso::
+
         :class:`~zhusuan.distributions.multivariate.Concrete` and
         :class:`~zhusuan.distributions.multivariate.ExpConcrete`
+
     :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
         distribution. The temperature should be positive.
     :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
+
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
+
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated

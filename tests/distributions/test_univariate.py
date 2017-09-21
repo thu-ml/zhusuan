@@ -102,7 +102,7 @@ class TestNormal(tf.test.TestCase):
                 self.assertAllClose(p2.eval(), target_p)
 
             _test_value(0., 0., 0.)
-            _test_value([0.99, 0.9, 9., 99.], 1., [-10., -1., 1., 10.])
+            _test_value([0.99, 0.9, 9., 99.], 1., [-3., -1., 1., 10.])
             _test_value([7.], [0., 4.], [[1., 2.], [3., 5.]])
 
     def test_check_numerics(self):
