@@ -20,6 +20,7 @@ from zhusuan.distributions.utils import \
 
 __all__ = [
     'Normal',
+    'FoldNormal',
     'Bernoulli',
     'Categorical',
     'Discrete',
@@ -159,6 +160,138 @@ class Normal(Distribution):
         if self._check_numerics:
             precision = tf.check_numerics(precision, "precision")
         return c - self.logstd - 0.5 * precision * tf.square(given - self.mean)
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
+
+
+class FoldNormal(Distribution):
+    """
+    The class of univariate FoldNormal distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    .. warning::
+
+         The order of arguments `logstd`/`std` will change to `std`/`logstd`
+         in the coming version (0.3.1).
+
+    :param mean: A `float` Tensor. The mean of the FoldNormal distribution.
+        Should be broadcastable to match `logstd`.
+    :param logstd: A `float` Tensor. The log standard deviation of the FoldNormal
+        distribution. Should be broadcastable to match `mean`.
+    :param std: A `float` Tensor. The standard deviation of the FoldNormal
+        distribution. Should be positive and broadcastable to match `mean`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 mean=0.,
+                 logstd=None,
+                 std=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        self._mean = tf.convert_to_tensor(mean)
+        warnings.warn("FoldNormal: The order of arguments logstd/std will change "
+                      "to std/logstd in the coming version.", FutureWarning)
+        if (logstd is None) == (std is None):
+            raise ValueError("Either std or logstd should be passed but not "
+                             "both of them.")
+        elif logstd is None:
+            self._std = tf.convert_to_tensor(std)
+            dtype = assert_same_float_dtype([(self._mean, 'FoldNormal.mean'),
+                                             (self._std, 'FoldNormal.std')])
+            logstd = tf.log(self._std)
+            if check_numerics:
+                logstd = tf.check_numerics(logstd, "log(std)")
+            self._logstd = logstd
+        else:
+            # std is None
+            self._logstd = tf.convert_to_tensor(logstd)
+            dtype = assert_same_float_dtype([(self._mean, 'FoldNormal.mean'),
+                                             (self._logstd, 'FoldNormal.logstd')])
+            std = tf.exp(self._logstd)
+            if check_numerics:
+                std = tf.check_numerics(std, "exp(logstd)")
+            self._std = std
+
+        try:
+            tf.broadcast_static_shape(self._mean.get_shape(),
+                                      self._std.get_shape())
+        except ValueError:
+            raise ValueError(
+                "mean and std/logstd should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._mean.get_shape(), self._std.get_shape()))
+        self._check_numerics = check_numerics
+        super(FoldNormal, self).__init__(
+            dtype=dtype,
+            param_dtype=dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            group_ndims=group_ndims,
+            **kwargs)
+
+    @property
+    def mean(self):
+        """The mean of the FoldNormal distribution."""
+        return self._mean
+
+    @property
+    def logstd(self):
+        """The log standard deviation of the FoldNormal distribution."""
+        return self._logstd
+
+    @property
+    def std(self):
+        """The standard deviation of the FoldNormal distribution."""
+        return self._std
+
+    def _value_shape(self):
+        return tf.constant([], dtype=tf.int32)
+
+    def _get_value_shape(self):
+        return tf.TensorShape([])
+
+    def _batch_shape(self):
+        return tf.broadcast_dynamic_shape(tf.shape(self.mean),
+                                          tf.shape(self.std))
+
+    def _get_batch_shape(self):
+        return tf.broadcast_static_shape(self.mean.get_shape(),
+                                         self.std.get_shape())
+
+    def _sample(self, n_samples):
+        mean, std = self.mean, self.std
+        if not self.is_reparameterized:
+            mean = tf.stop_gradient(mean)
+            std = tf.stop_gradient(std)
+        shape = tf.concat([[n_samples], self.batch_shape], 0)
+        samples = tf.random_normal(shape, dtype=self.dtype) * std + mean
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples]).concatenate(
+                self.get_batch_shape()))
+        return samples
+
+    def _log_prob(self, given):        
+        c = -0.5 * (np.log(2.0) + np.log(np.pi))
+        precision = tf.exp(-2.0 * self.logstd)
+        if self._check_numerics:
+            precision = tf.check_numerics(precision, "precision")
+        mask = tf.log(tf.cast(given >= 0., dtype=precision.dtype))
+        return (c - (self.logstd + 0.5 * precision * tf.square(given - self.mean)) + \
+                tf.nn.softplus(-2.0 * self.mean * given * precision)) + mask
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
