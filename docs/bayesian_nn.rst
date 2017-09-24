@@ -22,7 +22,7 @@ inference on the weights, one can learn a predictor which both fits to the
 training data and knows about the uncertainty of its own prediction on test
 data. In this tutorial, we show how to implement BayesianNN in ZhuSuan.
 The full script for this tutorial is at
-`examples/tutorials/bayesian_nn.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/tutorials/bayesian_nn.py>`_.
+`examples/tutorials/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/bayesian_nn.py>`_.
 
 We use a regression dataset called
 `Boston housing <https://archive.ics.uci.edu/ml/datasets/Housing>`_. This has
@@ -70,10 +70,10 @@ for all the data. So we need only one copy of them, that is, we need a
             w_mu = tf.zeros([1, n_out, n_in + 1])
             ws.append(
                 zs.Normal('w' + str(i), w_mu, std=1.,
-                          n_samples=n_particles, group_event_ndims=2))
+                          n_samples=n_particles, group_ndims=2))
 
 To make the probabilities of weights in each layer evaluated together,
-``group_event_ndims`` is set to 2. For those who are not familiar with this
+``group_ndims`` is set to 2. For those who are not familiar with this
 property, see :ref:`dist-and-stochastic`.
 
 Then we write the feedforward process of neural networks, through which the
@@ -104,7 +104,7 @@ likelihood when evaluating the probability::
             initializer=tf.constant_initializer(0.))
         y = zs.Normal('y', y_mean, logstd=y_logstd)
 
-Putting together, the code for constructing a BayesianNN is::
+Putting together and adding model reuse, the code for constructing a BayesianNN is::
 
     import tensorflow as tf
     import zhusuan as zs
@@ -118,7 +118,7 @@ Putting together, the code for constructing a BayesianNN is::
                 w_mu = tf.zeros([1, n_out, n_in + 1])
                 ws.append(
                     zs.Normal('w' + str(i), w_mu, std=1.,
-                              n_samples=n_particles, group_event_ndims=2))
+                              n_samples=n_particles, group_ndims=2))
 
             # forward
             ly_x = tf.expand_dims(
@@ -180,7 +180,7 @@ The code for above definition is::
                     initializer=tf.constant_initializer(0.))
                 ws.append(
                     zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                              n_samples=n_particles, group_event_ndims=2))
+                              n_samples=n_particles, group_ndims=2))
         return variational
 
 In Variational Inference, to make :math:`q_{\phi}(W)` approximate
@@ -256,16 +256,16 @@ The code for this part is::
         return tf.add_n(log_pws) + log_py_xw * N
 
     variational = mean_field_variational(layer_sizes, n_particles)
-    qw_outputs = variational.query(w_names, outputs=True,
-                                   local_log_prob=True)
+    qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
     latent = dict(zip(w_names, qw_outputs))
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'y': y_obs}, latent, axis=0))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'y': y_obs}, latent=latent, axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(cost)
 
 Evaluation
 ----------
@@ -299,7 +299,7 @@ on new data
 
 .. math::
 
-    y^{pred} = \mathbb{E}_{p(y|x, D)} y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)}y\quad W^i \sim q(W)
+    y^{pred} = \mathbb{E}_{p(y|x, D)} \; y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)} \; y \quad W^i \sim q(W)
 
 First we need to pass the data placeholder and sampled latent parameters to the
 BayesianNN model ::
@@ -337,7 +337,7 @@ This can also be computed by Monte Carlo estimation
 
 To be noted, as we usually standardized the data to make
 them have unit variance at beginning (check the full script
-`examples/tutorials/bayesian_nn.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/tutorials/bayesian_nn.py>`_),
+`examples/tutorials/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/bayesian_nn.py>`_),
 we need to count its effect in our evaluation formulas. RMSE is proportional
 to the amplitude, therefore the final RMSE should be multiplied with
 the standard deviation. For log likelihood, it needs to be subtracted by a

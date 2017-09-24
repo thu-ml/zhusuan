@@ -24,7 +24,7 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
                              'updates_collections': None}
         z_mean = tf.zeros([n, n_z])
         z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
         lx_z = layers.fully_connected(
             z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
@@ -32,7 +32,7 @@ def vae(observed, n, n_x, n_z, n_particles, is_training):
             lx_z, 500, normalizer_fn=layers.batch_norm,
             normalizer_params=normalizer_params)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
@@ -50,7 +50,7 @@ def q_net(observed, x, n_z, n_particles, is_training):
         lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
         lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
         z = zs.Normal('z', lz_mean, logstd=lz_logstd, n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
     return variational
 
 
@@ -112,8 +112,12 @@ if __name__ == "__main__":
     qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
                                                     n_iters=n_planar_flows)
 
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+    lower_bound = zs.variational.elbo(log_joint,
+                                      observed={'x': x_obs},
+                                      latent={'z': [qz_samples, log_qz]},
+                                      axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     # Importance sampling estimates of log likelihood:
     # Fast, used for evaluation during training
@@ -123,8 +127,7 @@ if __name__ == "__main__":
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    infer_op = optimizer.minimize(cost)
 
     params = tf.trainable_variables()
     for i in params:
@@ -153,7 +156,7 @@ if __name__ == "__main__":
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 x_batch_bin = sess.run(x_bin, feed_dict={x_orig: x_batch})
-                _, lb = sess.run([infer, lower_bound],
+                _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x: x_batch_bin,
                                             learning_rate_ph: learning_rate,
                                             n_particles: lb_samples,

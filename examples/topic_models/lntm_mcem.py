@@ -35,13 +35,10 @@ def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
                         tf.tile(tf.expand_dims(
                             tf.tile(tf.expand_dims(eta_mean, 0), D_multiple),
                             0), n_chains_multiple),
-                        logstd=tf.tile(tf.expand_dims(
-                            tf.tile(tf.expand_dims(eta_logstd, 0), D_multiple),
-                            0), n_chains_multiple),
-                        group_event_ndims=1)
-        beta = zs.Normal('beta', tf.zeros([K, V]),
-                         logstd=tf.ones([K, V]) * log_delta,
-                         group_event_ndims=1)
+                        logstd=eta_logstd,
+                        group_ndims=1)
+        beta = zs.Normal('beta', tf.zeros([K, V]), logstd=log_delta,
+                         group_ndims=1)
     return model
 
 

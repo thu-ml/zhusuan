@@ -31,11 +31,11 @@ def main():
     def vae(observed, n, n_x, n_z):
         with zs.BayesianNet(observed=observed) as model:
             z_mean = tf.zeros([n, n_z])
-            z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+            z = zs.Normal('z', z_mean, std=1., group_ndims=1)
             lx_z = layers.fully_connected(z, 500)
             lx_z = layers.fully_connected(lx_z, 500)
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+            x = zs.Bernoulli('x', x_logits, group_ndims=1)
         return model, x_logits
 
     @zs.reuse('variational')
@@ -45,7 +45,7 @@ def main():
             lz_x = layers.fully_connected(lz_x, 500)
             z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
             z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1)
+            z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1)
         return variational
 
     x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
@@ -59,13 +59,13 @@ def main():
     variational = q_net(x, n_z)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint,
-                observed={'x': x},
-                latent={'z': [qz_samples, log_qz]}))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'x': x}, latent={'z': [qz_samples, log_qz]})
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     optimizer = tf.train.AdamOptimizer(0.001)
-    infer = optimizer.minimize(-lower_bound)
+    infer_op = optimizer.minimize(cost)
 
     # Generate images
     n_gen = 100
@@ -86,7 +86,7 @@ def main():
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
-                _, lb = sess.run([infer, lower_bound],
+                _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x: x_batch})
                 lbs.append(lb)
 

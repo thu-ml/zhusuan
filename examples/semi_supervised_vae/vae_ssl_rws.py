@@ -22,13 +22,13 @@ def M2(observed, n, n_x, n_y, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, n_z])
         z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
         y_logits = tf.zeros([n, n_y])
         y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
         lx_zy = layers.fully_connected(tf.concat([z, tf.to_float(y)], 2), 500)
         lx_zy = layers.fully_connected(lx_zy, 500)
         x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
@@ -53,7 +53,7 @@ def labeled_proposal(x, y, n_z, n_particles):
     with zs.BayesianNet() as proposal:
         z_mean, z_logstd = qz_xy(x, y, n_z)
         z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
-                      group_event_ndims=1, is_reparameterized=False)
+                      group_ndims=1, is_reparameterized=False)
     return proposal
 
 
@@ -63,7 +63,7 @@ def unlabeled_proposal(x, n_y, n_z, n_particles):
         y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
         x_tiled = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
         z_mean, z_logstd = qz_xy(x_tiled, y, n_z)
-        z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1,
+        z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1,
                       is_reparameterized=False)
     return proposal
 
@@ -117,11 +117,20 @@ if __name__ == "__main__":
                             [n_particles, 1, 1])
     proposal = labeled_proposal(x_labeled_ph, y_labeled_ph, n_z, n_particles)
     qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
-    labeled_cost, labeled_log_likelihood = zs.rws(
-        log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
-        {'z': [qz_samples, log_qz]}, axis=0)
-    labeled_cost = tf.reduce_mean(labeled_cost)
-    labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
+
+    # adapting the proposal
+    labeled_klpq_obj = zs.variational.klpq(log_joint,
+                                           observed={'x': x_labeled_obs,
+                                                     'y': y_labeled_obs},
+                                           latent={'z': [qz_samples, log_qz]},
+                                           axis=0)
+    labeled_klpq_cost = tf.reduce_mean(labeled_klpq_obj.rws())
+
+    # learning model parameters
+    labeled_lower_bound = tf.reduce_mean(
+        zs.variational.importance_weighted_objective(
+            log_joint, observed={'x': x_labeled_obs, 'y': y_labeled_obs},
+            latent={'z': [qz_samples, log_qz]}, axis=0))
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.int32, shape=(None, n_x), name='x_u')
@@ -130,11 +139,20 @@ if __name__ == "__main__":
     proposal = unlabeled_proposal(x_unlabeled_ph, n_y, n_z, n_particles)
     qy_samples, log_qy = proposal.query('y', outputs=True, local_log_prob=True)
     qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
-    unlabeled_cost, unlabeled_log_likelihood = zs.rws(
-        log_joint, {'x': x_unlabeled_obs},
-        {'y': [qy_samples, log_qy], 'z': [qz_samples, log_qz]}, axis=0)
-    unlabeled_cost = tf.reduce_mean(unlabeled_cost)
-    unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
+
+    # adapting the proposal
+    unlabeled_klpq_obj = zs.variational.klpq(
+        log_joint, observed={'x': x_unlabeled_obs},
+        latent={'y': [qy_samples, log_qy],
+                'z': [qz_samples, log_qz]}, axis=0)
+    unlabeled_klpq_cost = tf.reduce_mean(unlabeled_klpq_obj.rws())
+
+    # learning model parameters
+    unlabeled_lower_bound = tf.reduce_mean(
+        zs.variational.importance_weighted_objective(
+            log_joint, observed={'x': x_unlabeled_obs},
+            latent={'y': [qy_samples, log_qy],
+                    'z': [qz_samples, log_qz]}, axis=0))
 
     # Build classifier
     qy_logits_l = qy_x(x_labeled_ph, n_y)
@@ -147,12 +165,20 @@ if __name__ == "__main__":
     log_qy_x = onehot_cat.log_prob(y_labeled_ph)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
 
+    klpq_cost = labeled_klpq_cost + unlabeled_klpq_cost
+    model_cost = -labeled_lower_bound - unlabeled_lower_bound
     # Gather gradients
-    cost = (labeled_cost + unlabeled_cost + classifier_cost) / 2.
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    grads = optimizer.compute_gradients(cost)
-    infer = optimizer.apply_gradients(grads)
+
+    model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                     scope='model')
+    model_grads = optimizer.compute_gradients(model_cost / 2., model_params)
+    klpq_grads = optimizer.compute_gradients(klpq_cost / 2.)
+    classifier_grads = optimizer.compute_gradients(classifier_cost / 2.)
+
+    infer_op = optimizer.apply_gradients(
+        model_grads + klpq_grads + classifier_grads)
 
     params = tf.trainable_variables()
     for i in params:
@@ -183,7 +209,7 @@ if __name__ == "__main__":
                 x_unlabeled_batch_bin = sess.run(
                     x_bin, feed_dict={x_orig: x_unlabeled_batch})
                 _, lb_labeled, lb_unlabeled, train_acc = sess.run(
-                    [infer, labeled_log_likelihood, unlabeled_log_likelihood,
+                    [infer_op, labeled_lower_bound, unlabeled_lower_bound,
                      acc],
                     feed_dict={x_labeled_ph: x_labeled_batch_bin,
                                y_labeled_ph: y_labeled_batch,
@@ -209,7 +235,7 @@ if __name__ == "__main__":
                     test_y_batch = t_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
-                        [labeled_log_likelihood, unlabeled_log_likelihood,
+                        [labeled_lower_bound, unlabeled_lower_bound,
                          acc],
                         feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,

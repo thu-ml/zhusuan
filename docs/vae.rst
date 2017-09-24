@@ -4,7 +4,7 @@ Variational Autoencoders: Step by Step
 **Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
 most widely used deep generative models. In this tutorial, we show how to
 implement VAE in ZhuSuan step by step. The full script is at
-`examples/tutorials/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/tutorials/vae.py>`_.
+`examples/tutorials/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/vae.py>`_.
 
 The generative process of a VAE for modeling binarized
 `MNIST <https://www.tensorflow.org/get_started/mnist/beginners>`_ data is as
@@ -50,7 +50,7 @@ need the Normal to generate samples of shape ``[n, n_z]``::
     with zs.BayesianNet() as model:
         # z ~ N(z|0, I)
         z_mean = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
 
 The shape of ``z_mean`` is ``[n, n_z]``, which means that
 we have ``[n, n_z]`` independent inputs fed into the univariate
@@ -65,7 +65,7 @@ that is of shape ``[n_z]``, which is the dimension of latent representations.
 And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, n_z]``. In ZhuSuan, the way to achieve this is by setting
-``group_event_ndims``, as we do in the above model definition code. To
+``group_ndims``, as we do in the above model definition code. To
 understand this, see :ref:`dist-and-stochastic`.
 
 Then we build a neural network of two fully-connected layers with :math:`z` as
@@ -87,7 +87,7 @@ likelihood when evaluating the probability of an image::
     with zs.BayesianNet() as model:
         ...
         # x ~ Bernoulli(x|sigmoid(x_logits))
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
 
 .. note::
 
@@ -105,13 +105,13 @@ Putting together, the code for constructing a VAE is::
 
     with zs.BayesianNet() as model:
         z_mean = tf.zeros([n, n_z])
-        z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
 
         lx_z = layers.fully_connected(z, 500)
         lx_z = layers.fully_connected(lx_z, 500)
         x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
 
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
 
 Reuse the Model
 ---------------
@@ -135,7 +135,7 @@ a batch of images ``x_batch``, write::
 
     with zs.BayesianNet(observed={'x': x_batch}):
         ...
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
 
 In this case, when ``x`` is used in further computation, it will convert to
 the observed value, i.e., ``x_batch``, instead of the sampled tensor.
@@ -156,11 +156,11 @@ ZhuSuan is to wrap it in a function, like this::
     def vae(observed, n, n_x, n_z):
         with zs.BayesianNet(observed=observed) as model:
             z_mean = tf.zeros([n, n_z])
-            z = zs.Normal('z', z_mean, std=1., group_event_ndims=1)
+            z = zs.Normal('z', z_mean, std=1., group_ndims=1)
             lx_z = layers.fully_connected(z, 500)
             lx_z = layers.fully_connected(lx_z, 500)
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+            x = zs.Bernoulli('x', x_logits, group_ndims=1)
         return model
 
 Each time the function is called, a different observation assignment can be
@@ -268,7 +268,7 @@ In ZhuSuan, the variational posterior can also be defined as a
             lz_x = layers.fully_connected(lz_x, 500)
             z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
             z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1)
+            z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1)
         return variational
 
 There are many ways to optimize this lower bound. One of the easiest way is
@@ -292,8 +292,9 @@ Here we are using the **Stochastic Gradient Variational Bayes** (SGVB)
 estimator from the original paper of variational autoencoders
 :cite:`vae-kingma2013auto`. This estimator takes benefits of a clever
 reparameterization trick to greatly reduce the variance when estimating the
-gradients of ELBO. In ZhuSuan, one can use this estimator by calling the
-:func:`~zhusuan.variational.sgvb` function. The code for this part is::
+gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
+:func:`~sgvb` of the output of :func:`~zhusuan.variational.elbo`.
+The code for this part is::
 
     x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
     n = tf.shape(x)[0]
@@ -306,15 +307,15 @@ gradients of ELBO. In ZhuSuan, one can use this estimator by calling the
     variational = q_net(x, n_z)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint,
-                observed={'x': x},
-                latent={'z': [qz_samples, log_qz]}))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'x': x}, latent={'z': [qz_samples, log_qz]})
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
 .. note::
 
     For readers who are interested, we provide a detailed explanation of the
-    :func:`~zhusuan.variational.sgvb` estimator used here, though this is not
+    :func:`~sgvb` estimator used here, though this is not
     required for you to use ZhuSuan's variational functionality.
 
     The key of SGVB estimator is a reparameterization trick, i.e., they
@@ -359,7 +360,7 @@ society. Here we are going to use Tensorflow's Adam optimizer to do the
 learning::
 
     optimizer = tf.train.AdamOptimizer(0.001)
-    infer = optimizer.minimize(-lower_bound)
+    infer_op = optimizer.minimize(cost)
 
 Generate Images
 ---------------
@@ -376,7 +377,7 @@ the direct output of the neural network (``x_logits``)::
         with zs.BayesianNet(observed=observed) as model:
             ...
             x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+            x = zs.Bernoulli('x', x_logits, group_ndims=1)
         # before change: return model
         return model, x_logits
 
@@ -420,7 +421,7 @@ images to disk. Keep watching them and have fun :)
     The example used in this tutorial is simplified for understanding. To see
     a fully functional example with batch normalization, multi-sample
     estimation, model storage and reloading, etc., check out
-    `examples/variational_autoencoders/vae.py <https://github.com/thjashin/ZhuSuan/blob/develop/examples/variational_autoencoders/vae.py>`_
+    `examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/variational_autoencoders/vae.py>`_
 
 .. rubric:: References
 
