@@ -4,7 +4,7 @@ Variational Autoencoders: Step by Step
 **Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
 most widely used deep generative models. In this tutorial, we show how to
 implement VAE in ZhuSuan step by step. The full script is at
-`examples/tutorials/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/vae.py>`_.
+`examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/variational_autoencoders/vae.py>`_.
 
 The generative process of a VAE for modeling binarized
 `MNIST <https://www.tensorflow.org/get_started/mnist/beginners>`_ data is as
@@ -44,27 +44,27 @@ statement in python::
 Following the generative process, first we need a standard Normal
 distribution to generate the latent representations (:math:`z`). As presented
 in our graphical model, the data is generated in batches with batch size ``n``,
-and for each data, the latent representation is of dimension ``n_z``. So we
-need the Normal to generate samples of shape ``[n, n_z]``::
+and for each data, the latent representation is of dimension ``z_dim``. So we
+need the Normal to generate samples of shape ``[n, z_dim]``::
 
     with zs.BayesianNet() as model:
         # z ~ N(z|0, I)
-        z_mean = tf.zeros([n, n_z])
+        z_mean = tf.zeros([n, z_dim])
         z = zs.Normal('z', z_mean, std=1., group_ndims=1)
 
-The shape of ``z_mean`` is ``[n, n_z]``, which means that
-we have ``[n, n_z]`` independent inputs fed into the univariate
+The shape of ``z_mean`` is ``[n, z_dim]``, which means that
+we have ``[n, z_dim]`` independent inputs fed into the univariate
 :class:`~zhusuan.model.stochastic.Normal` StochasticTensor. Because
 input parameters are allowed to
 `broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
 to match each other's shape, the standard deviation ``std`` is simply set to
 1. Thus the shape of samples and probabilities evaluated at this node should
-be of shape ``[n, n_z]``. However, what we want in modeling MNIST data, is a
+be of shape ``[n, z_dim]``. However, what we want in modeling MNIST data, is a
 batch of ``[n]`` independent events, with each one producing samples of ``z``
-that is of shape ``[n_z]``, which is the dimension of latent representations.
+that is of shape ``[z_dim]``, which is the dimension of latent representations.
 And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
-``[n, n_z]``. In ZhuSuan, the way to achieve this is by setting
+``[n, z_dim]``. In ZhuSuan, the way to achieve this is by setting
 ``group_ndims``, as we do in the above model definition code. To
 understand this, see :ref:`dist-and-stochastic`.
 
@@ -104,7 +104,7 @@ Putting together, the code for constructing a VAE is::
     import zhusuan as zs
 
     with zs.BayesianNet() as model:
-        z_mean = tf.zeros([n, n_z])
+        z_mean = tf.zeros([n, z_dim])
         z = zs.Normal('z', z_mean, std=1., group_ndims=1)
 
         lx_z = layers.fully_connected(z, 500)
@@ -153,13 +153,14 @@ To reuse the code above for different observations, a common practice in
 ZhuSuan is to wrap it in a function, like this::
 
     @zs.reuse('model')
-    def vae(observed, n, n_x, n_z):
+    def vae(observed, n, n_x, z_dim):
         with zs.BayesianNet(observed=observed) as model:
-            z_mean = tf.zeros([n, n_z])
+            z_mean = tf.zeros([n, z_dim])
             z = zs.Normal('z', z_mean, std=1., group_ndims=1)
             lx_z = layers.fully_connected(z, 500)
             lx_z = layers.fully_connected(lx_z, 500)
-            x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+            x_logits = layers.fully_connected(lx_z, n_x,
+                                              activation_fn=None)
             x = zs.Bernoulli('x', x_logits, group_ndims=1)
         return model
 
@@ -262,12 +263,14 @@ In ZhuSuan, the variational posterior can also be defined as a
 :class:`~zhusuan.model.base.BayesianNet`. The code for above definition is::
 
     @zs.reuse('variational')
-    def q_net(x, n_z):
+    def q_net(x, z_dim):
         with zs.BayesianNet() as variational:
             lz_x = layers.fully_connected(tf.to_float(x), 500)
             lz_x = layers.fully_connected(lz_x, 500)
-            z_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
-            z_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
+            z_mean = layers.fully_connected(lz_x, z_dim,
+                                            activation_fn=None)
+            z_logstd = layers.fully_connected(lz_x, z_dim,
+                                              activation_fn=None)
             z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1)
         return variational
 
@@ -296,15 +299,15 @@ gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
 :func:`~sgvb` of the output of :func:`~zhusuan.variational.elbo`.
 The code for this part is::
 
-    x = tf.placeholder(tf.int32, shape=[None, n_x], name='x')
+    x = tf.placeholder(tf.int32, shape=[None, x_dim], name='x')
     n = tf.shape(x)[0]
 
     def log_joint(observed):
-        model = vae(observed, n, n_x, n_z)
+        model = vae(observed, n, x_dim, z_dim)
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return log_pz + log_px_z
 
-    variational = q_net(x, n_z)
+    variational = q_net(x, z_dim)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
     lower_bound = zs.variational.elbo(
@@ -373,10 +376,10 @@ function a little to return one more instance,
 the direct output of the neural network (``x_logits``)::
 
     @zs.reuse('model')
-    def vae(observed, n, n_x, n_z):
+    def vae(observed, n, x_dim, z_dim):
         with zs.BayesianNet(observed=observed) as model:
             ...
-            x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+            x_logits = layers.fully_connected(lx_z, x_dim, activation_fn=None)
             x = zs.Bernoulli('x', x_logits, group_ndims=1)
         # before change: return model
         return model, x_logits
@@ -385,7 +388,7 @@ Then we add a sigmoid function to it to get a "mean" image.
 This is done by::
 
     n_gen = 100
-    _, x_logits = vae({}, n_gen, n_x, n_z)
+    _, x_logits = vae({}, n_gen, x_dim, z_dim)
     x_gen = tf.reshape(tf.sigmoid(x_logits), [-1, 28, 28, 1])
 
 Run Gradient Descent
@@ -416,12 +419,6 @@ images to disk. Keep watching them and have fun :)
                 name = "results/vae/vae.epoch.{}.png".format(epoch)
                 save_image_collections(images, name)
 
-.. seealso::
-
-    The example used in this tutorial is simplified for understanding. To see
-    a fully functional example with batch normalization, multi-sample
-    estimation, model storage and reloading, etc., check out
-    `examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/variational_autoencoders/vae.py>`_
 
 .. rubric:: References
 
