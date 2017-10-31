@@ -78,7 +78,7 @@ class TestDistributions(tf.test.TestCase):
             dist._prob(tf.ones([2, 3, 4, 5]))
 
         with self.assertRaisesRegexp(ValueError, "must be non-negative"):
-            dist2 = Distribution(tf.float32, tf.float32, True, True, -1)
+            dist2 = Distribution(tf.float32, tf.float32, True, True, False, -1)
 
     def test_subclass(self):
         with self.test_session(use_gpu=True):

@@ -75,6 +75,34 @@ class TestNormal(tf.test.TestCase):
         self.assertEqual(mean_grads, None)
         self.assertEqual(logstd_grads, None)
 
+    def test_path_derivative(self):
+        mean = tf.ones([2, 3])
+        logstd = tf.ones([2, 3])
+        n_samples = tf.placeholder(tf.int32, shape=[])
+
+        norm_rep = Normal(mean, logstd, use_path_derivative=True)
+        samples = norm_rep.sample(n_samples)
+        log_prob = norm_rep.log_prob(samples)
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        sample_grads = tf.gradients(log_prob, samples)
+        mean_true_grads = tf.gradients(samples, mean, sample_grads)[0]
+        logstd_true_grads = tf.gradients(samples, logstd, sample_grads)[0]
+        with self.test_session(use_gpu=True) as sess:
+            outs = sess.run([mean_path_grads, mean_true_grads,
+                             logstd_path_grads, logstd_true_grads],
+                            feed_dict={n_samples: 7})
+            mean_path, mean_true, logstd_path, logstd_true = outs
+            self.assertAllClose(mean_path, mean_true)
+            self.assertAllClose(logstd_path, logstd_true)
+
+        norm_no_rep = Normal(mean, logstd, is_reparameterized=False,
+                             use_path_derivative=True)
+        samples = norm_no_rep.sample(n_samples)
+        log_prob = norm_no_rep.log_prob(samples)
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        self.assertTrue(mean_path_grads is None)
+        self.assertTrue(mean_path_grads is None)
+
     def test_log_prob_shape(self):
         utils.test_2parameter_log_prob_shape_same(
             self, Normal, np.zeros, np.zeros, np.zeros)
@@ -145,17 +173,17 @@ class TestFoldNormal(tf.test.TestCase):
                 FoldNormal(mean=tf.ones([2, 1]), std=tf.ones([2, 4, 3]))
 
         FoldNormal(mean=tf.placeholder(tf.float32, [None, 1]),
-               logstd=tf.placeholder(tf.float32, [None, 1, 3]))
+                   logstd=tf.placeholder(tf.float32, [None, 1, 3]))
         FoldNormal(mean=tf.placeholder(tf.float32, [None, 1]),
-               std=tf.placeholder(tf.float32, [None, 1, 3]))
+                   std=tf.placeholder(tf.float32, [None, 1, 3]))
 
     def test_value_shape(self):
         # static
         norm = FoldNormal(mean=tf.placeholder(tf.float32, None),
-                      logstd=tf.placeholder(tf.float32, None))
+                          logstd=tf.placeholder(tf.float32, None))
         self.assertEqual(norm.get_value_shape().as_list(), [])
         norm = FoldNormal(mean=tf.placeholder(tf.float32, None),
-                      std=tf.placeholder(tf.float32, None))
+                          std=tf.placeholder(tf.float32, None))
         self.assertEqual(norm.get_value_shape().as_list(), [])
 
         # dynamic
@@ -187,6 +215,34 @@ class TestFoldNormal(tf.test.TestCase):
         mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
         self.assertEqual(mean_grads, None)
         self.assertEqual(logstd_grads, None)
+
+    def test_path_derivative(self):
+        mean = tf.ones([2, 3])
+        logstd = tf.ones([2, 3])
+        n_samples = tf.placeholder(tf.int32, shape=[])
+
+        norm_rep = FoldNormal(mean, logstd, use_path_derivative=True)
+        samples = norm_rep.sample(n_samples)
+        log_prob = norm_rep.log_prob(samples)
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        sample_grads = tf.gradients(log_prob, samples)
+        mean_true_grads = tf.gradients(samples, mean, sample_grads)[0]
+        logstd_true_grads = tf.gradients(samples, logstd, sample_grads)[0]
+        with self.test_session(use_gpu=True) as sess:
+            outs = sess.run([mean_path_grads, mean_true_grads,
+                             logstd_path_grads, logstd_true_grads],
+                            feed_dict={n_samples: 7})
+            mean_path, mean_true, logstd_path, logstd_true = outs
+            self.assertAllClose(mean_path, mean_true)
+            self.assertAllClose(logstd_path, logstd_true)
+
+        norm_no_rep = FoldNormal(mean, logstd, is_reparameterized=False,
+                                 use_path_derivative=True)
+        samples = norm_no_rep.sample(n_samples)
+        log_prob = norm_no_rep.log_prob(samples)
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        self.assertTrue(mean_path_grads is None)
+        self.assertTrue(mean_path_grads is None)
 
     def test_log_prob_shape(self):
         utils.test_2parameter_log_prob_shape_same(
@@ -993,6 +1049,34 @@ class TestLaplace(tf.test.TestCase):
         self.assertEqual(loc_grads, None)
         self.assertEqual(scale_grads, None)
 
+    def test_path_derivative(self):
+        loc = tf.ones([2, 3])
+        scale = tf.ones([2, 3])
+        n_samples = tf.placeholder(tf.int32, shape=[])
+
+        laplace_rep = Laplace(loc, scale, use_path_derivative=True)
+        samples = laplace_rep.sample(n_samples)
+        log_prob = laplace_rep.log_prob(samples)
+        loc_path_grads, scale_path_grads = tf.gradients(log_prob, [loc, scale])
+        sample_grads = tf.gradients(log_prob, samples)
+        loc_true_grads = tf.gradients(samples, loc, sample_grads)[0]
+        scale_true_grads = tf.gradients(samples, scale, sample_grads)[0]
+        with self.test_session(use_gpu=True) as sess:
+            outs = sess.run([loc_path_grads, loc_true_grads,
+                             scale_path_grads, scale_true_grads],
+                            feed_dict={n_samples: 7})
+            loc_path, loc_true, scale_path, scale_true = outs
+            self.assertAllClose(loc_path, loc_true)
+            self.assertAllClose(scale_path, scale_true)
+
+        laplace_no_rep = Laplace(loc, scale, is_reparameterized=False,
+                                 use_path_derivative=True)
+        samples = laplace_no_rep.sample(n_samples)
+        log_prob = laplace_no_rep.log_prob(samples)
+        loc_path_grads, scale_path_grads = tf.gradients(log_prob, [loc, scale])
+        self.assertTrue(loc_path_grads is None)
+        self.assertTrue(loc_path_grads is None)
+
     def test_log_prob_shape(self):
         utils.test_2parameter_log_prob_shape_same(
             self, Laplace, np.zeros, np.ones, np.zeros)
@@ -1081,10 +1165,10 @@ class TestBinConcrete(tf.test.TestCase):
                 logits = np.array(logits, np.float32)
 
                 target_log_p = np.log(temperature) + logits - \
-                    (temperature + 1) * np.log(given) - \
-                    (temperature + 1) * np.log(1 - given) - \
-                    2 * np.log(np.exp(logits) * (given ** -temperature) +
-                               (1 - given) ** -temperature)
+                               (temperature + 1) * np.log(given) - \
+                               (temperature + 1) * np.log(1 - given) - \
+                               2 * np.log(np.exp(logits) * (given ** -temperature) +
+                                          (1 - given) ** -temperature)
 
                 con = BinConcrete(temperature, logits=logits)
                 log_p = con.log_prob(given)
@@ -1114,6 +1198,34 @@ class TestBinConcrete(tf.test.TestCase):
         t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
         self.assertEqual(t_grads, None)
         self.assertEqual(logits_grads, None)
+
+    def test_path_derivative(self):
+        temperature = tf.ones([])
+        logits = tf.ones([2, 3])
+        n_samples = tf.placeholder(tf.int32, shape=[])
+
+        con_rep = BinConcrete(temperature, logits, use_path_derivative=True)
+        samples = con_rep.sample(n_samples)
+        log_prob = con_rep.log_prob(samples)
+        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        sample_grads = tf.gradients(log_prob, samples)
+        t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
+        logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
+        with self.test_session(use_gpu=True) as sess:
+            outs = sess.run([t_path_grads, t_true_grads,
+                             logits_path_grads, logits_true_grads],
+                            feed_dict={n_samples: 7})
+            t_path, t_true, logits_path, logits_true = outs
+            self.assertAllClose(t_path, t_true)
+            self.assertAllClose(logits_path, logits_true)
+
+        con_no_rep = BinConcrete(temperature, logits, is_reparameterized=False,
+                                 use_path_derivative=True)
+        samples = con_no_rep.sample(n_samples)
+        log_prob = con_no_rep.log_prob(samples)
+        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        self.assertTrue(t_path_grads is None)
+        self.assertTrue(logits_path_grads is None)
 
     def test_check_numerics(self):
         tau = tf.placeholder(tf.float32, None)

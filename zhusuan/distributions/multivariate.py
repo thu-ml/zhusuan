@@ -405,6 +405,11 @@ class ExpConcrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -413,6 +418,7 @@ class ExpConcrete(Distribution):
                  logits,
                  group_ndims=0,
                  is_reparameterized=True,
+                 use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
@@ -433,6 +439,7 @@ class ExpConcrete(Distribution):
             param_dtype=param_dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -484,7 +491,8 @@ class ExpConcrete(Distribution):
         return samples
 
     def _log_prob(self, given):
-        logits, temperature = self.logits, self.temperature
+        logits, temperature = self.path_param(self.logits),\
+                              self.path_param(self.temperature)
         n = tf.cast(self.n_categories, self.dtype)
         log_temperature = tf.log(temperature)
 
@@ -530,6 +538,11 @@ class Concrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -538,6 +551,7 @@ class Concrete(Distribution):
                  logits,
                  group_ndims=0,
                  is_reparameterized=True,
+                 use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
@@ -558,6 +572,7 @@ class Concrete(Distribution):
             param_dtype=param_dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -610,7 +625,8 @@ class Concrete(Distribution):
         return samples
 
     def _log_prob(self, given):
-        logits, temperature = self.logits, self.temperature
+        logits, temperature = self.path_param(self.logits), \
+                              self.path_param(self.temperature)
         log_given = tf.log(given)
         log_temperature = tf.log(temperature)
         n = tf.cast(self.n_categories, self.dtype)

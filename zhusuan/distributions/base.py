@@ -67,6 +67,11 @@ class Distribution(object):
     :param is_reparameterized: A bool. Whether the gradients of samples can
         and are allowed to propagate back into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in :attr:`batch_shape` (counted from the end) that are
         grouped into a single event, so that their probabilities are calculated
@@ -79,6 +84,7 @@ class Distribution(object):
                  param_dtype,
                  is_continuous,
                  is_reparameterized,
+                 use_path_derivative=False,
                  group_ndims=0,
                  **kwargs):
         if 'group_event_ndims' in kwargs:
@@ -92,6 +98,7 @@ class Distribution(object):
         self._param_dtype = param_dtype
         self._is_continuous = is_continuous
         self._is_reparameterized = is_reparameterized
+        self._use_path_derivative = use_path_derivative
         if isinstance(group_ndims, int):
             if group_ndims < 0:
                 raise ValueError("group_ndims must be non-negative.")
@@ -130,6 +137,26 @@ class Distribution(object):
         into inputs, using the reparametrization trick from (Kingma, 2013).
         """
         return self._is_reparameterized
+
+    @property
+    def use_path_derivative(self):
+        """
+        Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
+        """
+        return self._use_path_derivative
+
+    def path_param(self, param):
+        """
+        Automatically transforms a parameter based on `use_path_derivative`
+        """
+        if self.use_path_derivative:
+            return tf.stop_gradient(param)
+        else:
+            return param
 
     @property
     def group_ndims(self):

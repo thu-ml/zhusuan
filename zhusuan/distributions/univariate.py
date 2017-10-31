@@ -60,6 +60,11 @@ class Normal(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -69,6 +74,7 @@ class Normal(Distribution):
                  std=None,
                  group_ndims=0,
                  is_reparameterized=True,
+                 use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._mean = tf.convert_to_tensor(mean)
@@ -109,6 +115,7 @@ class Normal(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -155,11 +162,13 @@ class Normal(Distribution):
         return samples
 
     def _log_prob(self, given):
+        mean, logstd = self.path_param(self.mean),\
+                       self.path_param(self.logstd)
         c = -0.5 * np.log(2 * np.pi)
-        precision = tf.exp(-2 * self.logstd)
+        precision = tf.exp(-2 * logstd)
         if self._check_numerics:
             precision = tf.check_numerics(precision, "precision")
-        return c - self.logstd - 0.5 * precision * tf.square(given - self.mean)
+        return c - logstd - 0.5 * precision * tf.square(given - mean)
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -190,6 +199,11 @@ class FoldNormal(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -199,6 +213,7 @@ class FoldNormal(Distribution):
                  std=None,
                  group_ndims=0,
                  is_reparameterized=True,
+                 use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._mean = tf.convert_to_tensor(mean)
@@ -239,6 +254,7 @@ class FoldNormal(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -284,14 +300,16 @@ class FoldNormal(Distribution):
                 self.get_batch_shape()))
         return samples
 
-    def _log_prob(self, given):        
+    def _log_prob(self, given):
+        mean, logstd = self.path_param(self.mean), \
+                       self.path_param(self.logstd)
         c = -0.5 * (np.log(2.0) + np.log(np.pi))
-        precision = tf.exp(-2.0 * self.logstd)
+        precision = tf.exp(-2.0 * logstd)
         if self._check_numerics:
             precision = tf.check_numerics(precision, "precision")
         mask = tf.log(tf.cast(given >= 0., dtype=precision.dtype))
-        return (c - (self.logstd + 0.5 * precision * tf.square(given - self.mean)) + \
-                tf.nn.softplus(-2.0 * self.mean * given * precision)) + mask
+        return (c - (logstd + 0.5 * precision * tf.square(given - mean)) + \
+                tf.nn.softplus(-2.0 * mean * given * precision)) + mask
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -1176,6 +1194,11 @@ class Laplace(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -1184,6 +1207,7 @@ class Laplace(Distribution):
                  scale,
                  group_ndims=0,
                  is_reparameterized=True,
+                 use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._loc = tf.convert_to_tensor(loc)
@@ -1206,6 +1230,7 @@ class Laplace(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -1255,10 +1280,12 @@ class Laplace(Distribution):
         return samples
 
     def _log_prob(self, given):
-        log_scale = tf.log(self.scale)
+        loc, scale = self.path_param(self.loc),\
+                     self.path_param(self.scale)
+        log_scale = tf.log(scale)
         if self._check_numerics:
             log_scale = tf.check_numerics(log_scale, "log(scale)")
-        return -np.log(2.) - log_scale - tf.abs(given - self.loc) / self.scale
+        return -np.log(2.) - log_scale - tf.abs(given - loc) / scale
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -1291,6 +1318,11 @@ class BinConcrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
@@ -1299,6 +1331,7 @@ class BinConcrete(Distribution):
                  logits,
                  group_ndims=0,
                  is_reparameterized=True,
+                 use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
@@ -1316,6 +1349,7 @@ class BinConcrete(Distribution):
             param_dtype=param_dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -1360,7 +1394,8 @@ class BinConcrete(Distribution):
         return samples
 
     def _log_prob(self, given):
-        temperature, logits = self.temperature, self.logits
+        temperature, logits = self.path_param(self.temperature), \
+                              self.path_param(self.logits)
         log_given = tf.log(given)
         log_1_minus_given = tf.log(1 - given)
         log_temperature = tf.log(temperature)
