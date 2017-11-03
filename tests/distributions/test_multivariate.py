@@ -442,7 +442,7 @@ class TestExpConcrete(tf.test.TestCase):
         utils.test_dtype_2parameter(self, ExpConcrete)
 
     def test_sample_reparameterized(self):
-        temperature = tf.ones([])
+        temperature = tf.constant(1.0)
         logits = tf.ones([2, 3])
         con_rep = ExpConcrete(temperature, logits)
         samples = con_rep.sample(tf.placeholder(tf.int32, shape=[]))
@@ -455,6 +455,33 @@ class TestExpConcrete(tf.test.TestCase):
         t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
         self.assertEqual(t_grads, None)
         self.assertEqual(logits_grads, None)
+
+    def test_path_derivative(self):
+        temperature = tf.constant(1.0)
+        logits = tf.ones([2, 3])
+        n_samples = tf.placeholder(tf.int32, shape=[])
+
+        con_rep = ExpConcrete(temperature, logits, use_path_derivative=True)
+        samples = con_rep.sample(n_samples)
+        log_prob = con_rep.log_prob(samples)
+        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        sample_grads = tf.gradients(log_prob, samples)
+        t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
+        logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
+        with self.test_session(use_gpu=True) as sess:
+            outs = sess.run([t_path_grads, t_true_grads,
+                             logits_path_grads, logits_true_grads],
+                            feed_dict={n_samples: 7})
+            t_path, t_true, logits_path, logits_true = outs
+            self.assertAllClose(t_path, t_true)
+            self.assertAllClose(logits_path, logits_true)
+
+        con_no_rep = ExpConcrete(temperature, logits, is_reparameterized=False, use_path_derivative=True)
+        samples = con_no_rep.sample(n_samples)
+        log_prob = con_no_rep.log_prob(samples)
+        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        self.assertTrue(t_path_grads is None)
+        self.assertTrue(logits_path_grads is None)
 
     def test_check_numerics(self):
         tau = tf.placeholder(tf.float32, None)
@@ -573,7 +600,7 @@ class TestConcrete(tf.test.TestCase):
         utils.test_dtype_2parameter(self, Concrete)
 
     def test_sample_reparameterized(self):
-        temperature = tf.ones([])
+        temperature = tf.constant(1.0)
         logits = tf.ones([2, 3])
         con_rep = Concrete(temperature, logits)
         samples = con_rep.sample(tf.placeholder(tf.int32, shape=[]))
@@ -586,6 +613,34 @@ class TestConcrete(tf.test.TestCase):
         t_grads, logits_grads = tf.gradients(samples, [temperature, logits])
         self.assertEqual(t_grads, None)
         self.assertEqual(logits_grads, None)
+
+    def test_path_derivative(self):
+        temperature = tf.constant(1.0)
+        logits = tf.ones([2, 3])
+        n_samples = tf.placeholder(tf.int32, shape=[])
+
+        con_rep = Concrete(temperature, logits, use_path_derivative=True)
+        samples = con_rep.sample(n_samples)
+        log_prob = con_rep.log_prob(samples)
+        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        sample_grads = tf.gradients(log_prob, samples)
+        t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
+        logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
+        with self.test_session(use_gpu=True) as sess:
+            outs = sess.run([t_path_grads, t_true_grads,
+                             logits_path_grads, logits_true_grads],
+                            feed_dict={n_samples: 7})
+            t_path, t_true, logits_path, logits_true = outs
+            self.assertAllClose(t_path, t_true)
+            self.assertAllClose(logits_path, logits_true)
+
+        con_no_rep = Concrete(temperature, logits, is_reparameterized=False,
+                              use_path_derivative=True)
+        samples = con_no_rep.sample(n_samples)
+        log_prob = con_no_rep.log_prob(samples)
+        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        self.assertTrue(t_path_grads is None)
+        self.assertTrue(logits_path_grads is None)
 
     def test_check_numerics(self):
         tau = tf.placeholder(tf.float32, None)
