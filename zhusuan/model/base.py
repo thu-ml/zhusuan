@@ -118,6 +118,9 @@ class StochasticTensor(TensorArithmeticMixin):
                 self._tensor = self.sample(self._n_samples)
         return self._tensor
 
+    def get_shape(self):
+        return self.tensor.get_shape()
+
     def sample(self, n_samples):
         """
         Return samples from this `StochasticTensor`.
