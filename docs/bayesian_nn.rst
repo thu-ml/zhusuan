@@ -22,7 +22,7 @@ inference on the weights, one can learn a predictor which both fits to the
 training data and knows about the uncertainty of its own prediction on test
 data. In this tutorial, we show how to implement BayesianNN in ZhuSuan.
 The full script for this tutorial is at
-`examples/tutorials/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/bayesian_nn.py>`_.
+`examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_.
 
 We use a regression dataset called
 `Boston housing <https://archive.ics.uci.edu/ml/datasets/Housing>`_. This has
@@ -48,8 +48,9 @@ bayesian neural network is as follows. Combining the observed input (:math:`x`) 
 the global network parameters (:math:`\{W_i\}_{i=1}^L`), the model outputs
 observed (:math:`y`).
 
-.. image:: ./figures/bayesian_nn.jpg
+.. image:: ./figures/bayesian_nn.png
     :align: center
+    :height: 300px
 
 Build the Model
 ---------------
@@ -57,7 +58,7 @@ Build the Model
 Following the forwarding process, first we need standard Normal
 distributions to generate the weights (:math:`\{W_i\}_{i=1}^L`).
 For a layer with ``n_in`` input units and ``n_out`` output units, the weights
-are of shape ``[n_out, n_in + 1]`` (one gained column for bias).
+are of shape ``[n_out, n_in + 1]`` (one additional column for bias).
 As presented in our graphical model, the latent variable of weights are global
 for all the data. So we need only one copy of them, that is, we need a
 :class:`~zhusuan.model.stochastic.Normal` StochasticTensor of shape
@@ -72,8 +73,8 @@ for all the data. So we need only one copy of them, that is, we need a
                 zs.Normal('w' + str(i), w_mu, std=1.,
                           n_samples=n_particles, group_ndims=2))
 
-To make the probabilities of weights in each layer evaluated together,
-``group_ndims`` is set to 2. For those who are not familiar with this
+To treat the weights in each layer as a whole and evaluate the probability of
+them together, ``group_ndims`` is set to 2. If you are unfamiliar with this
 property, see :ref:`dist-and-stochastic`.
 
 Then we write the feedforward process of neural networks, through which the
@@ -148,9 +149,9 @@ or uncertainty of weights given the training data.
 
 .. math::
 
-    p(W|\{(x_n, y_n)\}_{n=1:N}) \propto p(W)\prod_{n=1}^N p(y_n|x_n, W)
+    p(W|x_{1:N}, y_{1:N}) \propto p(W)\prod_{n=1}^N p(y_n|x_n, W)
 
-With the intractable marginal distribution :math:`p(y|x)`, we cannot directly
+Because the normalizing constant is intractable, we cannot directly
 compute the posterior distribution of network parameters
 (:math:`\{W_i\}_{i=1}^L`). In order to solve this problem, we use
 `Variational Inference <https://en.wikipedia.org/wiki/Variational_Bayesian_methods>`_,
@@ -159,7 +160,7 @@ i.e., using a variational distribution
 approximate the true posterior.
 The simplest variational posterior (:math:`q_{\phi_i}(W_i)`) we can specify
 is factorized (also called mean-field) Normal distribution parameterized
-by mean and log standard deviation.
+by its mean and log standard deviation.
 
 .. math::
 
@@ -184,58 +185,51 @@ The code for above definition is::
         return variational
 
 In Variational Inference, to make :math:`q_{\phi}(W)` approximate
-:math:`p(W|\{(x_n, y_n)\}_{n=1:N})` well.
+:math:`p(W|x_{1:N}, y_{1:N})` well.
 We need to maximize a lower bound of the marginal log probability
 (:math:`\log p(y|x)`):
 
 .. math::
 
-    \log p(y|x) &\geq \log p(y, W|x) - \mathrm{KL}(q_{\phi}(W)\|p(W)) \\
-    &= \mathbb{E}_{q_{\phi}(W)} \left[\log p(y|x, W)p(W) - \log q_{\phi}(W)\right] \\
+    \log p(y_{1:N}|x_{1:N}) &\geq \log p(y_{1:N}, W|x_{1:N}) - \mathrm{KL}(q_{\phi}(W)\|p(W)) \\
+    &= \mathbb{E}_{q_{\phi}(W)} \left[\log p(y_{1:N}|x_{1:N}, W)p(W) - \log q_{\phi}(W)\right] \\
     &= \mathcal{L}(\phi)
 
 The lower bound is equal to the marginal log
-likelihood if and only if :math:`q_{\phi}(W) = p(W|\{(x_n, y_n)\}_{n=1:N})`,
+likelihood if and only if :math:`q_{\phi}(W) = p(W|x_{1:N}, y_{1:N})`,
 for :math:`i` in :math:`1\cdots L`, when the
 `Kullback–Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`_
-between them (:math:`\mathrm{KL}(q_{\phi}(\{W\})\|p(W|\{(x_n, y_n)\}_{n=1:N})`)
+between them (:math:`\mathrm{KL}(q_{\phi}(\{W\})\|p(W|x_{1:N}, y_{1:N})`)
 is zero.
 
 This lower bound is usually called Evidence Lower Bound (ELBO). Note that the
 only probabilities we need to evaluate in it is the joint likelihood and
-the probability of the variational posterior. ELBO can also be rearranged as
-log conditional likelihood and KL divergence between variational posterior and prior.
-In our setting, both variaional posterior and prior are normal distribution. Their
-KL divergence is easy to compute. The log conditional likelihood is
+the probability of the variational posterior. The log conditional likelihood is
 
 .. math::
-    \log p(y|x, W) = \sum_{n=1}^N\log p(y_n|x_n, W)
+    \log p(y_{1:N}|x_{1:N}, W) = \sum_{n=1}^N\log p(y_n|x_n, W)
 
 Computing log conditional likelihood for the whole dataset is very time-consuming.
-To solve this problem, we take the idea of ``mini-batch`` to approximate the conditional
+In practice, we sub-sample a minibatch of data to approximate the conditional
 likelihood
 
 .. math::
-    \log p(y|x, W) \approx \frac{N}{M}\sum_{m=1}^M\log p(y_m| x_m, W)
+    \log p(y_{1:N}|x_{1:N}, W) \approx \frac{N}{M}\sum_{m=1}^M\log p(y_m| x_m, W)
 
-The dataset :math:`\{(x_m, y_m)\}_{m=1:M}` is a subset of :math:`M` nonrepetitive random samples from the training set
-:math:`\{(x_n, y_n)\}_{n=1:N}`. By setting :math:`M` relatively small, we can compute the formula
-above efficiently. What's more, using ``mini-batch`` brings us additional benefits.
-Training neural networks has a general problem that the parameters can be stuck in a local
-minimum, which limits the model performance. Therefore, in the training process,
-we hope the model parameters have the ability to jump out of the local minimum area when stuck at it
-and search in a bigger space to find the global minimum. ``Mini-batch`` samples brings along
-randomness, which gives the parameters greater chance to search in a bigger space. Therefore, using
-``mini-batch`` in training also helps optimization.
+Here :math:`\{(x_m, y_m)\}_{m=1:M}` is a subset including :math:`M`
+random samples from the training set :math:`\{(x_n, y_n)\}_{n=1:N}`. :math:`M`
+is called the batch size. By setting the batch size relatively small, we can
+compute the formula above efficiently. Moreover, using mini-batches brings
+additional benefits. Since a general problem for optimization algorithms is that the
+parameters can get stuck in a local minimum. Using mini-batches brings along
+randomness, which increases the chance for the algorithm to jump out of the local
+minimum.
 
 .. Note::
 
-    Different with some other models like VAE, BayesianNN's latent variables
-    :math:`\{W_i\}_{i=1}^L` are global for all the data, therefore the ELBO
-    has a slightly different expression, i.e., we don't explicitly condition
-    :math:`W` on each data in the variational posterior.
-
-.. TODO: talk about data subsampling
+    Different with some other models like VAE, Bayesian NN's latent variables
+    :math:`\{W_i\}_{i=1}^L` are global for all the data, therefore we don't
+    explicitly condition :math:`W` on each data in the variational posterior.
 
 We optimize this lower bound by
 `stochastic gradient descent <https://en.wikipedia.org/wiki/Stochastic_gradient_descent>`_.
@@ -256,11 +250,11 @@ The code for this part is::
         return tf.add_n(log_pws) + log_py_xw * N
 
     variational = mean_field_variational(layer_sizes, n_particles)
-    qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
+    qw_outputs = variational.query(w_names, outputs=True,
+                                   local_log_prob=True)
     latent = dict(zip(w_names, qw_outputs))
-    y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
     lower_bound = zs.variational.elbo(
-        log_joint, observed={'y': y_obs}, latent=latent, axis=0)
+        log_joint, observed={'y': y}, latent=latent, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
@@ -306,8 +300,9 @@ BayesianNN model ::
 
     # prediction: rmse & log likelihood
     observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y_obs})
-    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+    observed.update({'y': y})
+    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes,
+                               n_particles)
 
 The predictive mean is given by ``y_mean``.
 To see how this performs, we would like to compute some quantitative
@@ -337,7 +332,7 @@ This can also be computed by Monte Carlo estimation
 
 To be noted, as we usually standardized the data to make
 them have unit variance at beginning (check the full script
-`examples/tutorials/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/tutorials/bayesian_nn.py>`_),
+`examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_),
 we need to count its effect in our evaluation formulas. RMSE is proportional
 to the amplitude, therefore the final RMSE should be multiplied with
 the standard deviation. For log likelihood, it needs to be subtracted by a
@@ -345,8 +340,9 @@ log term. All together, the code for evaluation is::
 
     # prediction: rmse & log likelihood
     observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y_obs})
-    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+    observed.update({'y': y})
+    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes,
+                               n_particles)
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
     log_py_xw = model.local_log_prob('y')
@@ -359,14 +355,6 @@ Run Gradient Descent
 Again, everything is good before a run. Now add the following codes to
 run the training loop and see how Bayesian Neural Networks performs::
 
-    # Define training/evaluation parameters
-    lb_samples = 10
-    ll_samples = 5000
-    epochs = 500
-    batch_size = 10
-    iters = int(np.floor(x_train.shape[0] / float(batch_size)))
-    test_freq = 10
-
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -376,11 +364,12 @@ run the training loop and see how Bayesian Neural Networks performs::
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
                 _, lb = sess.run(
-                    [infer, lower_bound],
+                    [infer_op, lower_bound],
                     feed_dict={n_particles: lb_samples,
                                x: x_batch, y: y_batch})
                 lbs.append(lb)
-            print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
+            print('Epoch {}: Lower bound = {}'
+                  .format(epoch, np.mean(lbs)))
 
             if epoch % test_freq == 0:
                 test_lb, test_rmse, test_ll = sess.run(
@@ -388,6 +377,6 @@ run the training loop and see how Bayesian Neural Networks performs::
                     feed_dict={n_particles: ll_samples,
                                x: x_test, y: y_test})
                 print('>> TEST')
-                print('>> lower bound = {}, rmse = {}, log_likelihood = {}'
-                      .format(test_lb, test_rmse, test_ll))
+                print('>> lower bound = {}, rmse = {}, log_likelihood '
+                      '= {}'.format(test_lb, test_rmse, test_ll))
 
