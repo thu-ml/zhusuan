@@ -43,8 +43,8 @@ If you are developing ZhuSuan, you may want to install in an
 Documentation
 -------------
 
-Documentation is available online:
-`zhusuan.readthedocs.io <http://zhusuan.readthedocs.io>`_
+* Tutorials and API Docs: `zhusuan.readthedocs.io <http://zhusuan.readthedocs.io>`_
+* White Paper: `ZhuSuan: A Library for Bayesian Deep Learning <https://arxiv.org/abs/1709.05870>`_
 
 Examples
 --------
@@ -76,6 +76,21 @@ This can be done by::
   `VIMCO <examples/sigmoid_belief_nets/sbn_vimco.py>`_
 * Logistic Normal Topic Model:
   `HMC <examples/topic_models/lntm_mcem.py>`_
+
+
+Citing ZhuSuan
+--------------
+
+If you find ZhuSuan useful, please consider citing it in your publications.
+We provide a BibTeX entry of the ZhuSuan white paper below.
+
+@ARTICLE{zhusuan2017,
+	title={ZhuSuan: A Library for Bayesian Deep Learning},
+	author={Shi, Jiaxin and Chen, Jianfei. and Zhu, Jun and Sun, Shengyang
+	and Luo, Yucen and Gu, Yihong and Zhou, Yuhao},
+	journal={arXiv preprint arXiv:1709.05870},
+	year=2017,
+}
 
 Contribution
 ------------
