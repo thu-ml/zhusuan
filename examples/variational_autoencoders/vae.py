@@ -8,7 +8,6 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
@@ -22,19 +21,19 @@ def vae(observed, n, x_dim, z_dim, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, z_dim])
         z = zs.Normal('z', z_mean, std=1., group_ndims=1, n_samples=n_particles)
-        lx_z = layers.fully_connected(z, 500)
-        lx_z = layers.fully_connected(lx_z, 500)
-        x_logits = layers.fully_connected(lx_z, x_dim, activation_fn=None)
+        lx_z = tf.layers.dense(z, 500, activation=tf.nn.relu)
+        lx_z = tf.layers.dense(lx_z, 500, activation=tf.nn.relu)
+        x_logits = tf.layers.dense(lx_z, x_dim)
         x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model, x_logits
 
 
 def q_net(x, z_dim, n_particles):
     with zs.BayesianNet() as variational:
-        lz_x = layers.fully_connected(tf.to_float(x), 500)
-        lz_x = layers.fully_connected(lz_x, 500)
-        z_mean = layers.fully_connected(lz_x, z_dim, activation_fn=None)
-        z_logstd = layers.fully_connected(lz_x, z_dim, activation_fn=None)
+        lz_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+        lz_x = tf.layers.dense(lz_x, 500, activation=tf.nn.relu)
+        z_mean = tf.layers.dense(lz_x, z_dim)
+        z_logstd = tf.layers.dense(lz_x, z_dim)
         z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1,
                       n_samples=n_particles)
     return variational

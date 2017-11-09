@@ -12,13 +12,12 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
 
 from examples import conf
-from examples.utils import dataset, makedirs
+from examples.utils import dataset
 
 
 @zs.reuse('model')
@@ -27,9 +26,9 @@ def vae(observed, n, n_x, n_z, n_particles):
         z_mean = tf.zeros([n, n_z])
         z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
                       group_ndims=1)
-        lx_z = layers.fully_connected(z, 500)
-        lx_z = layers.fully_connected(lx_z, 500)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        lx_z = tf.layers.dense(z, 500, activation=tf.nn.relu)
+        lx_z = tf.layers.dense(lx_z, 500, activation=tf.nn.relu)
+        x_logits = tf.layers.dense(lx_z, n_x)
         x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
@@ -37,16 +36,16 @@ def vae(observed, n, n_x, n_z, n_particles):
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as variational:
-        lz_x = layers.fully_connected(tf.to_float(x), 500)
-        lz_x = layers.fully_connected(lz_x, 500)
-        lz_mean = layers.fully_connected(lz_x, n_z, activation_fn=None)
-        lz_logstd = layers.fully_connected(lz_x, n_z, activation_fn=None)
+        lz_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+        lz_x = tf.layers.dense(lz_x, 500, activation=tf.nn.relu)
+        lz_mean = tf.layers.dense(lz_x, n_z)
+        lz_logstd = tf.layers.dense(lz_x, n_z)
         z = zs.Normal('z', lz_mean, logstd=lz_logstd, n_samples=n_particles,
                       group_ndims=1)
     return variational
 
 
-if __name__ == "__main__":
+def main():
     tf.set_random_seed(1237)
 
     # Load MNIST
@@ -63,7 +62,6 @@ if __name__ == "__main__":
 
     # Define training/evaluation parameters
     lb_samples = 50
-    ll_samples = 1000
     epochs = 3000
     batch_size = 1000
     iters = x_train.shape[0] // batch_size
@@ -73,8 +71,6 @@ if __name__ == "__main__":
     test_freq = 10
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
-    save_freq = 100
-    result_path = "results/iwae/iwae50"
 
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
@@ -102,21 +98,11 @@ if __name__ == "__main__":
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer_op = optimizer.minimize(cost)
 
-    saver = tf.train.Saver(max_to_keep=10)
-
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        # Restore from the latest checkpoint
-        ckpt_file = tf.train.latest_checkpoint(result_path)
-        begin_epoch = 1
-        if ckpt_file is not None:
-            print('Restoring model from {}...'.format(ckpt_file))
-            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
-            saver.restore(sess, ckpt_file)
-
-        for epoch in range(begin_epoch, epochs + 1):
+        for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
@@ -148,10 +134,6 @@ if __name__ == "__main__":
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test IWAE bound = {}'.format(np.mean(test_lbs)))
 
-            if epoch % save_freq == 0:
-                print('Saving model...')
-                save_path = os.path.join(result_path,
-                                         "iwae.epoch.{}.ckpt".format(epoch))
-                makedirs(save_path)
-                saver.save(sess, save_path)
-                print('Done')
+
+if __name__ == "__main__":
+    main()
