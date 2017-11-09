@@ -8,7 +8,6 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
@@ -25,9 +24,10 @@ def M2(observed, n, n_x, n_y, n_z, n_particles):
                       group_ndims=1)
         y_logits = tf.zeros([n, n_y])
         y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
-        lx_zy = layers.fully_connected(tf.concat([z, tf.to_float(y)], 2), 500)
-        lx_zy = layers.fully_connected(lx_zy, 500)
-        x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
+        lx_zy = tf.layers.dense(tf.concat([z, tf.to_float(y)], 2), 500,
+                                activation=tf.nn.relu)
+        lx_zy = tf.layers.dense(lx_zy, 500, activation=tf.nn.relu)
+        x_logits = tf.layers.dense(lx_zy, n_x)
         x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
@@ -35,10 +35,11 @@ def M2(observed, n, n_x, n_y, n_z, n_particles):
 @zs.reuse('variational')
 def qz_xy(x, y, n_z, n_particles):
     with zs.BayesianNet() as variational:
-        lz_xy = layers.fully_connected(tf.to_float(tf.concat([x, y], 1)), 500)
-        lz_xy = layers.fully_connected(lz_xy, 500)
-        lz_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-        lz_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
+        lz_xy = tf.layers.dense(tf.to_float(tf.concat([x, y], 1)), 500,
+                                activation=tf.nn.relu)
+        lz_xy = tf.layers.dense(lz_xy, 500, activation=tf.nn.relu)
+        lz_mean = tf.layers.dense(lz_xy, n_z)
+        lz_logstd = tf.layers.dense(lz_xy, n_z)
         z = zs.Normal('z', lz_mean, logstd=lz_logstd, n_samples=n_particles,
                       group_ndims=1)
     return variational
@@ -46,9 +47,9 @@ def qz_xy(x, y, n_z, n_particles):
 
 @zs.reuse('classifier')
 def qy_x(x, n_y):
-    ly_x = layers.fully_connected(tf.to_float(x), 500)
-    ly_x = layers.fully_connected(ly_x, 500)
-    ly_x = layers.fully_connected(ly_x, n_y, activation_fn=None)
+    ly_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+    ly_x = tf.layers.dense(ly_x, 500, activation=tf.nn.relu)
+    ly_x = tf.layers.dense(ly_x, n_y)
     return ly_x
 
 
@@ -166,9 +167,8 @@ if __name__ == "__main__":
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_unlabeled)
-            lbs_labeled = []
-            lbs_unlabeled = []
-            train_accs = []
+            lbs_labeled, lbs_unlabeled, train_accs = [], [], []
+
             for t in range(iters):
                 labeled_indices = np.random.randint(0, n_labeled,
                                                     size=batch_size)
@@ -190,16 +190,17 @@ if __name__ == "__main__":
                 lbs_labeled.append(lb_labeled)
                 lbs_unlabeled.append(lb_unlabeled)
                 train_accs.append(train_acc)
+
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s), Lower bound: labeled = {}, '
                   'unlabeled = {} Accuracy: {:.2f}%'.
                   format(epoch, time_epoch, np.mean(lbs_labeled),
                          np.mean(lbs_unlabeled), np.mean(train_accs) * 100.))
+
             if epoch % test_freq == 0:
                 time_test = -time.time()
-                test_lls_labeled = []
-                test_lls_unlabeled = []
-                test_accs = []
+                test_lls_labeled, test_lls_unlabeled, test_accs = [], [], []
+
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
@@ -214,6 +215,7 @@ if __name__ == "__main__":
                     test_lls_labeled.append(test_ll_labeled)
                     test_lls_unlabeled.append(test_ll_unlabeled)
                     test_accs.append(test_acc)
+
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound: labeled = {}, unlabeled = {}'.

@@ -8,7 +8,6 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
@@ -30,9 +29,9 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
                 'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
                 dtype=tf.float32)
             z = tf.reshape(z, [n_particles, n, n_z * n_k])
-        lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
-        lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+        lx_z = tf.layers.dense(z, 200, activation=tf.tanh)
+        lx_z = tf.layers.dense(lx_z, 200, activation=tf.tanh)
+        x_logits = tf.layers.dense(lx_z, n_x)
         x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
@@ -40,11 +39,10 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
     with zs.BayesianNet(observed=observed) as variational:
-        lz_x = layers.fully_connected(
-            tf.to_float(x), 200, activation_fn=tf.tanh)
-        lz_x = layers.fully_connected(lz_x, 200, activation_fn=tf.tanh)
-        z_logits = layers.fully_connected(lz_x, n_z * n_k, activation_fn=None)
-        z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
+        lz_x = tf.layers.dense(tf.to_float(x), 200, activation=tf.tanh)
+        lz_x = tf.layers.dense(lz_x, 200, activation=tf.tanh)
+        z_logits = tf.layers.dense(lz_x, n_z * n_k)
+        z_stacked_logits = tf.reshape(z_logits, [-1, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
                                n_samples=n_particles, group_ndims=1)
@@ -55,7 +53,7 @@ def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
     return variational
 
 
-if __name__ == '__main__':
+def main():
     tf.set_random_seed(1237)
     np.random.seed(1237)
 
@@ -84,8 +82,6 @@ if __name__ == '__main__':
     test_freq = 25
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
-    save_freq = 50
-    result_path = "results/concrete-vae"
 
     # Build the computation graph
     tau_p = tf.placeholder(tf.float32, shape=[], name="tau_p")
@@ -133,25 +129,11 @@ if __name__ == '__main__':
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer_op = optimizer.minimize(relaxed_cost)
 
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
-
-    saver = tf.train.Saver(max_to_keep=10)
-
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        # Restore from the latest checkpoint
-        ckpt_file = tf.train.latest_checkpoint(result_path)
-        begin_epoch = 1
-        if ckpt_file is not None:
-            print('Restoring model from {}...'.format(ckpt_file))
-            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
-            saver.restore(sess, ckpt_file)
-
-        for epoch in range(begin_epoch, epochs + 1):
+        for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
             np.random.shuffle(x_train)
 
@@ -182,7 +164,7 @@ if __name__ == '__main__':
                 for t in range(test_iters):
                     test_x_batch = x_test[t * test_batch_size:
                                           (t + 1) * test_batch_size]
-                    feed_dict = {x: x_batch_bin,
+                    feed_dict = {x: test_x_batch,
                                  n_particles: ll_samples,
                                  tau_p: tau_p0,
                                  tau_q: tau_q0}
@@ -198,11 +180,6 @@ if __name__ == '__main__':
                 print('>> Test log likelihood (IS) = {}'.format(
                     np.mean(test_lls)))
 
-            if epoch % save_freq == 0:
-                print('Saving model...')
-                save_path = os.path.join(result_path,
-                                         "vae.epoch.{}.ckpt".format(epoch))
-                if not os.path.exists(os.path.dirname(save_path)):
-                    os.makedirs(os.path.dirname(save_path))
-                saver.save(sess, save_path)
-                print('Done')
+
+if __name__ == "__main__":
+    main()

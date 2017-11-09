@@ -8,7 +8,6 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
@@ -23,37 +22,36 @@ def sbn(observed, n, n_x, n_h, n_particles):
         h3_logits = tf.zeros([n, n_h])
         h3 = zs.Bernoulli('h3', h3_logits, n_samples=n_particles,
                           group_ndims=1, dtype=tf.float32)
-        h2_logits = layers.fully_connected(h3, n_h, activation_fn=None)
+        h2_logits = tf.layers.dense(h3, n_h)
         h2 = zs.Bernoulli('h2', h2_logits, group_ndims=1, dtype=tf.float32)
-        h1_logits = layers.fully_connected(h2, n_h, activation_fn=None)
+        h1_logits = tf.layers.dense(h2, n_h)
         h1 = zs.Bernoulli('h1', h1_logits, group_ndims=1, dtype=tf.float32)
-        x_logits = layers.fully_connected(h1, n_x, activation_fn=None)
+        x_logits = tf.layers.dense(h1, n_x)
         x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
 def q_net(x, n_h, n_particles):
     with zs.BayesianNet() as variational:
-        h1_logits = layers.fully_connected(
-            tf.to_float(x), n_h, activation_fn=None)
+        h1_logits = tf.layers.dense(tf.to_float(x), n_h)
         h1 = zs.Bernoulli('h1', h1_logits, n_samples=n_particles,
                           group_ndims=1, dtype=tf.float32)
-        h2_logits = layers.fully_connected(h1, n_h, activation_fn=None)
+        h2_logits = tf.layers.dense(h1, n_h)
         h2 = zs.Bernoulli('h2', h2_logits, group_ndims=1, dtype=tf.float32)
-        h3_logits = layers.fully_connected(h2, n_h, activation_fn=None)
+        h3_logits = tf.layers.dense(h2, n_h)
         h3 = zs.Bernoulli('h3', h3_logits, group_ndims=1, dtype=tf.float32)
     return variational
 
 
-if __name__ == "__main__":
+def main():
     tf.set_random_seed(1237)
+    np.random.seed(1234)
 
     # Load MNIST
     data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         dataset.load_mnist_realval(data_path)
     x_train = np.vstack([x_train, x_valid]).astype('float32')
-    np.random.seed(1234)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
     n_x = x_train.shape[1]
 
@@ -123,6 +121,7 @@ if __name__ == "__main__":
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
                 epoch, time_epoch, np.mean(lbs)))
+
             if epoch % test_freq == 0:
                 time_test = -time.time()
                 test_lbs = []
@@ -142,3 +141,7 @@ if __name__ == "__main__":
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
                 print('>> Test log likelihood = {}'.format(np.mean(test_lls)))
+
+
+if __name__ == "__main__":
+    main()
