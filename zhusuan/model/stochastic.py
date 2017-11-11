@@ -459,6 +459,12 @@ class Multinomial(StochasticTensor):
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
     :param dtype: The value type of this `StochasticTensor`.
+    :param is_normalized: A Bool. If True, for each sample it describes a
+        multinomial distribution with n_experiments experiments. If False, for
+        each sample it describes a multiplication of categorical distribution, like
+        in LDA. The number of experiments is not fixed, so we do not support
+        sampling if is_normalized == False now. Default is False.
+        More concrete example can be seen in zs.distributions.Multinomial.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a vector of counts for all categories.
@@ -467,16 +473,18 @@ class Multinomial(StochasticTensor):
     def __init__(self,
                  name,
                  logits,
-                 n_experiments,
+                 n_experiments=None,
                  n_samples=None,
                  group_ndims=0,
                  dtype=None,
+                 is_normalized=False,
                  **kwargs):
         multinomial = distributions.Multinomial(
             logits,
-            n_experiments,
+            n_experiments=n_experiments,
             group_ndims=group_ndims,
             dtype=dtype,
+            is_normalized=is_normalized,
             **kwargs
         )
         super(Multinomial, self).__init__(name, multinomial, n_samples)

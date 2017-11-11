@@ -29,16 +29,19 @@ log_delta = 10.0
 @zs.reuse('model')
 def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
-        D_multiple = tf.stack([D, 1])
-        n_chains_multiple = tf.stack([n_chains, 1, 1])
         eta = zs.Normal('eta',
                         tf.tile(tf.expand_dims(
-                            tf.tile(tf.expand_dims(eta_mean, 0), D_multiple),
-                            0), n_chains_multiple),
+                            tf.tile(tf.expand_dims(eta_mean, 0), [D, 1]),
+                            0), [n_chains, 1, 1]),
                         logstd=eta_logstd,
                         group_ndims=1)
         beta = zs.Normal('beta', tf.zeros([K, V]), logstd=log_delta,
                          group_ndims=1)
+        theta = tf.reshape(tf.nn.softmax(eta), [-1, K])
+        phi = tf.nn.softmax(beta)
+        pred = tf.matmul(theta, phi)
+        pred = tf.reshape(pred, tf.stack([n_chains, D, V]))
+        x = zs.Multinomial('x', tf.log(pred), is_normalized=False)
     return model
 
 
@@ -77,7 +80,7 @@ if __name__ == "__main__":
     Eta_logstd = np.zeros(K, dtype=np.float32)
 
     # Build the computation graph
-    x = tf.placeholder(tf.float32, shape=[D, V], name='x')
+    x = tf.placeholder(tf.int32, shape=[D, V], name='x')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([n_chains, D, K]), name='eta')
@@ -86,33 +89,16 @@ if __name__ == "__main__":
     phi = tf.nn.softmax(beta)
     init_eta_ph = tf.assign(eta, eta_ph)
 
-    D_ph = tf.placeholder(tf.int32, shape=[], name='D_ph')
-    n_chains_ph = tf.placeholder(tf.int32, shape=[], name='n_chains_ph')
-
-    def joint_obj(observed):
-        model = lntm(observed, n_chains_ph, D_ph, K, V, eta_mean, eta_logstd)
-
-        log_p_eta, log_p_beta = \
-            model.local_log_prob(['eta', 'beta'])
-
-        theta = tf.nn.softmax(observed['eta'])
-        theta = tf.reshape(theta, [-1, K])
-        phi = tf.nn.softmax(observed['beta'])
-        pred = tf.matmul(theta, phi)
-        pred = tf.reshape(pred, tf.stack([n_chains_ph, D_ph, V]))
-        x = tf.expand_dims(observed['x'], 0)
-        log_px = tf.reduce_sum(x * tf.log(pred), -1)
-
-        # Shape:
-        # log_p_eta, log_px: [n_chains, D]
-        # log_p_beta: [K]
-        return log_p_eta, log_p_beta, log_px
-
     def e_obj(observed):
-        log_p_eta, _, log_px = joint_obj(observed)
-        return log_p_eta + log_px
+        model = lntm(observed, n_chains, D, K, V,
+            eta_mean, eta_logstd)
+        return model.local_log_prob('eta') + model.local_log_prob('x')
+    
+    x_obs = tf.expand_dims(x, 0)
+    model = lntm({'x': x_obs, 'eta': eta, 'beta': beta}, n_chains, D, K, V,
+        eta_mean, eta_logstd)
+    lp_eta, lp_beta, lp_x = model.local_log_prob(['eta', 'beta', 'x'])
 
-    lp_eta, lp_beta, lp_x = joint_obj({'x': x, 'eta': eta, 'beta': beta})
     log_likelihood = tf.reduce_sum(tf.reduce_mean(lp_x, axis=0), axis=0)
     log_joint = tf.reduce_sum(lp_beta) + log_likelihood
     sample_op, hmc_info = hmc.sample(
@@ -135,12 +121,17 @@ if __name__ == "__main__":
     _n_chains = 25
     _n_temperatures = 1000
 
-    _x = tf.placeholder(tf.float32, shape=[_D, V], name='x')
+    _x = tf.placeholder(tf.int32, shape=[_D, V], name='x')
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta')
 
     def _log_prior(observed):
-        log_p_eta, _, _ = joint_obj(observed)
-        return log_p_eta
+        return  lntm(observed, _n_chains, _D, K, V,
+            eta_mean, eta_logstd).local_log_prob('eta')
+
+    def _e_obj(observed):
+        model = lntm(observed, _n_chains, _D, K, V,
+            eta_mean, eta_logstd)
+        return model.local_log_prob('eta') + model.local_log_prob('x')
 
     _prior_samples = {'eta': lntm({}, _n_chains, _D, K, V,
                       eta_mean, eta_logstd).outputs('eta')}
@@ -148,7 +139,7 @@ if __name__ == "__main__":
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)
 
-    _ais = zs.evaluation.AIS(_log_prior, e_obj, _prior_samples, _hmc,
+    _ais = zs.evaluation.AIS(_log_prior, _e_obj, _prior_samples, _hmc,
                              observed={'x': _x, 'beta': beta},
                              latent={'eta': _eta},
                              n_chains=_n_chains,
@@ -181,9 +172,7 @@ if __name__ == "__main__":
                          hmc_info.acceptance_rate],
                         feed_dict={x: x_batch,
                                    eta_mean: Eta_mean,
-                                   eta_logstd: Eta_logstd,
-                                   D_ph: D,
-                                   n_chains_ph: n_chains})
+                                   eta_logstd: Eta_logstd})
                     accs.append(acc)
                     # Store eta for the persistent chain
                     if j + 1 == num_e_steps:
@@ -196,9 +185,7 @@ if __name__ == "__main__":
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
                                learning_rate_ph: learning_rate * t0 / (
-                                   t0 + epoch),
-                               D_ph: D,
-                               n_chains_ph: n_chains})
+                                   t0 + epoch)})
                 lls.append(ll)
 
             # Update hyper-parameters
@@ -217,9 +204,7 @@ if __name__ == "__main__":
 
         ll_lb = _ais.run(sess, feed_dict={_x: X_test,
                                           eta_mean: Eta_mean,
-                                          eta_logstd: Eta_logstd,
-                                          D_ph: _D,
-                                          n_chains_ph: _n_chains})
+                                          eta_logstd: Eta_logstd})
 
         time_ais += time.time()
 
