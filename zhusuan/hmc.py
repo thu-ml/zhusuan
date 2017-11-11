@@ -260,6 +260,8 @@ class HMC:
                 step_size, adapt_step_size, gamma, t0, kappa,
                 target_acceptance_rate)
         if adapt_mass is not None:
+            if adapt_step_size is None:
+                raise Exception('If adapt mass, we should also adapt step size')
             self.adapt_mass = tf.convert_to_tensor(
                 adapt_mass, dtype=tf.bool, name="adapt_mass")
         else:
@@ -326,9 +328,6 @@ class HMC:
                 tf.less(last_acceptance_rate, self.target_acceptance_rate),
                 tf.less(acceptance_rate, self.target_acceptance_rate)))
             return [new_step_size, acceptance_rate, cond]
-            # return [tf.Print(new_step_size,
-            #                  [new_step_size, acceptance_rate], "Tuning"),
-            #          acceptance_rate, cond]
 
         new_step_size, _, _ = tf.while_loop(
             loop_cond,
@@ -439,15 +438,16 @@ class HMC:
         current_q = copy(self.q)
 
         # Initialize step size
-        if_initialize_step_size = tf.logical_or(
-            tf.equal(new_t, 1),
-            tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
-
-        def iss():
-            return self._init_step_size(current_q, current_p, mass,
-                                        get_gradient, get_log_posterior)
-        new_step_size = tf.stop_gradient(
-            tf.cond(if_initialize_step_size, iss, lambda: self.step_size))
+        if self.adapt_step_size is None:
+            new_step_size = self.step_size
+        else:
+            if_initialize_step_size = tf.logical_or(tf.equal(new_t, 1),
+              tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
+            def iss():
+                return self._init_step_size(current_q, current_p, mass,
+                                            get_gradient, get_log_posterior)
+            new_step_size = tf.stop_gradient(
+                tf.cond(if_initialize_step_size, iss, lambda: self.step_size))
 
         # Leapfrog
         current_q, current_p = self._leapfrog(
@@ -460,6 +460,11 @@ class HMC:
                     self.q, p, current_q, current_p,
                     get_log_posterior, mass, self.data_axes)
 
+            old_log_prob = tf.check_numerics(old_log_prob, 'HMC: old_log_prob is NaN! Try better initialization?')
+            is_nan = tf.logical_or(tf.is_nan(acceptance_rate),
+                                    tf.is_nan(new_log_prob))
+            acceptance_rate = tf.where(is_nan,
+                    tf.zeros_like(acceptance_rate), acceptance_rate)
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))
             if_accept = tf.less(u01, acceptance_rate)
 
