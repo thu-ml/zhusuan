@@ -43,7 +43,7 @@ class Multinomial(Distribution):
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
     :param dtype: The value type of samples from the distribution.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -58,7 +58,8 @@ class Multinomial(Distribution):
                  logits,
                  n_experiments,
                  dtype=None,
-                 group_event_ndims=0):
+                 group_ndims=0,
+                 **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Multinomial.logits')])
@@ -78,7 +79,8 @@ class Multinomial(Distribution):
             param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def logits(self):
@@ -158,7 +160,7 @@ class OnehotCategorical(Distribution):
         .. math:: \\mathrm{logits} \\propto \\log p
 
     :param dtype: The value type of samples from the distribution.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -169,7 +171,7 @@ class OnehotCategorical(Distribution):
     `[i, j, ..., k, :]` is a one-hot vector of the selected category.
     """
 
-    def __init__(self, logits, dtype=None, group_event_ndims=0):
+    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'OnehotCategorical.logits')])
@@ -186,7 +188,8 @@ class OnehotCategorical(Distribution):
             param_dtype=param_dtype,
             is_continuous=False,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def logits(self):
@@ -269,7 +272,7 @@ class Dirichlet(Distribution):
     :param alpha: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
         Each slice `[i, j, ..., k, :]` represents the concentration parameter
         of a Dirichlet distribution. Should be positive.
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -286,8 +289,9 @@ class Dirichlet(Distribution):
 
     def __init__(self,
                  alpha,
-                 group_event_ndims=0,
-                 check_numerics=False):
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
         self._alpha = tf.convert_to_tensor(alpha)
         dtype = assert_same_float_dtype(
             [(self._alpha, 'Dirichlet.alpha')])
@@ -321,7 +325,8 @@ class Dirichlet(Distribution):
             param_dtype=dtype,
             is_continuous=True,
             is_reparameterized=False,
-            group_event_ndims=group_event_ndims)
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def alpha(self):
@@ -391,7 +396,7 @@ class ExpConcrete(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -400,15 +405,22 @@ class ExpConcrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
                  temperature,
                  logits,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 use_path_derivative=False,
+                 check_numerics=False,
+                 **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         self._temperature = tf.convert_to_tensor(temperature)
         param_dtype = assert_same_float_dtype(
@@ -427,7 +439,9 @@ class ExpConcrete(Distribution):
             param_dtype=param_dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            use_path_derivative=use_path_derivative,
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def temperature(self):
@@ -477,7 +491,8 @@ class ExpConcrete(Distribution):
         return samples
 
     def _log_prob(self, given):
-        logits, temperature = self.logits, self.temperature
+        logits, temperature = self.path_param(self.logits),\
+                              self.path_param(self.temperature)
         n = tf.cast(self.n_categories, self.dtype)
         log_temperature = tf.log(temperature)
 
@@ -514,7 +529,7 @@ class Concrete(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param group_event_ndims: A 0-D `int32` Tensor representing the number of
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
@@ -523,15 +538,22 @@ class Concrete(Distribution):
     :param is_reparameterized: A Bool. If True, gradients on samples from this
         distribution are allowed to propagate into inputs, using the
         reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
     :param check_numerics: Bool. Whether to check numeric issues.
     """
 
     def __init__(self,
                  temperature,
                  logits,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  is_reparameterized=True,
-                 check_numerics=False):
+                 use_path_derivative=False,
+                 check_numerics=False,
+                 **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         self._temperature = tf.convert_to_tensor(temperature)
         param_dtype = assert_same_float_dtype(
@@ -550,7 +572,9 @@ class Concrete(Distribution):
             param_dtype=param_dtype,
             is_continuous=True,
             is_reparameterized=is_reparameterized,
-            group_event_ndims=group_event_ndims)
+            use_path_derivative=use_path_derivative,
+            group_ndims=group_ndims,
+            **kwargs)
 
     @property
     def temperature(self):
@@ -601,7 +625,8 @@ class Concrete(Distribution):
         return samples
 
     def _log_prob(self, given):
-        logits, temperature = self.logits, self.temperature
+        logits, temperature = self.path_param(self.logits), \
+                              self.path_param(self.temperature)
         log_given = tf.log(given)
         log_temperature = tf.log(temperature)
         n = tf.cast(self.n_categories, self.dtype)

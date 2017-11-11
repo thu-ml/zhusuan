@@ -8,7 +8,6 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
@@ -23,41 +22,38 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
         z_stacked_logits = tf.zeros([n, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+                               n_samples=n_particles, group_ndims=1)
             z = tf.exp(tf.reshape(z, [n_particles, n, n_z * n_k]))
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
-                                     n_samples=n_particles,
-                                     group_event_ndims=1)
+            z = zs.OnehotCategorical(
+                'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
+                dtype=tf.float32)
             z = tf.reshape(z, [n_particles, n, n_z * n_k])
-        lx_z = layers.fully_connected(z, 200, activation_fn=tf.tanh)
-        lx_z = layers.fully_connected(lx_z, 200, activation_fn=tf.tanh)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        lx_z = tf.layers.dense(z, 200, activation=tf.tanh)
+        lx_z = tf.layers.dense(lx_z, 200, activation=tf.tanh)
+        x_logits = tf.layers.dense(lx_z, n_x)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
     with zs.BayesianNet(observed=observed) as variational:
-        lz_x = layers.fully_connected(
-            tf.to_float(x), 200, activation_fn=tf.tanh)
-        lz_x = layers.fully_connected(lz_x, 200, activation_fn=tf.tanh)
-        z_logits = layers.fully_connected(lz_x, n_z * n_k, activation_fn=None)
-        z_stacked_logits = tf.reshape(z_logits, [n, n_z, n_k])
+        lz_x = tf.layers.dense(tf.to_float(x), 200, activation=tf.tanh)
+        lz_x = tf.layers.dense(lz_x, 200, activation=tf.tanh)
+        z_logits = tf.layers.dense(lz_x, n_z * n_k)
+        z_stacked_logits = tf.reshape(z_logits, [-1, n_z, n_k])
         if relaxed:
             z = zs.ExpConcrete('z', tau, z_stacked_logits,
-                               n_samples=n_particles, group_event_ndims=1)
+                               n_samples=n_particles, group_ndims=1)
         else:
-            z = zs.OnehotCategorical('z', z_stacked_logits,
-                                     dtype=tf.float32,
-                                     n_samples=n_particles,
-                                     group_event_ndims=1)
+            z = zs.OnehotCategorical(
+                'z', z_stacked_logits, n_samples=n_particles, group_ndims=1,
+                dtype=tf.float32)
     return variational
 
 
-if __name__ == '__main__':
+def main():
     tf.set_random_seed(1237)
     np.random.seed(1237)
 
@@ -86,8 +82,6 @@ if __name__ == '__main__':
     test_freq = 25
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
-    save_freq = 50
-    result_path = "results/concrete-vae"
 
     # Build the computation graph
     tau_p = tf.placeholder(tf.float32, shape=[], name="tau_p")
@@ -112,45 +106,34 @@ if __name__ == '__main__':
         qz_samples, log_qz = variational.query('z', outputs=True,
                                                local_log_prob=True)
 
-        lower_bound = tf.reduce_mean(zs.sgvb(
-            log_joint, {'x': x_obs}, {'z': [qz_samples, log_qz]}, axis=0))
+        lower_bound = zs.variational.elbo(log_joint,
+                                          observed={'x': x_obs},
+                                          latent={'z': [qz_samples, log_qz]},
+                                          axis=0)
+        cost = tf.reduce_mean(lower_bound.sgvb())
+        lower_bound = tf.reduce_mean(lower_bound)
 
         # Importance sampling estimates of marginal log likelihood
         is_log_likelihood = tf.reduce_mean(
             zs.is_loglikelihood(log_joint, {'x': x_obs},
                                 {'z': [qz_samples, log_qz]}, axis=0))
 
-        return lower_bound, is_log_likelihood
+        return cost, lower_bound, is_log_likelihood
 
     # For training
-    relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
+    relaxed_cost, relaxed_lower_bound, _ = lower_bound_and_log_likelihood(True)
     # For testing and generating
-    lower_bound, is_log_likelihood = lower_bound_and_log_likelihood(False)
+    _, lower_bound, is_log_likelihood = lower_bound_and_log_likelihood(False)
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    grads = optimizer.compute_gradients(-relaxed_lower_bound)
-    infer = optimizer.apply_gradients(grads)
-
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
-
-    saver = tf.train.Saver(max_to_keep=10)
+    infer_op = optimizer.minimize(relaxed_cost)
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        # Restore from the latest checkpoint
-        ckpt_file = tf.train.latest_checkpoint(result_path)
-        begin_epoch = 1
-        if ckpt_file is not None:
-            print('Restoring model from {}...'.format(ckpt_file))
-            begin_epoch = int(ckpt_file.split('.')[-2]) + 1
-            saver.restore(sess, ckpt_file)
-
-        for epoch in range(begin_epoch, epochs + 1):
+        for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
             np.random.shuffle(x_train)
 
@@ -167,7 +150,7 @@ if __name__ == '__main__':
                              n_particles: lb_samples,
                              tau_p: tau_p0,
                              tau_q: tau_q0}
-                _, lb = sess.run([infer, relaxed_lower_bound],
+                _, lb = sess.run([infer_op, relaxed_lower_bound],
                                  feed_dict=feed_dict)
                 lbs.append(lb)
             time_epoch += time.time()
@@ -181,7 +164,7 @@ if __name__ == '__main__':
                 for t in range(test_iters):
                     test_x_batch = x_test[t * test_batch_size:
                                           (t + 1) * test_batch_size]
-                    feed_dict = {x: x_batch_bin,
+                    feed_dict = {x: test_x_batch,
                                  n_particles: ll_samples,
                                  tau_p: tau_p0,
                                  tau_q: tau_q0}
@@ -197,11 +180,6 @@ if __name__ == '__main__':
                 print('>> Test log likelihood (IS) = {}'.format(
                     np.mean(test_lls)))
 
-            if epoch % save_freq == 0:
-                print('Saving model...')
-                save_path = os.path.join(result_path,
-                                         "vae.epoch.{}.ckpt".format(epoch))
-                if not os.path.exists(os.path.dirname(save_path)):
-                    os.makedirs(os.path.dirname(save_path))
-                saver.save(sess, save_path)
-                print('Done')
+
+if __name__ == "__main__":
+    main()

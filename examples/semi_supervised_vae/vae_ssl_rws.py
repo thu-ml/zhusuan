@@ -8,7 +8,6 @@ import os
 import time
 
 import tensorflow as tf
-from tensorflow.contrib import layers
 from six.moves import range
 import numpy as np
 import zhusuan as zs
@@ -22,30 +21,32 @@ def M2(observed, n, n_x, n_y, n_z, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, n_z])
         z = zs.Normal('z', z_mean, std=1., n_samples=n_particles,
-                      group_event_ndims=1)
+                      group_ndims=1)
         y_logits = tf.zeros([n, n_y])
         y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
-        lx_zy = layers.fully_connected(tf.concat([z, tf.to_float(y)], 2), 500)
-        lx_zy = layers.fully_connected(lx_zy, 500)
-        x_logits = layers.fully_connected(lx_zy, n_x, activation_fn=None)
-        x = zs.Bernoulli('x', x_logits, group_event_ndims=1)
+        lx_zy = tf.layers.dense(tf.concat([z, tf.to_float(y)], 2), 500,
+                                activation=tf.nn.relu)
+        lx_zy = tf.layers.dense(lx_zy, 500, activation=tf.nn.relu)
+        x_logits = tf.layers.dense(lx_zy, n_x)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
 @zs.reuse('qz_xy')
 def qz_xy(x, y, n_z):
-    lz_xy = layers.fully_connected(tf.to_float(tf.concat([x, y], -1)), 500)
-    lz_xy = layers.fully_connected(lz_xy, 500)
-    z_mean = layers.fully_connected(lz_xy, n_z, activation_fn=None)
-    z_logstd = layers.fully_connected(lz_xy, n_z, activation_fn=None)
+    lz_xy = tf.layers.dense(tf.to_float(tf.concat([x, y], -1)), 500,
+                            activation=tf.nn.relu)
+    lz_xy = tf.layers.dense(lz_xy, 500, activation=tf.nn.relu)
+    z_mean = tf.layers.dense(lz_xy, n_z)
+    z_logstd = tf.layers.dense(lz_xy, n_z)
     return z_mean, z_logstd
 
 
 @zs.reuse('qy_x')
 def qy_x(x, n_y):
-    ly_x = layers.fully_connected(tf.to_float(x), 500)
-    ly_x = layers.fully_connected(ly_x, 500)
-    y_logits = layers.fully_connected(ly_x, n_y, activation_fn=None)
+    ly_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+    ly_x = tf.layers.dense(ly_x, 500, activation=tf.nn.relu)
+    y_logits = tf.layers.dense(ly_x, n_y)
     return y_logits
 
 
@@ -53,7 +54,7 @@ def labeled_proposal(x, y, n_z, n_particles):
     with zs.BayesianNet() as proposal:
         z_mean, z_logstd = qz_xy(x, y, n_z)
         z = zs.Normal('z', z_mean, logstd=z_logstd, n_samples=n_particles,
-                      group_event_ndims=1, is_reparameterized=False)
+                      group_ndims=1, is_reparameterized=False)
     return proposal
 
 
@@ -63,17 +64,17 @@ def unlabeled_proposal(x, n_y, n_z, n_particles):
         y = zs.OnehotCategorical('y', y_logits, n_samples=n_particles)
         x_tiled = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
         z_mean, z_logstd = qz_xy(x_tiled, y, n_z)
-        z = zs.Normal('z', z_mean, logstd=z_logstd, group_event_ndims=1,
+        z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1,
                       is_reparameterized=False)
     return proposal
 
 
-if __name__ == "__main__":
+def main():
     tf.set_random_seed(1234)
+    np.random.seed(1234)
 
     # Load MNIST
     data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
-    np.random.seed(1234)
     x_labeled, t_labeled, x_unlabeled, x_test, t_test = \
         dataset.load_mnist_semi_supervised(data_path, one_hot=True)
     x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
@@ -117,11 +118,20 @@ if __name__ == "__main__":
                             [n_particles, 1, 1])
     proposal = labeled_proposal(x_labeled_ph, y_labeled_ph, n_z, n_particles)
     qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
-    labeled_cost, labeled_log_likelihood = zs.rws(
-        log_joint, {'x': x_labeled_obs, 'y': y_labeled_obs},
-        {'z': [qz_samples, log_qz]}, axis=0)
-    labeled_cost = tf.reduce_mean(labeled_cost)
-    labeled_log_likelihood = tf.reduce_mean(labeled_log_likelihood)
+
+    # adapting the proposal
+    labeled_klpq_obj = zs.variational.klpq(log_joint,
+                                           observed={'x': x_labeled_obs,
+                                                     'y': y_labeled_obs},
+                                           latent={'z': [qz_samples, log_qz]},
+                                           axis=0)
+    labeled_klpq_cost = tf.reduce_mean(labeled_klpq_obj.rws())
+
+    # learning model parameters
+    labeled_lower_bound = tf.reduce_mean(
+        zs.variational.importance_weighted_objective(
+            log_joint, observed={'x': x_labeled_obs, 'y': y_labeled_obs},
+            latent={'z': [qz_samples, log_qz]}, axis=0))
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.int32, shape=(None, n_x), name='x_u')
@@ -130,11 +140,20 @@ if __name__ == "__main__":
     proposal = unlabeled_proposal(x_unlabeled_ph, n_y, n_z, n_particles)
     qy_samples, log_qy = proposal.query('y', outputs=True, local_log_prob=True)
     qz_samples, log_qz = proposal.query('z', outputs=True, local_log_prob=True)
-    unlabeled_cost, unlabeled_log_likelihood = zs.rws(
-        log_joint, {'x': x_unlabeled_obs},
-        {'y': [qy_samples, log_qy], 'z': [qz_samples, log_qz]}, axis=0)
-    unlabeled_cost = tf.reduce_mean(unlabeled_cost)
-    unlabeled_log_likelihood = tf.reduce_mean(unlabeled_log_likelihood)
+
+    # adapting the proposal
+    unlabeled_klpq_obj = zs.variational.klpq(
+        log_joint, observed={'x': x_unlabeled_obs},
+        latent={'y': [qy_samples, log_qy],
+                'z': [qz_samples, log_qz]}, axis=0)
+    unlabeled_klpq_cost = tf.reduce_mean(unlabeled_klpq_obj.rws())
+
+    # learning model parameters
+    unlabeled_lower_bound = tf.reduce_mean(
+        zs.variational.importance_weighted_objective(
+            log_joint, observed={'x': x_unlabeled_obs},
+            latent={'y': [qy_samples, log_qy],
+                    'z': [qz_samples, log_qz]}, axis=0))
 
     # Build classifier
     qy_logits_l = qy_x(x_labeled_ph, n_y)
@@ -147,12 +166,20 @@ if __name__ == "__main__":
     log_qy_x = onehot_cat.log_prob(y_labeled_ph)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
 
+    klpq_cost = labeled_klpq_cost + unlabeled_klpq_cost
+    model_cost = -labeled_lower_bound - unlabeled_lower_bound
     # Gather gradients
-    cost = (labeled_cost + unlabeled_cost + classifier_cost) / 2.
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    grads = optimizer.compute_gradients(cost)
-    infer = optimizer.apply_gradients(grads)
+
+    model_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
+                                     scope='model')
+    model_grads = optimizer.compute_gradients(model_cost / 2., model_params)
+    klpq_grads = optimizer.compute_gradients(klpq_cost / 2.)
+    classifier_grads = optimizer.compute_gradients(classifier_cost / 2.)
+
+    infer_op = optimizer.apply_gradients(
+        model_grads + klpq_grads + classifier_grads)
 
     params = tf.trainable_variables()
     for i in params:
@@ -166,9 +193,8 @@ if __name__ == "__main__":
             if epoch % anneal_lr_freq == 0:
                 learning_rate *= anneal_lr_rate
             np.random.shuffle(x_unlabeled)
-            lbs_labeled = []
-            lbs_unlabeled = []
-            train_accs = []
+            lbs_labeled, lbs_unlabeled, train_accs = [], [], []
+
             for t in range(iters):
                 labeled_indices = np.random.randint(0, n_labeled,
                                                     size=batch_size)
@@ -176,14 +202,12 @@ if __name__ == "__main__":
                 y_labeled_batch = t_labeled[labeled_indices]
                 x_unlabeled_batch = x_unlabeled[t * batch_size:
                                                 (t + 1) * batch_size]
-                x_unlabeled_batch = x_unlabeled[t * batch_size:
-                                                (t + 1) * batch_size]
                 x_labeled_batch_bin = sess.run(
                     x_bin, feed_dict={x_orig: x_labeled_batch})
                 x_unlabeled_batch_bin = sess.run(
                     x_bin, feed_dict={x_orig: x_unlabeled_batch})
                 _, lb_labeled, lb_unlabeled, train_acc = sess.run(
-                    [infer, labeled_log_likelihood, unlabeled_log_likelihood,
+                    [infer_op, labeled_lower_bound, unlabeled_lower_bound,
                      acc],
                     feed_dict={x_labeled_ph: x_labeled_batch_bin,
                                y_labeled_ph: y_labeled_batch,
@@ -193,23 +217,24 @@ if __name__ == "__main__":
                 lbs_labeled.append(lb_labeled)
                 lbs_unlabeled.append(lb_unlabeled)
                 train_accs.append(train_acc)
+
             time_epoch += time.time()
             print('Epoch {} ({:.1f}s), Lower bound: labeled = {}, '
                   'unlabeled = {} Accuracy: {:.2f}%'.
                   format(epoch, time_epoch, np.mean(lbs_labeled),
                          np.mean(lbs_unlabeled), np.mean(train_accs) * 100.))
+
             if epoch % test_freq == 0:
                 time_test = -time.time()
-                test_lls_labeled = []
-                test_lls_unlabeled = []
-                test_accs = []
+                test_lls_labeled, test_lls_unlabeled, test_accs = [], [], []
+
                 for t in range(test_iters):
                     test_x_batch = x_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_y_batch = t_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
-                        [labeled_log_likelihood, unlabeled_log_likelihood,
+                        [labeled_lower_bound, unlabeled_lower_bound,
                          acc],
                         feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
@@ -218,6 +243,7 @@ if __name__ == "__main__":
                     test_lls_labeled.append(test_ll_labeled)
                     test_lls_unlabeled.append(test_ll_unlabeled)
                     test_accs.append(test_acc)
+
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound: labeled = {}, unlabeled = {}'.
@@ -225,3 +251,7 @@ if __name__ == "__main__":
                              np.mean(test_lls_unlabeled)))
                 print('>> Test accuracy: {:.2f}%'.format(
                     100. * np.mean(test_accs)))
+
+
+if __name__ == "__main__":
+    main()

@@ -27,7 +27,7 @@ def var_dropout(observed, x, n, net_size, n_particles, is_training):
             eps_mean = tf.ones([n, n_in])
             eps = zs.Normal(
                 'layer' + str(i) + '/eps', eps_mean, std=1.,
-                n_samples=n_particles, group_event_ndims=1)
+                n_samples=n_particles, group_ndims=1)
             h = layers.fully_connected(
                 h * eps, n_out, normalizer_fn=layers.batch_norm,
                 normalizer_params=normalizer_params)
@@ -48,7 +48,7 @@ def q(observed, n, net_size, n_particles):
             alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
             eps = zs.Normal('layer' + str(i) + '/eps',
                             1., logstd=0.5 * tf.log(alpha + 1e-10),
-                            n_samples=n_particles, group_event_ndims=1)
+                            n_samples=n_particles, group_ndims=1)
     return variational
 
 

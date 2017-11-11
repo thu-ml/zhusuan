@@ -5,7 +5,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 import os
-import time
 
 import tensorflow as tf
 from six.moves import range, zip
@@ -23,8 +22,9 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                               layer_sizes[1:])):
             w_mu = tf.zeros([1, n_out, n_in + 1])
-            ws.append(zs.Normal('w' + str(i), w_mu, std=1.,
-                                n_samples=n_particles, group_event_ndims=2))
+            ws.append(
+                zs.Normal('w' + str(i), w_mu, std=1.,
+                          n_samples=n_particles, group_ndims=2))
 
         # forward
         ly_x = tf.expand_dims(
@@ -33,8 +33,7 @@ def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
             w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
             ly_x = tf.concat(
                 [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-            ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.cast(tf.shape(ly_x)[2],
-                                                        tf.float32))
+            ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
             if i < len(ws) - 1:
                 ly_x = tf.nn.relu(ly_x)
 
@@ -59,11 +58,11 @@ def mean_field_variational(layer_sizes, n_particles):
                 initializer=tf.constant_initializer(0.))
             ws.append(
                 zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                          n_samples=n_particles, group_event_ndims=2))
+                          n_samples=n_particles, group_ndims=2))
     return variational
 
 
-if __name__ == '__main__':
+def main():
     tf.set_random_seed(1237)
     np.random.seed(1234)
 
@@ -83,22 +82,10 @@ if __name__ == '__main__':
     # Define model parameters
     n_hiddens = [50]
 
-    # Define training/evaluation parameters
-    lb_samples = 10
-    ll_samples = 5000
-    epochs = 500
-    batch_size = 10
-    iters = int(np.floor(x_train.shape[0] / float(batch_size)))
-    test_freq = 10
-    learning_rate = 0.01
-    anneal_lr_freq = 100
-    anneal_lr_rate = 0.75
-
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x = tf.placeholder(tf.float32, shape=[None, n_x])
     y = tf.placeholder(tf.float32, shape=[None])
-    y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
     layer_sizes = [n_x] + n_hiddens + [1]
     w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
 
@@ -111,17 +98,17 @@ if __name__ == '__main__':
     variational = mean_field_variational(layer_sizes, n_particles)
     qw_outputs = variational.query(w_names, outputs=True, local_log_prob=True)
     latent = dict(zip(w_names, qw_outputs))
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'y': y_obs}, latent, axis=0))
+    lower_bound = zs.variational.elbo(
+        log_joint, observed={'y': y}, latent=latent, axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[])
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    grads = optimizer.compute_gradients(-lower_bound)
-    infer = optimizer.apply_gradients(grads)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+    infer_op = optimizer.minimize(cost)
 
     # prediction: rmse & log likelihood
     observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y_obs})
+    observed.update({'y': y})
     model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
@@ -129,39 +116,38 @@ if __name__ == '__main__':
     log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - \
         tf.log(std_y_train)
 
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
+    # Define training/evaluation parameters
+    lb_samples = 10
+    ll_samples = 5000
+    epochs = 500
+    batch_size = 10
+    iters = int(np.floor(x_train.shape[0] / float(batch_size)))
+    test_freq = 10
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epochs + 1):
-            time_epoch = -time.time()
-            if epoch % anneal_lr_freq == 0:
-                learning_rate *= anneal_lr_rate
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
                 _, lb = sess.run(
-                    [infer, lower_bound],
+                    [infer_op, lower_bound],
                     feed_dict={n_particles: lb_samples,
-                               learning_rate_ph: learning_rate,
                                x: x_batch, y: y_batch})
                 lbs.append(lb)
-            time_epoch += time.time()
-            print('Epoch {} ({:.1f}s): Lower bound = {}'.format(
-                epoch, time_epoch, np.mean(lbs)))
+            print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
 
             if epoch % test_freq == 0:
-                time_test = -time.time()
                 test_lb, test_rmse, test_ll = sess.run(
                     [lower_bound, rmse, log_likelihood],
                     feed_dict={n_particles: ll_samples,
                                x: x_test, y: y_test})
-                time_test += time.time()
-                print('>>> TEST ({:.1f}s)'.format(time_test))
-                print('>> Test lower bound = {}'.format(test_lb))
-                print('>> Test rmse = {}'.format(test_rmse))
-                print('>> Test log_likelihood = {}'.format(test_ll))
+                print('>> TEST')
+                print('>> Test lower bound = {}, rmse = {}, log_likelihood = {}'
+                      .format(test_lb, test_rmse, test_ll))
+
+
+if __name__ == "__main__":
+    main()

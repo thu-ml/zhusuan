@@ -20,11 +20,11 @@ class TestNormal(tf.test.TestCase):
             logstd = tf.zeros([2, 3])
             std = tf.exp(logstd)
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            group_ndims = tf.placeholder(tf.int32, shape=[])
             a = Normal('a', mean, logstd=logstd, n_samples=n_samples,
-                       group_event_ndims=group_event_ndims)
+                       group_ndims=group_ndims)
             b = Normal('b', mean, std=std, n_samples=n_samples,
-                       group_event_ndims=group_event_ndims)
+                       group_ndims=group_ndims)
 
         for st in [a, b]:
             sample_ops = set(get_backward_ops(st.tensor))
@@ -32,8 +32,9 @@ class TestNormal(tf.test.TestCase):
                 self.assertTrue(i.op in sample_ops)
             log_p = st.log_prob(np.ones([2, 3]))
             log_p_ops = set(get_backward_ops(log_p))
-            for i in [mean, logstd, group_event_ndims]:
+            for i in [mean, logstd, group_ndims]:
                 self.assertTrue(i.op in log_p_ops)
+            self.assertTrue(a.get_shape()[1:], mean.get_shape())
 
 
 class TestBernoulli(tf.test.TestCase):
@@ -41,15 +42,16 @@ class TestBernoulli(tf.test.TestCase):
         with BayesianNet():
             logits = tf.zeros([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Bernoulli('a', logits, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Bernoulli('a', logits, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, group_event_ndims]:
+        for i in [logits, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())
 
 
 class TestCategorical(tf.test.TestCase):
@@ -57,15 +59,16 @@ class TestCategorical(tf.test.TestCase):
         with BayesianNet():
             logits = tf.zeros([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=())
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Categorical('a', logits, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Categorical('a', logits, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.array([0, 1]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, group_event_ndims]:
+        for i in [logits, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape()[:-1])
 
 
 class TestUniform(tf.test.TestCase):
@@ -74,15 +77,16 @@ class TestUniform(tf.test.TestCase):
             minval = tf.zeros([2, 3])
             maxval = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Uniform('a', minval, maxval, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Uniform('a', minval, maxval, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [minval, maxval, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.zeros([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [minval, maxval, group_event_ndims]:
+        for i in [minval, maxval, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], minval.get_shape())
 
 
 class TestGamma(tf.test.TestCase):
@@ -91,15 +95,16 @@ class TestGamma(tf.test.TestCase):
             alpha = tf.ones([2, 3])
             beta = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Gamma('a', alpha, beta, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Gamma('a', alpha, beta, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [alpha, beta, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [alpha, beta, group_event_ndims]:
+        for i in [alpha, beta, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestBeta(tf.test.TestCase):
@@ -108,15 +113,16 @@ class TestBeta(tf.test.TestCase):
             alpha = tf.ones([2, 3])
             beta = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Beta('a', alpha, beta, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Beta('a', alpha, beta, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [alpha, beta, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]) * 0.5)
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [alpha, beta, group_event_ndims]:
+        for i in [alpha, beta, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestPoisson(tf.test.TestCase):
@@ -124,15 +130,16 @@ class TestPoisson(tf.test.TestCase):
         with BayesianNet():
             rate = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Poisson('a', rate, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Poisson('a', rate, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [rate, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [rate, group_event_ndims]:
+        for i in [rate, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], rate.get_shape())
 
 
 class TestBinomial(tf.test.TestCase):
@@ -141,16 +148,17 @@ class TestBinomial(tf.test.TestCase):
             logits = tf.zeros([2, 3])
             n_experiments = tf.placeholder(tf.int32, shape=[])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            group_ndims = tf.placeholder(tf.int32, shape=[])
             a = Binomial('a', logits, n_experiments, n_samples,
-                         group_event_ndims)
+                         group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_experiments, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, n_experiments, group_event_ndims]:
+        for i in [logits, n_experiments, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())
 
 
 class TestMultinomial(tf.test.TestCase):
@@ -159,16 +167,17 @@ class TestMultinomial(tf.test.TestCase):
             logits = tf.ones([2, 3])
             n_experiments = tf.placeholder(tf.int32, shape=[])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
+            group_ndims = tf.placeholder(tf.int32, shape=[])
             a = Multinomial('a', logits, n_experiments, n_samples,
-                            group_event_ndims)
+                            group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_experiments, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, n_experiments, group_event_ndims]:
+        for i in [logits, n_experiments, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())
 
 
 class TestOnehotCategorical(tf.test.TestCase):
@@ -176,15 +185,16 @@ class TestOnehotCategorical(tf.test.TestCase):
         with BayesianNet():
             logits = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = OnehotCategorical('a', logits, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = OnehotCategorical('a', logits, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(tf.one_hot([0, 2], 3, dtype=tf.int32))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, group_event_ndims]:
+        for i in [logits, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())
 
 
 class TestDirichlet(tf.test.TestCase):
@@ -192,15 +202,16 @@ class TestDirichlet(tf.test.TestCase):
         with BayesianNet():
             alpha = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Dirichlet('a', alpha, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Dirichlet('a', alpha, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [alpha, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.array([[0.2, 0.3, 0.5], [0.1, 0.7, 0.2]]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [alpha, group_event_ndims]:
+        for i in [alpha, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestInverseGamma(tf.test.TestCase):
@@ -209,15 +220,16 @@ class TestInverseGamma(tf.test.TestCase):
             alpha = tf.ones([2, 3])
             beta = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = InverseGamma('a', alpha, beta, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = InverseGamma('a', alpha, beta, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [alpha, beta, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [alpha, beta, group_event_ndims]:
+        for i in [alpha, beta, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestLaplace(tf.test.TestCase):
@@ -226,15 +238,16 @@ class TestLaplace(tf.test.TestCase):
             loc = tf.zeros([2, 3])
             scale = tf.ones([2, 3])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Laplace('a', loc, scale, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Laplace('a', loc, scale, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [loc, scale, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [loc, scale, group_event_ndims]:
+        for i in [loc, scale, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], loc.get_shape())
 
 
 class TestBinConcrete(tf.test.TestCase):
@@ -243,15 +256,16 @@ class TestBinConcrete(tf.test.TestCase):
             logits = tf.zeros([2, 3])
             tau = tf.ones([])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = BinConcrete('a', tau, logits, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = BinConcrete('a', tau, logits, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, tau, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, tau, group_event_ndims]:
+        for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())
 
 
 class TestConcrete(tf.test.TestCase):
@@ -260,15 +274,16 @@ class TestConcrete(tf.test.TestCase):
             logits = tf.zeros([2, 3])
             tau = tf.ones([])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Concrete('a', tau, logits, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Concrete('a', tau, logits, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, tau, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, tau, group_event_ndims]:
+        for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())
 
 
 class TestExpConcrete(tf.test.TestCase):
@@ -277,12 +292,13 @@ class TestExpConcrete(tf.test.TestCase):
             logits = tf.zeros([2, 3])
             tau = tf.ones([])
             n_samples = tf.placeholder(tf.int32, shape=[])
-            group_event_ndims = tf.placeholder(tf.int32, shape=[])
-            a = ExpConcrete('a', tau, logits, n_samples, group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = ExpConcrete('a', tau, logits, n_samples, group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, tau, n_samples]:
             self.assertTrue(i.op in sample_ops)
         log_p = a.log_prob(np.ones([2, 3]))
         log_p_ops = set(get_backward_ops(log_p))
-        for i in [logits, tau, group_event_ndims]:
+        for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
+        self.assertTrue(a.get_shape()[1:], logits.get_shape())

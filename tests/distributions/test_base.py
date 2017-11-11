@@ -15,13 +15,13 @@ class Dist(Distribution):
     def __init__(self,
                  dtype=tf.float32,
                  param_dtype=tf.float32,
-                 group_event_ndims=0,
+                 group_ndims=0,
                  shape_fully_defined=True):
         super(Dist, self).__init__(dtype,
                                    param_dtype,
                                    is_continuous=True,
                                    is_reparameterized=True,
-                                   group_event_ndims=group_event_ndims)
+                                   group_ndims=group_ndims)
         self._shape_fully_defined = shape_fully_defined
 
     def _value_shape(self):
@@ -56,12 +56,12 @@ class TestDistributions(tf.test.TestCase):
                             param_dtype=tf.float32,
                             is_continuous=True,
                             is_reparameterized=True,
-                            group_event_ndims=2)
+                            group_ndims=2)
         self.assertEqual(dist.dtype, tf.float32)
         self.assertEqual(dist.param_dtype, tf.float32)
         self.assertEqual(dist.is_continuous, True)
         self.assertEqual(dist.is_reparameterized, True)
-        self.assertEqual(dist.group_event_ndims, 2)
+        self.assertEqual(dist.group_ndims, 2)
         with self.assertRaises(NotImplementedError):
             dist._value_shape()
         with self.assertRaises(NotImplementedError):
@@ -78,15 +78,15 @@ class TestDistributions(tf.test.TestCase):
             dist._prob(tf.ones([2, 3, 4, 5]))
 
         with self.assertRaisesRegexp(ValueError, "must be non-negative"):
-            dist2 = Distribution(tf.float32, tf.float32, True, True, -1)
+            dist2 = Distribution(tf.float32, tf.float32, True, True, False, -1)
 
     def test_subclass(self):
         with self.test_session(use_gpu=True):
-            dist = Dist(group_event_ndims=2)
+            dist = Dist(group_ndims=2)
             self.assertEqual(dist.dtype, tf.float32)
             self.assertEqual(dist.is_continuous, True)
             self.assertEqual(dist.is_reparameterized, True)
-            self.assertEqual(dist.group_event_ndims, 2)
+            self.assertEqual(dist.group_ndims, 2)
 
             # shape
             static_v_shape = dist.get_value_shape()
@@ -155,15 +155,14 @@ class TestDistributions(tf.test.TestCase):
                 p_3.eval(feed_dict={given_3: np.ones((1, 1, 2, 3, 4, 5))}),
                 np.ones((1, 1, 2)))
 
-            group_event_ndims = tf.placeholder(tf.int32)
-            dist2 = Dist(group_event_ndims=group_event_ndims)
+            group_ndims = tf.placeholder(tf.int32)
+            dist2 = Dist(group_ndims=group_ndims)
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "must be non-negative"):
-                dist2.group_event_ndims.eval(feed_dict={group_event_ndims: -1})
+                dist2.group_ndims.eval(feed_dict={group_ndims: -1})
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "should be a scalar"):
-                dist2.group_event_ndims.eval(
-                    feed_dict={group_event_ndims: [1, 2]})
+                dist2.group_ndims.eval(feed_dict={group_ndims: [1, 2]})
 
             # shape not fully defined
             dist3 = Dist(shape_fully_defined=False)

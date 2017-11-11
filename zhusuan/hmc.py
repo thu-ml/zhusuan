@@ -156,7 +156,7 @@ class HMCInfo(object):
     can get fine control of the sampling process by monitoring these
     statistics.
 
-    .. warning::
+    .. note::
 
         Attributes provided in this structure must be fetched together with the
         corresponding sampling operation and should not be fetched anywhere
@@ -213,7 +213,7 @@ class HMC:
         multiple times per :class:`HMC` class. Please declare one :class:`HMC`
         class per each invoke of the :meth:`sample` method.
 
-    .. warning::
+    .. note::
 
         When the adaptations are on, the sampler is not reversible.
         To guarantee current equilibrium, the user should only turn on
