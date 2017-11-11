@@ -40,16 +40,6 @@ class Multinomial(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param n_experiments: If is_normalized == True, it is a 0-D `int32` Tensor,
-        meaning the number of experiments for each sample. If is_normalized
-        == False, then it is not used.
-    :param dtype: The value type of samples from the distribution.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
     :param is_normalized: A Bool. If True, for each sample it describes a
         multinomial distribution with n_experiments experiments. If False, for
         each sample it describes a multiplication of categorical distribution, like
@@ -60,10 +50,10 @@ class Multinomial(Distribution):
         >>> _ = tf.InteractiveSession()
         >>> logits = [0.5, 0.5]
         >>> x = zs.distributions.Multinomial(logits, n_experiments=2, \
-                    is_normalized=True)
+                    						 is_normalized=True)
         >>> x.sample(2).eval()
         array([[1, 1],
-                      [0, 2]], dtype=int32)  # example output
+               [0, 2]], dtype=int32)  # example output
         >>> x.log_prob([[0,2],[1,1]]).eval()
         array([-1.38629436, -0.69314718], dtype=float32)
         # [-1.3863, -0.6931] = ln([0.25, 0.5])
@@ -71,7 +61,7 @@ class Multinomial(Distribution):
         # 0.5 = 0.5*0.5+0.5*0.5 = (2!)/(1!*1!) * 0.5 * 0.5
 
         >>> x = zs.distributions.Multinomial(logits, n_experiments=None, \
-                    is_normalized=False)
+                    						 is_normalized=False)
         >>> x.sample(2).eval()
         NotImplementedError: Sampling general "sum of categorical"distribution is not supported now
         >>> x.log_prob([[0,2],[1,1]]).eval()
@@ -79,9 +69,19 @@ class Multinomial(Distribution):
         # [-1.3863, -1.3863] = ln([0.25, 0.25])
         # 0.25 = 0.5*0.5
         >>> x.log_prob([[0,3],[1,1]]).eval()   # Number of experiments can vary
-                                                                                # between samples
+                                               # between samples
         array([-2.07944155, -1.38629436], dtype=float32)
         # [-2.0794, -1.3863] = ln([0.125, 0.25])
+    :param n_experiments: If is_normalized == True, it is a 0-D `int32` Tensor,
+        meaning the number of experiments for each sample. If is_normalized
+        == False, then it is not used.
+    :param dtype: The value type of samples from the distribution.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
 
     A single sample is a N-D Tensor with the same shape as logits. Each slice
     `[i, j, ..., k, :]` is a vector of counts for all categories.
@@ -89,10 +89,10 @@ class Multinomial(Distribution):
 
     def __init__(self,
                  logits,
+                 is_normalized=False,
                  n_experiments=None,
                  dtype=None,
                  group_ndims=0,
-                 is_normalized=False,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
@@ -131,7 +131,11 @@ class Multinomial(Distribution):
     @property
     def n_experiments(self):
         """The number of experiments for each sample."""
-        return self._n_experiments
+        if self.is_normalized:
+            return self._n_experiments
+        else:
+            raise NotImplementedError("n_experiments property is invalid now" +
+                                      "when is_normalized == False")
 
     def _value_shape(self):
         return tf.convert_to_tensor([self.n_categories], tf.int32)
@@ -170,8 +174,8 @@ class Multinomial(Distribution):
                 tf.one_hot(samples, self.n_categories, dtype=self.dtype), axis=1)
             return samples
         else:
-            raise NotImplementedError('Sampling general "sum of categorical"' + \
-                'distribution is not supported now')
+            raise NotImplementedError('Sampling when is_normalized == False' + \
+                ' (also means #experiments varies between samples) is not supported now')
 
     def _log_prob(self, given):
         given = tf.cast(given, self.param_dtype)
