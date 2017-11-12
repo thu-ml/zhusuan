@@ -48,7 +48,7 @@ bayesian neural network is as follows. Combining the observed input (:math:`x`) 
 the global network parameters (:math:`\{W_i\}_{i=1}^L`), the model outputs
 observed (:math:`y`).
 
-.. image:: ./figures/bayesian_nn.png
+.. image:: static/images/bayesian_nn.png
     :align: center
     :height: 300px
 
