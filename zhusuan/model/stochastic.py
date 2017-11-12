@@ -29,6 +29,8 @@ __all__ = [
     'BinConcrete',
     'ExpConcrete',
     'Concrete',
+    'Empirical',
+    'Implicit',
 ]
 
 
@@ -811,3 +813,82 @@ class Concrete(StochasticTensor):
             **kwargs
         )
         super(Concrete, self).__init__(name, concrete, n_samples)
+
+
+class Empirical(StochasticTensor):
+    """
+    The class of Empirical `StochasticTensor`.
+    You can not sample or query log_probabilities without providing observations.
+    See :class:`~zhusuan.model.base.Empirical` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param batch_shape: A list or tuple describing the `batch_shape` of the distribution.
+        The entries of the list can either be int, Dimension or None.
+    :param dtype: The value type of samples from the distribution.
+    :param value_shape: A list or tuple describing the `value_shape` of the distribution.
+        The entries of the list can either be int, Dimension or None.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_continuous: Whether the distribution is continuous or not.
+        If None will consider it continuous only if `dtype` is a float type.
+    """
+
+    def __init__(self,
+                 name,
+                 batch_shape,
+                 dtype,
+                 value_shape=None,
+                 group_ndims=0,
+                 is_continuous=None,
+                 n_samples=None,
+                 **kwargs):
+        norm = distributions.Empirical(
+            batch_shape, dtype,
+            value_shape=value_shape,
+            group_ndims=group_ndims,
+            is_continous=is_continuous,
+            **kwargs
+        )
+        super(Empirical, self).__init__(name, norm, n_samples)
+
+
+class Implicit(StochasticTensor):
+    """
+    The class of Implicit `StochasticTensor`.
+    This distribution always sample the implicit tensor provided.
+    See :class:`~zhusuan.model.base.Implicit` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param implicit: A N-D (N >= 1) `float` Tensor
+    :param value_shape: A list or tuple describing the `value_shape` of the distribution.
+        The entries of the list can either be int, Dimension or None.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_continuous: Whether the distribution is continuous or not.
+        If None will consider it continuous only if `dtype` is a float type.
+    """
+
+    def __init__(self,
+                 name,
+                 implicit,
+                 value_shape=None,
+                 group_ndims=0,
+                 n_samples=None,
+                 **kwargs):
+        norm = distributions.Implicit(
+            implicit,
+            value_shape=value_shape,
+            group_ndims=group_ndims,
+            **kwargs
+        )
+        super(Implicit, self).__init__(name, norm, n_samples)
