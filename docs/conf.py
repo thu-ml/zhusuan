@@ -97,7 +97,6 @@ html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme_options = {
     'collapse_navigation': False,
     'logo_only': True,
-    # 'logo': 'images/zhusuan-logo-v.svg',
     # 'description': 'A library for Bayesian Deep Learning.',
     # 'github_user': 'thu-ml',
     # 'github_repo': 'zhusuan',
@@ -118,11 +117,8 @@ html_static_path = ['_static']
 html_logo = '_static/images/zhusuan-logo-v.svg'
 
 
-html_context = {
-    'css_files': [
-        '_static/css/style.css'
-    ],
-}
+def setup(app):
+    app.add_stylesheet("css/style.css")
 
 
 # html_sidebars = {
