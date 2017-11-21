@@ -50,24 +50,28 @@ After installation, open your python console and type::
 If no error occurs, you've successfully installed ZhuSuan.
 
 
-Tutorials
----------
+.. toctree::
+   :maxdepth: 1
+   :caption: Tutorials
+
+   tutorials/vae
+   tutorials/concepts
+   tutorials/bayesian_nn
+
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: API Docs
 
-   tutorials
-
-
-API Docs
---------
-
-Information on specific functions, classes, and methods.
-
-.. toctree::
-   :maxdepth: 2
-
-   api
+   api/zhusuan.distributions
+   api/zhusuan.model
+   api/zhusuan.variational
+   api/zhusuan.hmc
+   api/zhusuan.evaluation
+   api/zhusuan.transform
+   api/zhusuan.diagnostics
+   api/zhusuan.utils
+   api/zhusuan.legacy
 
 
 Indices and tables

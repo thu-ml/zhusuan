@@ -19,7 +19,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('..'))
-
+import sphinx_rtd_theme
 
 # -- General configuration ------------------------------------------------
 
@@ -90,23 +90,26 @@ add_module_names = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+html_theme = "sphinx_rtd_theme"
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
 #
 html_theme_options = {
-    'logo': 'images/zhusuan-logo-v.png',
-    'description': 'A library for Bayesian Deep Learning.',
-    'github_user': 'thu-ml',
-    'github_repo': 'zhusuan',
-    'github_type': 'star',
-    'sidebar_width': '220px',
-    'page_width': '980px',
-    'travis_button': True,
-    'link': '#3782BE',
-    'link_hover': '#3782BE',
+    'collapse_navigation': False,
+    'logo_only': True,
+    # 'logo': 'images/zhusuan-logo-v.svg',
+    # 'description': 'A library for Bayesian Deep Learning.',
+    # 'github_user': 'thu-ml',
+    # 'github_repo': 'zhusuan',
+    # 'github_type': 'star',
+    # 'sidebar_width': '220px',
+    # 'page_width': '980px',
+    # 'travis_button': True,
+    # 'link': '#3782BE',
+    # 'link_hover': '#3782BE',
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -115,14 +118,24 @@ html_theme_options = {
 html_static_path = ['static']
 
 
-html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        'relations.html',
-        'searchbox.html',
-    ]
+html_logo = 'static/images/zhusuan-logo-v.svg'
+
+
+html_context = {
+    'css_files': [
+        '_static/css/style.css'
+    ],
 }
+
+
+# html_sidebars = {
+#     '**': [
+#         'about.html',
+#         'navigation.html',
+#         'relations.html',
+#         'searchbox.html',
+#     ]
+# }
 
 
 # -- Options for HTMLHelp output ------------------------------------------
