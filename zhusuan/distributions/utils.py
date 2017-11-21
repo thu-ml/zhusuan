@@ -223,13 +223,14 @@ def assert_scalar(tensor, name):
         return tensor
 
 
-def assert_positive_int32(value, name):
+def assert_positive_integer(value, dtype, name):
     """
     Whether `value` is a scalar (or 0-D tensor) and positive.
     If `value` is the instance of built-in type, it will be checked
     directly. Otherwise, it will be converted to a `dtype` tensor and checked.
 
     :param value: The value to be checked.
+    :param dtype: The tensor dtype.
     :param name: The name of `value` used in error message.
     :return: The checked value.
     """
@@ -240,9 +241,9 @@ def assert_positive_int32(value, name):
         return value
     else:
         try:
-            tensor = tf.convert_to_tensor(value, tf.int32)
+            tensor = tf.convert_to_tensor(value, dtype)
         except ValueError:
-            raise TypeError(name + ' must be ' + str(tf.int32))
+            raise TypeError(name + ' must be ' + str(dtype))
         _assert_rank_op = tf.assert_rank(
             tensor, 0,
             message=name + " should be a scalar (0-D Tensor).")
