@@ -13,6 +13,15 @@ from tests.distributions import utils
 from zhusuan.distributions.multivariate import *
 
 
+class TestMultivariateNormalTriL(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError, "should have rank"):
+                MultivariateNormalTriL(tf.zeros([]), tf.zeros([]))
+            with self.assertRaisesRegexp(ValueError, "should have rank"):
+                MultivariateNormalTriL(tf.zeros([1]), tf.zeros([1]))
+
+
 class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):

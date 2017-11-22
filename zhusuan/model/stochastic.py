@@ -24,6 +24,7 @@ __all__ = [
     'Binomial',
     'InverseGamma',
     'Laplace',
+    'MultivariateNormalTriL',
     'Multinomial',
     'Dirichlet',
     'BinConcrete',
@@ -480,6 +481,31 @@ class Multinomial(StochasticTensor):
             **kwargs
         )
         super(Multinomial, self).__init__(name, multinomial, n_samples)
+
+
+class MultivariateNormalTriL(StochasticTensor):
+    """
+    TODO: docstrings
+    """
+
+    def __init__(self,
+                 name,
+                 mean,
+                 cov_tril,
+                 n_samples=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        mvn = distributions.MultivariateNormalTriL(
+            mean,
+            cov_tril,
+            group_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(MultivariateNormalTriL, self).__init__(name, mvn, n_samples)
 
 
 class OnehotCategorical(StochasticTensor):

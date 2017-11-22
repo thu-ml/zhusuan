@@ -182,6 +182,28 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
         raise TypeError("The argument 'dtype' must be in %s" % available_types)
 
 
+def assert_rank_at_least(tensor, k, name):
+    """
+    TODO
+    """
+    static_shape = tensor.get_shape()
+    shape_err_msg = name + " should have rank >= {}.".format(k)
+    if static_shape and (static_shape.ndims < k):
+        raise ValueError(shape_err_msg)
+    if not static_shape:
+        _assert_shape_op = tf.assert_rank_at_least(
+            tensor, k, message=shape_err_msg)
+        with tf.control_dependencies([_assert_shape_op]):
+            tensor = tf.identity(tensor)
+    ret_shape = []
+    for i in range(-k, 0):
+        if static_shape and (static_shape[i].value is not None):
+            ret_shape.append(static_shape[i].value)
+        else:
+            ret_shape.append(tf.shape(tensor)[-i])
+    return tensor, ret_shape
+
+
 def assert_rank_at_least_one(tensor, name):
     """
     Whether the rank of `tensor` is at least one.

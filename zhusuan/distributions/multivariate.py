@@ -12,6 +12,7 @@ from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
+        assert_rank_at_least, \
         assert_rank_at_least_one, \
         assert_scalar, \
         assert_positive_int32_integer, \
@@ -20,6 +21,7 @@ from zhusuan.distributions.utils import \
 
 
 __all__ = [
+    'MultivariateNormalTriL',
     'Multinomial',
     'OnehotCategorical',
     'OnehotDiscrete',
@@ -27,6 +29,132 @@ __all__ = [
     'ExpConcrete',
     'Concrete',
 ]
+
+
+class MultivariateNormalTriL(Distribution):
+    """
+    The class of multivariate normal distribution.
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param mean: A 1-D `float` Tensor. The mean of the Normal distribution.
+        Should be broadcastable to match `logstd`.
+    :param cov_tril: A 2-D `float` Tensor. TODO.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 mean,
+                 cov_tril,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 use_path_derivative=False,
+                 check_numerics=False,
+                 **kwargs):
+        self._check_numerics = check_numerics
+        self._mean, self._n_dim = assert_rank_at_least_one(mean, 'MVNTriL.mean')
+        self._cov_tril, cov_tril_last_shapes = assert_rank_at_least(
+            cov_tril, 2,
+            "MVNTriL.cov_tril should have rank at least 2"
+        )
+        # Immediately evaluated if both args are constant
+        assert_ops = [tf.assert_equal(
+            s, self._n_dim,
+            ['MVNTriL.cov_tril should have compatible shapes with mean'])
+            for s in cov_tril_last_shapes]
+        with tf.control_dependencies(assert_ops):
+            self._cov_tril = tf.identity(self._cov_tril)
+        dtype = assert_same_float_dtype([(self._mean, 'MVNTriL.mean'),
+                                         (self._cov_tril, 'MVNTriL.cov_tril')])
+        super(MultivariateNormalTriL, self).__init__(
+            dtype=dtype,
+            param_dtype=dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
+            group_ndims=group_ndims,
+            **kwargs)
+
+    @property
+    def mean(self):
+        """The mean of the normal distribution."""
+        return self._mean
+
+    @property
+    def cov_tril(self):
+        """The cholosky decomposition of the multivariate normal covariance. """
+        return self._cov_tril
+
+    def _value_shape(self):
+        return tf.convert_to_tensor([self._n_dim], tf.int32)
+    
+    def _get_value_shape(self):
+        if isinstance(self._n_dim, int):
+            return tf.TensorShape([self._n_dim])
+        return tf.TensorShape([None])
+
+    def _batch_shape(self):
+        return tf.get_shape(self.mean)[:-1]
+
+    def _get_batch_shape(self):
+        if self.mean.get_shape():
+            return self.mean.get_shape()[:-1]
+        return tf.TensorShape(None)
+
+    def _sample(self, n_samples):
+        mean, cov_tril = self.mean, self.cov_tril
+        if not self.is_reparameterized:
+            mean = tf.stop_gradient(mean)
+            cov_tril = tf.stop_gradient(cov_tril)
+        def tile(t):
+            new_shape = tf.concat([[n_samples], tf.ones_like(tf.shape(t))], 0)
+            return tf.tile(tf.expand_dims(t, 0), new_shape)
+        batch_mean = tile(mean)
+        batch_cov = tile(cov_tril)
+        # n_dim -> n_dim x 1 for matmul
+        batch_mean = tf.expand_dims(batch_mean, -1)
+        noise = tf.random_normal(tf.shape(batch_mean), dtype=self.dtype)
+        samples = tf.matmul(batch_cov, noise) + batch_mean
+        samples = tf.squeeze(samples, -1)
+        # Update static shape
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        if self.get_batch_shape():
+            samples.set_shape(tf.TensorShape([static_n_samples])
+                              .concatenate(self.get_batch_shape())
+                              .concatenate(self.get_value_shape()))
+        return samples
+
+    def _log_prob(self, given):
+        mean, cov_tril = (self.path_param(self.mean),
+                          self.path_param(self.cov_tril))
+        det = tf.reduce_prod(tf.matrix_diag_part(cov_tril))
+        logZ = - tf.cast(self._n_dim, self.dtype) / 2 * tf.log(2 * pi * det)
+        if self._check_numerics:
+            logZ = tf.check_numerics(logZ, "log[det(Cov)]")
+        # (given-mean)' Sigma^{-1} (given-mean) =
+        # (g-m)' L^{-T} L^{-1} (g-m) = |x|^2, where Lx = g-m =: y.
+        y = tf.expand_dims(given - mean, -1)
+        L = tf.reshape(cov_tril, broadcast_dynamic_shape(
+            tf.shape(y), cov_tril))
+        x = tf.matrix_triangular_solve(L, y, lower=True)
+        stoc_dist = -0.5 * tf.reduce_sum(tf.square(x), axis=-1)
+        return logZ + stoc_dist
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
 
 
 class Multinomial(Distribution):
