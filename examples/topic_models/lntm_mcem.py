@@ -41,7 +41,7 @@ def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
         phi = tf.nn.softmax(beta)
         pred = tf.matmul(theta, phi)
         pred = tf.reshape(pred, tf.stack([n_chains, D, V]))
-        x = zs.Multinomial('x', tf.log(pred), is_normalized=False)
+        x = zs.UnnormalizedMultinomial('x', tf.log(pred))
     return model
 
 
@@ -199,6 +199,18 @@ if __name__ == "__main__":
                           np.mean(accs), np.mean(Eta_mean),
                           np.mean(Eta_logstd)))
 
+        # Output topics
+        p = sess.run(phi)
+        for k in range(K):
+            rank = zip(list(p[k, :]), range(V))
+            rank.sort()
+            rank.reverse()
+            sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
+                             .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
+            for i in range(10):
+                sys.stdout.write(vocab[rank[i][1]] + ' ')
+            sys.stdout.write('\n')
+
         # Run AIS
         time_ais = -time.time()
 
@@ -213,14 +225,3 @@ if __name__ == "__main__":
               '>> perplexity upper bound = {}'
               .format(time_ais, ll_lb, np.exp(-ll_lb * _D / _T)))
 
-        # Output topics
-        p = sess.run(phi)
-        for k in range(K):
-            rank = zip(list(p[k, :]), range(V))
-            rank.sort()
-            rank.reverse()
-            sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
-                             .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
-            for i in range(10):
-                sys.stdout.write(vocab[rank[i][1]] + ' ')
-            sys.stdout.write('\n')

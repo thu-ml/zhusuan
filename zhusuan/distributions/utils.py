@@ -223,27 +223,27 @@ def assert_scalar(tensor, name):
         return tensor
 
 
-def assert_positive_integer(value, dtype, name):
+def assert_positive_int32(value, name):
     """
-    Whether `value` is a scalar (or 0-D tensor) and positive.
+    Whether `value` is a scalar integer(or 0-D tf.int32 tensor) and positive.
     If `value` is the instance of built-in type, it will be checked
-    directly. Otherwise, it will be converted to a `dtype` tensor and checked.
+    directly. Otherwise, it will be converted to a `tf.int32` tensor and checked.
 
     :param value: The value to be checked.
-    :param dtype: The tensor dtype.
     :param name: The name of `value` used in error message.
     :return: The checked value.
     """
-    sign_err_msg = name + " must be positive"
+    sign_err_msg = name + " must be positive integer"
     if isinstance(value, (int, float)):
-        if value <= 0:
+        if isinstance(value, int) and value > 0:
+            return value
+        else:
             raise ValueError(sign_err_msg)
-        return value
     else:
         try:
-            tensor = tf.convert_to_tensor(value, dtype)
+            tensor = tf.convert_to_tensor(value, tf.int32)
         except ValueError:
-            raise TypeError(name + ' must be ' + str(dtype))
+            raise TypeError(name + ' must be tf.int32 if it is a tensor')
         _assert_rank_op = tf.assert_rank(
             tensor, 0,
             message=name + " should be a scalar (0-D Tensor).")
@@ -253,21 +253,6 @@ def assert_positive_integer(value, dtype, name):
                                       _assert_positive_op]):
             tensor = tf.identity(tensor)
         return tensor
-
-
-def assert_positive_int32_integer(value, name):
-    """
-    Whether `value` is a scalar (or 0-D tensor) and positive.
-    If `value` is the instance of int, it will be checked directly.
-    Otherwise, it will be converted to a `int32` tensor and checked.
-
-    :param value: The value to be checked.
-    :param name: The name of `value` used in error message.
-    :return: The checked value.
-    """
-    if isinstance(value, float):
-        raise TypeError(name + ' must be an integer.')
-    return assert_positive_integer(value, tf.int32, name)
 
 
 def open_interval_standard_uniform(shape, dtype):
