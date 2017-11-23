@@ -1,6 +1,6 @@
 <div align="center">
   <a href="http://zhusuan.readthedocs.io"> <img width="250px" height="250px" 
-  src="docs/_static/images/zhusuan-logo-v.svg"></a>
+  src="docs/_static/images/zhusuan-logo-v.png"></a>
 </div>
 
 ---
