@@ -243,6 +243,6 @@ on the network::
     # query many quantities at the same time
     model.query('w', outputs=True, local_log_prob=True)
 
-.. bibliography:: refs.bib
+.. bibliography:: ../refs.bib
     :style: unsrtalpha
     :keyprefix: concepts-

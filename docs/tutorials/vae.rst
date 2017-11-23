@@ -422,7 +422,7 @@ images to disk. Keep watching them and have fun :)
 
 .. rubric:: References
 
-.. bibliography:: refs.bib
+.. bibliography:: ../refs.bib
     :style: unsrtalpha
     :labelprefix: VAE
     :keyprefix: vae-

@@ -39,7 +39,7 @@ class StochasticTensor(TensorArithmeticMixin):
 
     .. seealso::
 
-        :doc:`/concepts`
+        :doc:`/tutorials/concepts`
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -252,7 +252,7 @@ class BayesianNet(Context):
 
     .. seealso::
 
-        :doc:`/concepts`
+        :doc:`/tutorials/concepts`
 
     :param observed: A dictionary of (string, Tensor) pairs, which maps from
         names of random variables to their observed values.

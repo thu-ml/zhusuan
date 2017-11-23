@@ -6,12 +6,27 @@ zhusuan\.model
     :undoc-members:
     :show-inheritance:
 
-Submodules
-----------
+Base classes
+------------
 
-.. toctree::
+.. automodule:: zhusuan.model.base
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
-   zhusuan.model.base
-   zhusuan.model.stochastic
-   zhusuan.model.utils
+StochasticTensors
+-----------------
 
+.. automodule:: zhusuan.model.stochastic
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :inherited-members:
+
+Utils
+-----
+
+.. automodule:: zhusuan.model.utils
+    :members:
+    :undoc-members:
+    :show-inheritance:
