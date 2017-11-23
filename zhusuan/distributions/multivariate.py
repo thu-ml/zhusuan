@@ -76,7 +76,7 @@ class MultivariateNormalTriL(Distribution):
             cov_tril, 2, 'MVNTriL.cov_tril')
         # Immediately evaluated if both args are constant
         err_msg = 'MVNTriL.cov_tril should have compatible shapes with mean'
-        assert_ops = [tf.assert_equal(s, self._n_dim, err_msg)
+        assert_ops = [tf.assert_equal(s, self._n_dim, [err_msg])
                       for s in cov_tril_last_shapes]
         assert_ops += [tf.assert_equal(
             tf.shape(self._mean), tf.shape(self._cov_tril)[:-1], [err_msg])]

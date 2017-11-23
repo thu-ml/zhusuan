@@ -72,7 +72,7 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
             samples = dst.sample(n_exp).eval()
             self.assertEqual(samples.shape, (n_exp, 10, 11, 2))
             self.assertAllClose(
-                np.mean(samples, axis=0), mean, rtol=1e-2, atol=1e-2)
+                np.mean(samples, axis=0), mean, rtol=5e-2, atol=5e-2)
             for i in range(10):
                 for j in range(11):
                     self.assertAllClose(
