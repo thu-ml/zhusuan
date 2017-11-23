@@ -71,10 +71,11 @@ class MultivariateNormalTriL(Distribution):
             "MVNTriL.cov_tril should have rank at least 2"
         )
         # Immediately evaluated if both args are constant
-        assert_ops = [tf.assert_equal(
-            s, self._n_dim,
-            ['MVNTriL.cov_tril should have compatible shapes with mean'])
-            for s in cov_tril_last_shapes]
+        err_msg = 'MVNTriL.cov_tril should have compatible shapes with mean'
+        assert_ops = [tf.assert_equal(s, self._n_dim, [err_msg, s, self._n_dim]) 
+                      for s in cov_tril_last_shapes]
+        assert_ops += [tf.assert_equal(
+            tf.shape(self._mean), tf.shape(self._cov_tril)[:-1], [err_msg])]
         with tf.control_dependencies(assert_ops):
             self._cov_tril = tf.identity(self._cov_tril)
         dtype = assert_same_float_dtype([(self._mean, 'MVNTriL.mean'),
@@ -107,7 +108,7 @@ class MultivariateNormalTriL(Distribution):
         return tf.TensorShape([None])
 
     def _batch_shape(self):
-        return tf.get_shape(self.mean)[:-1]
+        return tf.shape(self.mean)[:-1]
 
     def _get_batch_shape(self):
         if self.mean.get_shape():
@@ -140,16 +141,18 @@ class MultivariateNormalTriL(Distribution):
     def _log_prob(self, given):
         mean, cov_tril = (self.path_param(self.mean),
                           self.path_param(self.cov_tril))
-        det = tf.reduce_prod(tf.matrix_diag_part(cov_tril))
-        logZ = - tf.cast(self._n_dim, self.dtype) / 2 * tf.log(2 * pi * det)
+        det = tf.reduce_prod(tf.matrix_diag_part(cov_tril), axis=-1)
+        logZ = - tf.cast(self._n_dim, self.dtype) / 2 * tf.log(2 * np.pi * det)
+        # logZ.shape == batch_shape 
         if self._check_numerics:
             logZ = tf.check_numerics(logZ, "log[det(Cov)]")
         # (given-mean)' Sigma^{-1} (given-mean) =
         # (g-m)' L^{-T} L^{-1} (g-m) = |x|^2, where Lx = g-m =: y.
         y = tf.expand_dims(given - mean, -1)
-        L = tf.reshape(cov_tril, broadcast_dynamic_shape(
-            tf.shape(y), cov_tril))
+        L, _ = maybe_explicit_broadcast(
+                cov_tril, y, 'MVNTriL.cov_tril', 'expand_dims(given, -1)')
         x = tf.matrix_triangular_solve(L, y, lower=True)
+        x = tf.squeeze(x, -1)
         stoc_dist = -0.5 * tf.reduce_sum(tf.square(x), axis=-1)
         return logZ + stoc_dist
 

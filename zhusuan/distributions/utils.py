@@ -200,7 +200,7 @@ def assert_rank_at_least(tensor, k, name):
         if static_shape and (static_shape[i].value is not None):
             ret_shape.append(static_shape[i].value)
         else:
-            ret_shape.append(tf.shape(tensor)[-i])
+            ret_shape.append(tf.shape(tensor)[i])
     return tensor, ret_shape
 
 
