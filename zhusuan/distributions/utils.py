@@ -184,7 +184,12 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
 
 def assert_rank_at_least(tensor, k, name):
     """
-    TODO
+    Whether the rank of `tensor` is at least k.
+
+    :param tensor: A tensor to be checked.
+    :param k: The least rank allowed.
+    :param name: The name of `tensor` for error message.
+    :return: (checked tensor, list of the last k dimensions of `tensor`).
     """
     static_shape = tensor.get_shape()
     shape_err_msg = name + " should have rank >= {}.".format(k)

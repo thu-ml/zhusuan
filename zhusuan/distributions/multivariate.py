@@ -33,12 +33,17 @@ __all__ = [
 
 class MultivariateNormalTriL(Distribution):
     """
-    The class of multivariate normal distribution.
+    The class of multivariate normal distribution, where covariance is
+    parameterized with the lower triangular matrix in Cholesky decomposition,
+
+        .. math :: L \\text{s.t.} LL^T = \Sigma.
+
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param mean: A 1-D `float` Tensor. The mean of the Normal distribution.
-        Should be broadcastable to match `logstd`.
-    :param cov_tril: A 2-D `float` Tensor. TODO.
+    :param mean: An N-D `float` Tensor. mean[..., i_{N-1}, :] corresponds to a
+        single distribution.
+    :param cov_tril: An (N+1)-D `float` Tensor. Each slice represents the lower
+        triangular matrix in the Cholesky decomposition.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -65,14 +70,13 @@ class MultivariateNormalTriL(Distribution):
                  check_numerics=False,
                  **kwargs):
         self._check_numerics = check_numerics
-        self._mean, self._n_dim = assert_rank_at_least_one(mean, 'MVNTriL.mean')
+        self._mean, self._n_dim = assert_rank_at_least_one(
+            mean, 'MVNTriL.mean')
         self._cov_tril, cov_tril_last_shapes = assert_rank_at_least(
-            cov_tril, 2,
-            "MVNTriL.cov_tril should have rank at least 2"
-        )
+            cov_tril, 2, 'MVNTriL.cov_tril')
         # Immediately evaluated if both args are constant
         err_msg = 'MVNTriL.cov_tril should have compatible shapes with mean'
-        assert_ops = [tf.assert_equal(s, self._n_dim, [err_msg, s, self._n_dim]) 
+        assert_ops = [tf.assert_equal(s, self._n_dim, err_msg)
                       for s in cov_tril_last_shapes]
         assert_ops += [tf.assert_equal(
             tf.shape(self._mean), tf.shape(self._cov_tril)[:-1], [err_msg])]
@@ -96,12 +100,15 @@ class MultivariateNormalTriL(Distribution):
 
     @property
     def cov_tril(self):
-        """The cholosky decomposition of the multivariate normal covariance. """
+        """
+        The lower triangular matrix in the cholosky decomposition of the
+        covariance.
+        """
         return self._cov_tril
 
     def _value_shape(self):
         return tf.convert_to_tensor([self._n_dim], tf.int32)
-    
+
     def _get_value_shape(self):
         if isinstance(self._n_dim, int):
             return tf.TensorShape([self._n_dim])
@@ -120,9 +127,11 @@ class MultivariateNormalTriL(Distribution):
         if not self.is_reparameterized:
             mean = tf.stop_gradient(mean)
             cov_tril = tf.stop_gradient(cov_tril)
+
         def tile(t):
             new_shape = tf.concat([[n_samples], tf.ones_like(tf.shape(t))], 0)
             return tf.tile(tf.expand_dims(t, 0), new_shape)
+
         batch_mean = tile(mean)
         batch_cov = tile(cov_tril)
         # n_dim -> n_dim x 1 for matmul
@@ -143,7 +152,7 @@ class MultivariateNormalTriL(Distribution):
                           self.path_param(self.cov_tril))
         det = tf.reduce_prod(tf.matrix_diag_part(cov_tril), axis=-1)
         logZ = - tf.cast(self._n_dim, self.dtype) / 2 * tf.log(2 * np.pi * det)
-        # logZ.shape == batch_shape 
+        # logZ.shape == batch_shape
         if self._check_numerics:
             logZ = tf.check_numerics(logZ, "log[det(Cov)]")
         # (given-mean)' Sigma^{-1} (given-mean) =
