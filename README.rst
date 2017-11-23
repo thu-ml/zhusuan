@@ -1,4 +1,7 @@
-ZhuSuan
+.. image:: docs/_static/images/zhusuan-logo-v.svg
+   :width: 25%
+   :align: center
+
 =======
 
 
