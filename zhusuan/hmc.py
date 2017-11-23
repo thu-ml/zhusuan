@@ -235,7 +235,7 @@ class HMC:
     :param kappa: A 0-D `float32` Tensor. Parameter for adapting the step
         size, see (Hoffman, 2014).
     :param adapt_mass: A `bool` Tensor, if set, indicating whether to adapt
-        the step size.
+        the mass, adapt_step_size must be set.
     :param mass_collect_iters: A 0-D `int32` Tensor. The beginning iteration
         to change the mass.
     :param mass_decay: A 0-D `float32` Tensor. The decay of computing
@@ -261,7 +261,7 @@ class HMC:
                 target_acceptance_rate)
         if adapt_mass is not None:
             if adapt_step_size is None:
-                raise Exception('If adapt mass, we should also adapt step size')
+                raise ValueError('If adapt mass is set, we should also adapt step size')
             self.adapt_mass = tf.convert_to_tensor(
                 adapt_mass, dtype=tf.bool, name="adapt_mass")
         else:
@@ -442,7 +442,7 @@ class HMC:
             new_step_size = self.step_size
         else:
             if_initialize_step_size = tf.logical_or(tf.equal(new_t, 1),
-              tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
+                tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
             def iss():
                 return self._init_step_size(current_q, current_p, mass,
                                             get_gradient, get_log_posterior)
@@ -460,7 +460,8 @@ class HMC:
                     self.q, p, current_q, current_p,
                     get_log_posterior, mass, self.data_axes)
 
-            old_log_prob = tf.check_numerics(old_log_prob, 'HMC: old_log_prob is NaN! Try better initialization?')
+            old_log_prob = tf.check_numerics(old_log_prob, 
+                'HMC: old_log_prob has numeric errors! Try better initialization?')
             is_nan = tf.logical_or(tf.is_nan(acceptance_rate),
                                     tf.is_nan(new_log_prob))
             acceptance_rate = tf.where(is_nan,
