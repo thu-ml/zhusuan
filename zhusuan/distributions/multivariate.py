@@ -164,8 +164,10 @@ class MultivariateNormalTriL(Distribution):
     def _log_prob(self, given):
         mean, cov_tril = (self.path_param(self.mean),
                           self.path_param(self.cov_tril))
-        det = tf.reduce_prod(tf.matrix_diag_part(cov_tril), axis=-1)
-        logZ = - tf.cast(self._n_dim, self.dtype) / 2 * tf.log(2 * np.pi * det)
+        log_det = tf.reduce_sum(tf.log(tf.matrix_diag_part(cov_tril)), axis=-1)
+        N = tf.cast(self._n_dim, self.dtype)
+        logZ = - N / 2 * (tf.log(2 * tf.constant(np.pi, dtype=self.dtype)) +
+                          log_det)
         # logZ.shape == batch_shape
         if self._check_numerics:
             logZ = tf.check_numerics(logZ, "log[det(Cov)]")
