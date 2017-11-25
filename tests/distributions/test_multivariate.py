@@ -20,7 +20,7 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
                 MultivariateNormalTriL(tf.zeros([]), tf.zeros([]))
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 MultivariateNormalTriL(tf.zeros([1]), tf.zeros([1]))
-            with self.assertRaisesRegexp(ValueError, 'compatible shapes'):
+            with self.assertRaisesRegexp(ValueError, 'compatible shape'):
                 MultivariateNormalTriL(tf.zeros([1, 2]), 
                                        tf.placeholder(tf.float32, [1, 2, 3]))
             u = tf.placeholder(tf.float32, [None])
@@ -28,7 +28,7 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
             dst = MultivariateNormalTriL(tf.zeros([2]), 
                                          tf.zeros([len_u, len_u]))
             with self.assertRaisesRegexp(
-                    tf.errors.InvalidArgumentError, 'compatible shapes'):
+                    tf.errors.InvalidArgumentError, 'compatible shape'):
                 dst.sample().eval(feed_dict={u: np.ones((3,))})
 
     def test_shape_inference(self):

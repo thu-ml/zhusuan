@@ -182,6 +182,35 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
         raise TypeError("The argument 'dtype' must be in %s" % available_types)
 
 
+def get_shape_list(tensor):
+    """
+    :param tensor: A `tf.Tensor`.
+    :return: A list representing the shape of `tensor`, or None if unknown.
+    Each item in the list is either int or a `tf.Tensor`.
+    """
+    static_shape = tensor.get_shape()
+    if not static_shape:
+        return None
+    dynamic_shape = tf.shape(tensor)
+    ret = [(val or dynamic_shape[i])
+           for i, val in enumerate(static_shape.as_list())]
+    return ret
+
+
+def get_shape_at(tensor, axis):
+    """
+    Similar to `tf.shape(tensor)[axis]`, but return a constant when possible.
+
+    :param tensor: A `tf.Tensor`.
+    :param axis: `int`.
+    :return: The shape along the axis specified.
+    """
+    static_shapes = get_shape_list(tensor)
+    if static_shapes:
+        return static_shapes[axis]
+    return tf.shape(tensor)[axis]
+
+
 def assert_rank_at_least(tensor, k, name):
     """
     Whether the rank of `tensor` is at least k.
@@ -189,7 +218,7 @@ def assert_rank_at_least(tensor, k, name):
     :param tensor: A tensor to be checked.
     :param k: The least rank allowed.
     :param name: The name of `tensor` for error message.
-    :return: (checked tensor, list of the last k dimensions of `tensor`).
+    :return: The checked tensor.
     """
     static_shape = tensor.get_shape()
     shape_err_msg = name + " should have rank >= {}.".format(k)
@@ -200,13 +229,7 @@ def assert_rank_at_least(tensor, k, name):
             tensor, k, message=shape_err_msg)
         with tf.control_dependencies([_assert_shape_op]):
             tensor = tf.identity(tensor)
-    ret_shape = []
-    for i in range(-k, 0):
-        if static_shape and (static_shape[i].value is not None):
-            ret_shape.append(static_shape[i].value)
-        else:
-            ret_shape.append(tf.shape(tensor)[i])
-    return tensor, ret_shape
+    return tensor
 
 
 def assert_rank_at_least_one(tensor, name):
@@ -215,20 +238,9 @@ def assert_rank_at_least_one(tensor, name):
 
     :param tensor: A tensor to be checked.
     :param name: The name of `tensor` for error message.
-    :return: (checked tensor, the last dimension of `tensor`).
+    :return: The checked tensor.
     """
-    static_shape = tensor.get_shape()
-    shape_err_msg = name + " should have rank >= 1."
-    if static_shape and (static_shape.ndims < 1):
-        raise ValueError(shape_err_msg)
-    elif static_shape and (static_shape[-1].value is not None):
-        return tensor, static_shape[-1].value
-    else:
-        _assert_shape_op = tf.assert_rank_at_least(
-            tensor, 1, message=shape_err_msg)
-        with tf.control_dependencies([_assert_shape_op]):
-            tensor = tf.identity(tensor)
-        return tensor, tf.shape(tensor)[-1]
+    return assert_rank_at_least(tensor, 1, name)
 
 
 def assert_scalar(tensor, name):

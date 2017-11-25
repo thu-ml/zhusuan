@@ -16,6 +16,8 @@ from zhusuan.distributions.utils import \
         assert_rank_at_least_one, \
         assert_scalar, \
         assert_positive_int32_integer, \
+        get_shape_at, \
+        get_shape_list, \
         open_interval_standard_uniform, \
         log_combination
 
@@ -70,18 +72,30 @@ class MultivariateNormalTriL(Distribution):
                  check_numerics=False,
                  **kwargs):
         self._check_numerics = check_numerics
-        self._mean, self._n_dim = assert_rank_at_least_one(
-            mean, 'MVNTriL.mean')
-        self._cov_tril, cov_tril_last_shapes = assert_rank_at_least(
-            cov_tril, 2, 'MVNTriL.cov_tril')
-        # Immediately evaluated if both args are constant
-        err_msg = 'MVNTriL.cov_tril should have compatible shapes with mean'
-        assert_ops = [tf.assert_equal(s, self._n_dim, [err_msg])
-                      for s in cov_tril_last_shapes]
-        assert_ops += [tf.assert_equal(
-            tf.shape(self._mean), tf.shape(self._cov_tril)[:-1], [err_msg])]
+        self._mean = assert_rank_at_least_one(mean, 'MVNTriL.mean')
+        self._n_dim = get_shape_at(self._mean, -1)
+        self._cov_tril = assert_rank_at_least(cov_tril, 2, 'MVNTriL.cov_tril')
+
+        # Check shape; fail asap
+        if self._mean.get_shape() and self._cov_tril.get_shape():
+            expected_shape = get_shape_list(self._mean) + [self._n_dim]
+            actual_shape = get_shape_list(self._cov_tril)
+            err_msg = ['MVNTriL.cov_tril should have compatible shape with',
+                       ' mean. Expected', tf.convert_to_tensor(expected_shape),
+                       'got', tf.convert_to_tensor(actual_shape)]
+            assert_ops = [tf.assert_equal(x, y, err_msg)
+                          for x, y in zip(expected_shape, actual_shape)]
+        else:
+            expected_shape = tf.concat(
+                    [tf.shape(self._mean), [self._n_dim]], axis=0)
+            actual_shape = tf.shape(self._cov_tril)
+            msg = ['MVNTriL.cov_tril should have compatible shape with '
+                   'mean. Expected', expected_shape, ' got ', actual_shape]
+            assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
+
         with tf.control_dependencies(assert_ops):
             self._cov_tril = tf.identity(self._cov_tril)
+
         dtype = assert_same_float_dtype([(self._mean, 'MVNTriL.mean'),
                                          (self._cov_tril, 'MVNTriL.cov_tril')])
         super(MultivariateNormalTriL, self).__init__(
@@ -208,8 +222,9 @@ class Multinomial(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         self._n_experiments = assert_positive_int32_integer(
             n_experiments, 'Multinomial.n_experiments')
@@ -320,8 +335,9 @@ class OnehotCategorical(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'OnehotCategorical.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         super(OnehotCategorical, self).__init__(
             dtype=dtype,
@@ -567,8 +583,9 @@ class ExpConcrete(Distribution):
             [(self._logits, 'ExpConcrete.logits'),
              (self._temperature, 'ExpConcrete.temperature')])
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'ExpConcrete.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         self._temperature = assert_scalar(
             self._temperature, 'ExpConcrete.temperature')
@@ -700,8 +717,9 @@ class Concrete(Distribution):
             [(self._logits, 'Concrete.logits'),
              (self._temperature, 'Concrete.temperature')])
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'Concrete.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         self._temperature = assert_scalar(
             self._temperature, 'Concrete.temperature')

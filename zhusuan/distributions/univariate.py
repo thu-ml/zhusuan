@@ -15,6 +15,7 @@ from zhusuan.distributions.utils import \
         assert_same_float_and_int_dtype, \
         assert_scalar, \
         assert_rank_at_least_one, \
+        get_shape_at, \
         open_interval_standard_uniform
 
 
@@ -422,8 +423,9 @@ class Categorical(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
-            self._logits, 'Categorical.logits')
+        self._logits = assert_rank_at_least_one(
+                self._logits, 'Categorical.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         super(Categorical, self).__init__(
             dtype=dtype,
