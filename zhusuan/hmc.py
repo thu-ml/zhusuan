@@ -48,8 +48,17 @@ def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axes):
         q, p, log_posterior, mass, data_axes)
     new_hamiltonian, new_log_prob = hamiltonian(
         new_q, new_p, log_posterior, mass, data_axes)
+    old_log_prob = tf.check_numerics(
+        old_log_prob,
+        'HMC: old_log_prob has numeric errors! Try better initialization.')
+    acceptance_rate = tf.exp(
+        tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
+    is_finite = tf.logical_and(tf.is_finite(acceptance_rate),
+                               tf.is_finite(new_log_prob))
+    acceptance_rate = tf.where(is_finite, acceptance_rate,
+                               tf.zeros_like(acceptance_rate))
     return old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
-        tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
+        acceptance_rate
 
 
 class StepsizeTuner:
@@ -460,12 +469,6 @@ class HMC:
                     self.q, p, current_q, current_p,
                     get_log_posterior, mass, self.data_axes)
 
-            old_log_prob = tf.check_numerics(old_log_prob, 
-                'HMC: old_log_prob has numeric errors! Try better initialization?')
-            is_nan = tf.logical_or(tf.is_nan(acceptance_rate),
-                                    tf.is_nan(new_log_prob))
-            acceptance_rate = tf.where(is_nan,
-                    tf.zeros_like(acceptance_rate), acceptance_rate)
             u01 = tf.random_uniform(shape=tf.shape(acceptance_rate))
             if_accept = tf.less(u01, acceptance_rate)
 
