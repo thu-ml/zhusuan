@@ -108,7 +108,7 @@ def assert_same_dtype(tensors_with_name, dtype=None):
 
     expected_dtype = dtype
     for tensor, tensor_name in tensors_with_name:
-        tensor_dtype = tensor.dtype
+        tensor_dtype = tensor.dtype.base_dtype
         if not expected_dtype:
             expected_dtype = tensor_dtype
         elif expected_dtype != tensor_dtype:
@@ -117,7 +117,7 @@ def assert_same_dtype(tensors_with_name, dtype=None):
                 raise TypeError(
                     '%s(%s), must be the same type as %s(%s).' % (
                         tensor_name, tensor_dtype,
-                        tensor0_name, tensor0.dtype))
+                        tensor0_name, tensor0.dtype.base_dtype))
             else:
                 raise TypeError(
                     '%s(%s), must be %s.' % (
