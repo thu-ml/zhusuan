@@ -223,34 +223,41 @@ def assert_scalar(tensor, name):
         return tensor
 
 
-def assert_positive_int32(value, name):
+def assert_positive_int32(value, name, need_scalar):
     """
-    Whether `value` is a scalar integer(or 0-D tf.int32 tensor) and positive.
+    Whether `value` is a integer(or tf.int32 tensor) and positive.
+    If `need_scalar` is True, `value` is also required to be a scalar(or 0-D tensor).
     If `value` is the instance of built-in type, it will be checked
     directly. Otherwise, it will be converted to a `tf.int32` tensor and checked.
 
     :param value: The value to be checked.
     :param name: The name of `value` used in error message.
+    :param need_scalar: Indicates whether `value` is required to be a scalar.
     :return: The checked value.
     """
-    sign_err_msg = name + " must be positive integer"
     if isinstance(value, (int, float)):
         if isinstance(value, int) and value > 0:
             return value
-        else:
-            raise ValueError(sign_err_msg)
+        elif isinstance(value, float):
+            raise TypeError(name + " must be integer")
+        elif value <= 0:
+            raise ValueError(name + " must be positive")
     else:
         try:
             tensor = tf.convert_to_tensor(value, tf.int32)
-        except ValueError:
-            raise TypeError(name + ' must be tf.int32 if it is a tensor')
-        _assert_rank_op = tf.assert_rank(
-            tensor, 0,
-            message=name + " should be a scalar (0-D Tensor).")
+        except (TypeError, ValueError):
+            raise TypeError(name + ' must be (convertible to) tf.int32')
+
         _assert_positive_op = tf.assert_greater(
-            tensor, tf.constant(0, tf.int32), message=sign_err_msg)
-        with tf.control_dependencies([_assert_rank_op,
-                                      _assert_positive_op]):
+            tensor, tf.constant(0, tf.int32),
+            message=name + " must be positive")
+        _assert_op_list = [_assert_positive_op]
+        if need_scalar:
+            _assert_rank_op = tf.assert_rank(
+                tensor, 0,
+                message=name + " should be a scalar (0-D Tensor).")
+            _assert_op_list.append(_assert_rank_op)
+        with tf.control_dependencies(_assert_op_list):
             tensor = tf.identity(tensor)
         return tensor
 

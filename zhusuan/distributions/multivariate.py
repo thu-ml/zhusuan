@@ -77,9 +77,8 @@ class Multinomial(Distribution):
             self._logits, 'Multinomial.logits')
 
         self.prob_only = prob_only
-        if not self.prob_only:
-            self._n_experiments = assert_positive_int32(
-                n_experiments, 'Multinomial.n_experiments')
+        self._n_experiments = assert_positive_int32(
+            n_experiments, 'Multinomial.n_experiments', not self.prob_only)
 
         super(Multinomial, self).__init__(
             dtype=dtype,
