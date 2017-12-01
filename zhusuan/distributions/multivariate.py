@@ -76,6 +76,7 @@ class Multinomial(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
 
+        self.prob_only = prob_only
         if not self.prob_only:
             self._n_experiments = assert_positive_int32(
                 n_experiments, 'Multinomial.n_experiments')
@@ -160,10 +161,15 @@ class Multinomial(Distribution):
 class UnnormalizedMultinomial(Distribution):
     """
     The class of UnnormalizedMultinomial distribution.
-    Unnormalized multinomial distribution calculates probability in a different
-    way from multinomial distribution: It considers the bag-of-words `given` as
+    :class:`UnnormalizedMultinomial` calculates probabilities in a different
+    way from :class:`Multinomial`: It considers the bag-of-words `given` as
     a statistics of a batch of ordered result sequences instead of a batch of
-    result counts. Hence it does not multiply the n!/(k1!*k2!*...) term.
+    result counts. Hence it does not multiply the term
+
+    .. math::
+
+        \\binom{n}{k_1, k_2, \\dots} =  \\frac{n!}{\\prod_{i} k_i!}
+
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
@@ -235,10 +241,10 @@ class UnnormalizedMultinomial(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        msg = "Unnormalized multinomial distribution does not support"
-        msg+= "sampling because n_experiments is not given. Please use"
-        msg+= "Multinomial to sample."
-        raise NotImplementedError(msg)
+        raise NotImplementedError("Unnormalized multinomial distribution "
+                                  "does not support sampling because "
+                                  "n_experiments is not given. Please use "
+                                  "class Multinomial to sample")
 
     def _log_prob(self, given):
         given = tf.cast(given, self.param_dtype)

@@ -248,7 +248,7 @@ def assert_positive_int32(value, name):
             tensor, 0,
             message=name + " should be a scalar (0-D Tensor).")
         _assert_positive_op = tf.assert_greater(
-            tensor, tf.constant(0, dtype), message=sign_err_msg)
+            tensor, tf.constant(0, tf.int32), message=sign_err_msg)
         with tf.control_dependencies([_assert_rank_op,
                                       _assert_positive_op]):
             tensor = tf.identity(tensor)

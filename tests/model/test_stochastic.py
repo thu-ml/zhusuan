@@ -168,8 +168,7 @@ class TestMultinomial(tf.test.TestCase):
             n_experiments = tf.placeholder(tf.int32, shape=[])
             n_samples = tf.placeholder(tf.int32, shape=[])
             group_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Multinomial('a', logits, is_normalized=True,
-                            n_experiments=n_experiments,
+            a = Multinomial('a', logits, n_experiments=n_experiments,
                             n_samples=n_samples,
                             group_ndims=group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))

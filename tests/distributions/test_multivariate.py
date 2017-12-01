@@ -17,21 +17,21 @@ class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
-                Multinomial(tf.zeros([]), is_normalized=True, n_experiments=10)
+                Multinomial(tf.zeros([]), n_experiments=10)
 
     def test_init_n(self):
-        dist = Multinomial(tf.ones([2]), is_normalized=True, n_experiments=10)
+        dist = Multinomial(tf.ones([2]), n_experiments=10)
         self.assertTrue(isinstance(dist.n_categories, int))
         self.assertEqual(dist.n_categories, 2)
         self.assertTrue(isinstance(dist.n_experiments, int))
         self.assertEqual(dist.n_experiments, 10)
         with self.assertRaisesRegexp(ValueError, "must be positive"):
-            _ = Multinomial(tf.ones([2]), is_normalized=True, n_experiments=0)
+            _ = Multinomial(tf.ones([2]), n_experiments=0)
 
         with self.test_session(use_gpu=True) as sess:
             logits = tf.placeholder(tf.float32, None)
             n_experiments = tf.placeholder(tf.int32, None)
-            dist2 = Multinomial(logits, is_normalized=True, n_experiments=n_experiments)
+            dist2 = Multinomial(logits, n_experiments=n_experiments)
             self.assertEqual(
                 sess.run([dist2.n_categories, dist2.n_experiments],
                          feed_dict={logits: np.ones([2]), n_experiments: 10}),
@@ -51,12 +51,12 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_value_shape(self):
         # static
-        dist = Multinomial(tf.placeholder(tf.float32, [None, 2]), is_normalized=True, n_experiments=10)
+        dist = Multinomial(tf.placeholder(tf.float32, [None, 2]), n_experiments=10)
         self.assertEqual(dist.get_value_shape().as_list(), [2])
 
         # dynamic
         logits = tf.placeholder(tf.float32, None)
-        dist2 = Multinomial(logits, is_normalized=True, n_experiments=10)
+        dist2 = Multinomial(logits, n_experiments=10)
         self.assertTrue(dist2._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
@@ -66,19 +66,19 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_batch_shape(self):
         def _distribution(param):
-            return Multinomial(param, is_normalized=True, n_experiments=10)
+            return Multinomial(param, n_experiments=10)
         utils.test_batch_shape_1parameter(
             self, _distribution, np.zeros, is_univariate=False)
 
     def test_sample_shape(self):
         def _distribution(param):
-            return Multinomial(param, is_normalized=True, n_experiments=10)
+            return Multinomial(param, n_experiments=10)
         utils.test_1parameter_sample_shape_one_rank_less(
             self, _distribution, np.zeros)
 
     def test_log_prob_shape(self):
         def _distribution(param):
-            return Multinomial(param, is_normalized=True, n_experiments=10)
+            return Multinomial(param, n_experiments=10)
 
         def _make_samples(shape):
             samples = np.zeros(shape)
@@ -96,7 +96,7 @@ class TestMultinomial(tf.test.TestCase):
                 normalized_logits = logits - misc.logsumexp(
                     logits, axis=-1, keepdims=True)
                 given = np.array(given)
-                dist = Multinomial(logits, is_normalized=True, n_experiments=n_experiments)
+                dist = Multinomial(logits, n_experiments=n_experiments)
                 log_p = dist.log_prob(given)
                 target_log_p = np.log(misc.factorial(n_experiments)) - \
                     np.sum(np.log(misc.factorial(given)), -1) + \
@@ -115,11 +115,11 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_dtype(self):
         def _distribution(param, dtype=None):
-            return Multinomial(param, is_normalized=True, n_experiments=10, dtype=dtype)
+            return Multinomial(param, n_experiments=10, dtype=dtype)
         utils.test_dtype_1parameter_discrete(self, _distribution)
 
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
-            Multinomial([1., 1.], is_normalized=True, n_experiments=tf.placeholder(tf.float32, []))
+            Multinomial([1., 1.], n_experiments=tf.placeholder(tf.float32, []))
 
 
 class TestOnehotCategorical(tf.test.TestCase):
