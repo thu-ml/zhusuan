@@ -524,14 +524,14 @@ class UnnormalizedMultinomial(StochasticTensor):
                  group_ndims=0,
                  dtype=None,
                  **kwargs):
-        unnorm_multinomial = distributions.UnnormalizedMultinomial(
+        unnormalized_multinomial = distributions.UnnormalizedMultinomial(
             logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
         super(UnnormalizedMultinomial, self) \
-            .__init__(name, unnorm_multinomial, None)
+            .__init__(name, unnormalized_multinomial, None)
 
 
 BagofCategorical = UnnormalizedMultinomial
