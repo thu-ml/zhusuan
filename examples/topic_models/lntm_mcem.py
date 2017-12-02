@@ -41,7 +41,9 @@ def lntm(observed, n_chains, D, K, V, eta_mean, eta_logstd):
         phi = tf.nn.softmax(beta)
         pred = tf.matmul(theta, phi)
         pred = tf.reshape(pred, tf.stack([n_chains, D, V]))
-        x = zs.UnnormalizedMultinomial('x', tf.log(pred))
+        x = zs.UnnormalizedMultinomial('x', tf.log(pred),
+                                       normalize_logits=False,
+                                       dtype=tf.float32)
     return model
 
 
@@ -80,7 +82,7 @@ if __name__ == "__main__":
     Eta_logstd = np.zeros(K, dtype=np.float32)
 
     # Build the computation graph
-    x = tf.placeholder(tf.int32, shape=[D, V], name='x')
+    x = tf.placeholder(tf.float32, shape=[D, V], name='x')
     eta_mean = tf.placeholder(tf.float32, shape=[K], name='eta_mean')
     eta_logstd = tf.placeholder(tf.float32, shape=[K], name='eta_logstd')
     eta = tf.Variable(tf.zeros([n_chains, D, K]), name='eta')
@@ -121,7 +123,7 @@ if __name__ == "__main__":
     _n_chains = 25
     _n_temperatures = 1000
 
-    _x = tf.placeholder(tf.int32, shape=[_D, V], name='x')
+    _x = tf.placeholder(tf.float32, shape=[_D, V], name='x')
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta')
 
     def _log_prior(observed):
@@ -212,6 +214,8 @@ if __name__ == "__main__":
             sys.stdout.write('\n')
 
         # Run AIS
+        print("Evaluating test perplexity using AIS...")
+
         time_ais = -time.time()
 
         ll_lb = _ais.run(sess, feed_dict={_x: X_test,

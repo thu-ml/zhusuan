@@ -108,30 +108,38 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_value(self):
         with self.test_session(use_gpu=True):
-            def _test_value(logits, n_experiments, given):
+            def _test_value(logits, n_experiments, given, normalize_logits):
                 logits = np.array(logits, np.float32)
-                normalized_logits = logits - misc.logsumexp(
-                    logits, axis=-1, keepdims=True)
                 given = np.array(given)
                 dist = Multinomial(logits, n_experiments=n_experiments,
-                                   prob_only=True)
+                                   prob_only=True,
+                                   normalize_logits=normalize_logits)
                 log_p = dist.log_prob(given)
+
+                maybe_normalized_logits = logits
+                if normalize_logits:
+                    maybe_normalized_logits -= misc.logsumexp(
+                        logits, axis=-1, keepdims=True)
                 target_log_p = np.log(misc.factorial(n_experiments)) - \
                     np.sum(np.log(misc.factorial(given)), -1) + \
-                    np.sum(given * normalized_logits, -1)
+                    np.sum(given * maybe_normalized_logits, -1)
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = dist.prob(given)
                 target_p = np.exp(target_log_p)
                 self.assertAllClose(p.eval(), target_p)
 
-            _test_value([-50., -20., 0.], 4, [1, 0, 3])
-            _test_value([1., 10., 1000.], 1, [1, 0, 0])
-            _test_value([[2., 3., 1.], [5., 7., 4.]], 3,
-                        np.ones([3, 1, 3], dtype=np.int32))
-            _test_value([[2., 3., 1.], [5., 7., 4.]], [3, 4],
-                        np.ones([3, 1, 3], dtype=np.int32))
-            _test_value([-10., 10., 20., 50.], 100, [[0, 1, 99, 100],
-                                                     [100, 99, 1, 0]])
+            for normalize_logits in [True, False]:
+                _test_value([-50., -20., 0.], 4, [1, 0, 3], normalize_logits)
+                _test_value([1., 10., 1000.], 1, [1, 0, 0], normalize_logits)
+                _test_value([[2., 3., 1.], [5., 7., 4.]], 3,
+                            np.ones([3, 1, 3], dtype=np.int32),
+                            normalize_logits)
+                _test_value([[2., 3., 1.], [5., 7., 4.]], [3, 4],
+                            np.ones([3, 1, 3], dtype=np.int32),
+                            normalize_logits)
+                _test_value([-10., 10., 20., 50.], 100,
+                            [[0, 1, 99, 100], [100, 99, 1, 0]],
+                            normalize_logits)
 
     def test_dtype(self):
         def _distribution(param, dtype=None):
@@ -207,25 +215,32 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
 
     def test_value(self):
         with self.test_session(use_gpu=True):
-            def _test_value(logits, given):
+            def _test_value(logits, given, normalize_logits):
                 logits = np.array(logits, np.float32)
-                normalized_logits = logits - misc.logsumexp(
-                    logits, axis=-1, keepdims=True)
                 given = np.array(given)
-                dist = UnnormalizedMultinomial(logits)
+                dist = UnnormalizedMultinomial(logits,
+                           normalize_logits=normalize_logits)
                 log_p = dist.log_prob(given)
-                target_log_p = np.sum(given * normalized_logits, -1)
+
+                maybe_normalized_logits = logits
+                if normalize_logits:
+                    maybe_normalized_logits -= misc.logsumexp(
+                        logits, axis=-1, keepdims=True)
+                target_log_p = np.sum(given * maybe_normalized_logits, -1)
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = dist.prob(given)
                 target_p = np.exp(target_log_p)
                 self.assertAllClose(p.eval(), target_p)
 
-            _test_value([-50., -20., 0.], [1, 0, 3])
-            _test_value([1., 10., 1000.], [1, 0, 0])
-            _test_value([[2., 3., 1.], [5., 7., 4.]],
-                        np.ones([3, 1, 3], dtype=np.int32))
-            _test_value([-10., 10., 20., 50.], [[0, 1, 99, 100],
-                                                [100, 99, 1, 0]])
+            for normalize_logits in [True, False]:
+                _test_value([-50., -20., 0.], [1, 0, 3], normalize_logits)
+                _test_value([1., 10., 1000.], [1, 0, 0], normalize_logits)
+                _test_value([[2., 3., 1.], [5., 7., 4.]],
+                            np.ones([3, 1, 3], dtype=np.int32),
+                            normalize_logits)
+                _test_value([-10., 10., 20., 50.],
+                            [[0, 1, 99, 100], [100, 99, 1, 0]],
+                            normalize_logits)
 
     def test_dtype(self):
         utils.test_dtype_1parameter_discrete(self, UnnormalizedMultinomial,

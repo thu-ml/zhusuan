@@ -46,6 +46,9 @@ class Multinomial(Distribution):
     :param prob_only: A bool. When n_experiments is a 1-D tensor, which means the
         number of experiments varies among samples, ZhuSuan does not support
         sampling, so you should set prob_only=True. Default is False.
+    :param normalize_logits: A bool indicating whether `logits` should be normalized
+        when computing probability. If you believe `logits` is already normalized,
+        set it to `False` to speed up. Default is True.
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -62,6 +65,7 @@ class Multinomial(Distribution):
                  logits,
                  n_experiments,
                  prob_only=False,
+                 normalize_logits=True,
                  dtype=None,
                  group_ndims=0,
                  **kwargs):
@@ -79,6 +83,8 @@ class Multinomial(Distribution):
         self.prob_only = prob_only
         self._n_experiments = assert_positive_int32(
             n_experiments, 'Multinomial.n_experiments', not self.prob_only)
+
+        self.normalize_logits = normalize_logits
 
         super(Multinomial, self).__init__(
             dtype=dtype,
@@ -146,11 +152,12 @@ class Multinomial(Distribution):
         given = tf.cast(given, self.param_dtype)
         given, logits = maybe_explicit_broadcast(
             given, self.logits, 'given', 'logits')
-        normalized_logits = logits - tf.reduce_logsumexp(
-            logits, axis=-1, keep_dims=True)
+        if self.normalize_logits:
+            logits = logits - tf.reduce_logsumexp(
+                logits, axis=-1, keep_dims=True)
         n = tf.cast(self.n_experiments, self.param_dtype)
         log_p = log_combination(n, given) + \
-            tf.reduce_sum(given * normalized_logits, -1)
+            tf.reduce_sum(given * logits, -1)
         return log_p
 
     def _prob(self, given):
@@ -177,6 +184,9 @@ class UnnormalizedMultinomial(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
+    :param normalize_logits: A bool indicating whether `logits` should be normalized
+        when computing probability. If you believe `logits` is already normalized,
+        set it to `False` to speed up. Default is True.
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -191,6 +201,7 @@ class UnnormalizedMultinomial(Distribution):
 
     def __init__(self,
                  logits,
+                 normalize_logits=True,
                  dtype=None,
                  group_ndims=0,
                  **kwargs):
@@ -204,6 +215,8 @@ class UnnormalizedMultinomial(Distribution):
 
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
+
+        self.normalize_logits = normalize_logits
 
         super(UnnormalizedMultinomial, self).__init__(
             dtype=dtype,
@@ -249,9 +262,10 @@ class UnnormalizedMultinomial(Distribution):
         given = tf.cast(given, self.param_dtype)
         given, logits = maybe_explicit_broadcast(
             given, self.logits, 'given', 'logits')
-        normalized_logits = logits - tf.reduce_logsumexp(
-            logits, axis=-1, keep_dims=True)
-        log_p = tf.reduce_sum(given * normalized_logits, -1)
+        if self.normalize_logits:
+            logits = logits - tf.reduce_logsumexp(
+                logits, axis=-1, keep_dims=True)
+        log_p = tf.reduce_sum(given * logits, -1)
         return log_p
 
     def _prob(self, given):
