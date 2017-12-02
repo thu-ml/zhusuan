@@ -37,7 +37,8 @@ def generator(observed, n, n_z, is_training):
         lx_z = tf.layers.batch_normalization(lx_z, training=is_training)
         lx_z = tf.nn.relu(lx_z)
         lx_z = tf.layers.conv2d_transpose(lx_z, 3, 5, strides=(2, 2),
-                                          padding='same', activation=tf.sigmoid)
+                                          padding='same',
+                                          activation=tf.sigmoid)
     return generator, lx_z
 
 

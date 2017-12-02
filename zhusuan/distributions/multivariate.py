@@ -41,14 +41,14 @@ class Multinomial(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param n_experiments: A 0-D or 1-D `int32` Tensor. The number of experiments
-        for each sample.
-    :param prob_only: A bool. When n_experiments is a 1-D tensor, which means the
-        number of experiments varies among samples, ZhuSuan does not support
-        sampling, so you should set prob_only=True. Default is False.
-    :param normalize_logits: A bool indicating whether `logits` should be normalized
-        when computing probability. If you believe `logits` is already normalized,
-        set it to `False` to speed up. Default is True.
+    :param n_experiments: A 0-D or 1-D `int32` Tensor. The number of
+        experiments for each sample.
+    :param prob_only: A bool. When n_experiments is a 1-D tensor, which means
+        the number of experiments varies among samples, ZhuSuan does not
+        support sampling, so you should set prob_only=True. Default is False.
+    :param normalize_logits: A bool indicating whether `logits` should be
+        normalized when computing probability. If you believe `logits` is
+        already normalized, set it to `False` to speed up. Default is True.
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -134,16 +134,18 @@ class Multinomial(Distribution):
             samples_flat = tf.transpose(
                 tf.multinomial(logits_flat, n_samples * self.n_experiments))
             shape = tf.concat([[n_samples, self.n_experiments],
-                            self.batch_shape], 0)
+                              self.batch_shape], 0)
             samples = tf.reshape(samples_flat, shape)
-            static_n_samples = n_samples if isinstance(n_samples, int) else None
-            static_n_exps = self.n_experiments if isinstance(self.n_experiments,
-                                                            int) else None
+            static_n_samples = n_samples if isinstance(n_samples,
+                                                       int) else None
+            static_n_exps = self.n_experiments \
+                if isinstance(self.n_experiments, int) else None
             samples.set_shape(
                 tf.TensorShape([static_n_samples, static_n_exps]).
                 concatenate(self.get_batch_shape()))
             samples = tf.reduce_sum(
-                tf.one_hot(samples, self.n_categories, dtype=self.dtype), axis=1)
+                tf.one_hot(samples, self.n_categories, dtype=self.dtype),
+                axis=1)
             return samples
         else:
             raise NotImplementedError('Cannot sample when prob_only is True')
@@ -184,9 +186,9 @@ class UnnormalizedMultinomial(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param normalize_logits: A bool indicating whether `logits` should be normalized
-        when computing probability. If you believe `logits` is already normalized,
-        set it to `False` to speed up. Default is True.
+    :param normalize_logits: A bool indicating whether `logits` should be
+        normalized when computing probability. If you believe `logits` is
+        already normalized, set it to `False` to speed up. Default is True.
     :param dtype: The value type of samples from the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped

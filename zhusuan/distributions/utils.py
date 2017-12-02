@@ -226,9 +226,10 @@ def assert_scalar(tensor, name):
 def assert_positive_int32(value, name, need_scalar):
     """
     Whether `value` is a integer(or tf.int32 tensor) and positive.
-    If `need_scalar` is True, `value` is also required to be a scalar(or 0-D tensor).
-    If `value` is the instance of built-in type, it will be checked
-    directly. Otherwise, it will be converted to a `tf.int32` tensor and checked.
+    If `need_scalar` is True, `value` is also required to be a scalar
+    (or 0-D tensor).
+    If `value` is the instance of built-in type, it will be checked directly.
+    Otherwise, it will be converted to a `tf.int32` tensor and checked.
 
     :param value: The value to be checked.
     :param name: The name of `value` used in error message.

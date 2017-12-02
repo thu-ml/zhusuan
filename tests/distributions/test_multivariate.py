@@ -46,25 +46,29 @@ class TestMultinomial(tf.test.TestCase):
                                          "must be positive"):
                 dist2.n_experiments.eval(feed_dict={logits: [1.],
                                                     n_experiments: 0})
-            
+
             n_experiments = tf.placeholder(tf.int32, [3])
-            dist3 = Multinomial(logits, n_experiments=n_experiments, prob_only=True)
+            dist3 = Multinomial(logits, n_experiments=n_experiments,
+                                prob_only=True)
             self.assertEqual(
                 sess.run(dist3.n_categories,
-                         feed_dict={logits: np.ones([3,2]), n_experiments: [1,2,3]}),
+                         feed_dict={logits: np.ones([3, 2]),
+                                    n_experiments: [1, 2, 3]}),
                 2)
             self.assertEqual(
                 sess.run(dist3.n_experiments,
-                         feed_dict={logits: np.ones([3,2]), n_experiments: [1,2,3]}).tolist(),
-                [1,2,3])
+                         feed_dict={logits: np.ones([3, 2]),
+                                    n_experiments: [1, 2, 3]}).tolist(),
+                [1, 2, 3])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "must be positive"):
-                dist3.n_experiments.eval(feed_dict={logits: np.ones([3,2]),
-                                                    n_experiments: [0,1,2]})
+                dist3.n_experiments.eval(feed_dict={logits: np.ones([3, 2]),
+                                                    n_experiments: [0, 1, 2]})
 
     def test_value_shape(self):
         # static
-        dist = Multinomial(tf.placeholder(tf.float32, [None, 2]), n_experiments=10)
+        dist = Multinomial(tf.placeholder(tf.float32, [None, 2]),
+                           n_experiments=10)
         self.assertEqual(dist.get_value_shape().as_list(), [2])
 
         # dynamic
@@ -88,7 +92,8 @@ class TestMultinomial(tf.test.TestCase):
             return Multinomial(param, n_experiments=10)
         utils.test_1parameter_sample_shape_one_rank_less(
             self, _distribution, np.zeros)
-        dist = Multinomial(np.ones([2,2]), n_experiments=[1,2], prob_only=True)
+        dist = Multinomial(np.ones([2, 2]), n_experiments=[1, 2],
+                           prob_only=True)
         with self.assertRaisesRegexp(NotImplementedError,
                                      "Cannot sample when prob_only"):
             dist.sample()
@@ -194,7 +199,7 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
             self, UnnormalizedMultinomial, np.zeros, is_univariate=False)
 
     def test_sample(self):
-        dist = UnnormalizedMultinomial(np.ones([2,2]))
+        dist = UnnormalizedMultinomial(np.ones([2, 2]))
         with self.assertRaisesRegexp(NotImplementedError,
                                      "Unnormalized multinomial distribution"
                                      " does not support sampling"):
@@ -218,8 +223,8 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
             def _test_value(logits, given, normalize_logits):
                 logits = np.array(logits, np.float32)
                 given = np.array(given)
-                dist = UnnormalizedMultinomial(logits,
-                           normalize_logits=normalize_logits)
+                dist = UnnormalizedMultinomial(
+                    logits, normalize_logits=normalize_logits)
                 log_p = dist.log_prob(given)
 
                 maybe_normalized_logits = logits
@@ -589,7 +594,8 @@ class TestExpConcrete(tf.test.TestCase):
         con_rep = ExpConcrete(temperature, logits, use_path_derivative=True)
         samples = con_rep.sample(n_samples)
         log_prob = con_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
@@ -601,10 +607,12 @@ class TestExpConcrete(tf.test.TestCase):
             self.assertAllClose(t_path, t_true)
             self.assertAllClose(logits_path, logits_true)
 
-        con_no_rep = ExpConcrete(temperature, logits, is_reparameterized=False, use_path_derivative=True)
+        con_no_rep = ExpConcrete(temperature, logits, is_reparameterized=False,
+                                 use_path_derivative=True)
         samples = con_no_rep.sample(n_samples)
         log_prob = con_no_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         self.assertTrue(t_path_grads is None)
         self.assertTrue(logits_path_grads is None)
 
@@ -747,7 +755,8 @@ class TestConcrete(tf.test.TestCase):
         con_rep = Concrete(temperature, logits, use_path_derivative=True)
         samples = con_rep.sample(n_samples)
         log_prob = con_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
@@ -763,7 +772,8 @@ class TestConcrete(tf.test.TestCase):
                               use_path_derivative=True)
         samples = con_no_rep.sample(n_samples)
         log_prob = con_no_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         self.assertTrue(t_path_grads is None)
         self.assertTrue(logits_path_grads is None)
 

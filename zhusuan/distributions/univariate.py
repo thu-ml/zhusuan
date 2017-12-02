@@ -186,8 +186,8 @@ class FoldNormal(Distribution):
 
     :param mean: A `float` Tensor. The mean of the FoldNormal distribution.
         Should be broadcastable to match `logstd`.
-    :param logstd: A `float` Tensor. The log standard deviation of the FoldNormal
-        distribution. Should be broadcastable to match `mean`.
+    :param logstd: A `float` Tensor. The log standard deviation of the
+        FoldNormal distribution. Should be broadcastable to match `mean`.
     :param std: A `float` Tensor. The standard deviation of the FoldNormal
         distribution. Should be positive and broadcastable to match `mean`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
@@ -217,8 +217,9 @@ class FoldNormal(Distribution):
                  check_numerics=False,
                  **kwargs):
         self._mean = tf.convert_to_tensor(mean)
-        warnings.warn("FoldNormal: The order of arguments logstd/std will change "
-                      "to std/logstd in the coming version.", FutureWarning)
+        warnings.warn("FoldNormal: The order of arguments logstd/std will "
+                      "change to std/logstd in the coming version.",
+                      FutureWarning)
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")
@@ -233,8 +234,9 @@ class FoldNormal(Distribution):
         else:
             # std is None
             self._logstd = tf.convert_to_tensor(logstd)
-            dtype = assert_same_float_dtype([(self._mean, 'FoldNormal.mean'),
-                                             (self._logstd, 'FoldNormal.logstd')])
+            dtype = assert_same_float_dtype(
+                [(self._mean, 'FoldNormal.mean'),
+                 (self._logstd, 'FoldNormal.logstd')])
             std = tf.exp(self._logstd)
             if check_numerics:
                 std = tf.check_numerics(std, "exp(logstd)")
@@ -308,7 +310,7 @@ class FoldNormal(Distribution):
         if self._check_numerics:
             precision = tf.check_numerics(precision, "precision")
         mask = tf.log(tf.cast(given >= 0., dtype=precision.dtype))
-        return (c - (logstd + 0.5 * precision * tf.square(given - mean)) + \
+        return (c - (logstd + 0.5 * precision * tf.square(given - mean)) +
                 tf.nn.softplus(-2.0 * mean * given * precision)) + mask
 
     def _prob(self, given):

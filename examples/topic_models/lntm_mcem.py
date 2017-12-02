@@ -93,12 +93,12 @@ if __name__ == "__main__":
 
     def e_obj(observed):
         model = lntm(observed, n_chains, D, K, V,
-            eta_mean, eta_logstd)
+                     eta_mean, eta_logstd)
         return model.local_log_prob('eta') + model.local_log_prob('x')
-    
+
     x_obs = tf.expand_dims(x, 0)
     model = lntm({'x': x_obs, 'eta': eta, 'beta': beta}, n_chains, D, K, V,
-        eta_mean, eta_logstd)
+                 eta_mean, eta_logstd)
     lp_eta, lp_beta, lp_x = model.local_log_prob(['eta', 'beta', 'x'])
 
     log_likelihood = tf.reduce_sum(tf.reduce_mean(lp_x, axis=0), axis=0)
@@ -127,12 +127,12 @@ if __name__ == "__main__":
     _eta = tf.Variable(tf.zeros([_n_chains, _D, K]), name='eta')
 
     def _log_prior(observed):
-        return  lntm(observed, _n_chains, _D, K, V,
-            eta_mean, eta_logstd).local_log_prob('eta')
+        return lntm(observed, _n_chains, _D, K, V,
+                    eta_mean, eta_logstd).local_log_prob('eta')
 
     def _e_obj(observed):
         model = lntm(observed, _n_chains, _D, K, V,
-            eta_mean, eta_logstd)
+                     eta_mean, eta_logstd)
         return model.local_log_prob('eta') + model.local_log_prob('x')
 
     _prior_samples = {'eta': lntm({}, _n_chains, _D, K, V,
@@ -228,4 +228,3 @@ if __name__ == "__main__":
               '>> loglikelihood lower bound = {}\n'
               '>> perplexity upper bound = {}'
               .format(time_ais, ll_lb, np.exp(-ll_lb * _D / _T)))
-
