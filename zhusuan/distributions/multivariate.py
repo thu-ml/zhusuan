@@ -140,7 +140,7 @@ class Multinomial(Distribution):
                 tf.one_hot(samples, self.n_categories, dtype=self.dtype), axis=1)
             return samples
         else:
-            raise ValueError('Cannot sample when prob_only is True')
+            raise NotImplementedError('Cannot sample when prob_only is True')
 
     def _log_prob(self, given):
         given = tf.cast(given, self.param_dtype)
@@ -240,10 +240,10 @@ class UnnormalizedMultinomial(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        raise NotImplementedError("Unnormalized multinomial distribution "
-                                  "does not support sampling because "
-                                  "n_experiments is not given. Please use "
-                                  "class Multinomial to sample")
+        raise NotImplementedError("Unnormalized multinomial distribution"
+                                  " does not support sampling because"
+                                  " n_experiments is not given. Please use"
+                                  " class Multinomial to sample")
 
     def _log_prob(self, given):
         given = tf.cast(given, self.param_dtype)
@@ -256,6 +256,9 @@ class UnnormalizedMultinomial(Distribution):
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
+
+
+BagofCategorical = UnnormalizedMultinomial
 
 
 class OnehotCategorical(Distribution):

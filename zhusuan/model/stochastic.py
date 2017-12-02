@@ -26,6 +26,7 @@ __all__ = [
     'Laplace',
     'Multinomial',
     'UnnormalizedMultinomial',
+    'BagofCategorical',
     'Dirichlet',
     'BinConcrete',
     'ExpConcrete',
@@ -531,6 +532,9 @@ class UnnormalizedMultinomial(StochasticTensor):
         )
         super(UnnormalizedMultinomial, self) \
             .__init__(name, unnorm_multinomial, None)
+
+
+BagofCategorical = UnnormalizedMultinomial
 
 
 class OnehotCategorical(StochasticTensor):
