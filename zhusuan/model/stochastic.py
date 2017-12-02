@@ -497,10 +497,15 @@ class Multinomial(StochasticTensor):
 class UnnormalizedMultinomial(StochasticTensor):
     """
     The class of UnnormalizedMultinomial `StochasticTensor`.
-    Unnormalized multinomial distribution calculates probability in a different
-    way from multinomial distribution: It considers the bag-of-words `given` as
-    a statistics of a batch of ordered result sequences instead of a batch of
-    result counts. Hence it does not multiply the n!/(k1!*k2!*...) term.
+    UnnormalizedMultinomial distribution calculates probabilities differently
+    from :class:`Multinomial`: It considers the bag-of-words `given` as a
+    statistics of an ordered result sequence, and calculates the probability
+    of the (imagined) ordered sequence. Hence it does not multiply the term
+
+    .. math::
+
+        \\binom{n}{k_1, k_2, \\dots} =  \\frac{n!}{\\prod_{i} k_i!}
+
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique

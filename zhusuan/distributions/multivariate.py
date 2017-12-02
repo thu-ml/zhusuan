@@ -169,10 +169,10 @@ class Multinomial(Distribution):
 class UnnormalizedMultinomial(Distribution):
     """
     The class of UnnormalizedMultinomial distribution.
-    :class:`UnnormalizedMultinomial` calculates probabilities in a different
-    way from :class:`Multinomial`: It considers the bag-of-words `given` as
-    a statistics of a batch of ordered result sequences instead of a batch of
-    result counts. Hence it does not multiply the term
+    UnnormalizedMultinomial distribution calculates probabilities differently
+    from :class:`Multinomial`: It considers the bag-of-words `given` as a
+    statistics of an ordered result sequence, and calculates the probability
+    of the (imagined) ordered sequence. Hence it does not multiply the term
 
     .. math::
 
