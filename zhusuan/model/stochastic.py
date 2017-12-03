@@ -24,7 +24,7 @@ __all__ = [
     'Binomial',
     'InverseGamma',
     'Laplace',
-    'MultivariateNormalTriL',
+    'MultivariateNormalCholesky',
     'Multinomial',
     'Dirichlet',
     'BinConcrete',
@@ -483,7 +483,7 @@ class Multinomial(StochasticTensor):
         super(Multinomial, self).__init__(name, multinomial, n_samples)
 
 
-class MultivariateNormalTriL(StochasticTensor):
+class MultivariateNormalCholesky(StochasticTensor):
     """
 
     The class of multivariate normal `StochasticTensor`,  where covariance is
@@ -524,7 +524,7 @@ class MultivariateNormalTriL(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        mvn = distributions.MultivariateNormalTriL(
+        mvn = distributions.MultivariateNormalCholesky(
             mean,
             cov_tril,
             group_ndims,
@@ -532,7 +532,7 @@ class MultivariateNormalTriL(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(MultivariateNormalTriL, self).__init__(name, mvn, n_samples)
+        super(MultivariateNormalCholesky, self).__init__(name, mvn, n_samples)
 
 
 class OnehotCategorical(StochasticTensor):

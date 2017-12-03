@@ -13,19 +13,19 @@ from tests.distributions import utils
 from zhusuan.distributions.multivariate import *
 
 
-class TestMultivariateNormalTriL(tf.test.TestCase):
+class TestMultivariateNormalCholesky(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
-                MultivariateNormalTriL(tf.zeros([]), tf.zeros([]))
+                MultivariateNormalCholesky(tf.zeros([]), tf.zeros([]))
             with self.assertRaisesRegexp(ValueError, "should have rank"):
-                MultivariateNormalTriL(tf.zeros([1]), tf.zeros([1]))
+                MultivariateNormalCholesky(tf.zeros([1]), tf.zeros([1]))
             with self.assertRaisesRegexp(ValueError, 'compatible'):
-                MultivariateNormalTriL(tf.zeros([1, 2]), 
+                MultivariateNormalCholesky(tf.zeros([1, 2]), 
                                        tf.placeholder(tf.float32, [1, 2, 3]))
             u = tf.placeholder(tf.float32, [None])
             len_u = tf.shape(u)[0]
-            dst = MultivariateNormalTriL(tf.zeros([2]), 
+            dst = MultivariateNormalCholesky(tf.zeros([2]), 
                                          tf.zeros([len_u, len_u]))
             with self.assertRaisesRegexp(
                     tf.errors.InvalidArgumentError, 'compatible'):
@@ -36,14 +36,14 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
             # Static
             mean = 10 * np.random.normal(size=(10, 11, 2)).astype('d')
             cov = np.zeros((10, 11, 2, 2))
-            dst = MultivariateNormalTriL(
+            dst = MultivariateNormalCholesky(
                 tf.constant(mean), tf.constant(cov))
             self.assertEqual(dst.get_batch_shape().as_list(), [10, 11])
             self.assertEqual(dst.get_value_shape().as_list(), [2])
             # Dynamic
             unk_mean = tf.placeholder(tf.float32, None)
             unk_cov = tf.placeholder(tf.float32, None)
-            dst = MultivariateNormalTriL(unk_mean, unk_cov) 
+            dst = MultivariateNormalCholesky(unk_mean, unk_cov) 
             self.assertEqual(dst.get_value_shape().as_list(), [None])
             feed_dict = {unk_mean: np.ones(2), unk_cov: np.eye(2)}
             self.assertEqual(list(dst.batch_shape.eval(feed_dict)), [])
@@ -66,7 +66,7 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
     def test_sample(self):
         with self.test_session(use_gpu=True):
             mean, cov, cov_chol = self._gen_test_params()
-            dst = MultivariateNormalTriL(
+            dst = MultivariateNormalCholesky(
                 tf.constant(mean), tf.constant(cov_chol))
             n_exp = 20000
             samples = dst.sample(n_exp).eval()
@@ -83,7 +83,7 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
     def test_prob(self):
         with self.test_session(use_gpu=True):
             mean, cov, cov_chol = self._gen_test_params()
-            dst = MultivariateNormalTriL(
+            dst = MultivariateNormalCholesky(
                 tf.constant(mean), tf.constant(cov_chol), check_numerics=True)
             n_exp = 200
             samples = dst.sample(n_exp).eval()
@@ -101,12 +101,12 @@ class TestMultivariateNormalTriL(tf.test.TestCase):
         mean, cov, cov_chol = self._gen_test_params()
         mean = tf.constant(mean)
         cov_chol = tf.constant(cov_chol)
-        mvn_rep = MultivariateNormalTriL(mean, cov_chol)
+        mvn_rep = MultivariateNormalCholesky(mean, cov_chol)
         samples = mvn_rep.sample(tf.placeholder(tf.int32, shape=[]))
         mean_grads, cov_grads = tf.gradients(samples, [mean, cov_chol])
         self.assertTrue(mean_grads is not None)
         self.assertTrue(cov_grads is not None)
-        mvn_no_rep = MultivariateNormalTriL(
+        mvn_no_rep = MultivariateNormalCholesky(
                 mean, cov_chol, is_reparameterized=False)
         samples = mvn_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
         mean_grads, cov_grads = tf.gradients(samples, [mean, cov_chol])

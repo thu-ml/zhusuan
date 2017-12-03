@@ -23,7 +23,7 @@ from zhusuan.distributions.utils import \
 
 
 __all__ = [
-    'MultivariateNormalTriL',
+    'MultivariateNormalCholesky',
     'Multinomial',
     'OnehotCategorical',
     'OnehotDiscrete',
@@ -33,7 +33,7 @@ __all__ = [
 ]
 
 
-class MultivariateNormalTriL(Distribution):
+class MultivariateNormalCholesky(Distribution):
     """
     The class of multivariate normal distribution, where covariance is
     parameterized with the lower triangular matrix in Cholesky decomposition,
@@ -76,11 +76,11 @@ class MultivariateNormalTriL(Distribution):
         self._check_numerics = check_numerics
         self._mean = tf.convert_to_tensor(mean)
         self._mean = assert_rank_at_least_one(
-            self._mean, 'MultivariateNormalTriL.mean')
+            self._mean, 'MultivariateNormalCholesky.mean')
         self._n_dim = get_shape_at(self._mean, -1)
         self._cov_tril = tf.convert_to_tensor(cov_tril)
         self._cov_tril = assert_rank_at_least(
-            self._cov_tril, 2, 'MultivariateNormalTriL.cov_tril')
+            self._cov_tril, 2, 'MultivariateNormalCholesky.cov_tril')
 
         # Check shape; fail asap
         if self._mean.get_shape() and self._cov_tril.get_shape():
@@ -88,9 +88,9 @@ class MultivariateNormalTriL(Distribution):
             actual_shape = get_shape_list(self._cov_tril)
 
             def make_err_msg(i, exp, act):
-                return [('MVNTriL.cov_tril should have compatible shape with '
-                         'mean. Expected {}, got {} at dimension {}').format(
-                             exp, act, i)]
+                return [('MultivariateNormalCholesky.cov_tril should have '
+                         'compatible shape with mean. Expected {}, got {} at '
+                         'dimension {}').format(exp, act, i)]
 
             assert_ops = [tf.assert_equal(x, y, make_err_msg(i, x, y))
                           for i, (x, y) in enumerate(zip(
@@ -99,7 +99,7 @@ class MultivariateNormalTriL(Distribution):
             expected_shape = tf.concat(
                 [tf.shape(self._mean), [self._n_dim]], axis=0)
             actual_shape = tf.shape(self._cov_tril)
-            msg = ['MultivariateNormalTriL.cov_tril should have compatible '
+            msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
                    'shape with mean. Expected', expected_shape, ' got ',
                    actual_shape]
             assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
@@ -108,9 +108,9 @@ class MultivariateNormalTriL(Distribution):
             self._cov_tril = tf.identity(self._cov_tril)
 
         dtype = assert_same_float_dtype(
-            [(self._mean, 'MultivariateNormalTriL.mean'),
-             (self._cov_tril, 'MultivariateNormalTriL.cov_tril')])
-        super(MultivariateNormalTriL, self).__init__(
+            [(self._mean, 'MultivariateNormalCholesky.mean'),
+             (self._cov_tril, 'MultivariateNormalCholesky.cov_tril')])
+        super(MultivariateNormalCholesky, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
@@ -186,7 +186,7 @@ class MultivariateNormalTriL(Distribution):
         # (g-m)' L^{-T} L^{-1} (g-m) = |x|^2, where Lx = g-m =: y.
         y = tf.expand_dims(given - mean, -1)
         L, _ = maybe_explicit_broadcast(
-            cov_tril, y, 'MultivariateNormalTriL.cov_tril',
+            cov_tril, y, 'MultivariateNormalCholesky.cov_tril',
             'expand_dims(given, -1)')
         x = tf.matrix_triangular_solve(L, y, lower=True)
         x = tf.squeeze(x, -1)
