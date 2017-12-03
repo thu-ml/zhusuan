@@ -42,10 +42,12 @@ class MultivariateNormalTriL(Distribution):
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param mean: An N-D `float` Tensor. mean[..., i_{N-1}, :] corresponds to a
-        single distribution.
-    :param cov_tril: An (N+1)-D `float` Tensor. Each slice represents the lower
-        triangular matrix in the Cholesky decomposition.
+    :param mean: An N-D `float` Tensor of shape [..., n_dim]. Each slice
+        [i, j, ..., k, :] represents the mean of a single multivariate normal
+        distribution.
+    :param cov_tril: An (N+1)-D `float` Tensor of shape [..., n_dim, n_dim].
+        Each slice [i, ..., k, :, :] represents the lower triangular matrix in
+        the Cholesky decomposition of the covariance of a single distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -72,32 +74,42 @@ class MultivariateNormalTriL(Distribution):
                  check_numerics=False,
                  **kwargs):
         self._check_numerics = check_numerics
-        self._mean = assert_rank_at_least_one(mean, 'MVNTriL.mean')
+        self._mean = tf.convert_to_tensor(mean)
+        self._mean = assert_rank_at_least_one(
+            self._mean, 'MultivariateNormalTriL.mean')
         self._n_dim = get_shape_at(self._mean, -1)
-        self._cov_tril = assert_rank_at_least(cov_tril, 2, 'MVNTriL.cov_tril')
+        self._cov_tril = tf.convert_to_tensor(cov_tril)
+        self._cov_tril = assert_rank_at_least(
+            self._cov_tril, 2, 'MultivariateNormalTriL.cov_tril')
 
         # Check shape; fail asap
         if self._mean.get_shape() and self._cov_tril.get_shape():
             expected_shape = get_shape_list(self._mean) + [self._n_dim]
             actual_shape = get_shape_list(self._cov_tril)
-            err_msg = ['MVNTriL.cov_tril should have compatible shape with',
-                       ' mean. Expected', tf.convert_to_tensor(expected_shape),
-                       'got', tf.convert_to_tensor(actual_shape)]
-            assert_ops = [tf.assert_equal(x, y, err_msg)
-                          for x, y in zip(expected_shape, actual_shape)]
+
+            def make_err_msg(i, exp, act):
+                return [('MVNTriL.cov_tril should have compatible shape with '
+                         'mean. Expected {}, got {} at dimension {}').format(
+                             exp, act, i)]
+
+            assert_ops = [tf.assert_equal(x, y, make_err_msg(i, x, y))
+                          for i, (x, y) in enumerate(zip(
+                                  expected_shape, actual_shape))]
         else:
             expected_shape = tf.concat(
-                    [tf.shape(self._mean), [self._n_dim]], axis=0)
+                [tf.shape(self._mean), [self._n_dim]], axis=0)
             actual_shape = tf.shape(self._cov_tril)
-            msg = ['MVNTriL.cov_tril should have compatible shape with '
-                   'mean. Expected', expected_shape, ' got ', actual_shape]
+            msg = ['MultivariateNormalTriL.cov_tril should have compatible '
+                   'shape with mean. Expected', expected_shape, ' got ',
+                   actual_shape]
             assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
 
         with tf.control_dependencies(assert_ops):
             self._cov_tril = tf.identity(self._cov_tril)
 
-        dtype = assert_same_float_dtype([(self._mean, 'MVNTriL.mean'),
-                                         (self._cov_tril, 'MVNTriL.cov_tril')])
+        dtype = assert_same_float_dtype(
+            [(self._mean, 'MultivariateNormalTriL.mean'),
+             (self._cov_tril, 'MultivariateNormalTriL.cov_tril')])
         super(MultivariateNormalTriL, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
@@ -155,10 +167,9 @@ class MultivariateNormalTriL(Distribution):
         samples = tf.squeeze(samples, -1)
         # Update static shape
         static_n_samples = n_samples if isinstance(n_samples, int) else None
-        if self.get_batch_shape():
-            samples.set_shape(tf.TensorShape([static_n_samples])
-                              .concatenate(self.get_batch_shape())
-                              .concatenate(self.get_value_shape()))
+        samples.set_shape(tf.TensorShape([static_n_samples])
+                          .concatenate(self.get_batch_shape())
+                          .concatenate(self.get_value_shape()))
         return samples
 
     def _log_prob(self, given):
@@ -175,7 +186,8 @@ class MultivariateNormalTriL(Distribution):
         # (g-m)' L^{-T} L^{-1} (g-m) = |x|^2, where Lx = g-m =: y.
         y = tf.expand_dims(given - mean, -1)
         L, _ = maybe_explicit_broadcast(
-                cov_tril, y, 'MVNTriL.cov_tril', 'expand_dims(given, -1)')
+            cov_tril, y, 'MultivariateNormalTriL.cov_tril',
+            'expand_dims(given, -1)')
         x = tf.matrix_triangular_solve(L, y, lower=True)
         x = tf.squeeze(x, -1)
         stoc_dist = -0.5 * tf.reduce_sum(tf.square(x), axis=-1)

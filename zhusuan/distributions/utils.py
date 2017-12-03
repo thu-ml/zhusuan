@@ -185,8 +185,8 @@ def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
 def get_shape_list(tensor):
     """
     :param tensor: A `tf.Tensor`.
-    :return: A list representing the shape of `tensor`, or None if unknown.
-    Each item in the list is either int or a `tf.Tensor`.
+    :return: A list representing the shape of `tensor`, or None if the shape
+             is unknown. Each item in the list is either int or a `tf.Tensor`.
     """
     static_shape = tensor.get_shape()
     if not static_shape:
@@ -205,9 +205,9 @@ def get_shape_at(tensor, axis):
     :param axis: `int`.
     :return: The shape along the axis specified.
     """
-    static_shapes = get_shape_list(tensor)
-    if static_shapes:
-        return static_shapes[axis]
+    sizes_of_axes = get_shape_list(tensor)
+    if sizes_of_axes:
+        return sizes_of_axes[axis]
     return tf.shape(tensor)[axis]
 
 
@@ -221,7 +221,7 @@ def assert_rank_at_least(tensor, k, name):
     :return: The checked tensor.
     """
     static_shape = tensor.get_shape()
-    shape_err_msg = name + " should have rank >= {}.".format(k)
+    shape_err_msg = '{} should have rank >= {}.'.format(name, k)
     if static_shape and (static_shape.ndims < k):
         raise ValueError(shape_err_msg)
     if not static_shape:
