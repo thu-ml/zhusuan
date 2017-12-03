@@ -52,12 +52,12 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
 
     def _gen_test_params(self):
         np.random.seed(23)
-        mean = 10 * np.random.normal(size=(10, 11, 2)).astype('d')
-        cov = np.zeros((10, 11, 2, 2))
+        mean = 10 * np.random.normal(size=(10, 11, 3)).astype('d')
+        cov = np.zeros((10, 11, 3, 3))
         cov_chol = np.zeros_like(cov)
         for i in range(10):
             for j in range(11):
-                cov[i, j] = stats.invwishart.rvs(2, np.eye(2))
+                cov[i, j] = stats.invwishart.rvs(3, np.eye(3))
                 cov[i, j] /= np.max(np.diag(cov[i, j]))
                 cov_chol[i, j, :, :] = np.linalg.cholesky(cov[i, j])
         return mean, cov, cov_chol
@@ -70,7 +70,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                 tf.constant(mean), tf.constant(cov_chol))
             n_exp = 20000
             samples = dst.sample(n_exp).eval()
-            self.assertEqual(samples.shape, (n_exp, 10, 11, 2))
+            self.assertEqual(samples.shape, (n_exp, 10, 11, 3))
             self.assertAllClose(
                 np.mean(samples, axis=0), mean, rtol=5e-2, atol=5e-2)
             for i in range(10):
