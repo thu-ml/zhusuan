@@ -99,7 +99,7 @@ def main():
     np.random.seed(1234)
     hps = parser.parse_args()
 
-    # Load UCI Boston housing data
+    # Load data
     data_path = os.path.join(conf.data_dir, hps.dataset + '.data')
     data_func = getattr(dataset, 'load_uci_' + hps.dataset)
     x_train, y_train, x_valid, y_valid, x_test, y_test = data_func(data_path)
