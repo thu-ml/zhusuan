@@ -13,6 +13,107 @@ from tests.distributions import utils
 from zhusuan.distributions.multivariate import *
 
 
+class TestMultivariateNormalCholesky(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError, "should have rank"):
+                MultivariateNormalCholesky(tf.zeros([]), tf.zeros([]))
+            with self.assertRaisesRegexp(ValueError, "should have rank"):
+                MultivariateNormalCholesky(tf.zeros([1]), tf.zeros([1]))
+            with self.assertRaisesRegexp(ValueError, 'compatible'):
+                MultivariateNormalCholesky(tf.zeros([1, 2]), 
+                                       tf.placeholder(tf.float32, [1, 2, 3]))
+            u = tf.placeholder(tf.float32, [None])
+            len_u = tf.shape(u)[0]
+            dst = MultivariateNormalCholesky(tf.zeros([2]), 
+                                         tf.zeros([len_u, len_u]))
+            with self.assertRaisesRegexp(
+                    tf.errors.InvalidArgumentError, 'compatible'):
+                dst.sample().eval(feed_dict={u: np.ones((3,))})
+
+    def test_shape_inference(self):
+        with self.test_session(use_gpu=True):
+            # Static
+            mean = 10 * np.random.normal(size=(10, 11, 2)).astype('d')
+            cov = np.zeros((10, 11, 2, 2))
+            dst = MultivariateNormalCholesky(
+                tf.constant(mean), tf.constant(cov))
+            self.assertEqual(dst.get_batch_shape().as_list(), [10, 11])
+            self.assertEqual(dst.get_value_shape().as_list(), [2])
+            # Dynamic
+            unk_mean = tf.placeholder(tf.float32, None)
+            unk_cov = tf.placeholder(tf.float32, None)
+            dst = MultivariateNormalCholesky(unk_mean, unk_cov) 
+            self.assertEqual(dst.get_value_shape().as_list(), [None])
+            feed_dict = {unk_mean: np.ones(2), unk_cov: np.eye(2)}
+            self.assertEqual(list(dst.batch_shape.eval(feed_dict)), [])
+            self.assertEqual(list(dst.value_shape.eval(feed_dict)), [2])
+
+
+    def _gen_test_params(self):
+        np.random.seed(23)
+        mean = 10 * np.random.normal(size=(10, 11, 3)).astype('d')
+        cov = np.zeros((10, 11, 3, 3))
+        cov_chol = np.zeros_like(cov)
+        for i in range(10):
+            for j in range(11):
+                cov[i, j] = stats.invwishart.rvs(3, np.eye(3))
+                cov[i, j] /= np.max(np.diag(cov[i, j]))
+                cov_chol[i, j, :, :] = np.linalg.cholesky(cov[i, j])
+        return mean, cov, cov_chol
+
+
+    def test_sample(self):
+        with self.test_session(use_gpu=True):
+            mean, cov, cov_chol = self._gen_test_params()
+            dst = MultivariateNormalCholesky(
+                tf.constant(mean), tf.constant(cov_chol))
+            n_exp = 20000
+            samples = dst.sample(n_exp).eval()
+            self.assertEqual(samples.shape, (n_exp, 10, 11, 3))
+            self.assertAllClose(
+                np.mean(samples, axis=0), mean, rtol=5e-2, atol=5e-2)
+            for i in range(10):
+                for j in range(11):
+                    self.assertAllClose(
+                        np.cov(samples[:, i, j, :].T), cov[i, j], 
+                        rtol=1e-1, atol=1e-1)
+
+
+    def test_prob(self):
+        with self.test_session(use_gpu=True):
+            mean, cov, cov_chol = self._gen_test_params()
+            dst = MultivariateNormalCholesky(
+                tf.constant(mean), tf.constant(cov_chol), check_numerics=True)
+            n_exp = 200
+            samples = dst.sample(n_exp).eval()
+            log_pdf = dst.log_prob(tf.constant(samples)).eval()
+            for i in range(10):
+                for j in range(11):
+                    log_pdf_exact = stats.multivariate_normal.logpdf(
+                            samples[:, i, j, :], mean[i, j], cov[i, j])
+                    self.assertAllClose(log_pdf_exact, log_pdf[:, i, j])
+            self.assertAllClose(
+                    np.exp(log_pdf), dst.prob(tf.constant(samples)).eval())
+
+
+    def test_sample_reparameterized(self):
+        mean, cov, cov_chol = self._gen_test_params()
+        mean = tf.constant(mean)
+        cov_chol = tf.constant(cov_chol)
+        mvn_rep = MultivariateNormalCholesky(mean, cov_chol)
+        samples = mvn_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        mean_grads, cov_grads = tf.gradients(samples, [mean, cov_chol])
+        self.assertTrue(mean_grads is not None)
+        self.assertTrue(cov_grads is not None)
+        mvn_no_rep = MultivariateNormalCholesky(
+                mean, cov_chol, is_reparameterized=False)
+        samples = mvn_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        mean_grads, cov_grads = tf.gradients(samples, [mean, cov_chol])
+        self.assertEqual(mean_grads, None)
+        self.assertEqual(cov_grads, None)
+
+
 class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):
