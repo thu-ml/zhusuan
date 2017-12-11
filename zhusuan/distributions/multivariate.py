@@ -82,28 +82,18 @@ class MultivariateNormalCholesky(Distribution):
         self._cov_tril = assert_rank_at_least(
             self._cov_tril, 2, 'MultivariateNormalCholesky.cov_tril')
 
-        # Check shape; fail asap
-        if self._mean.get_shape() and self._cov_tril.get_shape():
-            expected_shape = get_shape_list(self._mean) + [self._n_dim]
-            actual_shape = get_shape_list(self._cov_tril)
-
-            def make_err_msg(i, exp, act):
-                return [('MultivariateNormalCholesky.cov_tril should have '
-                         'compatible shape with mean. Expected {}, got {} at '
-                         'dimension {}').format(exp, act, i)]
-
-            assert_ops = [tf.assert_equal(x, y, make_err_msg(i, x, y))
-                          for i, (x, y) in enumerate(zip(
-                                  expected_shape, actual_shape))]
-        else:
-            expected_shape = tf.concat(
-                [tf.shape(self._mean), [self._n_dim]], axis=0)
-            actual_shape = tf.shape(self._cov_tril)
-            msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
-                   'shape with mean. Expected', expected_shape, ' got ',
-                   actual_shape]
-            assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
-
+        # Static shape check
+        expected_shape = self._mean.get_shape().concatenate(
+            [self._n_dim if isinstance(self._n_dim, int) else None])
+        self._cov_tril.get_shape().assert_is_compatible_with(expected_shape)
+        # Dynamic
+        expected_shape = tf.concat(
+            [tf.shape(self._mean), [self._n_dim]], axis=0)
+        actual_shape = tf.shape(self._cov_tril)
+        msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
+               'shape with mean. Expected', expected_shape, ' got ',
+               actual_shape]
+        assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
         with tf.control_dependencies(assert_ops):
             self._cov_tril = tf.identity(self._cov_tril)
 
