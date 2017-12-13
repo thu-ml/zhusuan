@@ -6,9 +6,9 @@ Sparse variational Gaussian process, loosely based on
 
 > Opper and Archambeau 2009, The variational Gaussian approximation revisited.
 
-On the Boston dataset you should get ~2.7 RMSE and ~2.3 negative log likelihood
+On the Boston dataset you should get ~2.5 RMSE and ~2.3 negative log likelihood
 after a while with default args;
-On the protein dataset you should get ~4.4 RMSE and ~2.9 NLL after 70 epochs
+On the protein dataset you should get ~4.5 RMSE and ~2.8 NLL after 100 epochs
 with `N_batch=1000 N_particles=10 dtype=float32`.
 '''
 
@@ -30,7 +30,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('-N_Z', default=100, type=int)
 parser.add_argument('-N_X', default=1, type=int)
-parser.add_argument('-N_particles', default=50, type=int)
+parser.add_argument('-N_particles', default=20, type=int)
 parser.add_argument('-N_particles_test', default=100, type=int)
 parser.add_argument('-N_batch', default=100, type=int)
 parser.add_argument('-N_epoch', default=5000, type=int)
@@ -48,7 +48,14 @@ def rbf(x, y, inv_scale):
 
 
 @zs.reuse('model')
-def build_model(observed, Z_pos, X_ph, hps, n_particles):
+def build_model(observed, Z_pos, X_ph, hps, n_particles, full_cov=False):
+    '''
+    Build the SVGP model.
+    Note that for inference, we only need the diagonal part of Cov[Y], as ELBO
+    equals sum over individual observations.
+    For visualization etc we may want a full covariance. Thus the argument
+    `full_cov`.
+    '''
     with zs.BayesianNet(observed) as model:
         k_inv_scale = tf.get_variable('k_inv_scale', [hps.N_X], hps.dtype,
                                       tf.zeros_initializer())
@@ -59,24 +66,37 @@ def build_model(observed, Z_pos, X_ph, hps, n_particles):
         fZ = zs.MultivariateNormalCholesky(
             'fZ', tf.zeros([hps.N_Z], dtype=hps.dtype), Kzz_chol,
             n_samples=n_particles)
-        # Mean = Kxz @ inv(Kzz) @ fZ
-        # When Z works Kzz will have small eigenvalues. Take care.
-        Kzz_chol_inv = tf.matrix_triangular_solve(
-            Kzz_chol, tf.eye(hps.N_Z, dtype=hps.dtype))
-        Kxziz = tf.matmul(tf.matmul(Kxz, tf.transpose(Kzz_chol_inv)),
-                          Kzz_chol_inv)
-        mean_xz = tf.matmul(fZ, tf.transpose(Kxziz))  # [N_particles, N_X]
-        cov_xz = rbf(X_ph, X_ph, k_inv_scale) -\
-            tf.matmul(Kxziz, tf.transpose(Kxz))
+
+        # Model Y|Z.
+        # Mean[Y|Z] = Kxz @ inv(Kzz) @ fZ
+        # Cov[Y|Z] = Kxx - Kxz @ inv(Kzz) @ Kzx + noise_level * I
         noise_level = tf.get_variable(
             'noise_level', dtype=hps.dtype,
             initializer=tf.constant(0.5, dtype=hps.dtype))
         noise_level = tf.nn.softplus(noise_level)
+
+        # With ill-conditioned Kzz, the inverse is often asymmetric, which
+        # breaks further cholesky decomposition. We compute a symmetric one.
+        Kzz_chol_inv = tf.matrix_triangular_solve(
+            Kzz_chol, tf.eye(hps.N_Z, dtype=hps.dtype))
+        Kzz_inv = tf.matmul(tf.transpose(Kzz_chol_inv), Kzz_chol_inv)
+
+        Kxziz = tf.matmul(Kxz, Kzz_inv)
+        mean_y = tf.matmul(fZ, tf.transpose(Kxziz))  # [N_particles, N_X]
+
+        cov_xz = rbf(X_ph, X_ph, k_inv_scale) - \
+            tf.matmul(Kxziz, tf.transpose(Kxz))
         cov_y = cov_xz + noise_level * tf.eye(
             tf.shape(X_ph)[0], dtype=hps.dtype)
-        cov_y_chol = tf.tile(tf.expand_dims(tf.cholesky(cov_y), 0),
-                             [n_particles, 1, 1])
-        Y = zs.MultivariateNormalCholesky('Y', mean_xz, cov_y_chol)
+        if full_cov:
+            cov_y_chol = tf.tile(tf.expand_dims(tf.cholesky(cov_y), 0),
+                                 [n_particles, 1, 1])
+            Y = zs.MultivariateNormalCholesky('Y', mean_y, cov_y_chol)
+        else:
+            std_y = tf.sqrt(tf.matrix_diag_part(cov_y))
+            std_y = tf.tile(tf.expand_dims(std_y, 0), [n_particles, 1])
+            Y = zs.Normal('Y', mean=mean_y, std=std_y, group_ndims=1)
+
     return model, Y
 
 
@@ -166,7 +186,7 @@ def main():
         return sess.run([lhood, pred_mse], fd)
 
     # Run the inference
-    iters = int(np.floor(x_train.shape[0] / float(hps.N_batch)))
+    iters = int(np.ceil(x_train.shape[0] / float(hps.N_batch)))
     test_freq = 10
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
