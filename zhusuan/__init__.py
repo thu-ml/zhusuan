@@ -9,3 +9,5 @@ from .evaluation import *
 from .transform import *
 from .utils import *
 from .legacy import *
+
+__version__ = '0.3.0'

@@ -46,10 +46,10 @@ class EvidenceLowerBoundObjective(VariationalObjective):
     :class:`EvidenceLowerBoundObjective`. Currently there are two of them:
 
     * :meth:`sgvb`: The Stochastic Gradient Variational Bayes (SGVB) estimator,
-        also known as "the reparameterization trick", or "path derivative
-        estimator".
+      also known as "the reparameterization trick", or "path derivative
+      estimator".
     * :meth:`reinforce`: The score function estimator with variance reduction,
-        also known as "REINFORCE", "NVIL", or "likelihood-ratio estimator".
+      also known as "REINFORCE", "NVIL", or "likelihood-ratio estimator".
 
     Thus the typical code for doing variational inference is like::
 

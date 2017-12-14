@@ -6,18 +6,21 @@
 Welcome to ZhuSuan
 ==================
 
-ZhuSuan is a python	library	for	**Bayesian Deep Learning**, built upon
-`Tensorflow <https://www.tensorflow.org>`_.
-Unlike existing deep learning libraries, which are mainly designed for
-supervised tasks, ZhuSuan is featured for its deep root into Bayesian
-Inference, thus supporting various kinds of generative models: both the
-traditional **hierarchical Bayesian models** and recent
-**deep generative models**.
+ZhuSuan is a python probabilistic programming library for
+**Bayesian deep learning**, which conjoins the complimentary advantages of
+Bayesian methods and deep learning. ZhuSuan is built upon
+`Tensorflow <https://www.tensorflow.org>`_. Unlike existing deep learning
+libraries, which are mainly designed for deterministic neural networks and
+supervised tasks, ZhuSuan provides deep learning style primitives and
+algorithms for building probabilistic models and applying Bayesian inference.
+The supported inference algorithms include:
 
-With ZhuSuan, users can enjoy powerful fitting and multi-GPU training of deep
-learning, while at the same time they can use generative models to model the
-complex world, exploit unlabeled data and deal with uncertainty by performing
-principled Bayesian inference.
+* Variational inference with programmable variational posteriors, various
+  objectives and advanced gradient estimators (SGVB, REINFORCE, VIMCO, etc.).
+* Importance sampling for learning and evaluating models, with programmable
+  proposals.
+* Hamiltonian Monte Carlo (HMC) with parallel chains, and optional automatic
+  parameter tuning.
 
 .. toctree::
    :maxdepth: 2
@@ -41,7 +44,7 @@ we do not include it in the dependencies. See
 
 If you are developing ZhuSuan, you may want to install in an "editable" or
 "develop" mode. Please refer to the Contribution section in
-`README <https://github.com/thu-ml/zhusuan/blob/master/README.rst#contribution>`_.
+`README <https://github.com/thu-ml/zhusuan/blob/master/README.md#contribution>`_.
 
 After installation, open your python console and type::
 
@@ -50,24 +53,28 @@ After installation, open your python console and type::
 If no error occurs, you've successfully installed ZhuSuan.
 
 
-Tutorials
----------
+.. toctree::
+   :maxdepth: 1
+   :caption: Tutorials
+
+   tutorials/vae
+   tutorials/concepts
+   tutorials/bayesian_nn
+
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: API Docs
 
-   tutorials
-
-
-API Docs
---------
-
-Information on specific functions, classes, and methods.
-
-.. toctree::
-   :maxdepth: 2
-
-   api
+   api/zhusuan.distributions
+   api/zhusuan.model
+   api/zhusuan.variational
+   api/zhusuan.hmc
+   api/zhusuan.evaluation
+   api/zhusuan.transform
+   api/zhusuan.diagnostics
+   api/zhusuan.utils
+   api/zhusuan.legacy
 
 
 Indices and tables

@@ -141,6 +141,11 @@ class TestBayesianNet(tf.test.TestCase):
         self.assertTrue(b_out is b.tensor)
         self.assertTrue(c_out is c.tensor)
 
+        # outputs by iterator
+        b_out_2, c_out_2 = model.outputs(iter(['b', 'c']))
+        self.assertIs(b_out_2, b_out)
+        self.assertIs(c_out_2, c_out)
+
         # local_log_prob
         log_pa = model.local_log_prob('a')
         log_pa_t = a.log_prob(a_observed)
@@ -154,6 +159,14 @@ class TestBayesianNet(tf.test.TestCase):
             log_pc_out, log_pc_t_out = sess.run([log_pc, log_pc_t])
             self.assertNear(log_pb_out, log_pb_t_out, 1e-6)
             self.assertNear(log_pc_out, log_pc_t_out, 1e-6)
+
+        # local_log_prob by iterator
+        log_pb_2, log_pc_2 = model.local_log_prob(iter(['b', 'c']))
+        with self.test_session(use_gpu=True) as sess:
+            log_pb_2_out, log_pb_t_out = sess.run([log_pb_2, log_pb_t])
+            log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
+            self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
+            self.assertNear(log_pc_2_out, log_pc_t_out, 1e-6)
 
         # query
         a_out, log_pa = model.query('a', outputs=True, local_log_prob=True)
@@ -171,6 +184,17 @@ class TestBayesianNet(tf.test.TestCase):
             self.assertNear(log_pa_out, log_pa_t_out, 1e-6)
             self.assertNear(log_pb_out, log_pb_t_out, 1e-6)
             self.assertNear(log_pc_out, log_pc_t_out, 1e-6)
+
+        # query by iterator
+        (b_out_2, log_pb_2), (c_out_2, log_pc_2) = \
+            model.query(iter(['b', 'c']), outputs=True, local_log_prob=True)
+        self.assertIs(b_out_2, b_out)
+        self.assertIs(c_out_2, c_out)
+        with self.test_session(use_gpu=True) as sess:
+            log_pb_2_out, log_pb_t_out = sess.run([log_pb_2, log_pb_t])
+            log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
+            self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
+            self.assertNear(log_pc_2_out, log_pc_t_out, 1e-6)
 
 
 class TestReuse(tf.test.TestCase):
