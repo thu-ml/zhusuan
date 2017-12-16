@@ -78,8 +78,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                 n_exp = 20000
                 samples = dst.sample(n_exp)
                 sample_shape = (n_exp, 10, 11, 3)
-                samples.shape.assert_is_compatible_with(
-                    tf.TensorShape(sample_shape))
+                self.assertEqual(samples.shape.as_list(), list(sample_shape))
                 samples = dst.sample(n_exp).eval()
                 self.assertEqual(samples.shape, sample_shape)
                 self.assertAllClose(
@@ -104,8 +103,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                 samples = dst.sample(n_exp).eval()
                 log_pdf = dst.log_prob(tf.constant(samples))
                 pdf_shape = (n_exp, 10, 11)
-                log_pdf.shape.assert_is_compatible_with(
-                    tf.TensorShape(pdf_shape))
+                self.assertEqual(log_pdf.shape.as_list(), list(pdf_shape))
                 log_pdf = log_pdf.eval()
                 self.assertEqual(log_pdf.shape, pdf_shape)
                 for i in range(10):
