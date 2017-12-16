@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+from contextlib import contextmanager
 import tensorflow as tf
 import numpy as np
 from scipy import stats, misc, special
@@ -61,9 +62,15 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                 cov_chol[i, j, :, :] = np.linalg.cholesky(cov[i, j])
         return mean, cov, cov_chol
 
+    @contextmanager
+    def fixed_randomness_session(self, seed):
+        with tf.Graph().as_default() as g:
+            with self.test_session(use_gpu=True, graph=g):
+                tf.set_random_seed(seed)
+                yield
+
     def test_sample(self):
-        tf.set_random_seed(233)
-        with self.test_session(use_gpu=True):
+        with self.fixed_randomness_session(233):
             def test_sample_with(seed):
                 mean, cov, cov_chol = self._gen_test_params(seed)
                 dst = MultivariateNormalCholesky(
@@ -87,8 +94,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                 test_sample_with(seed)
 
     def test_prob(self):
-        tf.set_random_seed(233)
-        with self.test_session(use_gpu=True):
+        with self.fixed_randomness_session(233):
             def test_prob_with(seed):
                 mean, cov, cov_chol = self._gen_test_params(seed)
                 dst = MultivariateNormalCholesky(
@@ -106,7 +112,8 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                     for j in range(11):
                         log_pdf_exact = stats.multivariate_normal.logpdf(
                                 samples[:, i, j, :], mean[i, j], cov[i, j])
-                        self.assertAllClose(log_pdf_exact, log_pdf[:, i, j])
+                        self.assertAllClose(
+                            log_pdf_exact, log_pdf[:, i, j])
                 self.assertAllClose(
                     np.exp(log_pdf), dst.prob(tf.constant(samples)).eval())
 
