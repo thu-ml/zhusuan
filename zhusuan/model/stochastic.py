@@ -28,8 +28,11 @@ __all__ = [
     'Multinomial',
     'Dirichlet',
     'BinConcrete',
+    'BinGumbelSoftmax',
     'ExpConcrete',
+    'ExpGumbelSoftmax',
     'Concrete',
+    'GumbelSoftmax',
 ]
 
 
@@ -762,6 +765,9 @@ class BinConcrete(StochasticTensor):
         super(BinConcrete, self).__init__(name, bin_concrete, n_samples)
 
 
+BinGumbelSoftmax = BinConcrete
+
+
 class ExpConcrete(StochasticTensor):
     """
     The class of ExpConcrete `StochasticTensor` from (Maddison, 2016),
@@ -814,9 +820,13 @@ class ExpConcrete(StochasticTensor):
         super(ExpConcrete, self).__init__(name, exp_concrete, n_samples)
 
 
+ExpGumbelSoftmax = ExpConcrete
+
+
 class Concrete(StochasticTensor):
     """
-    The class of Concrete `StochasticTensor` from (Maddison, 2016), served as
+    The class of Concrete (or Gumbel-Softmax) `StochasticTensor` from
+    (Maddison, 2016; Jang, 2016), served as
     the continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
@@ -864,3 +874,6 @@ class Concrete(StochasticTensor):
             **kwargs
         )
         super(Concrete, self).__init__(name, concrete, n_samples)
+
+
+GumbelSoftmax = Concrete

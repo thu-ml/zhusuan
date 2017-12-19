@@ -33,6 +33,7 @@ __all__ = [
     'InverseGamma',
     'Laplace',
     'BinConcrete',
+    'BinGumbelSoftmax',
 ]
 
 
@@ -1417,3 +1418,6 @@ class BinConcrete(Distribution):
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
+
+
+BinGumbelSoftmax = BinConcrete
