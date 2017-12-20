@@ -50,11 +50,11 @@ class Empirical(Distribution):
         assert_same_float_and_int_dtype([], dtype)
 
         if value_shape is None:
-            self.explicit_value_shape = []
+            self.explicit_value_shape = tf.TensorShape([])
         elif not isinstance(value_shape, (list, tuple)):
-            self.explicit_value_shape = [value_shape]
+            self.explicit_value_shape = tf.TensorShape([value_shape])
         else:
-            self.explicit_value_shape = list(value_shape)
+            self.explicit_value_shape = tf.TensorShape(list(value_shape))
 
         if is_continuous is None:
             is_continuous = dtype.is_floating
@@ -71,13 +71,13 @@ class Empirical(Distribution):
         return tf.convert_to_tensor(self.explicit_value_shape, tf.int32)
 
     def _get_value_shape(self):
-        return tf.TensorShape(self.explicit_value_shape)
+        return self.explicit_value_shape
 
     def _batch_shape(self):
-        return self.explicit_batch_shape
+        return tf.convert_to_tensor(self.explicit_batch_shape, tf.int32)
 
     def _get_batch_shape(self):
-        return self.batch_shape
+        return self.explicit_batch_shape
 
     def _sample(self, n_samples):
         raise ValueError("You can not sample from an Empirical distribution.")
@@ -129,16 +129,26 @@ class Implicit(Distribution):
             **kwargs)
 
     def _value_shape(self):
-        return tf.convert_to_tensor(self._value_shape, tf.int32)
+        return tf.convert_to_tensor(self.explicit_value_shape, tf.int32)
 
     def _get_value_shape(self):
         return tf.TensorShape(self.explicit_value_shape)
 
     def _batch_shape(self):
-        return tf.shape(self.implicit)[:-len(self.explicit_value_shape)]
+        d = len(self.explicit_value_shape)
+        if d == 0:
+            return tf.shape(self.implicit)
+        else:
+            return tf.shape(self.implicit)[:-d]
 
     def _get_batch_shape(self):
-        return self.implicit.get_shape()[:-len(self.explicit_value_shape)]
+        if self.implicit.get_shape():
+            d = len(self.explicit_value_shape)
+            if d == 0:
+                return self.implicit.get_shape()
+            else:
+                return self.implicit.get_shape()[:-d]
+        return tf.TensorShape(None)
 
     def _sample(self, n_samples=None):
         if n_samples is not None and n_samples != 1:
