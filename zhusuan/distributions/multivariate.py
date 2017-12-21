@@ -29,7 +29,9 @@ __all__ = [
     'OnehotDiscrete',
     'Dirichlet',
     'ExpConcrete',
+    'ExpGumbelSoftmax',
     'Concrete',
+    'GumbelSoftmax',
 ]
 
 
@@ -672,9 +674,13 @@ class ExpConcrete(Distribution):
         return tf.exp(self._log_prob(given))
 
 
+ExpGumbelSoftmax = ExpConcrete
+
+
 class Concrete(Distribution):
     """
-    The class of Concrete distribution from (Maddison, 2016), served as the
+    The class of Concrete (or Gumbel-Softmax) distribution from
+    (Maddison, 2016; Jang, 2016), served as the
     continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
@@ -807,3 +813,6 @@ class Concrete(Distribution):
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
+
+
+GumbelSoftmax = Concrete
