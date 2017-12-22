@@ -6,13 +6,37 @@ zhusuan\.variational
     :undoc-members:
     :show-inheritance:
 
-Submodules
+Base class
 ----------
 
-.. toctree::
+.. automodule:: zhusuan.variational.base
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
-   zhusuan.variational.base
-   zhusuan.variational.exclusive_kl
-   zhusuan.variational.inclusive_kl
-   zhusuan.variational.monte_carlo
+Exclusive KL divergence
+-----------------------
 
+.. automodule:: zhusuan.variational.exclusive_kl
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :inherited-members:
+
+Inclusive KL divergence
+-----------------------
+
+.. automodule:: zhusuan.variational.inclusive_kl
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :inherited-members:
+
+Monte Carlo objectives
+----------------------
+
+.. automodule:: zhusuan.variational.monte_carlo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :inherited-members:

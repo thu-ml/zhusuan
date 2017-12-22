@@ -1,6 +1,7 @@
 -r requirements.txt
 tensorflow>=1.0.0
 Sphinx
+sphinx_rtd_theme
 sphinxcontrib-bibtex
 coverage
 pep8

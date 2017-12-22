@@ -117,16 +117,16 @@ class TestImplicit(tf.test.TestCase):
             with self.test_session(use_gpu=True):
                 self.assertEqual(dist._value_shape().eval().tolist(), value_shape)
 
-            # No value shape
-            _test_shape([None, 1], None)
-            _test_shape([12, 1], None)
-            _test_shape([None, 10, 15], None)
-            _test_shape([12, 10, 15], None)
-            # With value shape
-            _test_shape([None, 1], 5)
-            _test_shape([12, 1], 5)
-            _test_shape([None, 10, 15], [5, 3])
-            _test_shape([12, 10, 15], [5, 3])
+        # No value shape
+        _test_shape([None, 1], None)
+        _test_shape([12, 1], None)
+        _test_shape([None, 10, 15], None)
+        _test_shape([12, 10, 15], None)
+        # With value shape
+        _test_shape([None, 1], 5)
+        _test_shape([12, 1], 5)
+        _test_shape([None, 10, 15], [5, 3])
+        _test_shape([12, 10, 15], [5, 3])
 
     def test_sample(self):
         # with no value_shape
