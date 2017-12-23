@@ -47,24 +47,6 @@ class TestMultinomial(tf.test.TestCase):
                 dist2.n_experiments.eval(feed_dict={logits: [1.],
                                                     n_experiments: 0})
 
-            n_experiments = tf.placeholder(tf.int32, [3])
-            dist3 = Multinomial(logits, n_experiments=n_experiments,
-                                prob_only=True)
-            self.assertEqual(
-                sess.run(dist3.n_categories,
-                         feed_dict={logits: np.ones([3, 2]),
-                                    n_experiments: [1, 2, 3]}),
-                2)
-            self.assertEqual(
-                sess.run(dist3.n_experiments,
-                         feed_dict={logits: np.ones([3, 2]),
-                                    n_experiments: [1, 2, 3]}).tolist(),
-                [1, 2, 3])
-            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
-                                         "must be positive"):
-                dist3.n_experiments.eval(feed_dict={logits: np.ones([3, 2]),
-                                                    n_experiments: [0, 1, 2]})
-
     def test_value_shape(self):
         # static
         dist = Multinomial(tf.placeholder(tf.float32, [None, 2]),
@@ -92,11 +74,6 @@ class TestMultinomial(tf.test.TestCase):
             return Multinomial(param, n_experiments=10)
         utils.test_1parameter_sample_shape_one_rank_less(
             self, _distribution, np.zeros)
-        dist = Multinomial(np.ones([2, 2]), n_experiments=[1, 2],
-                           prob_only=True)
-        with self.assertRaisesRegexp(NotImplementedError,
-                                     "Cannot sample when prob_only"):
-            dist.sample()
 
     def test_log_prob_shape(self):
         def _distribution(param):
@@ -137,9 +114,6 @@ class TestMultinomial(tf.test.TestCase):
                 _test_value([-50., -20., 0.], 4, [1, 0, 3], normalize_logits)
                 _test_value([1., 10., 1000.], 1, [1, 0, 0], normalize_logits)
                 _test_value([[2., 3., 1.], [5., 7., 4.]], 3,
-                            np.ones([3, 1, 3], dtype=np.int32),
-                            normalize_logits)
-                _test_value([[2., 3., 1.], [5., 7., 4.]], [3, 4],
                             np.ones([3, 1, 3], dtype=np.int32),
                             normalize_logits)
                 _test_value([-10., 10., 20., 50.], 100,

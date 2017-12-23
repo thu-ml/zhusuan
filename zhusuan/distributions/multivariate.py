@@ -14,7 +14,7 @@ from zhusuan.distributions.utils import \
         assert_same_float_and_int_dtype, \
         assert_rank_at_least_one, \
         assert_scalar, \
-        assert_positive_int32, \
+        assert_positive_int32_scalar, \
         open_interval_standard_uniform, \
         log_combination
 
@@ -41,11 +41,13 @@ class Multinomial(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param n_experiments: A 0-D or 1-D `int32` Tensor. The number of
-        experiments for each sample.
-    :param prob_only: A bool. When n_experiments is a 1-D tensor, which means
-        the number of experiments varies among samples, ZhuSuan does not
-        support sampling, so you should set prob_only=True. Default is False.
+    :param n_experiments: A 0-D `int32` Tensor or `None`. When it is a 0-D
+        `int32` integer, it represents the number of experiments for each
+        sample, which should be invariant among samples. In this situation
+        `_sample` function is supported. When it is `None`, `_sample` function
+        is not supported, and when calculating probabilities the number of
+        experiments will be inferred from `given`, so it could vary among
+        samples.
     :param normalize_logits: A bool indicating whether `logits` should be
         normalized when computing probability. If you believe `logits` is
         already normalized, set it to `False` to speed up. Default is True.
@@ -64,7 +66,6 @@ class Multinomial(Distribution):
     def __init__(self,
                  logits,
                  n_experiments,
-                 prob_only=False,
                  normalize_logits=True,
                  dtype=None,
                  group_ndims=0,
@@ -80,9 +81,11 @@ class Multinomial(Distribution):
         self._logits, self._n_categories = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
 
-        self.prob_only = prob_only
-        self._n_experiments = assert_positive_int32(
-            n_experiments, 'Multinomial.n_experiments', not self.prob_only)
+        if n_experiments is None:
+            self._n_experiments = None
+        else:
+            self._n_experiments = assert_positive_int32_scalar(
+                n_experiments, 'Multinomial.n_experiments')
 
         self.normalize_logits = normalize_logits
 
@@ -126,29 +129,29 @@ class Multinomial(Distribution):
         return tf.TensorShape(None)
 
     def _sample(self, n_samples):
-        if not self.prob_only:
-            if self.logits.get_shape().ndims == 2:
-                logits_flat = self.logits
-            else:
-                logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
-            samples_flat = tf.transpose(
-                tf.multinomial(logits_flat, n_samples * self.n_experiments))
-            shape = tf.concat([[n_samples, self.n_experiments],
-                              self.batch_shape], 0)
-            samples = tf.reshape(samples_flat, shape)
-            static_n_samples = n_samples if isinstance(n_samples,
-                                                       int) else None
-            static_n_exps = self.n_experiments \
-                if isinstance(self.n_experiments, int) else None
-            samples.set_shape(
-                tf.TensorShape([static_n_samples, static_n_exps]).
-                concatenate(self.get_batch_shape()))
-            samples = tf.reduce_sum(
-                tf.one_hot(samples, self.n_categories, dtype=self.dtype),
-                axis=1)
-            return samples
+        if self.n_experiments is None:
+            raise ValueError('Cannot sample when `n_experiments` is None')
+
+        if self.logits.get_shape().ndims == 2:
+            logits_flat = self.logits
         else:
-            raise NotImplementedError('Cannot sample when prob_only is True')
+            logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
+        samples_flat = tf.transpose(
+            tf.multinomial(logits_flat, n_samples * self.n_experiments))
+        shape = tf.concat([[n_samples, self.n_experiments],
+                           self.batch_shape], 0)
+        samples = tf.reshape(samples_flat, shape)
+        static_n_samples = n_samples if isinstance(n_samples,
+                                                   int) else None
+        static_n_exps = self.n_experiments \
+            if isinstance(self.n_experiments, int) else None
+        samples.set_shape(
+            tf.TensorShape([static_n_samples, static_n_exps]).
+            concatenate(self.get_batch_shape()))
+        samples = tf.reduce_sum(
+            tf.one_hot(samples, self.n_categories, dtype=self.dtype),
+            axis=1)
+        return samples
 
     def _log_prob(self, given):
         given = tf.cast(given, self.param_dtype)
@@ -157,7 +160,10 @@ class Multinomial(Distribution):
         if self.normalize_logits:
             logits = logits - tf.reduce_logsumexp(
                 logits, axis=-1, keep_dims=True)
-        n = tf.cast(self.n_experiments, self.param_dtype)
+        if self.n_experiments is None:
+            n = tf.reduce_sum(given, -1)
+        else:
+            n = tf.cast(self.n_experiments, self.param_dtype)
         log_p = log_combination(n, given) + \
             tf.reduce_sum(given * logits, -1)
         return log_p

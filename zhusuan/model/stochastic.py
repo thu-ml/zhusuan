@@ -26,7 +26,7 @@ __all__ = [
     'Laplace',
     'Multinomial',
     'UnnormalizedMultinomial',
-    'BagofCategorical',
+    'BagofCategoricals',
     'Dirichlet',
     'BinConcrete',
     'ExpConcrete',
@@ -450,11 +450,13 @@ class Multinomial(StochasticTensor):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param n_experiments: A 0-D or 1-D `int32` Tensor. The number of
-        experiments for each sample.
-    :param prob_only: A bool. When n_experiments is a 1-D tensor, which means
-        the number of experiments varies among samples, ZhuSuan does not
-        support sampling, so you should set prob_only=True. Default is False.
+    :param n_experiments: A 0-D `int32` Tensor or `None`. When it is a 0-D
+        `int32` integer, it represents the number of experiments for each
+        sample, which should be invariant among samples. In this situation
+        `_sample` function is supported. When it is `None`, `_sample` function
+        is not supported, and when calculating probabilities the number of
+        experiments will be inferred from `given`, so it could vary among
+        samples.
     :param normalize_logits: A bool indicating whether `logits` should be
         normalized when computing probability. If you believe `logits` is
         already normalized, set it to `False` to speed up. Default is True.
@@ -476,7 +478,6 @@ class Multinomial(StochasticTensor):
                  name,
                  logits,
                  n_experiments,
-                 prob_only=False,
                  normalize_logits=True,
                  n_samples=None,
                  group_ndims=0,
@@ -484,8 +485,7 @@ class Multinomial(StochasticTensor):
                  **kwargs):
         multinomial = distributions.Multinomial(
             logits,
-            n_experiments=n_experiments,
-            prob_only=prob_only,
+            n_experiments,
             normalize_logits=normalize_logits,
             group_ndims=group_ndims,
             dtype=dtype,
@@ -549,7 +549,7 @@ class UnnormalizedMultinomial(StochasticTensor):
             .__init__(name, unnormalized_multinomial, None)
 
 
-BagofCategorical = UnnormalizedMultinomial
+BagofCategoricals = UnnormalizedMultinomial
 
 
 class OnehotCategorical(StochasticTensor):
