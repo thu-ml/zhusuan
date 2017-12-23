@@ -48,8 +48,17 @@ def get_acceptance_rate(q, p, new_q, new_p, log_posterior, mass, data_axes):
         q, p, log_posterior, mass, data_axes)
     new_hamiltonian, new_log_prob = hamiltonian(
         new_q, new_p, log_posterior, mass, data_axes)
+    old_log_prob = tf.check_numerics(
+        old_log_prob,
+        'HMC: old_log_prob has numeric errors! Try better initialization.')
+    acceptance_rate = tf.exp(
+        tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
+    is_finite = tf.logical_and(tf.is_finite(acceptance_rate),
+                               tf.is_finite(new_log_prob))
+    acceptance_rate = tf.where(is_finite, acceptance_rate,
+                               tf.zeros_like(acceptance_rate))
     return old_hamiltonian, new_hamiltonian, old_log_prob, new_log_prob, \
-        tf.exp(tf.minimum(-new_hamiltonian + old_hamiltonian, 0.0))
+        acceptance_rate
 
 
 class StepsizeTuner:
@@ -235,7 +244,7 @@ class HMC:
     :param kappa: A 0-D `float32` Tensor. Parameter for adapting the step
         size, see (Hoffman, 2014).
     :param adapt_mass: A `bool` Tensor, if set, indicating whether to adapt
-        the step size.
+        the mass, adapt_step_size must be set.
     :param mass_collect_iters: A 0-D `int32` Tensor. The beginning iteration
         to change the mass.
     :param mass_decay: A 0-D `float32` Tensor. The decay of computing
@@ -260,6 +269,8 @@ class HMC:
                 step_size, adapt_step_size, gamma, t0, kappa,
                 target_acceptance_rate)
         if adapt_mass is not None:
+            if adapt_step_size is None:
+                raise ValueError('If adapt mass is set, we should also adapt step size')
             self.adapt_mass = tf.convert_to_tensor(
                 adapt_mass, dtype=tf.bool, name="adapt_mass")
         else:
@@ -326,9 +337,6 @@ class HMC:
                 tf.less(last_acceptance_rate, self.target_acceptance_rate),
                 tf.less(acceptance_rate, self.target_acceptance_rate)))
             return [new_step_size, acceptance_rate, cond]
-            # return [tf.Print(new_step_size,
-            #                  [new_step_size, acceptance_rate], "Tuning"),
-            #          acceptance_rate, cond]
 
         new_step_size, _, _ = tf.while_loop(
             loop_cond,
@@ -439,15 +447,16 @@ class HMC:
         current_q = copy(self.q)
 
         # Initialize step size
-        if_initialize_step_size = tf.logical_or(
-            tf.equal(new_t, 1),
-            tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
-
-        def iss():
-            return self._init_step_size(current_q, current_p, mass,
-                                        get_gradient, get_log_posterior)
-        new_step_size = tf.stop_gradient(
-            tf.cond(if_initialize_step_size, iss, lambda: self.step_size))
+        if self.adapt_step_size is None:
+            new_step_size = self.step_size
+        else:
+            if_initialize_step_size = tf.logical_or(tf.equal(new_t, 1),
+                tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
+            def iss():
+                return self._init_step_size(current_q, current_p, mass,
+                                            get_gradient, get_log_posterior)
+            new_step_size = tf.stop_gradient(
+                tf.cond(if_initialize_step_size, iss, lambda: self.step_size))
 
         # Leapfrog
         current_q, current_p = self._leapfrog(

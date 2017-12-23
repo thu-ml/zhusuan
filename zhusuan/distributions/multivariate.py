@@ -12,22 +12,183 @@ from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
         assert_same_float_and_int_dtype, \
+        assert_rank_at_least, \
         assert_rank_at_least_one, \
         assert_scalar, \
         assert_positive_int32_scalar, \
+        get_shape_at, \
+        get_shape_list, \
         open_interval_standard_uniform, \
         log_combination
 
 
 __all__ = [
+    'MultivariateNormalCholesky',
     'Multinomial',
     'UnnormalizedMultinomial',
     'OnehotCategorical',
     'OnehotDiscrete',
     'Dirichlet',
     'ExpConcrete',
+    'ExpGumbelSoftmax',
     'Concrete',
+    'GumbelSoftmax',
 ]
+
+
+class MultivariateNormalCholesky(Distribution):
+    """
+    The class of multivariate normal distribution, where covariance is
+    parameterized with the lower triangular matrix in Cholesky decomposition,
+
+        .. math :: L \\text{s.t.} LL^T = \Sigma.
+
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param mean: An N-D `float` Tensor of shape [..., n_dim]. Each slice
+        [i, j, ..., k, :] represents the mean of a single multivariate normal
+        distribution.
+    :param cov_tril: An (N+1)-D `float` Tensor of shape [..., n_dim, n_dim].
+        Each slice [i, ..., k, :, :] represents the lower triangular matrix in
+        the Cholesky decomposition of the covariance of a single distribution.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 mean,
+                 cov_tril,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 use_path_derivative=False,
+                 check_numerics=False,
+                 **kwargs):
+        self._check_numerics = check_numerics
+        self._mean = tf.convert_to_tensor(mean)
+        self._mean = assert_rank_at_least_one(
+            self._mean, 'MultivariateNormalCholesky.mean')
+        self._n_dim = get_shape_at(self._mean, -1)
+        self._cov_tril = tf.convert_to_tensor(cov_tril)
+        self._cov_tril = assert_rank_at_least(
+            self._cov_tril, 2, 'MultivariateNormalCholesky.cov_tril')
+
+        # Static shape check
+        expected_shape = self._mean.get_shape().concatenate(
+            [self._n_dim if isinstance(self._n_dim, int) else None])
+        self._cov_tril.get_shape().assert_is_compatible_with(expected_shape)
+        # Dynamic
+        expected_shape = tf.concat(
+            [tf.shape(self._mean), [self._n_dim]], axis=0)
+        actual_shape = tf.shape(self._cov_tril)
+        msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
+               'shape with mean. Expected', expected_shape, ' got ',
+               actual_shape]
+        assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
+        with tf.control_dependencies(assert_ops):
+            self._cov_tril = tf.identity(self._cov_tril)
+
+        dtype = assert_same_float_dtype(
+            [(self._mean, 'MultivariateNormalCholesky.mean'),
+             (self._cov_tril, 'MultivariateNormalCholesky.cov_tril')])
+        super(MultivariateNormalCholesky, self).__init__(
+            dtype=dtype,
+            param_dtype=dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
+            group_ndims=group_ndims,
+            **kwargs)
+
+    @property
+    def mean(self):
+        """The mean of the normal distribution."""
+        return self._mean
+
+    @property
+    def cov_tril(self):
+        """
+        The lower triangular matrix in the cholosky decomposition of the
+        covariance.
+        """
+        return self._cov_tril
+
+    def _value_shape(self):
+        return tf.convert_to_tensor([self._n_dim], tf.int32)
+
+    def _get_value_shape(self):
+        if isinstance(self._n_dim, int):
+            return tf.TensorShape([self._n_dim])
+        return tf.TensorShape([None])
+
+    def _batch_shape(self):
+        return tf.shape(self.mean)[:-1]
+
+    def _get_batch_shape(self):
+        if self.mean.get_shape():
+            return self.mean.get_shape()[:-1]
+        return tf.TensorShape(None)
+
+    def _sample(self, n_samples):
+        mean, cov_tril = self.mean, self.cov_tril
+        if not self.is_reparameterized:
+            mean = tf.stop_gradient(mean)
+            cov_tril = tf.stop_gradient(cov_tril)
+
+        def tile(t):
+            new_shape = tf.concat([[n_samples], tf.ones_like(tf.shape(t))], 0)
+            return tf.tile(tf.expand_dims(t, 0), new_shape)
+
+        batch_mean = tile(mean)
+        batch_cov = tile(cov_tril)
+        # n_dim -> n_dim x 1 for matmul
+        batch_mean = tf.expand_dims(batch_mean, -1)
+        noise = tf.random_normal(tf.shape(batch_mean), dtype=self.dtype)
+        samples = tf.matmul(batch_cov, noise) + batch_mean
+        samples = tf.squeeze(samples, -1)
+        # Update static shape
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(tf.TensorShape([static_n_samples])
+                          .concatenate(self.get_batch_shape())
+                          .concatenate(self.get_value_shape()))
+        return samples
+
+    def _log_prob(self, given):
+        mean, cov_tril = (self.path_param(self.mean),
+                          self.path_param(self.cov_tril))
+        log_det = 2 * tf.reduce_sum(
+            tf.log(tf.matrix_diag_part(cov_tril)), axis=-1)
+        N = tf.cast(self._n_dim, self.dtype)
+        logZ = - N / 2 * tf.log(2 * tf.constant(np.pi, dtype=self.dtype)) - \
+            log_det / 2
+        # logZ.shape == batch_shape
+        if self._check_numerics:
+            logZ = tf.check_numerics(logZ, "log[det(Cov)]")
+        # (given-mean)' Sigma^{-1} (given-mean) =
+        # (g-m)' L^{-T} L^{-1} (g-m) = |x|^2, where Lx = g-m =: y.
+        y = tf.expand_dims(given - mean, -1)
+        L, _ = maybe_explicit_broadcast(
+            cov_tril, y, 'MultivariateNormalCholesky.cov_tril',
+            'expand_dims(given, -1)')
+        x = tf.matrix_triangular_solve(L, y, lower=True)
+        x = tf.squeeze(x, -1)
+        stoc_dist = -0.5 * tf.reduce_sum(tf.square(x), axis=-1)
+        return logZ + stoc_dist
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
 
 
 class Multinomial(Distribution):
@@ -78,8 +239,9 @@ class Multinomial(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         if n_experiments is None:
             self._n_experiments = None
@@ -315,8 +477,9 @@ class OnehotCategorical(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'OnehotCategorical.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         super(OnehotCategorical, self).__init__(
             dtype=dtype,
@@ -562,8 +725,9 @@ class ExpConcrete(Distribution):
             [(self._logits, 'ExpConcrete.logits'),
              (self._temperature, 'ExpConcrete.temperature')])
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'ExpConcrete.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         self._temperature = assert_scalar(
             self._temperature, 'ExpConcrete.temperature')
@@ -645,9 +809,13 @@ class ExpConcrete(Distribution):
         return tf.exp(self._log_prob(given))
 
 
+ExpGumbelSoftmax = ExpConcrete
+
+
 class Concrete(Distribution):
     """
-    The class of Concrete distribution from (Maddison, 2016), served as the
+    The class of Concrete (or Gumbel-Softmax) distribution from
+    (Maddison, 2016; Jang, 2016), served as the
     continuous relaxation of the :class:`~OnehotCategorical`.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
@@ -695,8 +863,9 @@ class Concrete(Distribution):
             [(self._logits, 'Concrete.logits'),
              (self._temperature, 'Concrete.temperature')])
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
+        self._logits = assert_rank_at_least_one(
             self._logits, 'Concrete.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         self._temperature = assert_scalar(
             self._temperature, 'Concrete.temperature')
@@ -779,3 +948,6 @@ class Concrete(Distribution):
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
+
+
+GumbelSoftmax = Concrete
