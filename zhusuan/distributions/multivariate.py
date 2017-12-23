@@ -377,14 +377,15 @@ class UnnormalizedMultinomial(Distribution):
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
-            [(self._logits, 'Multinomial.logits')])
+            [(self._logits, 'UnnormalizedMultinomial.logits')])
 
         if dtype is None:
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
-        self._logits, self._n_categories = assert_rank_at_least_one(
-            self._logits, 'Multinomial.logits')
+        self._logits = assert_rank_at_least_one(
+            self._logits, 'UnnormalizedMultinomial.logits')
+        self._n_categories = get_shape_at(self._logits, -1)
 
         self.normalize_logits = normalize_logits
 
