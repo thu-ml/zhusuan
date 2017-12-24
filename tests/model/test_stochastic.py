@@ -34,7 +34,7 @@ class TestNormal(tf.test.TestCase):
             log_p_ops = set(get_backward_ops(log_p))
             for i in [mean, logstd, group_ndims]:
                 self.assertTrue(i.op in log_p_ops)
-            self.assertTrue(a.get_shape()[1:], mean.get_shape())
+            self.assertEqual(a.get_shape()[1:], mean.get_shape())
 
 
 class TestBernoulli(tf.test.TestCase):
@@ -51,7 +51,7 @@ class TestBernoulli(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())
 
 
 class TestCategorical(tf.test.TestCase):
@@ -68,7 +68,7 @@ class TestCategorical(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape()[:-1])
+        self.assertEqual(a.get_shape()[1:], logits.get_shape()[:-1])
 
 
 class TestUniform(tf.test.TestCase):
@@ -86,7 +86,7 @@ class TestUniform(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [minval, maxval, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], minval.get_shape())
+        self.assertEqual(a.get_shape()[1:], minval.get_shape())
 
 
 class TestGamma(tf.test.TestCase):
@@ -104,7 +104,7 @@ class TestGamma(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [alpha, beta, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
+        self.assertEqual(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestBeta(tf.test.TestCase):
@@ -122,7 +122,7 @@ class TestBeta(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [alpha, beta, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
+        self.assertEqual(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestPoisson(tf.test.TestCase):
@@ -139,7 +139,7 @@ class TestPoisson(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [rate, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], rate.get_shape())
+        self.assertEqual(a.get_shape()[1:], rate.get_shape())
 
 
 class TestBinomial(tf.test.TestCase):
@@ -158,7 +158,7 @@ class TestBinomial(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, n_experiments, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())
 
 
 class TestMultinomial(tf.test.TestCase):
@@ -168,8 +168,9 @@ class TestMultinomial(tf.test.TestCase):
             n_experiments = tf.placeholder(tf.int32, shape=[])
             n_samples = tf.placeholder(tf.int32, shape=[])
             group_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Multinomial('a', logits, n_experiments, n_samples,
-                            group_ndims)
+            a = Multinomial('a', logits, n_experiments=n_experiments,
+                            n_samples=n_samples,
+                            group_ndims=group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_experiments, n_samples]:
             self.assertTrue(i.op in sample_ops)
@@ -177,7 +178,19 @@ class TestMultinomial(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, n_experiments, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())
+
+
+class TestUnnormalizedMultinomial(tf.test.TestCase):
+    def test_UnnormalizedMultinomial(self):
+        with BayesianNet():
+            logits = tf.ones([2, 3])
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = UnnormalizedMultinomial('a', logits, group_ndims=group_ndims)
+        log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [logits, group_ndims]:
+            self.assertTrue(i.op in log_p_ops)
 
 
 class TestOnehotCategorical(tf.test.TestCase):
@@ -194,7 +207,7 @@ class TestOnehotCategorical(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())
 
 
 class TestDirichlet(tf.test.TestCase):
@@ -211,7 +224,7 @@ class TestDirichlet(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [alpha, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
+        self.assertEqual(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestInverseGamma(tf.test.TestCase):
@@ -229,7 +242,7 @@ class TestInverseGamma(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [alpha, beta, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], alpha.get_shape())
+        self.assertEqual(a.get_shape()[1:], alpha.get_shape())
 
 
 class TestLaplace(tf.test.TestCase):
@@ -247,7 +260,7 @@ class TestLaplace(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [loc, scale, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], loc.get_shape())
+        self.assertEqual(a.get_shape()[1:], loc.get_shape())
 
 
 class TestBinConcrete(tf.test.TestCase):
@@ -265,7 +278,7 @@ class TestBinConcrete(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())
 
 
 class TestConcrete(tf.test.TestCase):
@@ -283,7 +296,7 @@ class TestConcrete(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())
 
 
 class TestExpConcrete(tf.test.TestCase):
@@ -301,4 +314,4 @@ class TestExpConcrete(tf.test.TestCase):
         log_p_ops = set(get_backward_ops(log_p))
         for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
-        self.assertTrue(a.get_shape()[1:], logits.get_shape())
+        self.assertEqual(a.get_shape()[1:], logits.get_shape())

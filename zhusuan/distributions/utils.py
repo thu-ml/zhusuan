@@ -24,7 +24,7 @@ def log_combination(n, ks):
 
         \\log \\binom{n}{k_1, k_2, \\dots} = \\log n! - \\sum_{i}\\log k_i!
 
-    :param n: A N-D `float` Tensor. Can broadcast to match `ks[:-1]`.
+    :param n: A N-D `float` Tensor. Can broadcast to match `tf.shape(ks)[:-1]`.
     :param ks: A (N + 1)-D `float` Tensor. Each slice `[i, j, ..., k, :]` is
         a vector of `[k_1, k_2, ...]`.
 
@@ -246,7 +246,6 @@ def assert_rank_at_least_one(tensor, name):
 def assert_scalar(tensor, name):
     """
     Whether the `tensor` is a scalar (0-D tensor).
-
     :param tensor: A tensor to be checked.
     :param name: The name of `tensor` for error message.
     :return: The checked tensor.
@@ -262,51 +261,37 @@ def assert_scalar(tensor, name):
         return tensor
 
 
-def assert_positive_integer(value, dtype, name):
+def assert_positive_int32_scalar(value, name):
     """
-    Whether `value` is a scalar (or 0-D tensor) and positive.
-    If `value` is the instance of built-in type, it will be checked
-    directly. Otherwise, it will be converted to a `dtype` tensor and checked.
-
+    Whether `value` is a integer(or 0-D `tf.int32` tensor) and positive.
+    If `value` is the instance of built-in type, it will be checked directly.
+    Otherwise, it will be converted to a `tf.int32` tensor and checked.
     :param value: The value to be checked.
-    :param dtype: The tensor dtype.
     :param name: The name of `value` used in error message.
     :return: The checked value.
     """
-    sign_err_msg = name + " must be positive"
     if isinstance(value, (int, float)):
-        if value <= 0:
-            raise ValueError(sign_err_msg)
-        return value
+        if isinstance(value, int) and value > 0:
+            return value
+        elif isinstance(value, float):
+            raise TypeError(name + " must be integer")
+        elif value <= 0:
+            raise ValueError(name + " must be positive")
     else:
         try:
-            tensor = tf.convert_to_tensor(value, dtype)
-        except ValueError:
-            raise TypeError(name + ' must be ' + str(dtype))
+            tensor = tf.convert_to_tensor(value, tf.int32)
+        except (TypeError, ValueError):
+            raise TypeError(name + ' must be (convertible to) tf.int32')
         _assert_rank_op = tf.assert_rank(
             tensor, 0,
             message=name + " should be a scalar (0-D Tensor).")
         _assert_positive_op = tf.assert_greater(
-            tensor, tf.constant(0, dtype), message=sign_err_msg)
+            tensor, tf.constant(0, tf.int32),
+            message=name + " must be positive")
         with tf.control_dependencies([_assert_rank_op,
                                       _assert_positive_op]):
             tensor = tf.identity(tensor)
         return tensor
-
-
-def assert_positive_int32_integer(value, name):
-    """
-    Whether `value` is a scalar (or 0-D tensor) and positive.
-    If `value` is the instance of int, it will be checked directly.
-    Otherwise, it will be converted to a `int32` tensor and checked.
-
-    :param value: The value to be checked.
-    :param name: The name of `value` used in error message.
-    :return: The checked value.
-    """
-    if isinstance(value, float):
-        raise TypeError(name + ' must be an integer.')
-    return assert_positive_integer(value, tf.int32, name)
 
 
 def open_interval_standard_uniform(shape, dtype):

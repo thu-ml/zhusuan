@@ -128,5 +128,9 @@ class AIS:
         return np.mean(self.get_lower_bound(log_weights))
 
     def get_lower_bound(self, log_weights):
-        # TODO: remove dependencies on scipy
-        return logsumexp(log_weights, axis=0) - np.log(self.n_chains)
+        max_log_weights = np.max(log_weights, axis=0)
+        offset_log_weights = np.sum(np.exp(log_weights - max_log_weights),
+                                    axis=0)
+        log_weights = np.log(offset_log_weights) + max_log_weights - \
+            np.log(self.n_chains)
+        return log_weights
