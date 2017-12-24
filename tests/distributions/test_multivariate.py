@@ -196,6 +196,10 @@ class TestMultinomial(tf.test.TestCase):
             return Multinomial(param, n_experiments=10)
         utils.test_1parameter_sample_shape_one_rank_less(
             self, _distribution, np.zeros)
+        dist = Multinomial(np.ones([2, 2]), n_experiments=None)
+        with self.assertRaisesRegexp(ValueError,
+                                     "Cannot sample when `n_experiments`"):
+            dist.sample()
 
     def test_log_prob_shape(self):
         def _distribution(param):
@@ -215,31 +219,36 @@ class TestMultinomial(tf.test.TestCase):
             def _test_value(logits, n_experiments, given, normalize_logits):
                 logits = np.array(logits, np.float32)
                 given = np.array(given)
-                dist = Multinomial(logits, n_experiments=n_experiments,
-                                   prob_only=True,
+                dist = Multinomial(logits, n_experiments=None,
                                    normalize_logits=normalize_logits)
                 log_p = dist.log_prob(given)
+                if n_experiments is not None:
+                    dist2 = Multinomial(logits, n_experiments=n_experiments,
+                                        normalize_logits=normalize_logits)
+                    log_p_2 = dist2.log_prob(given)
+                    self.assertAllClose(log_p.eval(), log_p_2.eval())
 
                 maybe_normalized_logits = logits
                 if normalize_logits:
                     maybe_normalized_logits -= misc.logsumexp(
                         logits, axis=-1, keepdims=True)
+                n_experiments = np.sum(given, axis=-1)
                 target_log_p = np.log(misc.factorial(n_experiments)) - \
                     np.sum(np.log(misc.factorial(given)), -1) + \
                     np.sum(given * maybe_normalized_logits, -1)
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = dist.prob(given)
                 target_p = np.exp(target_log_p)
-                self.assertAllClose(p.eval(), target_p)
+                self.assertAllClose(np.log(p.eval()), np.log(target_p))
 
             for normalize_logits in [True, False]:
                 _test_value([-50., -20., 0.], 4, [1, 0, 3], normalize_logits)
                 _test_value([1., 10., 1000.], 1, [1, 0, 0], normalize_logits)
-                _test_value([[2., 3., 1.], [5., 7., 4.]], 3,
-                            np.ones([3, 1, 3], dtype=np.int32),
+                _test_value([[2., 3., 1.], [5., 7., 4.]], 7,
+                            np.array([3, 1, 3], dtype=np.int32),
                             normalize_logits)
                 _test_value([-10., 10., 20., 50.], 100,
-                            [[0, 1, 99, 100], [100, 99, 1, 0]],
+                            [[0, 1, 49, 50], [50, 49, 1, 0]],
                             normalize_logits)
 
     def test_dtype(self):

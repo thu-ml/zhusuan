@@ -277,8 +277,6 @@ def assert_positive_int32_scalar(value, name):
             raise TypeError(name + " must be integer")
         elif value <= 0:
             raise ValueError(name + " must be positive")
-    elif isinstance(value, (list, tuple, dict)):
-        raise TypeError(name + " should be a scalar (0-D Tensor).")
     else:
         try:
             tensor = tf.convert_to_tensor(value, tf.int32)

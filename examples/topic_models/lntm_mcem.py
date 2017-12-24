@@ -42,7 +42,7 @@ def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
         beta = zs.Normal('beta', tf.zeros([n_topics, n_vocab]),
                          logstd=log_delta, group_ndims=1)
         phi = tf.nn.softmax(beta)
-        # doc_word: (Automatically) normalized document-word matrix
+        # doc_word: Document-word matrix
         doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
         doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
         x = zs.UnnormalizedMultinomial('x', tf.log(doc_word),
@@ -234,4 +234,4 @@ if __name__ == "__main__":
               '>> log likelihood lower bound = {}\n'
               '>> perplexity upper bound = {}'
               .format(time_ais, ll_lb,
-                      np.exp(-ll_lb * _batch_size / np.sum(X_test))))
+                      np.exp(-ll_lb * n_docs_test / np.sum(X_test))))
