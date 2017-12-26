@@ -66,19 +66,20 @@ def test_dtype_2parameter(test_class, Distribution):
     _test_parameter_dtype_raise(tf.int32, tf.int32)
 
 
-def test_dtype_1parameter_discrete(test_class, Distribution):
+def test_dtype_1parameter_discrete(test_class, Distribution, prob_only=False):
     def _test_sample_dtype(input_, result_dtype, dtype):
         distribution = Distribution(input_, dtype=dtype)
         samples = distribution.sample(2)
         test_class.assertEqual(distribution.dtype, result_dtype)
         test_class.assertEqual(samples.dtype, result_dtype)
 
-    for input_ in [[1.], [[2., 3.], [4., 5.]]]:
-        _test_sample_dtype(input_, tf.int32, None)
-        _test_sample_dtype(input_, tf.int16, tf.int16)
-        _test_sample_dtype(input_, tf.int32, tf.int32)
-        _test_sample_dtype(input_, tf.float32, tf.float32)
-        _test_sample_dtype(input_, tf.float64, tf.float64)
+    if not prob_only:
+        for input_ in [[1.], [[2., 3.], [4., 5.]]]:
+            _test_sample_dtype(input_, tf.int32, None)
+            _test_sample_dtype(input_, tf.int16, tf.int16)
+            _test_sample_dtype(input_, tf.int32, tf.int32)
+            _test_sample_dtype(input_, tf.float32, tf.float32)
+            _test_sample_dtype(input_, tf.float64, tf.float64)
 
     def _test_parameter_dtype_raise(param_dtype):
         param = tf.placeholder(param_dtype, [1])

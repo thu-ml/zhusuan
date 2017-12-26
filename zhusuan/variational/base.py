@@ -72,7 +72,7 @@ class VariationalObjective(TensorArithmeticMixin):
 
     def _log_joint_term(self):
         if self._dict_key is not None:
-            log_p_cache = VariationalObjective._get_log_p_cache();
+            log_p_cache = VariationalObjective._get_log_p_cache()
             if self._dict_key not in log_p_cache:
                 log_p_cache[self._dict_key] = self._log_joint(self._joint_obs)
             return log_p_cache[self._dict_key]
@@ -83,7 +83,7 @@ class VariationalObjective(TensorArithmeticMixin):
 
     def _entropy_term(self):
         if self._dict_key is not None:
-            log_q_cache = VariationalObjective._get_log_q_cache();
+            log_q_cache = VariationalObjective._get_log_q_cache()
             if self._dict_key not in log_q_cache:
                 log_q_cache[self._dict_key] = -tf.add_n(
                     list(six.itervalues(self._latent_logpdfs)))
