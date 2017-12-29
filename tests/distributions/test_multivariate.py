@@ -905,3 +905,166 @@ class TestConcrete(tf.test.TestCase):
                                          "log\(temperature\).*Tensor had NaN"):
                 log_p.eval(feed_dict={tau: -1., logits: np.ones([2]),
                                       given: [1., 1.]})
+
+
+class TestMatrixVariateNormalCholesky(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError, "should have rank >= 2"):
+                MatrixVariateNormalCholesky(
+                    tf.zeros([]), tf.zeros([]), tf.zeros([]))
+            with self.assertRaisesRegexp(ValueError, "should have rank >= 2"):
+                MatrixVariateNormalCholesky(
+                    tf.zeros([1, 2]), tf.zeros([1]), tf.zeros([2, 2]))
+            with self.assertRaisesRegexp(ValueError, "should have rank >= 2"):
+                MatrixVariateNormalCholesky(
+                    tf.zeros([1, 2]), tf.zeros([1, 1]), tf.zeros([1]))
+            with self.assertRaisesRegexp(ValueError, 'compatible'):
+                MatrixVariateNormalCholesky(
+                    tf.zeros([1, 2, 3]),
+                    tf.placeholder(tf.float32, [1, 3, 3]),
+                    tf.placeholder(tf.float32, [1, 3, 3]))
+            with self.assertRaisesRegexp(ValueError, 'compatible'):
+                MatrixVariateNormalCholesky(
+                    tf.zeros([1, 2, 3]),
+                    tf.placeholder(tf.float32, [1, 2, 2]),
+                    tf.placeholder(tf.float32, [1, 2, 2]))
+            with self.assertRaisesRegexp(ValueError, 'compatible'):
+                MatrixVariateNormalCholesky(
+                    tf.zeros([2, 3]),
+                    tf.placeholder(tf.float32, [1, 2, 2]),
+                    tf.placeholder(tf.float32, [1, 3, 3]))
+            u = tf.placeholder(tf.float32, [None])
+            len_u = tf.shape(u)[0]
+            v = tf.placeholder(tf.float32, [None])
+            len_v = tf.shape(v)[0]
+            dst = MatrixVariateNormalCholesky(
+                tf.zeros([2, 3]), tf.zeros([len_u, len_u]),
+                tf.zeros([len_v, len_v]))
+            with self.assertRaisesRegexp(
+                    tf.errors.InvalidArgumentError, 'compatible'):
+                dst.sample().eval(
+                    feed_dict={u: np.ones((3,)), v: np.ones((3,))})
+                dst.sample().eval(
+                    feed_dict={u: np.ones((2,)), v: np.ones((2,))})
+
+    def test_shape_inference(self):
+        with self.test_session(use_gpu=True):
+            # Static
+            mean = 10 * np.random.normal(size=(10, 11, 2, 3)).astype('d')
+            u_tril = np.zeros((10, 11, 2, 2))
+            v_tril = np.zeros((10, 11, 3, 3))
+            dst = MatrixVariateNormalCholesky(
+                tf.constant(mean), tf.constant(u_tril), tf.constant(v_tril))
+            self.assertEqual(dst.get_batch_shape().as_list(), [10, 11])
+            self.assertEqual(dst.get_value_shape().as_list(), [2, 3])
+            # Dynamic
+            unk_mean = tf.placeholder(tf.float32, None)
+            unk_u_tril = tf.placeholder(tf.float32, None)
+            unk_v_tril = tf.placeholder(tf.float32, None)
+            dst = MatrixVariateNormalCholesky(unk_mean, unk_u_tril, unk_v_tril)
+            self.assertEqual(dst.get_value_shape().as_list(), [None, None])
+            feed_dict = {unk_mean: np.ones((2, 3)), unk_u_tril: np.eye(2),
+                         unk_v_tril: np.eye(3)}
+            self.assertEqual(list(dst.batch_shape.eval(feed_dict)), [])
+            self.assertEqual(list(dst.value_shape.eval(feed_dict)), [2, 3])
+
+    def _gen_test_params(self, seed):
+        np.random.seed(seed)
+        mean = 10 * np.random.normal(size=(10, 11, 2, 3)).astype('d')
+        u = np.zeros((10, 11, 2, 2))
+        v = np.zeros((10, 11, 3, 3))
+        u_chol = np.zeros_like(u)
+        v_chol = np.zeros_like(v)
+        for i in range(10):
+            for j in range(11):
+                u[i, j] = stats.invwishart.rvs(2, np.eye(2))
+                u[i, j] /= np.max(np.diag(u[i, j]))
+                u_chol[i, j, :, :] = np.linalg.cholesky(u[i, j])
+
+                v[i, j] = stats.invwishart.rvs(3, np.eye(3))
+                v[i, j] /= np.max(np.diag(v[i, j]))
+                v_chol[i, j, :, :] = np.linalg.cholesky(v[i, j])
+        return mean, u, u_chol, v, v_chol
+
+    @contextmanager
+    def fixed_randomness_session(self, seed):
+        with tf.Graph().as_default() as g:
+            with self.test_session(use_gpu=True, graph=g):
+                tf.set_random_seed(seed)
+                yield
+
+    def test_sample(self):
+        with self.fixed_randomness_session(233):
+            def test_sample_with(seed):
+                mean, u, u_chol, v, v_chol = self._gen_test_params(seed)
+                dst = MatrixVariateNormalCholesky(
+                    tf.constant(mean), tf.constant(u_chol),
+                    tf.constant(v_chol))
+                n_exp = 20000
+                samples = dst.sample(n_exp)
+                sample_shape = (n_exp, 10, 11, 2, 3)
+                self.assertEqual(samples.shape.as_list(), list(sample_shape))
+                samples = dst.sample(n_exp).eval()
+                self.assertEqual(samples.shape, sample_shape)
+                self.assertAllClose(
+                    np.mean(samples, axis=0), mean, rtol=5e-2, atol=5e-2)
+                samples = np.reshape(samples.transpose([0, 1, 2, 4, 3]),
+                                     [n_exp, 10, 11, -1])
+                for i in range(10):
+                    for j in range(11):
+                        for k in range(3):
+                            self.assertAllClose(np.cov(samples[:, i, j, :].T),
+                                                np.kron(v[i, j], u[i, j]),
+                                                rtol=1e-1, atol=1e-1)
+
+            for seed in [23, 233, 2333]:
+                test_sample_with(seed)
+
+    def test_prob(self):
+        with self.fixed_randomness_session(233):
+            def test_prob_with(seed):
+                mean, u, u_chol, v, v_chol = self._gen_test_params(seed)
+                dst = MatrixVariateNormalCholesky(
+                    tf.constant(mean), tf.constant(u_chol),
+                    tf.constant(v_chol), check_numerics=True)
+                n_exp = 200
+                samples = dst.sample(n_exp).eval()
+                log_pdf = dst.log_prob(tf.constant(samples))
+                pdf_shape = (n_exp, 10, 11)
+                self.assertEqual(log_pdf.shape.as_list(), list(pdf_shape))
+                log_pdf = log_pdf.eval()
+                self.assertEqual(log_pdf.shape, pdf_shape)
+                for i in range(10):
+                    for j in range(11):
+                        log_pdf_exact = stats.matrix_normal.logpdf(
+                            samples[:, i, j, :], mean[i, j],
+                            u[i, j], v[i, j])
+                        self.assertAllClose(
+                            log_pdf_exact, log_pdf[:, i, j])
+                self.assertAllClose(
+                    np.exp(log_pdf), dst.prob(tf.constant(samples)).eval())
+
+            for seed in [23, 233, 2333]:
+                test_prob_with(seed)
+
+    def test_sample_reparameterized(self):
+        mean, u, u_chol, v, v_chol = self._gen_test_params(23)
+        mean = tf.constant(mean)
+        u_chol = tf.constant(u_chol)
+        v_chol = tf.constant(v_chol)
+        mvn_rep = MatrixVariateNormalCholesky(mean, u_chol, v_chol)
+        samples = mvn_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        mean_grads, u_grads, v_grads = tf.gradients(
+            samples, [mean, u_chol, v_chol])
+        self.assertTrue(mean_grads is not None)
+        self.assertTrue(u_grads is not None)
+        self.assertTrue(v_grads is not None)
+        mvn_rep = MatrixVariateNormalCholesky(mean, u_chol, v_chol,
+                                              is_reparameterized=False)
+        samples = mvn_rep.sample(tf.placeholder(tf.int32, shape=[]))
+        mean_grads, u_grads, v_grads = tf.gradients(
+            samples, [mean, u_chol, v_chol])
+        self.assertEqual(mean_grads, None)
+        self.assertEqual(u_grads, None)
+        self.assertEqual(v_grads, None)
