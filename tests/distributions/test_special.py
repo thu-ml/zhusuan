@@ -15,6 +15,7 @@ from zhusuan.distributions.special import *
 
 class TestEmpirical(tf.test.TestCase):
     def test_init(self):
+        Empirical(tf.float32, batch_shape=None, value_shape=None)
         Empirical(tf.float32, batch_shape=[None, 1])
         Empirical(tf.float32, batch_shape=[None, 10], value_shape=5)
         Empirical(tf.int32, batch_shape=[None, 1])
@@ -23,20 +24,19 @@ class TestEmpirical(tf.test.TestCase):
     def test_shape(self):
         def _test_shape(batch_shape, value_shape):
             empirical = Empirical(tf.float32, batch_shape, value_shape)
-            value_shape = value_shape if isinstance(value_shape, list) else [value_shape]
 
             # static
             self.assertEqual(empirical.get_batch_shape().as_list(), batch_shape)
-            if value_shape == [None]:
+            if value_shape is None:
                 self.assertEqual(empirical.get_value_shape(), tf.TensorShape(None))
-            else:
+            elif isinstance(value_shape, (list, tuple)):
                 self.assertEqual(empirical.get_value_shape().as_list(), value_shape)
+            else:
+                self.assertEqual(empirical.get_value_shape().as_list(), [value_shape])
 
-            # dynamic
-            if None not in batch_shape:
-                self.assertTrue(empirical._batch_shape().dtype is tf.int32)
-                with self.test_session(use_gpu=True):
-                    self.assertEqual(empirical._batch_shape().eval().tolist(), batch_shape)
+            # Error for _batch_shape:
+            with self.assertRaises(NotImplementedError):
+                empirical._batch_shape()
 
             # Error for _value_shape()
             with self.assertRaises(NotImplementedError):
@@ -82,27 +82,23 @@ class TestEmpirical(tf.test.TestCase):
 
 class TestImplicit(tf.test.TestCase):
     def test_init(self):
-        Implicit(implicit=tf.placeholder(tf.float32, [None, 1]))
-        Implicit(implicit=tf.placeholder(tf.float32, [None, 1, 3]))
-        Implicit(implicit=tf.placeholder(tf.float32, [None, 1]), value_shape=10)
-        Implicit(implicit=tf.placeholder(tf.float32, [None, 1, 3]), value_shape=10)
+        Implicit(samples=tf.placeholder(tf.float32, [None, 1]))
+        Implicit(samples=tf.placeholder(tf.float32, [None, 1, 3]))
+        Implicit(samples=tf.placeholder(tf.float32, [None, 1]), value_shape=10)
+        Implicit(samples=tf.placeholder(tf.float32, [None, 1, 3]), value_shape=10)
 
     def test_shape(self):
         def _test_shape(batch_shape, value_shape):
-            if value_shape is None:
-                shape = tf.TensorShape(None)
-                batch_shape = None
-            else:
-                if not isinstance(value_shape, (list, tuple)):
-                    value_shape = [value_shape]
-                shape = tf.TensorShape(batch_shape + value_shape)
+            shape = tf.TensorShape(batch_shape).concatenate(tf.TensorShape(value_shape))
             implicit = tf.placeholder(tf.float32, shape)
             dist = Implicit(implicit, value_shape)
 
             # static
-            if batch_shape is not None:
+            if batch_shape is not None and value_shape is not None:
                 self.assertEqual(dist.get_batch_shape().as_list(), batch_shape)
             if value_shape is not None:
+                if not isinstance(value_shape, (list, tuple)):
+                    value_shape = [value_shape]
                 self.assertEqual(dist.get_value_shape().as_list(), value_shape)
 
             # dynamic
@@ -113,7 +109,7 @@ class TestImplicit(tf.test.TestCase):
 
             # Error for _value_shape()
             with self.assertRaises(NotImplementedError):
-                        dist._value_shape()
+                dist._value_shape()
 
         # No value shape
         _test_shape([None, 1], None)
@@ -132,7 +128,7 @@ class TestImplicit(tf.test.TestCase):
 
     def test_sample(self):
         # with no value_shape
-        implicit = Implicit(implicit=tf.placeholder(tf.float32, [None, 3]))
+        implicit = Implicit(samples=tf.placeholder(tf.float32, [None, 3]))
         with self.assertRaisesRegexp(
                 ValueError, "Implicit distribution does not accept `n_samples` argument."):
             implicit.sample(3)
@@ -143,7 +139,7 @@ class TestImplicit(tf.test.TestCase):
         utils.test_1parameter_sample_shape_same(self, Implicit, np.zeros, only_one_sample=True)
 
         # with value_shape
-        implicit = Implicit(implicit=tf.placeholder(tf.float32, [None, 3]), value_shape=5)
+        implicit = Implicit(samples=tf.placeholder(tf.float32, [None, 3]), value_shape=5)
         with self.assertRaisesRegexp(
                 ValueError, "Implicit distribution does not accept `n_samples` argument."):
             implicit.sample(3)
@@ -167,10 +163,12 @@ class TestImplicit(tf.test.TestCase):
             return samples.reshape(shape).astype(dtype)
 
         utils.test_1parameter_log_prob_shape_same(
-            self, partial(Implicit, value_shape=[]), _make_param, _make_given)
+            self, partial(Implicit, value_shape=[]),
+            _make_param, _make_given)
 
         utils.test_1parameter_log_prob_shape_same(
-            self, partial(Implicit, value_shape=5), _make_param, _make_given)
+            self, partial(Implicit, value_shape=5),
+            _make_param, _make_given)
 
     def test_value(self):
         with self.test_session(use_gpu=True):

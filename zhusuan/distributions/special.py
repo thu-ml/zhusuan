@@ -8,8 +8,6 @@ import tensorflow as tf
 from numpy import inf
 
 from zhusuan.distributions.base import Distribution
-from zhusuan.distributions.utils import assert_same_float_and_int_dtype, \
-    maybe_explicit_broadcast
 
 
 __all__ = [
@@ -68,7 +66,7 @@ class Empirical(Distribution):
         return self.explicit_value_shape
 
     def _batch_shape(self):
-        return tf.convert_to_tensor(self.explicit_batch_shape, tf.int32)
+        raise NotImplementedError()
 
     def _get_batch_shape(self):
         return self.explicit_batch_shape
@@ -90,7 +88,7 @@ class Implicit(Distribution):
     A common example of implicit variables are the generated samples from a GAN.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param implicit: A N-D t    ensor
+    :param samples: A Tensor.
     :param value_shape: A `TensorShape` describing the `value_shape` of the distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -101,18 +99,18 @@ class Implicit(Distribution):
     """
 
     def __init__(self,
-                 implicit,
+                 samples,
                  value_shape=None,
                  group_ndims=0,
                  **kwargs):
-        self.implicit = tf.convert_to_tensor(implicit)
+        self.samples = tf.convert_to_tensor(samples)
 
         self.explicit_value_shape = tf.TensorShape(value_shape)
 
         super(Implicit, self).__init__(
-            dtype=implicit.dtype,
-            param_dtype=implicit.dtype,
-            is_continuous=implicit.dtype.is_floating,
+            dtype=samples.dtype,
+            param_dtype=samples.dtype,
+            is_continuous=samples.dtype.is_floating,
             group_ndims=group_ndims,
             is_reparameterized=False,
             **kwargs)
@@ -128,32 +126,34 @@ class Implicit(Distribution):
         if d is None:
             raise NotImplementedError()
         elif d == 0:
-            return tf.shape(self.implicit)
+            return tf.shape(self.samples)
         else:
-            return tf.shape(self.implicit)[:-d]
+            return tf.shape(self.samples)[:-d]
 
     def _get_batch_shape(self):
-        if self.implicit.get_shape() == tf.TensorShape(None) or \
+        if self.samples.get_shape() == tf.TensorShape(None) or \
                         self.explicit_value_shape == tf.TensorShape(None):
             return tf.TensorShape(None)
         else:
             d = self.explicit_value_shape.ndims
             if d == 0:
-                return self.implicit.get_shape()
+                return self.samples.get_shape()
             else:
-                return self.implicit.get_shape()[:-d]
+                return self.samples.get_shape()[:-d]
 
     def _sample(self, n_samples=None):
         if n_samples is not None and n_samples != 1:
             raise ValueError("Implicit distribution does not accept `n_samples` argument.")
-        return tf.expand_dims(self.implicit, 0)
+        return tf.expand_dims(self.samples, 0)
 
     def _log_prob(self, given):
         return tf.log(self.prob(given))
 
     def _prob(self, given):
-        prob = tf.cast(tf.equal(given, self.implicit), tf.float32)
+        prob = tf.equal(given, self.samples)
         if self.is_continuous:
-            return (2 * prob - 1) * inf
+            prob = tf.cast(prob, self.param_dtype)
+            inf_dtype = tf.cast(inf, self.param_dtype)
+            return (2 * prob - 1) * inf_dtype
         else:
-            return prob
+            return tf.cast(prob, tf.float32)

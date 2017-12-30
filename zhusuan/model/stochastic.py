@@ -1001,7 +1001,7 @@ class Implicit(StochasticTensor):
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
-    :param implicit: A N-D (N >= 1) `float` Tensor
+    :param samples: A N-D (N >= 1) `float` Tensor
     :param value_shape: A list or tuple describing the `value_shape` of the distribution.
         The entries of the list can either be int, Dimension or None.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
@@ -1016,13 +1016,13 @@ class Implicit(StochasticTensor):
 
     def __init__(self,
                  name,
-                 implicit,
+                 samples,
                  value_shape=None,
                  group_ndims=0,
                  n_samples=None,
                  **kwargs):
         norm = distributions.Implicit(
-            implicit,
+            samples,
             value_shape=value_shape,
             group_ndims=group_ndims,
             **kwargs

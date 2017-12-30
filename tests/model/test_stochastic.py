@@ -354,5 +354,5 @@ class TestImplicit(tf.test.TestCase):
 
         self.assertEqual(a.get_shape().as_list(), b.get_shape().as_list())
         (a_value, ),  (b_value, ) = model.query(['a', 'b'], outputs=True)
-        # The ops are Squeeze(ExpandDims(a))
-        self.assertEqual(a_value, b_value.op.inputs[0].op.inputs[0])
+        # The ops are Squeeze(ExpandDims(a, 0))
+        self.assertTrue(a_value in b_value.op.inputs[0].op.inputs)
