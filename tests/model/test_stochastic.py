@@ -168,8 +168,9 @@ class TestMultinomial(tf.test.TestCase):
             n_experiments = tf.placeholder(tf.int32, shape=[])
             n_samples = tf.placeholder(tf.int32, shape=[])
             group_ndims = tf.placeholder(tf.int32, shape=[])
-            a = Multinomial('a', logits, n_experiments, n_samples,
-                            group_ndims)
+            a = Multinomial('a', logits, n_experiments=n_experiments,
+                            n_samples=n_samples,
+                            group_ndims=group_ndims)
         sample_ops = set(get_backward_ops(a.tensor))
         for i in [logits, n_experiments, n_samples]:
             self.assertTrue(i.op in sample_ops)
@@ -178,6 +179,18 @@ class TestMultinomial(tf.test.TestCase):
         for i in [logits, n_experiments, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
         self.assertEqual(a.get_shape()[1:], logits.get_shape())
+
+
+class TestUnnormalizedMultinomial(tf.test.TestCase):
+    def test_UnnormalizedMultinomial(self):
+        with BayesianNet():
+            logits = tf.ones([2, 3])
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = UnnormalizedMultinomial('a', logits, group_ndims=group_ndims)
+        log_p = a.log_prob(np.ones([2, 3], dtype=np.int32))
+        log_p_ops = set(get_backward_ops(log_p))
+        for i in [logits, group_ndims]:
+            self.assertTrue(i.op in log_p_ops)
 
 
 class TestOnehotCategorical(tf.test.TestCase):

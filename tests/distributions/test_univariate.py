@@ -83,7 +83,8 @@ class TestNormal(tf.test.TestCase):
         norm_rep = Normal(mean, logstd, use_path_derivative=True)
         samples = norm_rep.sample(n_samples)
         log_prob = norm_rep.log_prob(samples)
-        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob,
+                                                          [mean, logstd])
         sample_grads = tf.gradients(log_prob, samples)
         mean_true_grads = tf.gradients(samples, mean, sample_grads)[0]
         logstd_true_grads = tf.gradients(samples, logstd, sample_grads)[0]
@@ -99,7 +100,8 @@ class TestNormal(tf.test.TestCase):
                              use_path_derivative=True)
         samples = norm_no_rep.sample(n_samples)
         log_prob = norm_no_rep.log_prob(samples)
-        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob,
+                                                          [mean, logstd])
         self.assertTrue(mean_path_grads is None)
         self.assertTrue(mean_path_grads is None)
 
@@ -224,7 +226,8 @@ class TestFoldNormal(tf.test.TestCase):
         norm_rep = FoldNormal(mean, logstd, use_path_derivative=True)
         samples = norm_rep.sample(n_samples)
         log_prob = norm_rep.log_prob(samples)
-        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob,
+                                                          [mean, logstd])
         sample_grads = tf.gradients(log_prob, samples)
         mean_true_grads = tf.gradients(samples, mean, sample_grads)[0]
         logstd_true_grads = tf.gradients(samples, logstd, sample_grads)[0]
@@ -240,7 +243,8 @@ class TestFoldNormal(tf.test.TestCase):
                                  use_path_derivative=True)
         samples = norm_no_rep.sample(n_samples)
         log_prob = norm_no_rep.log_prob(samples)
-        mean_path_grads, logstd_path_grads = tf.gradients(log_prob, [mean, logstd])
+        mean_path_grads, logstd_path_grads = tf.gradients(log_prob,
+                                                          [mean, logstd])
         self.assertTrue(mean_path_grads is None)
         self.assertTrue(mean_path_grads is None)
 
@@ -255,8 +259,10 @@ class TestFoldNormal(tf.test.TestCase):
                 given = np.array(given, np.float32)
                 logstd = np.array(logstd, np.float32)
                 std = np.exp(logstd)
-                target_log_p = stats.foldnorm.logpdf(given, mean / np.exp(logstd), 0, np.exp(logstd))
-                target_p = stats.foldnorm.pdf(given, mean / np.exp(logstd), 0, np.exp(logstd))
+                target_log_p = stats.foldnorm.logpdf(
+                    given, mean / np.exp(logstd), 0, np.exp(logstd))
+                target_p = stats.foldnorm.pdf(
+                    given, mean / np.exp(logstd), 0, np.exp(logstd))
 
                 norm1 = FoldNormal(mean, logstd=logstd)
                 log_p1 = norm1.log_prob(given)
@@ -1165,10 +1171,10 @@ class TestBinConcrete(tf.test.TestCase):
                 logits = np.array(logits, np.float32)
 
                 target_log_p = np.log(temperature) + logits - \
-                               (temperature + 1) * np.log(given) - \
-                               (temperature + 1) * np.log(1 - given) - \
-                               2 * np.log(np.exp(logits) * (given ** -temperature) +
-                                          (1 - given) ** -temperature)
+                    (temperature + 1) * np.log(given) - \
+                    (temperature + 1) * np.log(1 - given) - \
+                    2 * np.log(np.exp(logits) * (given ** -temperature) +
+                               (1 - given) ** -temperature)
 
                 con = BinConcrete(temperature, logits=logits)
                 log_p = con.log_prob(given)
@@ -1207,7 +1213,8 @@ class TestBinConcrete(tf.test.TestCase):
         con_rep = BinConcrete(temperature, logits, use_path_derivative=True)
         samples = con_rep.sample(n_samples)
         log_prob = con_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
@@ -1223,7 +1230,8 @@ class TestBinConcrete(tf.test.TestCase):
                                  use_path_derivative=True)
         samples = con_no_rep.sample(n_samples)
         log_prob = con_no_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         self.assertTrue(t_path_grads is None)
         self.assertTrue(logits_path_grads is None)
 
