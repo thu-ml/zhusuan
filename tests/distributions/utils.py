@@ -333,7 +333,7 @@ def test_batch_shape_1parameter(
 
 
 def test_1parameter_sample_shape_same(
-        test_class, Distribution, make_param):
+        test_class, Distribution, make_param, only_one_sample=False):
     def _test_static(param_shape, n_samples, target_shape):
         param = tf.placeholder(tf.float32, param_shape)
         dist = Distribution(param)
@@ -345,12 +345,14 @@ def test_1parameter_sample_shape_same(
 
     _test_static([2, 3], None, [2, 3])
     _test_static([2, 3], 1, [1, 2, 3])
-    _test_static([5], 2, [2, 5])
-    _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
+    if not only_one_sample:
+        _test_static([5], 2, [2, 5])
+        _test_static([None, 2], tf.placeholder(tf.int32, []), [None, None, 2])
     _test_static(None, 1, None)
     _test_static(None, None, None)
     _test_static([None, 1, 10], None, [None, 1, 10])
-    _test_static([3, None], 2, [2, 3, None])
+    if not only_one_sample:
+        _test_static([3, None], 2, [2, 3, None])
 
     with test_class.test_session(use_gpu=True):
         def _test_dynamic(param_shape, n_samples, target_shape):
@@ -363,8 +365,9 @@ def test_1parameter_sample_shape_same(
                 target_shape)
 
         _test_dynamic([2, 3], 1, [1, 2, 3])
-        _test_dynamic([1, 3], 2, [2, 1, 3])
-        _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
+        if not only_one_sample:
+            _test_dynamic([1, 3], 2, [2, 1, 3])
+            _test_dynamic([2, 1, 5], 3, [3, 2, 1, 5])
 
 
 def test_1parameter_log_prob_shape_same(
