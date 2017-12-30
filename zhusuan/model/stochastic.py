@@ -884,8 +884,8 @@ GumbelSoftmax = Concrete
 class Empirical(StochasticTensor):
     """
     The class of Empirical `StochasticTensor`.
-    You can not sample or query log_probabilities without providing observations.
-    See :class:`~zhusuan.model.base.Empirical` for details.
+    For any inference it is always required that the variables are observed.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -906,15 +906,15 @@ class Empirical(StochasticTensor):
 
     def __init__(self,
                  name,
-                 batch_shape,
                  dtype,
+                 batch_shape,
                  value_shape=None,
                  group_ndims=0,
                  is_continuous=None,
                  n_samples=None,
                  **kwargs):
         norm = distributions.Empirical(
-            batch_shape, dtype,
+            dtype, batch_shape,
             value_shape=value_shape,
             group_ndims=group_ndims,
             is_continous=is_continuous,
@@ -927,7 +927,7 @@ class Implicit(StochasticTensor):
     """
     The class of Implicit `StochasticTensor`.
     This distribution always sample the implicit tensor provided.
-    See :class:`~zhusuan.model.base.Implicit` for details.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.

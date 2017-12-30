@@ -17,21 +17,21 @@ from examples.utils import dataset, save_image_collections
 
 
 @zs.reuse('model')
-def vae(observed, x_dim, z_dim, n_z, n_x_per_z=1):
+def vae(observed, x_dim, z_dim, n, n_particles=1):
     with zs.BayesianNet(observed=observed) as model:
-        z_mean = tf.zeros([n_z, z_dim])
+        z_mean = tf.zeros([n, z_dim])
         z = zs.Normal('z', z_mean, std=1., group_ndims=1)
         lx_z = tf.layers.dense(z, 500, activation=tf.nn.relu)
         lx_z = tf.layers.dense(lx_z, 500, activation=tf.nn.relu)
         x_logits = tf.layers.dense(lx_z, x_dim)
         x_mean = zs.Implicit("x_mean", tf.sigmoid(x_logits), group_ndims=1)
-        x = zs.Bernoulli('x', x_logits, group_ndims=1, n_samples=n_x_per_z)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1, n_samples=n_particles)
     return model
 
 
 def q_net(observed, x_dim, z_dim, n_z_per_x):
     with zs.BayesianNet(observed=observed) as variational:
-        x = zs.Empirical('x', (None, x_dim), tf.int32)
+        x = zs.Empirical('x', tf.int32, (None, x_dim))
         lz_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
         lz_x = tf.layers.dense(lz_x, 500, activation=tf.nn.relu)
         z_mean = tf.layers.dense(lz_x, z_dim)
@@ -84,8 +84,7 @@ def main():
 
     # Generate images
     n_gen = 100
-    x_mean, = vae({}, x_dim, z_dim, n_gen)\
-        .query('x_mean', outputs=True)
+    x_mean = vae({}, x_dim, z_dim, n_gen).outputs('x_mean')
     x_gen = tf.reshape(x_mean, [-1, 28, 28, 1])
 
     # Define training/evaluation parameters
