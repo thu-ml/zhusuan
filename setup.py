@@ -77,7 +77,6 @@ setup(
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=['numpy',
-                      'scipy',
                       'six'],
 
     # List additional groups of dependencies here (e.g. development
@@ -87,6 +86,7 @@ setup(
     extras_require={
         'dev': [
             'Sphinx',
+            'sphinx_rtd_theme',
             'sphinxcontrib-bibtex',
             'pep8',
             'scipy',
