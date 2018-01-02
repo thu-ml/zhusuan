@@ -139,21 +139,19 @@ class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
         with self.test_session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
-                Multinomial(tf.zeros([]), 10)
+                Multinomial(tf.zeros([]), n_experiments=10)
 
     def test_init_n(self):
-        dist = Multinomial(tf.ones([2]), 10)
+        dist = Multinomial(tf.ones([2]), n_experiments=10)
         self.assertTrue(isinstance(dist.n_categories, int))
         self.assertEqual(dist.n_categories, 2)
         self.assertTrue(isinstance(dist.n_experiments, int))
         self.assertEqual(dist.n_experiments, 10)
-        with self.assertRaisesRegexp(ValueError, "must be positive"):
-            _ = Multinomial(tf.ones([2]), 0)
 
         with self.test_session(use_gpu=True) as sess:
             logits = tf.placeholder(tf.float32, None)
             n_experiments = tf.placeholder(tf.int32, None)
-            dist2 = Multinomial(logits, n_experiments)
+            dist2 = Multinomial(logits, n_experiments=n_experiments)
             self.assertEqual(
                 sess.run([dist2.n_categories, dist2.n_experiments],
                          feed_dict={logits: np.ones([2]), n_experiments: 10}),
@@ -173,12 +171,13 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_value_shape(self):
         # static
-        dist = Multinomial(tf.placeholder(tf.float32, [None, 2]), 10)
+        dist = Multinomial(tf.placeholder(tf.float32, [None, 2]),
+                           n_experiments=10)
         self.assertEqual(dist.get_value_shape().as_list(), [2])
 
         # dynamic
         logits = tf.placeholder(tf.float32, None)
-        dist2 = Multinomial(logits, 10)
+        dist2 = Multinomial(logits, n_experiments=10)
         self.assertTrue(dist2._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
@@ -188,19 +187,23 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_batch_shape(self):
         def _distribution(param):
-            return Multinomial(param, 10)
+            return Multinomial(param, n_experiments=10)
         utils.test_batch_shape_1parameter(
             self, _distribution, np.zeros, is_univariate=False)
 
-    def test_sample_shape(self):
+    def test_sample(self):
         def _distribution(param):
-            return Multinomial(param, 10)
+            return Multinomial(param, n_experiments=10)
         utils.test_1parameter_sample_shape_one_rank_less(
             self, _distribution, np.zeros)
+        dist = Multinomial(np.ones([2, 2]), n_experiments=None)
+        with self.assertRaisesRegexp(ValueError,
+                                     "Cannot sample when `n_experiments`"):
+            dist.sample()
 
     def test_log_prob_shape(self):
         def _distribution(param):
-            return Multinomial(param, 10)
+            return Multinomial(param, n_experiments=10)
 
         def _make_samples(shape):
             samples = np.zeros(shape)
@@ -213,35 +216,145 @@ class TestMultinomial(tf.test.TestCase):
 
     def test_value(self):
         with self.test_session(use_gpu=True):
-            def _test_value(logits, n_experiments, given):
+            def _test_value(logits, n_experiments, given, normalize_logits):
                 logits = np.array(logits, np.float32)
-                normalized_logits = logits - misc.logsumexp(
-                    logits, axis=-1, keepdims=True)
                 given = np.array(given)
-                dist = Multinomial(logits, n_experiments)
+                dist = Multinomial(logits, n_experiments=None,
+                                   normalize_logits=normalize_logits)
                 log_p = dist.log_prob(given)
+                if n_experiments is not None:
+                    dist2 = Multinomial(logits, n_experiments=n_experiments,
+                                        normalize_logits=normalize_logits)
+                    log_p_2 = dist2.log_prob(given)
+                    self.assertAllClose(log_p.eval(), log_p_2.eval())
+
+                maybe_normalized_logits = logits
+                if normalize_logits:
+                    maybe_normalized_logits -= misc.logsumexp(
+                        logits, axis=-1, keepdims=True)
+                n_experiments = np.sum(given, axis=-1)
                 target_log_p = np.log(misc.factorial(n_experiments)) - \
                     np.sum(np.log(misc.factorial(given)), -1) + \
-                    np.sum(given * normalized_logits, -1)
+                    np.sum(given * maybe_normalized_logits, -1)
+                self.assertAllClose(log_p.eval(), target_log_p)
+                p = dist.prob(given)
+                target_p = np.exp(target_log_p)
+                self.assertAllClose(np.log(p.eval()), np.log(target_p))
+
+            for normalize_logits in [True, False]:
+                _test_value([-50., -20., 0.], 4, [1, 0, 3], normalize_logits)
+                _test_value([1., 10., 1000.], 1, [1, 0, 0], normalize_logits)
+                _test_value([[2., 3., 1.], [5., 7., 4.]], 7,
+                            np.array([3, 1, 3], dtype=np.int32),
+                            normalize_logits)
+                _test_value([-10., 10., 20., 50.], 100,
+                            [[0, 1, 49, 50], [50, 49, 1, 0]],
+                            normalize_logits)
+
+    def test_dtype(self):
+        def _distribution(param, dtype=None):
+            return Multinomial(param, n_experiments=10, dtype=dtype)
+        utils.test_dtype_1parameter_discrete(self, _distribution)
+
+        with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
+            Multinomial([1., 1.], n_experiments=tf.placeholder(tf.float32, []))
+        with self.assertRaisesRegexp(TypeError,
+                                     "n_experiments must be integer"):
+            Multinomial([1., 1.], n_experiments=2.0)
+
+
+class TestUnnormalizedMultinomial(tf.test.TestCase):
+    def test_init_check_shape(self):
+        with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(ValueError, "should have rank"):
+                UnnormalizedMultinomial(tf.zeros([]))
+
+    def test_init_n(self):
+        dist = UnnormalizedMultinomial(tf.ones([2]))
+        self.assertTrue(isinstance(dist.n_categories, int))
+        self.assertEqual(dist.n_categories, 2)
+
+        with self.test_session(use_gpu=True) as sess:
+            logits = tf.placeholder(tf.float32, None)
+            dist2 = UnnormalizedMultinomial(logits)
+            self.assertEqual(
+                sess.run(dist2.n_categories, feed_dict={logits: np.ones([2])}),
+                2)
+            with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
+                                         "should have rank"):
+                dist2.n_categories.eval(feed_dict={logits: 1.})
+
+    def test_value_shape(self):
+        # static
+        dist = UnnormalizedMultinomial(tf.placeholder(tf.float32, [None, 2]))
+        self.assertEqual(dist.get_value_shape().as_list(), [2])
+
+        # dynamic
+        logits = tf.placeholder(tf.float32, None)
+        dist2 = UnnormalizedMultinomial(logits)
+        self.assertTrue(dist2._value_shape().dtype is tf.int32)
+        with self.test_session(use_gpu=True):
+            self.assertEqual(dist2._value_shape().eval(
+                feed_dict={logits: np.ones([2])}).tolist(), [2])
+
+        self.assertEqual(dist._value_shape().dtype, tf.int32)
+
+    def test_batch_shape(self):
+        utils.test_batch_shape_1parameter(
+            self, UnnormalizedMultinomial, np.zeros, is_univariate=False)
+
+    def test_sample(self):
+        dist = UnnormalizedMultinomial(np.ones([2, 2]))
+        with self.assertRaisesRegexp(NotImplementedError,
+                                     "Unnormalized multinomial distribution"
+                                     " does not support sampling"):
+            dist.sample()
+
+    def test_log_prob_shape(self):
+        def _distribution(param):
+            return UnnormalizedMultinomial(param)
+
+        def _make_samples(shape):
+            samples = np.zeros(shape)
+            samples = samples.reshape((-1, shape[-1]))
+            samples[:, 0] = 1
+            return samples.reshape(shape)
+
+        utils.test_1parameter_log_prob_shape_one_rank_less(
+            self, _distribution, _make_samples, _make_samples)
+
+    def test_value(self):
+        with self.test_session(use_gpu=True):
+            def _test_value(logits, given, normalize_logits):
+                logits = np.array(logits, np.float32)
+                given = np.array(given)
+                dist = UnnormalizedMultinomial(
+                    logits, normalize_logits=normalize_logits)
+                log_p = dist.log_prob(given)
+
+                maybe_normalized_logits = logits
+                if normalize_logits:
+                    maybe_normalized_logits -= misc.logsumexp(
+                        logits, axis=-1, keepdims=True)
+                target_log_p = np.sum(given * maybe_normalized_logits, -1)
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = dist.prob(given)
                 target_p = np.exp(target_log_p)
                 self.assertAllClose(p.eval(), target_p)
 
-            _test_value([-50., -20., 0.], 4, [1, 0, 3])
-            _test_value([1., 10., 1000.], 1, [1, 0, 0])
-            _test_value([[2., 3., 1.], [5., 7., 4.]], 3,
-                        np.ones([3, 1, 3], dtype=np.int32))
-            _test_value([-10., 10., 20., 50.], 100, [[0, 1, 99, 100],
-                                                     [100, 99, 1, 0]])
+            for normalize_logits in [True, False]:
+                _test_value([-50., -20., 0.], [1, 0, 3], normalize_logits)
+                _test_value([1., 10., 1000.], [1, 0, 0], normalize_logits)
+                _test_value([[2., 3., 1.], [5., 7., 4.]],
+                            np.ones([3, 1, 3], dtype=np.int32),
+                            normalize_logits)
+                _test_value([-10., 10., 20., 50.],
+                            [[0, 1, 99, 100], [100, 99, 1, 0]],
+                            normalize_logits)
 
     def test_dtype(self):
-        def _distribution(param, dtype=None):
-            return Multinomial(param, 10, dtype)
-        utils.test_dtype_1parameter_discrete(self, _distribution)
-
-        with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
-            Multinomial([1., 1.], tf.placeholder(tf.float32, []))
+        utils.test_dtype_1parameter_discrete(self, UnnormalizedMultinomial,
+                                             prob_only=True)
 
 
 class TestOnehotCategorical(tf.test.TestCase):
@@ -586,7 +699,8 @@ class TestExpConcrete(tf.test.TestCase):
         con_rep = ExpConcrete(temperature, logits, use_path_derivative=True)
         samples = con_rep.sample(n_samples)
         log_prob = con_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
@@ -598,10 +712,12 @@ class TestExpConcrete(tf.test.TestCase):
             self.assertAllClose(t_path, t_true)
             self.assertAllClose(logits_path, logits_true)
 
-        con_no_rep = ExpConcrete(temperature, logits, is_reparameterized=False, use_path_derivative=True)
+        con_no_rep = ExpConcrete(temperature, logits, is_reparameterized=False,
+                                 use_path_derivative=True)
         samples = con_no_rep.sample(n_samples)
         log_prob = con_no_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         self.assertTrue(t_path_grads is None)
         self.assertTrue(logits_path_grads is None)
 
@@ -744,7 +860,8 @@ class TestConcrete(tf.test.TestCase):
         con_rep = Concrete(temperature, logits, use_path_derivative=True)
         samples = con_rep.sample(n_samples)
         log_prob = con_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
@@ -760,7 +877,8 @@ class TestConcrete(tf.test.TestCase):
                               use_path_derivative=True)
         samples = con_no_rep.sample(n_samples)
         log_prob = con_no_rep.log_prob(samples)
-        t_path_grads, logits_path_grads = tf.gradients(log_prob, [temperature, logits])
+        t_path_grads, logits_path_grads = tf.gradients(log_prob,
+                                                       [temperature, logits])
         self.assertTrue(t_path_grads is None)
         self.assertTrue(logits_path_grads is None)
 
