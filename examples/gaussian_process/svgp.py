@@ -21,9 +21,10 @@ from __future__ import division
 
 from six.moves import range, zip
 
-import zhusuan as zs
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+import zhusuan as zs
+from zhusuan.utils import log_mean_exp
 from examples import conf
 from examples.utils import dataset
 import os
@@ -151,15 +152,13 @@ def main():
     def log_joint(observed):
         model, _ = build_model(observed, x_ph, hps, n_particles_ph)
         prior, ll = model.local_log_prob(['fZ', 'y'])
-        print(ll.shape)
         return prior + ll / n_batch * n_train
 
     variational = build_variational(hps, n_particles_ph)
     var_fZ = variational.query('fZ', outputs=True, local_log_prob=True)
     lower_bound = zs.variational.elbo(
         log_joint, observed={'y': y_ph}, latent={'fZ': var_fZ}, axis=0)
-    cost = tf.reduce_mean(lower_bound.sgvb())
-    lower_bound = tf.reduce_mean(lower_bound)
+    cost = lower_bound.sgvb()
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
     infer_op = optimizer.minimize(cost)
 
@@ -171,16 +170,6 @@ def main():
     observed = {'fZ': var_fZ[0], 'y': y_ph}
     model, y_inferred = build_model(observed, x_ph, hps, n_particles_ph)
     log_likelihood = model.local_log_prob('y')
-
-    def log_mean_exp(x, axis=None, keep_dims=False):
-        # FIXME: Any reason zs.log_mean_exp cast to tf.float32?
-        x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
-        ret = tf.log(tf.reduce_mean(tf.exp(x - x_max), axis=axis,
-                                    keep_dims=True)) + x_max
-        if not keep_dims:
-            ret = tf.reduce_mean(ret, axis=axis)
-        return ret
-
     std_y_train = tf.cast(std_y_train, hps.dtype)
     log_likelihood = log_mean_exp(log_likelihood, 0) / n_batch - tf.log(std_y_train)
     y_pred_mean = tf.reduce_mean(y_inferred.distribution.mean, axis=0)
@@ -204,9 +193,11 @@ def main():
             lbs = []
             indices = np.arange(x_train.shape[0])
             np.random.shuffle(indices)
+            x_train = x_train[indices]
+            y_train = y_train[indices]
             for t in range(iters):
-                idx = indices[t * hps.n_batch: (t + 1) * hps.n_batch]
-                lb = infer_step(x_train[idx], y_train[idx])
+                lb = infer_step(x_train[t*hps.n_batch: (t+1)*hps.n_batch],
+                                y_train[t*hps.n_batch: (t+1)*hps.n_batch])
                 lbs.append(lb)
             print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
             if epoch % test_freq == 0:
