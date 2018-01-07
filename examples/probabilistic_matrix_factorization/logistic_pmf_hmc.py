@@ -1,7 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+import os
 import time
+from six.moves import range
+
 import tensorflow as tf
 import numpy as np
 import zhusuan as zs
@@ -11,7 +17,7 @@ from examples.utils import dataset
 
 
 def load_movielens1m_mapped(path):
-    num_movies, num_users, train, valid, test = load_movielens1m(path)
+    num_movies, num_users, train, valid, test = dataset.load_movielens1m(path)
 
     user_movie = []
     user_movie_score = []
@@ -49,16 +55,16 @@ def pmf(observed, n, m, D, n_particles, select_u, select_v,
     with zs.BayesianNet(observed=observed) as model:
         mu_u = tf.zeros(shape=[n, D])
         log_std_u = tf.ones(shape=[n, D]) * tf.log(alpha_u)
-        u = zs.Normal('u', mu_u, log_std_u,
-                      n_samples=n_particles, group_event_ndims=1)
+        u = zs.Normal('u', mu_u, logstd=log_std_u,
+                      n_samples=n_particles, group_ndims=1)
         mu_v = tf.zeros(shape=[m, D])
         log_std_v = tf.ones(shape=[m, D]) * tf.log(alpha_v)
-        v = zs.Normal('v', mu_v, log_std_v,
-                      n_samples=n_particles, group_event_ndims=1)
+        v = zs.Normal('v', mu_v, logstd=log_std_v,
+                      n_samples=n_particles, group_ndims=1)
         gather_u = select_from_axis1(u, select_u)  # [K, batch, D]
         gather_v = select_from_axis1(v, select_v)  # [K, batch, D]
         pred_mu = tf.reduce_sum(gather_u * gather_v, axis=2)
-        r = zs.Normal('r', tf.sigmoid(pred_mu), tf.log(alpha_pred))
+        r = zs.Normal('r', tf.sigmoid(pred_mu), logstd=tf.log(alpha_pred))
     return model, tf.sigmoid(pred_mu)
 
 
@@ -96,7 +102,7 @@ if __name__ == '__main__':
     tf.set_random_seed(1237)
     M, N, train_data, valid_data, test_data, user_movie, \
         user_movie_score, movie_user, movie_user_score \
-        = load_movielens1m_mapped('data/ml-1m.zip')
+        = load_movielens1m_mapped(os.path.join(conf.data_dir, 'ml-1m.zip'))
     old_M = M
     old_N = N
 
@@ -119,9 +125,9 @@ if __name__ == '__main__':
 
     # paralleled
     chunk_size = 50
-    N = (N + chunk_size - 1) / chunk_size
+    N = (N + chunk_size - 1) // chunk_size
     N *= chunk_size
-    M = (M + chunk_size - 1) / chunk_size
+    M = (M + chunk_size - 1) // chunk_size
     M *= chunk_size
 
     # Selection
@@ -153,12 +159,12 @@ if __name__ == '__main__':
     # Define samples as variables
     Us = []
     Vs = []
-    for i in range(N / chunk_size):
+    for i in range(N // chunk_size):
         ui = tf.get_variable('u_chunk_%d' % i, shape=[K, chunk_size, D],
                              initializer=tf.random_normal_initializer(0, 0.1),
                              trainable=False)
         Us.append(ui)
-    for i in range(M / chunk_size):
+    for i in range(M // chunk_size):
         vi = tf.get_variable('v_chunk_%d' % i, shape=[K, chunk_size, D],
                              initializer=tf.random_normal_initializer(0, 0.1),
                              trainable=False)
@@ -224,10 +230,10 @@ if __name__ == '__main__':
     trans_cand_V = tf.assign(candidate_sample_v, candidate_v)
 
     trans_us_cand = []
-    for i in range(N / chunk_size):
+    for i in range(N // chunk_size):
         trans_us_cand.append(tf.assign(Us[i], candidate_sample_u))
     trans_vs_cand = []
-    for i in range(M / chunk_size):
+    for i in range(M // chunk_size):
         trans_vs_cand.append(tf.assign(Vs[i], candidate_sample_v))
 
     params = tf.trainable_variables()
@@ -242,7 +248,7 @@ if __name__ == '__main__':
 
         for step in range(1, num_steps + 1):
             epoch_time = -time.time()
-            for i in range(N / chunk_size):
+            for i in range(N // chunk_size):
                 nv, sv, tr, ssu, ssv = select_from_corpus(i * chunk_size,
                                                           (i + 1) * chunk_size,
                                                           user_movie,
@@ -258,7 +264,7 @@ if __name__ == '__main__':
                                                      n: chunk_size,
                                                      m: nv})
                 _ = sess.run(trans_us_cand[i])
-            for i in range(M / chunk_size):
+            for i in range(M // chunk_size):
                 nu, su, tr, ssv, ssu = select_from_corpus(i * chunk_size,
                                                           (i + 1) * chunk_size,
                                                           movie_user,
@@ -325,4 +331,3 @@ if __name__ == '__main__':
                 time_valid += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_valid))
                 print('>> Test rmse = {}'.format((np.mean(valid_rmse))))
-
