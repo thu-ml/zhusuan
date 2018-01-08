@@ -20,27 +20,25 @@ class TestPlanarNormalizingFlow(tf.test.TestCase):
                 z.append(np.array([[vz[i]]]))
                 z[i] = tf.constant(z[i], dtype=tf.float32)
             z_0 = tf.concat(z, axis=1)
-            z_1, n_log_det_ja = planar_normalizing_flow(
-                z_0, [0.0], n_iters=10)
-
-            n_log_det_ja = tf.reshape(n_log_det_ja, [])
+            z_1, n_log_det_ja = repeated_flow(planar_normalizing_flow, z_0, n_iters=10)
 
             grad = []
             for i in range(len(vz)):
                 z_1i = z_1[0, i]
                 grad.append(tf.gradients(z_1i, z_0)[0])
-            jocabian = tf.concat(grad, axis=0)
-            log_det_jacobian = tf.log(tf.matrix_determinant(jocabian))
+            jacobian = tf.concat(grad, axis=0)
+            log_det_jacobian = tf.log(tf.matrix_determinant(jacobian))
 
             sess.run(tf.global_variables_initializer())
-            test_value, true_value = sess.run([-log_det_jacobian,
-                                               n_log_det_ja])
+            test_value, true_value = sess.run([log_det_jacobian,
+                                               tf.squeeze(n_log_det_ja)])
             self.assertAllClose(test_value, true_value)
 
     def test_flow_shape(self):
         z = tf.random_normal(shape=(2, 10, 6), mean=0, stddev=0.05)
         log_pz = tf.random_normal(shape=(2, 10), mean=0, stddev=0.05)
-        t_z, t_log_pz = planar_normalizing_flow(z, log_pz, n_iters=10)
+        t_z, log_det = repeated_flow(planar_normalizing_flow, z, n_iters=10)
+        t_log_pz = log_pz - log_det
         with self.test_session(use_gpu=True) as sess:
             sess.run(tf.global_variables_initializer())
             o_z, o_log_pz = sess.run([t_z, t_log_pz])

@@ -115,8 +115,15 @@ class StochasticTensor(TensorArithmeticMixin):
                         "with its observed value. Error message: {}".format(
                             self._name, e))
             else:
-                self._tensor = self.sample(self._n_samples)
+                self._tensor, self._local_log_prob = self.sample_and_log_prob(self._n_samples)
         return self._tensor
+
+    @property
+    def local_log_prob(self):
+        tensor = self.tensor
+        if not hasattr(self, '_local_log_prob'):
+            self._local_log_prob = self.log_prob(tensor)
+        return self._local_log_prob
 
     def get_shape(self):
         return self.tensor.get_shape()
@@ -148,6 +155,9 @@ class StochasticTensor(TensorArithmeticMixin):
         :return: A Tensor. The probability density (mass) value.
         """
         return self._distribution.prob(given)
+
+    def sample_and_log_prob(self, n_samples):
+        return self._distribution.sample_and_log_prob(n_samples)
 
     @staticmethod
     def _to_tensor(value, dtype=None, name=None, as_ref=False):
@@ -340,14 +350,10 @@ class BayesianNet(Context):
         """
         name_or_names = self._check_names_exist(name_or_names)
         if isinstance(name_or_names, tuple):
-            ret = []
-            for name in name_or_names:
-                s_tensor = self._stochastic_tensors[name]
-                ret.append(s_tensor.log_prob(s_tensor.tensor))
+            return [self._stochastic_tensors[name].local_log_prob
+                    for name in name_or_names]
         else:
-            s_tensor = self._stochastic_tensors[name_or_names]
-            ret = s_tensor.log_prob(s_tensor.tensor)
-        return ret
+            return self._stochastic_tensors[name_or_names].local_log_prob
 
     def query(self, name_or_names, outputs=False, local_log_prob=False):
         """

@@ -10,8 +10,92 @@ import numpy as np
 
 
 __all__ = [
+    'repeated_flow',
     'planar_normalizing_flow',
 ]
+
+
+def repeated_flow(base_flow_function, samples, n_iters, scope=None,
+                  reuse=tf.AUTO_REUSE, **kwargs):
+    samples = tf.convert_to_tensor(samples, dtype=tf.float32)
+    if not isinstance(n_iters, int):
+        raise ValueError('n_iters should be type \'int\'')
+
+    # check shapes of sample
+    static_sample_shape = samples.get_shape()
+    static_sample_ndim = convert_to_int(static_sample_shape.ndims)
+    if static_sample_ndim and static_sample_ndim <= 1:
+        raise ValueError('samples should have rank >= 2')
+    dynamic_sample_ndim = tf.rank(samples)
+    tf.assert_greater_equal(dynamic_sample_ndim, 2,
+                            message='samples should have rank >= 2')
+
+    static_x_shape = samples.get_shape()
+    if not static_x_shape[-1:].is_fully_defined():
+        raise ValueError(
+            'Inputs {} has undefined last dimension.'.format(samples.name))
+    scope = "repeated_flow" if scope is None else scope
+
+    xt, log_det = samples, 0
+    with tf.variable_scope(scope, reuse=reuse):
+        for i in range(n_iters):
+            xt, log_det_t = base_flow_function(xt, **kwargs)
+            log_det += log_det_t
+    return xt, log_det
+
+
+def planar_normalizing_flow(z, scope=None, reuse=tf.AUTO_REUSE):
+    """
+    Perform Planar Normalizing Flow along the last axis of inputs.
+
+    .. math ::
+
+        f(z_t) = z_{t-1} + h(z_{t-1} * w_t + b_t) * u_t
+
+    with activation function `tanh` as well as the invertibility trick
+    from (Danilo 2016).
+
+    :param z: A N-D (N>=2) `float32` Tensor of shape `[..., d]`, and
+        planar normalizing flow will be performed along the last axis.
+
+    :return: A N-D Tensor, the transformed samples.
+    :return: A (N-1)-D Tensor, the log probabilities of the transformed
+        samples.
+    """
+    d = int(z.get_shape()[-1])
+    scope = "planar_flow" if scope is None else scope
+    with tf.variable_scope(scope, reuse=reuse):
+        # define parameters
+        b = tf.get_variable('b', initializer=tf.zeros(shape=[1], dtype=tf.float32))
+        aux_u = tf.get_variable('aux_u', initializer=tf.random_normal(
+            shape=[d], mean=0, stddev=0.005, dtype=tf.float32))
+        w = tf.get_variable('w', initializer=tf.random_normal(
+            shape=[d], mean=0, stddev=0.005, dtype=tf.float32))
+        # Transformation from the Appendix of the paper
+        w_norm_2 = tf.tensordot(w, w, [[0], [0]])
+        w_normalized = w / w_norm_2
+        u_dot_w = tf.tensordot(w, aux_u, [[0], [0]])
+        m = tf.nn.softplus(u_dot_w) - 1
+        u = aux_u + (m - u_dot_w) * w_normalized
+
+        # check invertible
+        scalar = tf.tensordot(w, u, [[0], [0]])
+        invertible_check = tf.assert_greater_equal(
+            scalar, tf.constant(-1.0, dtype=tf.float32),
+            message="w'u must be greater or equal to -1")
+        with tf.control_dependencies([invertible_check]):
+            scalar = tf.identity(scalar)
+
+        # Planar flow
+        pre_activation = tf.tensordot(z, w, axes=[[-1], [0]], name='score') + b
+        activation = tf.tanh(pre_activation, name='activation')
+        u_expand = tf.reshape(u, [1 for _ in range(z.get_shape().ndims - 1)] + [-1])
+        z = z + tf.expand_dims(activation, -1) * u_expand
+        # Log determinant
+        activation_derivative = 1 - activation ** 2
+        log_det = tf.log(1 + activation_derivative * scalar)
+
+        return z, log_det
 
 
 def linear_ar(name, id, z, hidden=None):
@@ -67,135 +151,135 @@ def linear_ar(name, id, z, hidden=None):
     return m, s
 
 
-def planar_normalizing_flow(samples, log_probs, n_iters):
-    """
-    Perform Planar Normalizing Flow along the last axis of inputs.
-
-    .. math ::
-
-        f(z_t) = z_{t-1} + h(z_{t-1} * w_t + b_t) * u_t
-
-    with activation function `tanh` as well as the invertibility trick
-    from (Danilo 2016).
-
-    :param samples: A N-D (N>=2) `float32` Tensor of shape `[..., d]`, and
-        planar normalizing flow will be performed along the last axis.
-    :param log_probs: A (N-1)-D `float32` Tensor, should be of the same shape
-        as the first N-1 axes of `samples`.
-    :param n_iters: A int, which represents the number of successive flows.
-
-    :return: A N-D Tensor, the transformed samples.
-    :return: A (N-1)-D Tensor, the log probabilities of the transformed
-        samples.
-    """
-    samples = tf.convert_to_tensor(samples, dtype=tf.float32)
-    log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
-
-    if not isinstance(n_iters, int):
-        raise ValueError('n_iters should be type \'int\'')
-
-    # check shapes of samples and log_probs
-    static_sample_shape = samples.get_shape()
-    static_logprob_shape = log_probs.get_shape()
-    static_sample_ndim = convert_to_int(static_sample_shape.ndims)
-    static_logprob_ndim = convert_to_int(static_logprob_shape.ndims)
-    if static_sample_ndim and static_sample_ndim <= 1:
-        raise ValueError('samples should have rank >= 2')
-    if static_sample_ndim and static_logprob_ndim \
-            and static_sample_ndim != static_logprob_ndim + 1:
-        raise ValueError('log_probs should have rank (N-1), while N is the '
-                         'rank of samples')
-    try:
-        tf.broadcast_static_shape(static_sample_shape[:-1],
-                                  static_logprob_shape)
-    except ValueError:
-        raise ValueError(
-             "samples and log_probs don't have same shape of (N-1) dims,"
-             "while N is the rank of samples")
-    dynamic_sample_shape = tf.shape(samples)
-    dynamic_logprob_shape = tf.shape(log_probs)
-    dynamic_sample_ndim = tf.rank(samples)
-    dynamic_logprob_ndim = tf.rank(log_probs)
-    _assert_sample_ndim = \
-        tf.assert_greater_equal(dynamic_sample_ndim, 2,
-                                message='samples should have rank >= 2')
-    with tf.control_dependencies([_assert_sample_ndim]):
-        samples = tf.identity(samples)
-    _assert_logprob_ndim = \
-        tf.assert_equal(dynamic_logprob_ndim, dynamic_sample_ndim - 1,
-                        message='log_probs should have rank (N-1), while N is'
-                                ' the rank of samples')
-    with tf.control_dependencies([_assert_logprob_ndim]):
-        log_probs = tf.identity(log_probs)
-    _assert_same_shape = \
-        tf.assert_equal(dynamic_sample_shape[:-1], dynamic_logprob_shape,
-                        message="samples and log_probs don't have same shape "
-                                "of (N-1) dims,while N is the rank of samples")
-    with tf.control_dependencies([_assert_same_shape]):
-        samples = tf.identity(samples)
-        log_probs = tf.identity(log_probs)
-
-    input_x = tf.convert_to_tensor(samples, dtype=tf.float32)
-    log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
-    log_probs = tf.reshape(log_probs, [-1])
-    static_x_shape = input_x.get_shape()
-    if not static_x_shape[-1:].is_fully_defined():
-        raise ValueError(
-            'Inputs {} has undefined last dimension.'.format(input_x.name))
-    d = int(static_x_shape[-1])
-
-    # define parameters
-    with tf.name_scope('planar_flow_parameters'):
-        param_bs, param_us, param_ws = [], [], []
-        for iter in range(n_iters):
-            param_b = tf.Variable(tf.zeros(shape=[1], dtype=tf.float32),
-                                  name='param_b_%d' % iter)
-            aux_u = tf.Variable(
-                tf.random_normal(shape=[d, 1], mean=0, stddev=0.005,
-                                 dtype=tf.float32),
-                name='aux_u_%d' % iter)
-            param_w = tf.Variable(
-                tf.random_normal(shape=[d, 1], mean=0, stddev=0.005,
-                                 dtype=tf.float32),
-                name='para_w_%d' % iter)
-            dot_prod = tf.matmul(param_w, aux_u, transpose_a=True)
-            param_u = aux_u + param_w / tf.matmul(param_w, param_w,
-                                                  transpose_a=True) \
-                * (tf.log(tf.exp(dot_prod) + 1) - 1 - dot_prod)
-            param_u = tf.transpose(param_u, name='param_u_%d' % iter)
-            param_bs.append(param_b)
-            param_ws.append(param_w)
-            param_us.append(param_u)
-
-    # forward and log_det_jacobian
-    z = tf.reshape(input_x, [-1, d])
-    for iter in range(n_iters):
-        scalar = tf.matmul(param_us[iter], param_ws[iter], name='scalar')
-        scalar = tf.reshape(scalar, [])
-
-        # check invertible
-        invertible_check = tf.assert_greater_equal(
-            scalar, tf.constant(-1.0, dtype=tf.float32),
-            message="w'u must be greater or equal to -1")
-        with tf.control_dependencies([invertible_check]):
-            scalar = tf.identity(scalar)
-
-        param_w = param_ws[iter]
-        activation = tf.tanh(
-            tf.matmul(z, param_w, name='score') + param_bs[iter],
-            name='activation')
-        param_u = param_us[iter]
-
-        reduce_act = tf.reduce_sum(activation, axis=-1)
-        det_ja = scalar * (
-            tf.constant(1.0, dtype=tf.float32) - reduce_act * reduce_act) \
-            + tf.constant(1.0, dtype=tf.float32)
-        log_probs -= tf.log(det_ja)
-        z = z + tf.matmul(activation, param_u, name='update')
-    z = tf.reshape(z, tf.shape(input_x))
-    log_probs = tf.reshape(log_probs, tf.shape(input_x)[:-1])
-
-    return z, log_probs
+# def planar_normalizing_flow(samples, log_probs, n_iters):
+#     """
+#     Perform Planar Normalizing Flow along the last axis of inputs.
+#
+#     .. math ::
+#
+#         f(z_t) = z_{t-1} + h(z_{t-1} * w_t + b_t) * u_t
+#
+#     with activation function `tanh` as well as the invertibility trick
+#     from (Danilo 2016).
+#
+#     :param samples: A N-D (N>=2) `float32` Tensor of shape `[..., d]`, and
+#         planar normalizing flow will be performed along the last axis.
+#     :param log_probs: A (N-1)-D `float32` Tensor, should be of the same shape
+#         as the first N-1 axes of `samples`.
+#     :param n_iters: A int, which represents the number of successive flows.
+#
+#     :return: A N-D Tensor, the transformed samples.
+#     :return: A (N-1)-D Tensor, the log probabilities of the transformed
+#         samples.
+#     """
+#     samples = tf.convert_to_tensor(samples, dtype=tf.float32)
+#     log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
+#
+#     if not isinstance(n_iters, int):
+#         raise ValueError('n_iters should be type \'int\'')
+#
+#     # check shapes of samples and log_probs
+#     static_sample_shape = samples.get_shape()
+#     static_logprob_shape = log_probs.get_shape()
+#     static_sample_ndim = convert_to_int(static_sample_shape.ndims)
+#     static_logprob_ndim = convert_to_int(static_logprob_shape.ndims)
+#     if static_sample_ndim and static_sample_ndim <= 1:
+#         raise ValueError('samples should have rank >= 2')
+#     if static_sample_ndim and static_logprob_ndim \
+#             and static_sample_ndim != static_logprob_ndim + 1:
+#         raise ValueError('log_probs should have rank (N-1), while N is the '
+#                          'rank of samples')
+#     try:
+#         tf.broadcast_static_shape(static_sample_shape[:-1],
+#                                   static_logprob_shape)
+#     except ValueError:
+#         raise ValueError(
+#              "samples and log_probs don't have same shape of (N-1) dims,"
+#              "while N is the rank of samples")
+#     dynamic_sample_shape = tf.shape(samples)
+#     dynamic_logprob_shape = tf.shape(log_probs)
+#     dynamic_sample_ndim = tf.rank(samples)
+#     dynamic_logprob_ndim = tf.rank(log_probs)
+#     _assert_sample_ndim = \
+#         tf.assert_greater_equal(dynamic_sample_ndim, 2,
+#                                 message='samples should have rank >= 2')
+#     with tf.control_dependencies([_assert_sample_ndim]):
+#         samples = tf.identity(samples)
+#     _assert_logprob_ndim = \
+#         tf.assert_equal(dynamic_logprob_ndim, dynamic_sample_ndim - 1,
+#                         message='log_probs should have rank (N-1), while N is'
+#                                 ' the rank of samples')
+#     with tf.control_dependencies([_assert_logprob_ndim]):
+#         log_probs = tf.identity(log_probs)
+#     _assert_same_shape = \
+#         tf.assert_equal(dynamic_sample_shape[:-1], dynamic_logprob_shape,
+#                         message="samples and log_probs don't have same shape "
+#                                 "of (N-1) dims,while N is the rank of samples")
+#     with tf.control_dependencies([_assert_same_shape]):
+#         samples = tf.identity(samples)
+#         log_probs = tf.identity(log_probs)
+#
+#     input_x = tf.convert_to_tensor(samples, dtype=tf.float32)
+#     log_probs = tf.convert_to_tensor(log_probs, dtype=tf.float32)
+#     log_probs = tf.reshape(log_probs, [-1])
+#     static_x_shape = input_x.get_shape()
+#     if not static_x_shape[-1:].is_fully_defined():
+#         raise ValueError(
+#             'Inputs {} has undefined last dimension.'.format(input_x.name))
+#     d = int(static_x_shape[-1])
+#
+#     # define parameters
+#     with tf.name_scope('planar_flow_parameters'):
+#         param_bs, param_us, param_ws = [], [], []
+#         for iter in range(n_iters):
+#             param_b = tf.Variable(tf.zeros(shape=[1], dtype=tf.float32),
+#                                   name='param_b_%d' % iter)
+#             aux_u = tf.Variable(
+#                 tf.random_normal(shape=[d, 1], mean=0, stddev=0.005,
+#                                  dtype=tf.float32),
+#                 name='aux_u_%d' % iter)
+#             param_w = tf.Variable(
+#                 tf.random_normal(shape=[d, 1], mean=0, stddev=0.005,
+#                                  dtype=tf.float32),
+#                 name='para_w_%d' % iter)
+#             dot_prod = tf.matmul(param_w, aux_u, transpose_a=True)
+#             param_u = aux_u + param_w / tf.matmul(param_w, param_w,
+#                                                   transpose_a=True) \
+#                 * (tf.log(tf.exp(dot_prod) + 1) - 1 - dot_prod)
+#             param_u = tf.transpose(param_u, name='param_u_%d' % iter)
+#             param_bs.append(param_b)
+#             param_ws.append(param_w)
+#             param_us.append(param_u)
+#
+#     # forward and log_det_jacobian
+#     z = tf.reshape(input_x, [-1, d])
+#     for iter in range(n_iters):
+#         scalar = tf.matmul(param_us[iter], param_ws[iter], name='scalar')
+#         scalar = tf.reshape(scalar, [])
+#
+#         # check invertible
+#         invertible_check = tf.assert_greater_equal(
+#             scalar, tf.constant(-1.0, dtype=tf.float32),
+#             message="w'u must be greater or equal to -1")
+#         with tf.control_dependencies([invertible_check]):
+#             scalar = tf.identity(scalar)
+#
+#         param_w = param_ws[iter]
+#         activation = tf.tanh(
+#             tf.matmul(z, param_w, name='score') + param_bs[iter],
+#             name='activation')
+#         param_u = param_us[iter]
+#
+#         reduce_act = tf.reduce_sum(activation, axis=-1)
+#         det_ja = scalar * (
+#             tf.constant(1.0, dtype=tf.float32) - reduce_act * reduce_act) \
+#             + tf.constant(1.0, dtype=tf.float32)
+#         log_probs -= tf.log(det_ja)
+#         z = z + tf.matmul(activation, param_u, name='update')
+#     z = tf.reshape(z, tf.shape(input_x))
+#     log_probs = tf.reshape(log_probs, tf.shape(input_x)[:-1])
+#
+#     return z, log_probs
 
 
 def inv_autoregressive_flow(samples, hidden, log_probs, autoregressive_nn,
