@@ -8,7 +8,6 @@ import six
 from six.moves import zip, map, range
 import tensorflow as tf
 import numpy as np
-from scipy.misc import logsumexp
 
 from zhusuan.utils import log_mean_exp, merge_dicts
 
