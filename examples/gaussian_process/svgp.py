@@ -9,10 +9,11 @@ For the formulation you can refer to, e.g., Section 2.1 of the following paper:
 Salimbeni and Deisenroth 2017, Doubly Stochastic Variational Inference for Deep
 Gaussian Processes.
 
-On the Boston dataset you should get ~2.6 RMSE and ~2.3 negative log likelihood
-after a while with default args;
-On the protein dataset you should get ~4.5 RMSE and ~2.8 NLL after 100 epochs
-with `n_batch=1000 N_particles=10 dtype=float32`.
+Results (RMSE, NLL):
+ N_Z   Boston    Protein
+----- --------- ---------
+ 100  2.73,2.50
+ 500            4.08,2.86
 '''
 
 from __future__ import absolute_import
@@ -29,6 +30,7 @@ from examples import conf
 from examples.utils import dataset
 import os
 import argparse
+from utils import gp_conditional, RBFKernel
 
 
 parser = argparse.ArgumentParser()
@@ -36,7 +38,7 @@ parser.add_argument('-n_z', default=100, type=int)
 parser.add_argument('-n_covariates', default=1, type=int)
 parser.add_argument('-n_particles', default=20, type=int)
 parser.add_argument('-n_particles_test', default=100, type=int)
-parser.add_argument('-n_batch', default=100, type=int)
+parser.add_argument('-n_batch', default=5000, type=int)
 parser.add_argument('-n_epoch', default=5000, type=int)
 parser.add_argument('-dtype', default='float32', type=str,
                     choices=['float32', 'float64'])
@@ -44,83 +46,112 @@ parser.add_argument('-dataset', default='boston_housing', type=str,
                     choices=['boston_housing', 'protein_data'])
 
 
-def rbf(x, y, inv_scale):
-    x = tf.expand_dims(x, 1)
-    y = tf.expand_dims(y, 0)
-    inv_scale = tf.reshape(inv_scale, [1, 1, -1])
-    return tf.exp(- tf.reduce_sum(tf.square(x - y) * inv_scale, axis=-1) / 2)
+class SVGP:
 
+    def infer_step(self, sess, x_batch, y_batch):
+        fd = {
+            self._x_ph: x_batch,
+            self._y_ph: y_batch,
+            self._n_particles_ph: self._hps.n_particles
+        }
+        return sess.run([self._infer_op, self._elbo], fd)[1]
 
-@zs.reuse('model')
-def build_model(observed, x_ph, hps, n_particles, full_cov=False):
-    '''
-    Build the SVGP model.
-    Note that for inference, we only need the diagonal part of Cov[Y], as ELBO
-    equals sum over individual observations.
-    For visualization etc we may want a full covariance. Thus the argument
-    `full_cov`.
-    '''
-    with zs.BayesianNet(observed) as model:
-        z_pos = tf.get_variable(
+    def predict_step(self, sess, x_batch, y_batch):
+        fd = {
+            self._x_ph: x_batch,
+            self._y_ph: y_batch,
+            self._n_particles_ph: self._hps.n_particles_test
+        }
+        return sess.run([self.log_likelihood, self.pred_mse], fd)
+
+    def __init__(self, hps, n_train, std_y_train):
+        self._hps = hps
+        self._kernel = RBFKernel(hps.n_covariates)
+        self._x_ph = x_ph = tf.placeholder(
+            hps.dtype, [None, hps.n_covariates], 'x')
+        self._y_ph = y_ph = tf.placeholder(
+            hps.dtype, [None], 'y')
+        self._z_pos = tf.get_variable(
             'z/pos', [hps.n_z, hps.n_covariates], hps.dtype,
             initializer=tf.random_uniform_initializer(-1, 1))
-        k_inv_scale = tf.get_variable(
-            'k_inv_scale', [hps.n_covariates], hps.dtype,
-            tf.zeros_initializer())
-        k_inv_scale = tf.exp(k_inv_scale)
+        self._n_particles_ph = n_particles_ph = tf.placeholder(
+            tf.int32, [], 'n_particles')
 
-        Kzz = rbf(z_pos, z_pos, k_inv_scale)
-        Kxz = rbf(x_ph, z_pos, k_inv_scale)
-        Kzz_chol = tf.cholesky(Kzz)
-        fZ = zs.MultivariateNormalCholesky(
-            'fZ', tf.zeros([hps.n_z], dtype=hps.dtype), Kzz_chol,
-            n_samples=n_particles)
+        # TRAIN
+        n_batch = tf.cast(tf.shape(x_ph)[0], hps.dtype)
 
-        # Model Y|Z.
-        # Mean[Y|Z] = Kxz @ inv(Kzz) @ fZ
-        # Cov[Y|Z] = Kxx - Kxz @ inv(Kzz) @ Kzx + noise_level * I
-        noise_level = tf.get_variable(
-            'noise_level', shape=[], dtype=hps.dtype,
-            initializer=tf.constant_initializer(0.5))
-        noise_level = tf.nn.softplus(noise_level)
+        def log_joint(observed):
+            model, _ = SVGP.build_model(self, observed, n_particles_ph)
+            prior, ll = model.local_log_prob(['fZ', 'y'])
+            return prior + ll / n_batch * n_train
 
-        # With ill-conditioned Kzz, the inverse is often asymmetric, which
-        # breaks further cholesky decomposition. We compute a symmetric one.
-        Kzz_chol_inv = tf.matrix_triangular_solve(
-            Kzz_chol, tf.eye(hps.n_z, dtype=hps.dtype))
-        Kzz_inv = tf.matmul(tf.transpose(Kzz_chol_inv), Kzz_chol_inv)
+        variational = self.build_variational(n_particles_ph)
+        [var_fZ, var_fX] = variational.query(
+            ['fZ', 'fX'], outputs=True, local_log_prob=True)
+        var_fX = (var_fX[0], tf.zeros_like(var_fX[1]))
+        print(var_fX[1].shape, var_fZ[1].shape)
+        lower_bound = zs.variational.elbo(
+            log_joint,
+            observed={'y': y_ph},
+            latent={'fZ': var_fZ, 'fX': var_fX},
+            axis=0)
+        self._elbo = lower_bound.sgvb()
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+        self._infer_op = optimizer.minimize(self._elbo)
 
-        Kxziz = tf.matmul(Kxz, Kzz_inv)
-        mean_y = tf.matmul(fZ, tf.transpose(Kxziz)) # [n_particles, n_cov]
+        # Predict
+        observed = {'fX': var_fX[0], 'y': y_ph}
+        model, y_inferred = SVGP.build_model(self, observed, n_particles_ph)
+        log_likelihood = model.local_log_prob('y')
+        std_y_train = tf.cast(std_y_train, hps.dtype)
+        self.log_likelihood = log_mean_exp(log_likelihood, 0) / n_batch - \
+            tf.log(std_y_train)
+        y_pred_mean = tf.reduce_mean(y_inferred.distribution.mean, axis=0)
+        self.pred_mse = tf.reduce_mean((y_pred_mean - y_ph) ** 2)
+        self.pred_mse *= std_y_train ** 2
 
-        cov_fx_given_fz = rbf(x_ph, x_ph, k_inv_scale) - \
-            tf.matmul(Kxziz, tf.transpose(Kxz))
-        cov_y = cov_fx_given_fz + noise_level * tf.eye(
-            tf.shape(x_ph)[0], dtype=hps.dtype)
-        if full_cov:
-            cov_y_chol = tf.tile(tf.expand_dims(tf.cholesky(cov_y), 0),
-                                 [n_particles, 1, 1])
-            y = zs.MultivariateNormalCholesky('y', mean_y, cov_y_chol)
-        else:
-            std_y = tf.sqrt(tf.matrix_diag_part(cov_y))
-            std_y = tf.tile(tf.expand_dims(std_y, 0), [n_particles, 1])
-            y = zs.Normal('y', mean=mean_y, std=std_y, group_ndims=1)
+    @zs.reuse('model')
+    def build_model(self, observed, n_particles, full_cov=False):
+        '''
+        Build the SVGP model.
+        Note that for inference, we only need the diagonal part of Cov[Y], as
+        ELBO equals sum over individual observations.
+        For visualization etc we may want a full covariance. Thus the argument
+        `full_cov`.
+        '''
+        hps = self._hps
+        with zs.BayesianNet(observed) as model:
+            Kzz_chol = tf.cholesky(self._kernel(self._z_pos, self._z_pos))
+            fZ = zs.MultivariateNormalCholesky(
+                'fZ', tf.zeros([hps.n_z], dtype=hps.dtype), Kzz_chol,
+                n_samples=n_particles)
+            # f(X)|f(Z) follows GP(0, K) gp_conditional
+            fx_given_fz = gp_conditional(
+                self._z_pos, fZ, self._x_ph, full_cov, self._kernel, Kzz_chol)
+            # Y|f(X) ~ N(f(X), noise_level * I)
+            noise_level = tf.get_variable(
+                'noise_level', shape=[], dtype=hps.dtype,
+                initializer=tf.constant_initializer(0.05))
+            noise_level = tf.nn.softplus(noise_level)
+            y = zs.Normal(
+                'y', mean=fx_given_fz, std=noise_level, group_ndims=1)
+        return model, y
 
-    return model, y
-
-
-def build_variational(hps, n_particles):
-    with zs.BayesianNet() as variational:
-        z_mean = tf.get_variable(
-            'z/mean', [hps.n_z], hps.dtype, tf.zeros_initializer())
-        z_cov_raw = tf.get_variable(
-            'z/cov_raw', initializer=tf.eye(hps.n_z, dtype=hps.dtype))
-        z_cov_tril = tf.matrix_set_diag(
-            tf.matrix_band_part(z_cov_raw, -1, 0),
-            tf.nn.softplus(tf.matrix_diag_part(z_cov_raw)))
-        z = zs.MultivariateNormalCholesky(
-            'fZ', z_mean, z_cov_tril, n_samples=n_particles)
-    return variational
+    def build_variational(self, n_particles):
+        hps = self._hps
+        with zs.BayesianNet() as variational:
+            z_mean = tf.get_variable(
+                'z/mean', [hps.n_z], hps.dtype, tf.zeros_initializer())
+            z_cov_raw = tf.get_variable(
+                'z/cov_raw', initializer=tf.eye(hps.n_z, dtype=hps.dtype))
+            z_cov_tril = tf.matrix_set_diag(
+                tf.matrix_band_part(z_cov_raw, -1, 0),
+                tf.nn.softplus(tf.matrix_diag_part(z_cov_raw)))
+            fZ = zs.MultivariateNormalCholesky(
+                'fZ', z_mean, z_cov_tril, n_samples=n_particles)
+            fx_given_fz = gp_conditional(
+                self._z_pos, fZ, self._x_ph, False, self._kernel)
+        return variational
 
 
 def main():
@@ -142,51 +173,10 @@ def main():
     y_train, y_test, mean_y_train, std_y_train = dataset.standardize(
         y_train, y_test)
 
-    # Build graph
-    x_ph = tf.placeholder(hps.dtype, [None, hps.n_covariates], 'x')
-    y_ph = tf.placeholder(hps.dtype, [None], 'y')
-    n_particles_ph = tf.placeholder(tf.int32, [], 'n_particles')
-    n_batch = tf.cast(tf.shape(x_ph)[0], hps.dtype)
+    model = SVGP(hps, n_train, std_y_train)
 
-    # Train
-    def log_joint(observed):
-        model, _ = build_model(observed, x_ph, hps, n_particles_ph)
-        prior, ll = model.local_log_prob(['fZ', 'y'])
-        return prior + ll / n_batch * n_train
-
-    variational = build_variational(hps, n_particles_ph)
-    var_fZ = variational.query('fZ', outputs=True, local_log_prob=True)
-    lower_bound = zs.variational.elbo(
-        log_joint, observed={'y': y_ph}, latent={'fZ': var_fZ}, axis=0)
-    cost = lower_bound.sgvb()
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-    infer_op = optimizer.minimize(cost)
-
-    def infer_step(x_batch, y_batch):
-        fd = {x_ph: x_batch, y_ph: y_batch, n_particles_ph: hps.n_particles}
-        return sess.run([infer_op, cost], fd)[1]
-
-    # Predict
-    observed = {'fZ': var_fZ[0], 'y': y_ph}
-    model, y_inferred = build_model(observed, x_ph, hps, n_particles_ph)
-    log_likelihood = model.local_log_prob('y')
-    std_y_train = tf.cast(std_y_train, hps.dtype)
-    log_likelihood = log_mean_exp(log_likelihood, 0) / n_batch - tf.log(std_y_train)
-    y_pred_mean = tf.reduce_mean(y_inferred.distribution.mean, axis=0)
-    pred_mse = tf.reduce_mean((y_pred_mean - y_ph) ** 2)
-    pred_mse *= std_y_train ** 2
-
-    def predict_step(x_batch, y_batch):
-        fd = {
-            x_ph: x_batch,
-            y_ph: y_batch,
-            n_particles_ph: hps.n_particles_test
-        }
-        return sess.run([log_likelihood, pred_mse], fd)
-
-    # Run the inference
     iters = int(np.ceil(x_train.shape[0] / float(hps.n_batch)))
-    test_freq = 10
+    test_freq = 100
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, hps.n_epoch + 1):
@@ -196,16 +186,21 @@ def main():
             x_train = x_train[indices]
             y_train = y_train[indices]
             for t in range(iters):
-                lb = infer_step(x_train[t*hps.n_batch: (t+1)*hps.n_batch],
-                                y_train[t*hps.n_batch: (t+1)*hps.n_batch])
+                lb = model.infer_step(
+                    sess,
+                    x_train[t*hps.n_batch: (t+1)*hps.n_batch],
+                    y_train[t*hps.n_batch: (t+1)*hps.n_batch])
                 lbs.append(lb)
-            print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
+            if 10 * epoch % test_freq == 0:
+                print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
             if epoch % test_freq == 0:
                 test_lls = []
                 test_mses = []
                 for t in range(0, x_test.shape[0], hps.n_batch):
-                    ll, mse = predict_step(
-                        x_test[t: t+hps.n_batch], y_test[t: t+hps.n_batch])
+                    ll, mse = model.predict_step(
+                        sess,
+                        x_test[t: t+hps.n_batch],
+                        y_test[t: t+hps.n_batch])
                     test_lls.append(ll)
                     test_mses.append(mse)
                 print('>> TEST')
