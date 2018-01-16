@@ -48,22 +48,6 @@ parser.add_argument('-dataset', default='boston_housing', type=str,
 
 class SVGP:
 
-    def infer_step(self, sess, x_batch, y_batch):
-        fd = {
-            self._x_ph: x_batch,
-            self._y_ph: y_batch,
-            self._n_particles_ph: self._hps.n_particles
-        }
-        return sess.run([self._infer_op, self._elbo], fd)[1]
-
-    def predict_step(self, sess, x_batch, y_batch):
-        fd = {
-            self._x_ph: x_batch,
-            self._y_ph: y_batch,
-            self._n_particles_ph: self._hps.n_particles_test
-        }
-        return sess.run([self.log_likelihood, self.pred_mse], fd)
-
     def __init__(self, hps, n_train, std_y_train):
         self._hps = hps
         self._kernel = RBFKernel(hps.n_covariates)
@@ -76,20 +60,20 @@ class SVGP:
             initializer=tf.random_uniform_initializer(-1, 1))
         self._n_particles_ph = n_particles_ph = tf.placeholder(
             tf.int32, [], 'n_particles')
-
-        # TRAIN
         n_batch = tf.cast(tf.shape(x_ph)[0], hps.dtype)
 
+        # TRAIN
+        # ELBO = E_q log (p(y|fx)p(fx|fz)p(fz) / p(fx|fz)q(fz))
+        # So we remove p(fx|fz) in both log_joint and latent
         def log_joint(observed):
             model, _ = SVGP.build_model(self, observed, n_particles_ph)
-            prior, ll = model.local_log_prob(['fZ', 'y'])
-            return prior + ll / n_batch * n_train
+            prior, log_p_y_given_fx = model.local_log_prob(['fZ', 'y'])
+            return prior + log_p_y_given_fx / n_batch * n_train
 
         variational = self.build_variational(n_particles_ph)
         [var_fZ, var_fX] = variational.query(
             ['fZ', 'fX'], outputs=True, local_log_prob=True)
         var_fX = (var_fX[0], tf.zeros_like(var_fX[1]))
-        print(var_fX[1].shape, var_fZ[1].shape)
         lower_bound = zs.variational.elbo(
             log_joint,
             observed={'y': y_ph},
@@ -99,7 +83,7 @@ class SVGP:
         optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
         self._infer_op = optimizer.minimize(self._elbo)
 
-        # Predict
+        # PREDICT
         observed = {'fX': var_fX[0], 'y': y_ph}
         model, y_inferred = SVGP.build_model(self, observed, n_particles_ph)
         log_likelihood = model.local_log_prob('y')
@@ -127,7 +111,8 @@ class SVGP:
                 n_samples=n_particles)
             # f(X)|f(Z) follows GP(0, K) gp_conditional
             fx_given_fz = gp_conditional(
-                self._z_pos, fZ, self._x_ph, full_cov, self._kernel, Kzz_chol)
+                self._z_pos, fZ, self._x_ph, full_cov, self._kernel, 'fX',
+                Kzz_chol)
             # Y|f(X) ~ N(f(X), noise_level * I)
             noise_level = tf.get_variable(
                 'noise_level', shape=[], dtype=hps.dtype,
@@ -150,8 +135,24 @@ class SVGP:
             fZ = zs.MultivariateNormalCholesky(
                 'fZ', z_mean, z_cov_tril, n_samples=n_particles)
             fx_given_fz = gp_conditional(
-                self._z_pos, fZ, self._x_ph, False, self._kernel)
+                self._z_pos, fZ, self._x_ph, False, self._kernel, 'fX')
         return variational
+
+    def infer_step(self, sess, x_batch, y_batch):
+        fd = {
+            self._x_ph: x_batch,
+            self._y_ph: y_batch,
+            self._n_particles_ph: self._hps.n_particles
+        }
+        return sess.run([self._infer_op, self._elbo], fd)[1]
+
+    def predict_step(self, sess, x_batch, y_batch):
+        fd = {
+            self._x_ph: x_batch,
+            self._y_ph: y_batch,
+            self._n_particles_ph: self._hps.n_particles_test
+        }
+        return sess.run([self.log_likelihood, self.pred_mse], fd)
 
 
 def main():

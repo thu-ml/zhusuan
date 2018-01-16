@@ -42,7 +42,7 @@ class RBFKernel:
             return tf.ones([tf.shape(x)[0], tf.shape(x)[1]], dtype=x.dtype)
 
 
-def gp_conditional(Z, fZ, X, full_cov, kernel, Kzz_chol=None):
+def gp_conditional(Z, fZ, X, full_cov, kernel, name, Kzz_chol=None):
     '''
     GP gp_conditional f(X) | f(Z)==fZ
     :param Z: shape [n_z, n_covariates]
@@ -69,11 +69,11 @@ def gp_conditional(Z, fZ, X, full_cov, kernel, Kzz_chol=None):
         cov = tf.tile(tf.expand_dims(tf.cholesky(cov), 0),
                       [n_particles, 1, 1])
         fx_given_fz = zs.MultivariateNormalCholesky(
-            'fX', mean_fx_given_fz, cov_fx_given_fz)
+            name, mean_fx_given_fz, cov_fx_given_fz)
     else:
         # diag(AA^T) = sum(A**2, axis=-1)
         std = kernel.Kdiag(X) - \
             tf.reduce_sum(tf.matmul(Kxz, Kzz_chol_inv) ** 2, axis=-1)
         fx_given_fz = zs.Normal(
-            'fX', mean=mean_fx_given_fz, std=std, group_ndims=1)
+            name, mean=mean_fx_given_fz, std=std, group_ndims=1)
     return fx_given_fz
