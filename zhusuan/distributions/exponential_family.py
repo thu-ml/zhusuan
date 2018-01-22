@@ -31,14 +31,22 @@ class ExponentialFamily(Distribution):
     def __init__(self,
                  natural_param,
                  sufficient_stat_func,
+                 condition_func_h,
+                 normalization_param,
                  dtype,
                  param_dtype,
                  is_continuous,
                  is_reparameterized,
                  use_path_derivative=False,
                  group_ndims=0,
+                 check_numerics=False,
                  **kwargs
                  ):
+        self._natural_param = natural_param
+        self._normalization_param = normalization_param
+        self._sufficient_stat_func = sufficient_stat_func
+        self._condition_func_h = condition_func_h
+        self._check_numerics = check_numerics
         super(ExponentialFamily, self).__init__(
             dtype=dtype,
             param_dtype=param_dtype,
@@ -47,3 +55,48 @@ class ExponentialFamily(Distribution):
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
+
+    def truncate(self):
+        pass
+
+    @property
+    def natural_param(self):
+        """The natural parameter of the distribution."""
+        return self._natural_param
+
+    @property
+    def normalization_param(self):
+        """The normalization parameter of the distribution."""
+        return self._normalization_param
+
+    @property
+    def parameters(self):
+        """The parameters of the distribution."""
+        return self._natural_param, self._normalization_param
+
+    def _value_shape(self):
+        #return tf.constant([], dtype=tf.int32)
+        pass
+
+    def _get_value_shape(self):
+        #return tf.TensorShape([])
+        pass
+
+    def _batch_shape(self):
+        #return tf.broadcast_dynamic_shape(tf.shape(self.mean),
+        #                                  tf.shape(self.std))
+        pass
+
+    def _get_batch_shape(self):
+        #return tf.broadcast_static_shape(self.mean.get_shape(),
+        #                                 self.std.get_shape())
+        pass
+
+    def _sample(self, n_samples):
+        pass
+
+    def _log_prob(self, given):
+        pass
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
