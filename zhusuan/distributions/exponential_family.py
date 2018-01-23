@@ -21,7 +21,7 @@ from zhusuan.distributions.utils import \
 
 
 __all__ = [
-    'ExponentialFamily',
+    'Distribution',
 ]
 
 class ExponentialFamily(Distribution):
@@ -29,6 +29,7 @@ class ExponentialFamily(Distribution):
     Providing the support of the exponential family.
     """
     def __init__(self,
+                 n_dim,
                  natural_param,
                  sufficient_stat_func,
                  condition_func_h,
@@ -47,6 +48,7 @@ class ExponentialFamily(Distribution):
         self._sufficient_stat_func = sufficient_stat_func
         self._condition_func_h = condition_func_h
         self._check_numerics = check_numerics
+        self._n_dim = n_dim
         super(ExponentialFamily, self).__init__(
             dtype=dtype,
             param_dtype=param_dtype,
@@ -73,6 +75,10 @@ class ExponentialFamily(Distribution):
     def parameters(self):
         """The parameters of the distribution."""
         return self._natural_param, self._normalization_param
+
+    @property
+    def n_dim(self):
+        return self._n_dim
 
     def _value_shape(self):
         #return tf.constant([], dtype=tf.int32)
