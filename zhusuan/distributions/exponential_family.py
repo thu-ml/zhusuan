@@ -21,7 +21,7 @@ from zhusuan.distributions.utils import \
 
 
 __all__ = [
-    'Distribution',
+    'ExponentialFamily',
 ]
 
 class ExponentialFamily(Distribution):
@@ -49,7 +49,7 @@ class ExponentialFamily(Distribution):
         self._condition_func_h = condition_func_h
         self._check_numerics = check_numerics
         self._n_dim = n_dim
-        super(ExponentialFamily, self).__init__(
+        super(Distribution, self).__init__(
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=is_continuous,
@@ -81,12 +81,12 @@ class ExponentialFamily(Distribution):
         return self._n_dim
 
     def _value_shape(self):
-        #return tf.constant([], dtype=tf.int32)
-        pass
+        return tf.constant([self._n_dim], dtype=tf.int32)
 
     def _get_value_shape(self):
-        #return tf.TensorShape([])
-        pass
+        if isinstance(self._n_dim, int):
+            return tf.TensorShape([self._n_dim])
+        return tf.TensorShape([None])
 
     def _batch_shape(self):
         #return tf.broadcast_dynamic_shape(tf.shape(self.mean),
