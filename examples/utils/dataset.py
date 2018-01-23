@@ -433,4 +433,48 @@ def load_movielens1m(path):
     valid = corpus_data[Ndv:Ndv2, :]
     test = corpus_data[Ndv2:, :]
 
+    def find_non_trained(M, N, train_data):
+        # Find non-trained files or peoples
+        trained_movie = [False] * M
+        trained_user = [False] * N
+        for i in range(train_data.shape[0]):
+            trained_user[train_data[i, 0]] = True
+            trained_movie[train_data[i, 1]] = True
+        us = 0
+        vs = 0
+        for i in range(N):
+            us += trained_user[i]
+        for j in range(M):
+            vs += trained_movie[j]
+        print('Untrained users = %d, untrained movies = %d'
+              % (N - us, M - vs))
+
+    find_non_trained(num_movies, num_users, train)
     return num_movies, num_users, train, valid, test
+
+
+def load_movielens1m_mapped(path):
+    num_movies, num_users, train, valid, test = load_movielens1m(path)
+
+    user_movie = []
+    user_movie_score = []
+    for i in range(num_users):
+        user_movie.append([])
+        user_movie_score.append([])
+    movie_user = []
+    movie_user_score = []
+    for i in range(num_users):
+        movie_user.append([])
+        movie_user_score.append([])
+
+    for i in range(np.shape(train)[0]):
+        user_id = train[i, 0]
+        movie_id = train[i, 1]
+        rating = train[i, 2]
+        user_movie[user_id].append(movie_id)
+        user_movie_score[user_id].append(rating)
+        movie_user[movie_id].append(user_id)
+        movie_user_score[movie_id].append(rating)
+
+    return num_movies, num_users, train, valid, test, \
+        user_movie, user_movie_score, movie_user, movie_user_score
