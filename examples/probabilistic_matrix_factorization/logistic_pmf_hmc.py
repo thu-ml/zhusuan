@@ -192,8 +192,8 @@ def main():
                                                           user_movie_score)
                 _ = sess.run(trans_cand_U,
                              feed_dict={
-                                 candidate_idx_u: range(i * chunk_size,
-                                                        (i + 1) * chunk_size)})
+                                 candidate_idx_u: list(range(
+                                     i * chunk_size, (i + 1) * chunk_size))})
                 _ = sess.run(sample_u_op, feed_dict={select_v: sv,
                                                      true_rating: tr,
                                                      subselect_u: ssu,
@@ -208,8 +208,8 @@ def main():
                                                           movie_user_score)
                 _ = sess.run(trans_cand_V,
                              feed_dict={
-                                 candidate_idx_v: range(i * chunk_size,
-                                                        (i + 1) * chunk_size)})
+                                 candidate_idx_v: list(range(
+                                     i * chunk_size, (i + 1) * chunk_size))})
                 _ = sess.run(sample_v_op, feed_dict={select_u: su,
                                                      true_rating: tr,
                                                      subselect_u: ssu,

@@ -406,7 +406,7 @@ def load_movielens1m(path):
             'http://files.grouplens.org/datasets/movielens/ml-1m.zip', path)
 
     zp = zipfile.ZipFile(path, 'r')
-    content = zp.read('ml-1m/ratings.dat')
+    content = zp.read('ml-1m/ratings.dat').decode('utf-8')
     data_list = content.split('\n')
 
     num_users = 0
