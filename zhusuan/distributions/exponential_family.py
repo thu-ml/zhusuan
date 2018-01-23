@@ -96,7 +96,13 @@ class ExponentialFamily(Distribution):
         pass
 
     def _log_prob(self, given):
-        pass
+        natural_param, normalization_param = self.path_param(self.natural_param), \
+                       self.path_param(self.normalization_param)
+        h = np.log(self._condition_func_h(given))
+        t = self._sufficient_stat_func(given)
+        if self._check_numerics:
+            pass
+        return h + normalization_param + np.dot(natural_param, t)
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
