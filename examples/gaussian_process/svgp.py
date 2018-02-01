@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 '''
-Sparse variational Gaussian process with normal approximation for posterior.
+Stochastic sparse variational Gaussian process (SVGP) with normal approximation
+for posterior.
 
 For the formulation you can refer to, e.g., Section 2.1 of the following paper:
 
@@ -19,17 +20,16 @@ Results (RMSE, NLL):
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-
-from six.moves import range, zip
-
-import numpy as np
-import tensorflow as tf
-import zhusuan as zs
-from zhusuan.utils import log_mean_exp
-from examples import conf
-from examples.utils import dataset
 import os
 import argparse
+
+import numpy as np
+from six.moves import range, zip
+import tensorflow as tf
+import zhusuan as zs
+
+from examples import conf
+from examples.utils import dataset
 from utils import gp_conditional, RBFKernel
 
 
@@ -67,8 +67,8 @@ class SVGP:
         # So we remove p(fx|fz) in both log_joint and latent
         def log_joint(observed):
             model, _ = SVGP.build_model(self, observed, n_particles_ph)
-            prior, log_p_y_given_fx = model.local_log_prob(['fZ', 'y'])
-            return prior + log_p_y_given_fx / n_batch * n_train
+            prior, log_py_given_fx = model.local_log_prob(['fZ', 'y'])
+            return prior + log_py_given_fx / n_batch * n_train
 
         variational = self.build_variational(n_particles_ph)
         [var_fZ, var_fX] = variational.query(
@@ -79,16 +79,16 @@ class SVGP:
             observed={'y': y_ph},
             latent={'fZ': var_fZ, 'fX': var_fX},
             axis=0)
-        self._elbo = lower_bound.sgvb()
+        self._cost = lower_bound.sgvb()
         optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-        self._infer_op = optimizer.minimize(self._elbo)
+        self._infer_op = optimizer.minimize(self._cost)
 
         # PREDICT
         observed = {'fX': var_fX[0], 'y': y_ph}
         model, y_inferred = SVGP.build_model(self, observed, n_particles_ph)
         log_likelihood = model.local_log_prob('y')
         std_y_train = tf.cast(std_y_train, hps.dtype)
-        self.log_likelihood = log_mean_exp(log_likelihood, 0) / n_batch - \
+        self.log_likelihood = zs.log_mean_exp(log_likelihood, 0) / n_batch - \
             tf.log(std_y_train)
         y_pred_mean = tf.reduce_mean(y_inferred.distribution.mean, axis=0)
         self.pred_mse = tf.reduce_mean((y_pred_mean - y_ph) ** 2)
@@ -144,7 +144,7 @@ class SVGP:
             self._y_ph: y_batch,
             self._n_particles_ph: self._hps.n_particles
         }
-        return sess.run([self._infer_op, self._elbo], fd)[1]
+        return sess.run([self._infer_op, self._cost], fd)[1]
 
     def predict_step(self, sess, x_batch, y_batch):
         fd = {
