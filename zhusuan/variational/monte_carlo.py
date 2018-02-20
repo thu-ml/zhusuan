@@ -40,7 +40,7 @@ class ImportanceWeightedObjective(VariationalObjective):
     The variational posterior used in this objective is in fact a proposal
     for importance sampling, thus the typical usage of this objective is
     jointly doing inference (adapt the proposal to raise the lower bound) and
-    learning the model (optimize the lower bound wrt. model parameters).
+    learning the model (optimize the lower bound wrt. framework parameters).
 
     However, this cannot be directly done by calling Tensorflow optimizers on
     the :class:`ImportanceWeightedObjective` instance because of the outer
@@ -137,8 +137,8 @@ class ImportanceWeightedObjective(VariationalObjective):
 
         It only works for latent `StochasticTensor` s that can be
         reparameterized (Kingma, 2013). For example,
-        :class:`~zhusuan.model.stochastic.Normal`
-        and :class:`~zhusuan.model.stochastic.Concrete`.
+        :class:`~zhusuan.framework.stochastic.Normal`
+        and :class:`~zhusuan.framework.stochastic.Concrete`.
 
         .. note::
 

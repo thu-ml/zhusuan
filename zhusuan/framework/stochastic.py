@@ -6,7 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 from zhusuan import distributions
-from zhusuan.model.base import StochasticTensor
+from zhusuan.framework.base import StochasticTensor
 
 
 __all__ = [
@@ -43,7 +43,7 @@ __all__ = [
 class Normal(StochasticTensor):
     """
     The class of univariate Normal `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     .. warning::
 
@@ -97,7 +97,7 @@ class Normal(StochasticTensor):
 class FoldNormal(StochasticTensor):
     """
     The class of univariate FoldNormal `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     .. warning::
 
@@ -151,7 +151,7 @@ class FoldNormal(StochasticTensor):
 class Bernoulli(StochasticTensor):
     """
     The class of univariate Bernoulli `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -189,7 +189,7 @@ class Bernoulli(StochasticTensor):
 class Categorical(StochasticTensor):
     """
     The class of univariate Categorical `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -235,7 +235,7 @@ Discrete = Categorical
 class Uniform(StochasticTensor):
     """
     The class of univariate Uniform `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -280,7 +280,7 @@ class Uniform(StochasticTensor):
 class Gamma(StochasticTensor):
     """
     The class of univariate Gamma `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -320,7 +320,7 @@ class Gamma(StochasticTensor):
 class Beta(StochasticTensor):
     """
     The class of univariate Beta `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -362,7 +362,7 @@ class Beta(StochasticTensor):
 class Poisson(StochasticTensor):
     """
     The class of univariate Poisson `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -401,7 +401,7 @@ class Poisson(StochasticTensor):
 class Binomial(StochasticTensor):
     """
     The class of univariate Binomial `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -451,7 +451,7 @@ class MultivariateNormalCholesky(StochasticTensor):
 
         .. math :: L \\text{s.t.} LL^T = \Sigma.
 
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -498,7 +498,7 @@ class MultivariateNormalCholesky(StochasticTensor):
 class Multinomial(StochasticTensor):
     """
     The class of Multinomial `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -564,7 +564,7 @@ class UnnormalizedMultinomial(StochasticTensor):
 
         \\binom{n}{k_1, k_2, \\dots} =  \\frac{n!}{\\prod_{i} k_i!}
 
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -613,7 +613,7 @@ BagofCategoricals = UnnormalizedMultinomial
 class OnehotCategorical(StochasticTensor):
     """
     The class of one-hot Categorical `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -659,7 +659,7 @@ OnehotDiscrete = OnehotCategorical
 class Dirichlet(StochasticTensor):
     """
     The class of Dirichlet `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -703,7 +703,7 @@ class Dirichlet(StochasticTensor):
 class InverseGamma(StochasticTensor):
     """
     The class of univariate InverseGamma `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -743,7 +743,7 @@ class InverseGamma(StochasticTensor):
 class Laplace(StochasticTensor):
     """
     The class of univariate Laplace `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -789,7 +789,7 @@ class BinConcrete(StochasticTensor):
     """
     The class of univariate BinConcrete `StochasticTensor` from
     (Maddison, 2016). It is the binary case of :class:`~Concrete`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     .. seealso::
 
@@ -844,7 +844,7 @@ class ExpConcrete(StochasticTensor):
     """
     The class of ExpConcrete `StochasticTensor` from (Maddison, 2016),
     transformed from :class:`~Concrete` by taking logarithm.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     .. seealso::
 
@@ -900,7 +900,7 @@ class Concrete(StochasticTensor):
     The class of Concrete (or Gumbel-Softmax) `StochasticTensor` from
     (Maddison, 2016; Jang, 2016), served as
     the continuous relaxation of the :class:`~OnehotCategorical`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     .. seealso::
 
@@ -955,7 +955,7 @@ class Empirical(StochasticTensor):
     """
     The class of Empirical `StochasticTensor`.
     For any inference it is always required that the variables are observed.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -997,7 +997,7 @@ class Implicit(StochasticTensor):
     """
     The class of Implicit `StochasticTensor`.
     This distribution always sample the implicit tensor provided.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.

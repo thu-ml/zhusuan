@@ -12,7 +12,7 @@ import tensorflow as tf
 from tensorflow.python.client.session import \
     register_session_run_conversion_functions
 
-from zhusuan.model.utils import Context
+from zhusuan.framework.utils import Context
 from zhusuan.utils import TensorArithmeticMixin
 
 

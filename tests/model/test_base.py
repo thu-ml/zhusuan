@@ -10,8 +10,8 @@ import numpy as np
 import tensorflow as tf
 
 import zhusuan as zs
-from zhusuan.model.base import *
-from zhusuan.model.stochastic import *
+from zhusuan.framework.base import *
+from zhusuan.framework.stochastic import *
 
 
 class TestStochasticTensor(tf.test.TestCase):

@@ -129,8 +129,8 @@ class EvidenceLowerBoundObjective(VariationalObjective):
 
         It only works for latent `StochasticTensor` s that can be
         reparameterized (Kingma, 2013). For example,
-        :class:`~zhusuan.model.stochastic.Normal`
-        and :class:`~zhusuan.model.stochastic.Concrete`.
+        :class:`~zhusuan.framework.stochastic.Normal`
+        and :class:`~zhusuan.framework.stochastic.Concrete`.
 
         .. note::
 

@@ -3,7 +3,7 @@
 
 from . import distributions
 from . import variational
-from .model import *
+from .framework import *
 from .hmc import *
 from .evaluation import *
 from .transform import *

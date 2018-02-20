@@ -8,9 +8,9 @@ from __future__ import division
 import numpy as np
 import tensorflow as tf
 
-from zhusuan.model.stochastic import *
-from zhusuan.model.base import BayesianNet
-from zhusuan.model.utils import get_backward_ops
+from zhusuan.framework.stochastic import *
+from zhusuan.framework.base import BayesianNet
+from zhusuan.framework.utils import get_backward_ops
 
 
 class TestNormal(tf.test.TestCase):
