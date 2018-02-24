@@ -463,7 +463,7 @@ def load_movielens1m_mapped(path):
         user_movie_score.append([])
     movie_user = []
     movie_user_score = []
-    for i in range(num_users):
+    for i in range(num_movies):
         movie_user.append([])
         movie_user_score.append([])
 
