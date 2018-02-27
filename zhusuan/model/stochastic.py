@@ -35,6 +35,8 @@ __all__ = [
     'ExpGumbelSoftmax',
     'Concrete',
     'GumbelSoftmax',
+    'Empirical',
+    'Implicit',
     'MatrixVariateNormalCholesky',
 ]
 
@@ -950,27 +952,106 @@ class Concrete(StochasticTensor):
 GumbelSoftmax = Concrete
 
 
-class MatrixVariateNormalCholesky(StochasticTensor):
+class Empirical(StochasticTensor):
+    """
+    The class of Empirical `StochasticTensor`.
+    For any inference it is always required that the variables are observed.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param batch_shape: A list or tuple describing the `batch_shape` of the distribution.
+        The entries of the list can either be int, Dimension or None.
+    :param dtype: The value type of samples from the distribution.
+    :param value_shape: A list or tuple describing the `value_shape` of the distribution.
+        The entries of the list can either be int, Dimension or None.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_continuous: Whether the distribution is continuous or not.
+        If None will consider it continuous only if `dtype` is a float type.
     """
 
-    The class of maxtrix variate normal distribution, where covariances
+    def __init__(self,
+                 name,
+                 dtype,
+                 batch_shape,
+                 value_shape=None,
+                 group_ndims=0,
+                 is_continuous=None,
+                 n_samples=None,
+                 **kwargs):
+        norm = distributions.Empirical(
+            dtype, batch_shape,
+            value_shape=value_shape,
+            group_ndims=group_ndims,
+            is_continous=is_continuous,
+            **kwargs
+        )
+        super(Empirical, self).__init__(name, norm, n_samples)
+
+
+class Implicit(StochasticTensor):
+    """
+    The class of Implicit `StochasticTensor`.
+    This distribution always sample the implicit tensor provided.
+    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param samples: A N-D (N >= 1) `float` Tensor
+    :param value_shape: A list or tuple describing the `value_shape` of the distribution.
+        The entries of the list can either be int, Dimension or None.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_continuous: Whether the distribution is continuous or not.
+        If None will consider it continuous only if `dtype` is a float type.
+    """
+
+    def __init__(self,
+                 name,
+                 samples,
+                 value_shape=None,
+                 group_ndims=0,
+                 n_samples=None,
+                 **kwargs):
+        norm = distributions.Implicit(
+            samples,
+            value_shape=value_shape,
+            group_ndims=group_ndims,
+            **kwargs
+        )
+        super(Implicit, self).__init__(name, norm, n_samples)
+
+
+class MatrixVariateNormalCholesky(StochasticTensor):
+    """
+    The class of matrix variate normal `StochasticTensor`, where covariances
     :math:`U` and :math:`V` are parameterized with the lower triangular
     matrix in Cholesky decomposition,
 
-        .. math :: L \\text{s.t.} LL^T = \Sigma.
+    .. math ::
+        L_u \\text{s.t.} L_u L_u^T = U,\\; L_v \\text{s.t.} L_v L_v^T = V
 
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
-    :param mean: An N-D `float` Tensor of shape [..., n_in, n_out]. Each slice
+    :param mean: An N-D `float` Tensor of shape [..., n_row, n_col]. Each slice
         [i, j, ..., k, :, :] represents the mean of a single matrix variate
         normal distribution.
-    :param u_tril: An N-D `float` Tensor of shape [..., n_in, n_in].
+    :param u_tril: An N-D `float` Tensor of shape [..., n_row, n_row].
         Each slice [i, ..., k, :, :] represents the lower triangular matrix in
-        the Cholesky decomposition of the among-tow covariance of a single
+        the Cholesky decomposition of the among-row covariance of a single
         distribution.
-    :param v_tril: An N-D `float` Tensor of shape [..., n_out, n_out].
+    :param v_tril: An N-D `float` Tensor of shape [..., n_col, n_col].
         Each slice [i, ..., k, :, :] represents the lower triangular matrix in
         the Cholesky decomposition of the among-col covariance of a single
         distribution.
@@ -1002,7 +1083,7 @@ class MatrixVariateNormalCholesky(StochasticTensor):
             mean,
             u_tril,
             v_tril,
-            group_ndims,
+            group_ndims=group_ndims,
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics,
             **kwargs

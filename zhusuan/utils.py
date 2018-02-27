@@ -156,7 +156,7 @@ def log_sum_exp(x, axis=None, keep_dims=False):
 
     Tensorflow numerically stable log sum of exps across the `axis`.
 
-    :param x: A Tensor or numpy array.
+    :param x: A Tensor.
     :param axis: An int or list or tuple. The dimensions to reduce.
         If `None` (the default), reduces all dimensions.
     :param keep_dims: Bool. If true, retains reduced dimensions with length 1.
@@ -165,7 +165,7 @@ def log_sum_exp(x, axis=None, keep_dims=False):
     :return: A Tensor after the computation of log sum exp along given axes of
         x.
     """
-    x = tf.cast(x, dtype=tf.float32)
+    x = tf.convert_to_tensor(x)
     x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
     ret = tf.log(tf.reduce_sum(tf.exp(x - x_max), axis=axis,
                                keep_dims=True)) + x_max
@@ -178,7 +178,7 @@ def log_mean_exp(x, axis=None, keep_dims=False):
     """
     Tensorflow numerically stable log mean of exps across the `axis`.
 
-    :param x: A Tensor or numpy array.
+    :param x: A Tensor.
     :param axis: An int or list or tuple. The dimensions to reduce.
         If `None` (the default), reduces all dimensions.
     :param keep_dims: Bool. If true, retains reduced dimensions with length 1.
@@ -187,7 +187,7 @@ def log_mean_exp(x, axis=None, keep_dims=False):
     :return: A Tensor after the computation of log mean exp along given axes of
         x.
     """
-    x = tf.cast(x, dtype=tf.float32)
+    x = tf.convert_to_tensor(x)
     x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
     ret = tf.log(tf.reduce_mean(tf.exp(x - x_max), axis=axis,
                                 keep_dims=True)) + x_max

@@ -1,5 +1,4 @@
 Sphinx>=1.6.3
 sphinx-rtd-theme>=0.2.4
 tensorflow
-scipy
 sphinxcontrib-bibtex

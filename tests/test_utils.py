@@ -258,6 +258,7 @@ class TestLogSumExp(tf.test.TestCase):
                 test_values = sess.run(log_sum_exp(
                     tf.constant(a), (0, 2), keepdims))
                 self.assertAllClose(test_values, true_values)
+                self.assertEqual(test_values.dtype, true_values.dtype)
 
 
 class TestLogMeanExp(tf.test.TestCase):
@@ -271,6 +272,7 @@ class TestLogMeanExp(tf.test.TestCase):
                 test_values = sess.run(log_mean_exp(
                     tf.constant(a), (0, 2), keepdims))
                 self.assertAllClose(test_values, true_values)
+                self.assertEqual(test_values.dtype, true_values.dtype)
 
             b = np.array([[0., 1e-6, 10.1]])
             test_values = sess.run(log_mean_exp(b, 0, keep_dims=False))

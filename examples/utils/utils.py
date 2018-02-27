@@ -52,3 +52,16 @@ def save_image_collections(x, filename, shape=(10, 10), scale_each=False,
                 ret[i * h:(i + 1) * h, j * w:(j + 1) * w, :] = x[i * c + j]
     ret = ret.squeeze()
     io.imsave(filename, ret)
+
+
+def average_rmse_over_batches(rmses, sizes):
+    """
+    Average rmses over batches (may not be of the same size).
+
+    :param rmses: A list of per-batch rmses.
+    :param sizes: A list of batch sizes.
+    :return: The average rmse.
+    """
+    rmses = np.array(rmses)
+    sizes = np.array(sizes)
+    return np.sqrt(np.sum(rmses ** 2 * sizes) / np.sum(sizes))

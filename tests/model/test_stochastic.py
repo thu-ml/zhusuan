@@ -315,3 +315,44 @@ class TestExpConcrete(tf.test.TestCase):
         for i in [logits, tau, group_ndims]:
             self.assertTrue(i.op in log_p_ops)
         self.assertEqual(a.get_shape()[1:], logits.get_shape())
+
+
+class TestEmpirical(tf.test.TestCase):
+    def test_Empirical(self):
+        def _test(dtype, shape):
+            a_placeholder = tf.placeholder(dtype, shape)
+            with BayesianNet(observed={'a': a_placeholder}) as model:
+                a = Empirical('a', dtype, shape)
+
+            a_value, = model.query('a', outputs=True)
+            self.assertTrue(a_placeholder == a_value)
+
+        _test(tf.float32, [None, 1])
+        _test(tf.int32, [None, 1])
+        _test(tf.float32, [24, 1])
+        _test(tf.int32, [24, 1])
+        _test(tf.float32, [None, 5, 3, 3])
+        _test(tf.int32, [None, 5, 3, 3])
+        _test(tf.float32, [24, 5, 3, 3])
+        _test(tf.int32, [24, 5, 3, 3])
+
+
+class TestImplicit(tf.test.TestCase):
+    def test_Implicit(self):
+        with BayesianNet() as model:
+            mean = tf.zeros([2, 3])
+            logstd = tf.zeros([2, 3])
+            n_samples = tf.placeholder(tf.int32, shape=[])
+            group_ndims = tf.placeholder(tf.int32, shape=[])
+            a = Normal('a', mean, logstd=logstd, n_samples=n_samples,
+                       group_ndims=group_ndims)
+            b = Implicit('b', a, value_shape=[])
+
+        sample_ops = set(get_backward_ops(b.tensor))
+        for i in [mean, logstd, n_samples]:
+                self.assertTrue(i.op in sample_ops)
+
+        self.assertEqual(a.get_shape().as_list(), b.get_shape().as_list())
+        (a_value, ),  (b_value, ) = model.query(['a', 'b'], outputs=True)
+        # The ops are Squeeze(ExpandDims(a, 0))
+        self.assertTrue(a_value in b_value.op.inputs[0].op.inputs)

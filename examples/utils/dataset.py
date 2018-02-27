@@ -7,6 +7,7 @@ from __future__ import print_function
 import os
 import gzip
 import tarfile
+import zipfile
 
 import numpy as np
 import six
@@ -297,6 +298,32 @@ def load_uci_boston_housing(path, dtype=np.float32):
     return x_train, y_train, x_val, y_val, x_test, y_test
 
 
+def load_uci_protein_data(path, dtype=np.float32):
+    if not os.path.isfile(path):
+        data_dir = os.path.dirname(path)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(data_dir)
+        download_dataset('http://archive.ics.uci.edu/ml/'
+                         'machine-learning-databases/00265/CASP.csv',
+                         path)
+
+    data = np.loadtxt(open(path), delimiter=',', skiprows=1)
+
+    permutation = np.random.choice(np.arange(data.shape[0]),
+                                   data.shape[0], replace=False)
+    size_train = int(np.round(data.shape[0] * 0.8))
+    size_test = int(np.round(data.shape[0] * 0.9))
+    index_train = permutation[0: size_train]
+    index_test = permutation[size_train:size_test]
+    index_val = permutation[size_test:]
+
+    x_train, y_train = data[index_train, 1:], data[index_train, 0]
+    x_val, y_val = data[index_val, 1:], data[index_val, 0]
+    x_test, y_test = data[index_test, 1:], data[index_test, 0]
+
+    return x_train, y_train, x_val, y_val, x_test, y_test
+
+
 def load_uci_bow(data_name, data_path):
     """
     Loads the bag-of-words dataset from UCI machine learning repository.
@@ -388,3 +415,92 @@ def load_uci_bow_sparse(data_name, data_path):
         vocab = [v.strip() for v in vf.readlines()]
 
     return data, vocab
+
+
+def load_movielens1m(path):
+    """
+    Loads the movielens 1M dataset.
+
+    :param path: Path to the dataset.
+    :return: The movielens 1M dataset.
+    """
+    if not os.path.isfile(path):
+        data_dir = os.path.dirname(path)
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(data_dir)
+        download_dataset(
+            'http://files.grouplens.org/datasets/movielens/ml-1m.zip', path)
+
+    zp = zipfile.ZipFile(path, 'r')
+    content = zp.read('ml-1m/ratings.dat').decode('utf-8')
+    data_list = content.split('\n')
+
+    num_users = 0
+    num_movies = 0
+    corpus = []
+    for item in data_list:
+        term = item.split('::')
+        if len(term) < 3:
+            continue
+        user_id = int(term[0]) - 1
+        movie_id = int(term[1]) - 1
+        rating = int(term[2])
+        corpus.append((user_id, movie_id, rating))
+        num_users = max(num_users, user_id + 1)
+        num_movies = max(num_movies, movie_id + 1)
+
+    corpus_data = np.array(corpus)
+    np.random.shuffle(corpus_data)
+    np.random.shuffle(corpus_data)
+    N = np.shape(corpus_data)[0]
+    Ndv = N // 20 * 17
+    Ndv2 = N // 10 * 9
+    train = corpus_data[:Ndv, :]
+    valid = corpus_data[Ndv:Ndv2, :]
+    test = corpus_data[Ndv2:, :]
+
+    def find_non_trained(M, N, train_data):
+        # Find non-trained files or peoples
+        trained_movie = [False] * M
+        trained_user = [False] * N
+        for i in range(train_data.shape[0]):
+            trained_user[train_data[i, 0]] = True
+            trained_movie[train_data[i, 1]] = True
+        us = 0
+        vs = 0
+        for i in range(N):
+            us += trained_user[i]
+        for j in range(M):
+            vs += trained_movie[j]
+        print('Untrained users = %d, untrained movies = %d'
+              % (N - us, M - vs))
+
+    find_non_trained(num_movies, num_users, train)
+    return num_movies, num_users, train, valid, test
+
+
+def load_movielens1m_mapped(path):
+    num_movies, num_users, train, valid, test = load_movielens1m(path)
+
+    user_movie = []
+    user_movie_score = []
+    for i in range(num_users):
+        user_movie.append([])
+        user_movie_score.append([])
+    movie_user = []
+    movie_user_score = []
+    for i in range(num_movies):
+        movie_user.append([])
+        movie_user_score.append([])
+
+    for i in range(np.shape(train)[0]):
+        user_id = train[i, 0]
+        movie_id = train[i, 1]
+        rating = train[i, 2]
+        user_movie[user_id].append(movie_id)
+        user_movie_score[user_id].append(rating)
+        movie_user[movie_id].append(user_id)
+        movie_user_score[movie_id].append(rating)
+
+    return num_movies, num_users, train, valid, test, \
+        user_movie, user_movie_score, movie_user, movie_user_score
