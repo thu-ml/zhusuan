@@ -81,8 +81,10 @@ def gp_conditional(z, fz, x, full_cov, kernel, name, Kzz_chol=None):
             name, mean_fx_given_fz, cov_fx_given_fz)
     else:
         # diag(AA^T) = sum(A**2, axis=-1)
-        std = kernel.Kdiag(x) - \
-            tf.reduce_sum(tf.matmul(Kxz, Kzz_chol_inv) ** 2, axis=-1)
+        var = kernel.Kdiag(x) - \
+            tf.reduce_sum(tf.matmul(
+                Kxz, tf.matrix_transpose(Kzz_chol_inv)) ** 2, axis=-1)
+        std = tf.sqrt(var)
         fx_given_fz = zs.Normal(
             name, mean=mean_fx_given_fz, std=std, group_ndims=1)
     return fx_given_fz

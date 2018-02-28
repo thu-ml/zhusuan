@@ -11,10 +11,13 @@ Salimbeni and Deisenroth 2017, Doubly Stochastic Variational Inference for Deep
 Gaussian Processes.
 
 Results (RMSE, NLL):
- N_Z   Boston    Protein
------ --------- ---------
- 100  2.73,2.50
- 500            4.08,2.86
+
+ N_Z     Boston     Protein
+------  ---------  ---------
+ 100    3.00,2.44 
+ 500               4.35,2.91
+
+NEpoch    4000        400
 """
 
 from __future__ import absolute_import
@@ -43,6 +46,7 @@ parser.add_argument('-dtype', default='float32', type=str,
                     choices=['float32', 'float64'])
 parser.add_argument('-dataset', default='boston_housing', type=str,
                     choices=['boston_housing', 'protein_data'])
+parser.add_argument('-lr', default=1e-2, type=float)
 
 
 @zs.reuse('model')
@@ -137,7 +141,7 @@ def main():
         latent={'fz': var_fz, 'fx': var_fx},
         axis=0)
     cost = lower_bound.sgvb()
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+    optimizer = tf.train.AdamOptimizer(learning_rate=hps.lr)
     infer_op = optimizer.minimize(cost)
 
     # Prediction ops
