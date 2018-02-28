@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 from zhusuan.distributions.base import *
+from zhusuan.distributions.exponential_family import *
 from zhusuan.distributions.utils import \
         maybe_explicit_broadcast, \
         assert_same_float_dtype, \
@@ -37,7 +38,7 @@ __all__ = [
 ]
 
 
-class Normal(Distribution):
+class Normal(ExponentialFamily):
     """
     The class of univariate Normal distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -74,48 +75,80 @@ class Normal(Distribution):
                  mean=0.,
                  logstd=None,
                  std=None,
+                 natural_parameter=None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
-        self._mean = tf.convert_to_tensor(mean)
-        warnings.warn("Normal: The order of arguments logstd/std will change "
-                      "to std/logstd in the coming version.", FutureWarning)
-        if (logstd is None) == (std is None):
-            raise ValueError("Either std or logstd should be passed but not "
-                             "both of them.")
-        elif logstd is None:
-            self._std = tf.convert_to_tensor(std)
+        #TODO: determine priority
+        #if (logstd is not None) or (std is not None):
+        if natural_parameter is None:
+            self._mean = tf.convert_to_tensor(mean)
+            warnings.warn("Normal: The order of arguments logstd/std will change "
+                          "to std/logstd in the coming version.", FutureWarning)
+            if (logstd is None) == (std is None):
+                raise ValueError("Either std or logstd should be passed but not "
+                                 "both of them.")
+            elif logstd is None:
+                self._std = tf.convert_to_tensor(std)
+                dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
+                                                 (self._std, 'Normal.std')])
+                logstd = tf.log(self._std)
+                if check_numerics:
+                    logstd = tf.check_numerics(logstd, "log(std)")
+                self._logstd = logstd
+            else:
+                # std is None
+                self._logstd = tf.convert_to_tensor(logstd)
+                dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
+                                                 (self._logstd, 'Normal.logstd')])
+                std = tf.exp(self._logstd)
+                if check_numerics:
+                    std = tf.check_numerics(std, "exp(logstd)")
+                self._std = std
+
+            try:
+                tf.broadcast_static_shape(self._mean.get_shape(),
+                                          self._std.get_shape())
+            except ValueError:
+                raise ValueError(
+                    "mean and std/logstd should be broadcastable to match each "
+                    "other. ({} vs. {})".format(
+                        self._mean.get_shape(), self._std.get_shape()))
+
+            _m_means = tf.expand_dims(self._mean, -1)
+
+            tmp = -1./2 * tf.ones_like(_m_means, dtype)
+
+            self._natural_parameter = tf.div(tf.concat([_m_means, tmp], -1), tf.expand_dims(self._std, -1))
+            #print(_m_means.get_shape(), self._natural_parameter.get_shape())
+            #norm1 = Normal(
+            #    natural_parameter=self._natural_parameter,
+            #    group_ndims=group_ndims,
+            #    is_reparameterized=is_reparameterized,
+            #    check_numerics=check_numerics,
+            #    **kwargs
+            #)
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            #TODO: how to check the last dimension of natural_parameter?
+            self._natural_parameter = tf.convert_to_tensor(natural_parameter)
+            self._mean =  - natural_parameter[...,0] / 2 / natural_parameter[...,1]
+            self._std = - 1 / 2 / natural_parameter[...,1]
+            self._logstd = tf.log(self._std)
             dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
                                              (self._std, 'Normal.std')])
-            logstd = tf.log(self._std)
-            if check_numerics:
-                logstd = tf.check_numerics(logstd, "log(std)")
-            self._logstd = logstd
-        else:
-            # std is None
-            self._logstd = tf.convert_to_tensor(logstd)
-            dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
-                                             (self._logstd, 'Normal.logstd')])
-            std = tf.exp(self._logstd)
-            if check_numerics:
-                std = tf.check_numerics(std, "exp(logstd)")
-            self._std = std
+            #print(self._mean, self._std, self._logstd)
 
-        try:
-            tf.broadcast_static_shape(self._mean.get_shape(),
-                                      self._std.get_shape())
-        except ValueError:
-            raise ValueError(
-                "mean and std/logstd should be broadcastable to match each "
-                "other. ({} vs. {})".format(
-                    self._mean.get_shape(), self._std.get_shape()))
         self._check_numerics = check_numerics
         super(Normal, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
+            natural_param=self._natural_parameter,
+            Z=None,
             is_reparameterized=is_reparameterized,
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
@@ -319,7 +352,7 @@ class FoldNormal(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class Bernoulli(Distribution):
+class Bernoulli(ExponentialFamily):
     """
     The class of univariate Bernoulli distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -337,8 +370,16 @@ class Bernoulli(Distribution):
         explanation.
     """
 
-    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
-        self._logits = tf.convert_to_tensor(logits)
+    def __init__(self, logits = None, natural_parameter=None, dtype=None, group_ndims=0, **kwargs):
+        if logits is not None:
+            self._logits = tf.convert_to_tensor(logits)
+            natural_parameter = logits
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            self._logits = tf.convert_to_tensor(natural_parameter)
+            natural_parameter = tf.convert_to_tensor(natural_parameter)
+
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Bernoulli.logits')])
 
@@ -346,11 +387,15 @@ class Bernoulli(Distribution):
             dtype = tf.int32
         assert_same_float_and_int_dtype([], dtype)
 
+
         super(Bernoulli, self).__init__(
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
+            natural_param=natural_parameter,
+            Z=None,
             is_reparameterized=False,
+            use_path_derivative=False,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -394,7 +439,7 @@ class Bernoulli(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class Categorical(Distribution):
+class Categorical(ExponentialFamily):
     """
     The class of univariate Categorical distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -417,8 +462,16 @@ class Categorical(Distribution):
     [0, n_categories).
     """
 
-    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
-        self._logits = tf.convert_to_tensor(logits)
+    def __init__(self, logits=None, natural_parameter=None, dtype=None, group_ndims=0, **kwargs):
+        if logits is not None:
+            self._logits = tf.convert_to_tensor(logits)
+            natural_parameter = self._logits
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            self._logits = tf.convert_to_tensor(natural_parameter)
+
+
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Categorical.logits')])
 
@@ -434,6 +487,8 @@ class Categorical(Distribution):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
+            natural_param=natural_parameter,
+            Z=None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
@@ -647,7 +702,7 @@ class Uniform(Distribution):
         return p * mask
 
 
-class Gamma(Distribution):
+class Gamma(ExponentialFamily):
     """
     The class of univariate Gamma distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -666,30 +721,48 @@ class Gamma(Distribution):
     """
 
     def __init__(self,
-                 alpha,
-                 beta,
+                 alpha = None,
+                 beta = None,
+                 natural_parameter = None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        self._alpha = tf.convert_to_tensor(alpha)
-        self._beta = tf.convert_to_tensor(beta)
-        dtype = assert_same_float_dtype(
-            [(self._alpha, 'Gamma.alpha'),
-             (self._beta, 'Gamma.beta')])
+        if alpha is not None and beta is not None:
+            self._alpha = tf.convert_to_tensor(alpha)
+            self._beta = tf.convert_to_tensor(beta)
+            dtype = assert_same_float_dtype(
+                [(self._alpha, 'Gamma.alpha'),
+                 (self._beta, 'Gamma.beta')])
 
-        try:
-            tf.broadcast_static_shape(self._alpha.get_shape(),
-                                      self._beta.get_shape())
-        except ValueError:
-            raise ValueError(
-                "alpha and beta should be broadcastable to match each "
-                "other. ({} vs. {})".format(
-                    self._alpha.get_shape(), self._beta.get_shape()))
+            try:
+                tmp = tf.broadcast_static_shape(self._alpha.get_shape(),
+                                          self._beta.get_shape())
+                tmp1 = tf.expand_dims(alpha, -1)
+                tmp2 = tf.expand_dims(beta, -1)
+                natural_parameter = tf.concat([tmp1-1, tf.zeros_like(tmp1)], -1) + \
+                                    tf.concat([tf.zeros_like(tmp2), -tmp2], -1)
+            except ValueError:
+                raise ValueError(
+                    "alpha and beta should be broadcastable to match each "
+                    "other. ({} vs. {})".format(
+                        self._alpha.get_shape(), self._beta.get_shape()))
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            self._alpha = natural_parameter[...,0]+1
+            self._beta = -natural_parameter[...,1]
+            dtype = assert_same_float_dtype(
+                [(self._alpha, 'Gamma.alpha'),
+                 (self._beta, 'Gamma.beta')])
+
+
         self._check_numerics = check_numerics
         super(Gamma, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
+            natural_param = natural_parameter,
+            Z = None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
@@ -738,7 +811,7 @@ class Gamma(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class Beta(Distribution):
+class Beta(ExponentialFamily):
     """
     The class of univariate Beta distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -759,31 +832,49 @@ class Beta(Distribution):
     """
 
     def __init__(self,
-                 alpha,
-                 beta,
+                 alpha = None,
+                 beta = None,
+                 natural_parameter=None,
                  dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        self._alpha = tf.convert_to_tensor(alpha)
-        self._beta = tf.convert_to_tensor(beta)
-        dtype = assert_same_float_dtype(
-            [(self._alpha, 'Beta.alpha'),
-             (self._beta, 'Beta.beta')])
+        if alpha is not None and beta is not None:
+            self._alpha = tf.convert_to_tensor(alpha)
+            self._beta = tf.convert_to_tensor(beta)
+            dtype = assert_same_float_dtype(
+                [(self._alpha, 'Beta.alpha'),
+                 (self._beta, 'Beta.beta')])
 
-        try:
-            tf.broadcast_static_shape(self._alpha.get_shape(),
-                                      self._beta.get_shape())
-        except ValueError:
-            raise ValueError(
-                "alpha and beta should be broadcastable to match each "
-                "other. ({} vs. {})".format(
-                    self._alpha.get_shape(), self._beta.get_shape()))
+            try:
+                tf.broadcast_static_shape(self._alpha.get_shape(),
+                                          self._beta.get_shape())
+
+                tmp1 = tf.expand_dims(alpha, -1)
+                tmp2 = tf.expand_dims(beta, -1)
+                natural_parameter = tf.concat([tmp1, tf.zeros_like(tmp1)], -1) + \
+                                    tf.concat([tf.zeros_like(tmp2), tmp2], -1)
+            except ValueError:
+                raise ValueError(
+                    "alpha and beta should be broadcastable to match each "
+                    "other. ({} vs. {})".format(
+                        self._alpha.get_shape(), self._beta.get_shape()))
+
+        else:
+            natural_parameter = tf.convert_to_tensor(natural_parameter)
+            self._alpha = natural_parameter[...,0]
+            self._beta = natural_parameter[...,1]
+            dtype = assert_same_float_dtype(
+                [(self._alpha, 'Beta.alpha'),
+                 (self._beta, 'Beta.beta')])
+
         self._check_numerics = check_numerics
         super(Beta, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
+            natural_param = natural_parameter,
+            Z = None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
@@ -843,7 +934,7 @@ class Beta(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class Poisson(Distribution):
+class Poisson(ExponentialFamily):
     """
     The class of univariate Poisson distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -861,12 +952,21 @@ class Poisson(Distribution):
     """
 
     def __init__(self,
-                 rate,
+                 rate = None,
+                 natural_parameter = None,
                  dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        self._rate = tf.convert_to_tensor(rate)
+        if rate is not None:
+            self._rate = tf.convert_to_tensor(rate)
+            natural_parameter = tf.log(self._rate)
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            natural_parameter = tf.convert_to_tensor(natural_parameter)
+            self._rate = tf.exp(natural_parameter)
+
         param_dtype = assert_same_float_dtype(
             [(self._rate, 'Poisson.rate')])
 
@@ -880,6 +980,8 @@ class Poisson(Distribution):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
+            natural_param = natural_parameter,
+            Z = None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
@@ -956,7 +1058,7 @@ class Poisson(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class Binomial(Distribution):
+class Binomial(ExponentialFamily):
     """
     The class of univariate Binomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -978,13 +1080,22 @@ class Binomial(Distribution):
     """
 
     def __init__(self,
-                 logits,
-                 n_experiments,
+                 logits = None,
+                 n_experiments = 1,
+                 natural_parameter = None,
                  dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        self._logits = tf.convert_to_tensor(logits)
+        if logits is not None:
+            self._logits = tf.convert_to_tensor(logits)
+            natural_parameter = self._logits
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            self._logits = tf.convert_to_tensor(natural_parameter)
+            natural_parameter = self._logits
+
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Binomial.logits')])
 
@@ -1016,6 +1127,8 @@ class Binomial(Distribution):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
+            natural_param=natural_parameter,
+            Z=None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
@@ -1087,7 +1200,7 @@ class Binomial(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class InverseGamma(Distribution):
+class InverseGamma(ExponentialFamily):
     """
     The class of univariate InverseGamma distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -1106,30 +1219,50 @@ class InverseGamma(Distribution):
     """
 
     def __init__(self,
-                 alpha,
-                 beta,
+                 alpha = None,
+                 beta = None,
+                 natural_parameter = None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        self._alpha = tf.convert_to_tensor(alpha)
-        self._beta = tf.convert_to_tensor(beta)
-        dtype = assert_same_float_dtype(
-            [(self._alpha, 'InverseGamma.alpha'),
-             (self._beta, 'InverseGamma.beta')])
+        if alpha is not None and beta is not None:
+            self._alpha = tf.convert_to_tensor(alpha)
+            self._beta = tf.convert_to_tensor(beta)
+            dtype = assert_same_float_dtype(
+                [(self._alpha, 'InverseGamma.alpha'),
+                 (self._beta, 'InverseGamma.beta')])
 
-        try:
-            tf.broadcast_static_shape(self._alpha.get_shape(),
-                                      self._beta.get_shape())
-        except ValueError:
-            raise ValueError(
-                "alpha and beta should be broadcastable to match each "
-                "other. ({} vs. {})".format(
-                    self._alpha.get_shape(), self._beta.get_shape()))
+            try:
+                tf.broadcast_static_shape(self._alpha.get_shape(),
+                                          self._beta.get_shape())
+                tmp1 = tf.expand_dims(alpha, -1)
+                tmp2 = tf.expand_dims(beta, -1)
+                natural_parameter = tf.concat([-tmp1-1, tf.zeros_like(tmp1)], -1) + \
+                                    tf.concat([tf.zeros_like(tmp2), -tmp2], -1)
+            except ValueError:
+                raise ValueError(
+                    "alpha and beta should be broadcastable to match each "
+                    "other. ({} vs. {})".format(
+                        self._alpha.get_shape(), self._beta.get_shape()))
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            natural_parameter = tf.convert_to_tensor(natural_parameter)
+            self._alpha =-natural_parameter[...,0]-1
+            self._beta = -natural_parameter[...,1]
+            dtype = assert_same_float_dtype(
+                [(self._alpha, 'InverseGamma.alpha'),
+                 (self._beta, 'InverseGamma.beta')])
+
+
+
         self._check_numerics = check_numerics
         super(InverseGamma, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
+            natural_param= natural_parameter,
+            Z=None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
@@ -1181,7 +1314,7 @@ class InverseGamma(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class Laplace(Distribution):
+class Laplace(ExponentialFamily):
     """
     The class of univariate Laplace distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -1208,15 +1341,24 @@ class Laplace(Distribution):
     """
 
     def __init__(self,
-                 loc,
-                 scale,
+                 loc = 0,
+                 scale = None,
+                 natural_parameter = None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._loc = tf.convert_to_tensor(loc)
-        self._scale = tf.convert_to_tensor(scale)
+        if scale is not None:
+            self._scale = tf.convert_to_tensor(scale)
+            natural_parameter = - self._scale
+        elif natural_parameter is None:
+            raise ValueError("No parameters are passed")
+        else:
+            natural_parameter = tf.convert_to_tensor(natural_parameter)
+            self._scale = - natural_parameter
+
         dtype = assert_same_float_dtype(
             [(self._loc, 'Laplace.loc'),
              (self._scale, 'Laplace.scale')])
@@ -1234,6 +1376,8 @@ class Laplace(Distribution):
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
+            natural_param=natural_parameter,
+            Z=None,
             is_reparameterized=is_reparameterized,
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,

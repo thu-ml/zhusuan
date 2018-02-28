@@ -30,17 +30,33 @@ class TestNormal(tf.test.TestCase):
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 Normal(mean=tf.ones([2, 1]), std=tf.ones([2, 4, 3]))
+            #TODO: test check shape of natural_parameters
 
         Normal(mean=tf.placeholder(tf.float32, [None, 1]),
                logstd=tf.placeholder(tf.float32, [None, 1, 3]))
         Normal(mean=tf.placeholder(tf.float32, [None, 1]),
                std=tf.placeholder(tf.float32, [None, 1, 3]))
+        Normal(natural_parameter=tf.placeholder(tf.float32, [None, 2]))
+
+    def test_natural_parameter(self):
+        mean = tf.ones([2, 3])
+        std = tf.ones([2, 3])
+        tmp = tf.convert_to_tensor([[[1.,  -1./2]]])
+        natural_parameter = tf.tile(tmp, [2, 3, 1])
+        norm_rep = Normal(mean, std=std)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(norm_rep.natural_param.eval(), natural_parameter.eval())
+        norm_rep = Normal(natural_parameter=natural_parameter)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(norm_rep.mean.eval(), mean.eval())
+            self.assertAllClose(norm_rep.std.eval(), std.eval())
 
     def test_value_shape(self):
         # static
         norm = Normal(mean=tf.placeholder(tf.float32, None),
                       logstd=tf.placeholder(tf.float32, None))
         self.assertEqual(norm.get_value_shape().as_list(), [])
+        #Q: copied twice for what?
         norm = Normal(mean=tf.placeholder(tf.float32, None),
                       std=tf.placeholder(tf.float32, None))
         self.assertEqual(norm.get_value_shape().as_list(), [])
@@ -49,7 +65,6 @@ class TestNormal(tf.test.TestCase):
         self.assertTrue(norm._value_shape().dtype is tf.int32)
         with self.test_session(use_gpu=True):
             self.assertEqual(norm._value_shape().eval().tolist(), [])
-
         self.assertEqual(norm._value_shape().dtype, tf.int32)
 
     def test_batch_shape(self):
@@ -627,6 +642,20 @@ class TestGamma(tf.test.TestCase):
 
         Gamma(tf.placeholder(tf.float32, [None, 1]),
               tf.placeholder(tf.float32, [None, 1, 3]))
+        Gamma(natural_parameter=tf.placeholder(tf.float32, [None, 2]))
+
+    def test_natural_parameter(self):
+        alpha = tf.ones([2, 3])
+        beta = tf.ones([2, 3])
+        tmp = tf.convert_to_tensor([[[0.,  -1.]]])
+        natural_parameter = tf.tile(tmp, [2, 3, 1])
+        gamma_rep = Gamma(alpha, beta)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(gamma_rep.natural_param.eval(), natural_parameter.eval())
+        gamma_rep = Gamma(natural_parameter=natural_parameter)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(gamma_rep.alpha.eval(), alpha.eval())
+            self.assertAllClose(gamma_rep.beta.eval(), beta.eval())
 
     def test_value_shape(self):
         # static
@@ -703,6 +732,21 @@ class TestBeta(tf.test.TestCase):
 
         Beta(tf.placeholder(tf.float32, [None, 1]),
              tf.placeholder(tf.float32, [None, 1, 3]))
+        Beta(natural_parameter=tf.placeholder(tf.float32, [None, 1, 3, 2]))
+        Beta(natural_parameter=tf.placeholder(tf.float32, [None, 1, 3, None]))
+
+    def test_natural_parameter(self):
+        alpha = tf.ones([2, 3])
+        beta = tf.ones([2, 3])
+        tmp = tf.convert_to_tensor([[[1.,  1.]]])
+        natural_parameter = tf.tile(tmp, [2, 3, 1])
+        beta_rep = Beta(alpha, beta)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(beta_rep.natural_param.eval(), natural_parameter.eval())
+        beta_rep = Beta(natural_parameter=natural_parameter)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(beta_rep.alpha.eval(), alpha.eval())
+            self.assertAllClose(beta_rep.beta.eval(), beta.eval())
 
     def test_value_shape(self):
         # static
@@ -783,6 +827,18 @@ class TestPoisson(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             self.assertEqual(poisson._value_shape().eval().tolist(), [])
         self.assertEqual(poisson._value_shape().dtype, tf.int32)
+
+    def test_natural_parameter(self):
+        rate = np.random.uniform(0, 10, [2, 3])
+        rate = tf.convert_to_tensor(rate)
+        #rate = tf.ones([2, 3])
+        natural_parameter = tf.log(rate)
+        poisson_rep = Poisson(rate)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(poisson_rep.natural_param.eval(), natural_parameter.eval())
+        poisson_rep = Poisson(natural_parameter=natural_parameter)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(poisson_rep.rate.eval(), rate.eval())
 
     def test_batch_shape(self):
         utils.test_batch_shape_1parameter(
@@ -946,6 +1002,22 @@ class TestInverseGamma(tf.test.TestCase):
 
         InverseGamma(tf.placeholder(tf.float32, [None, 1]),
                      tf.placeholder(tf.float32, [None, 1, 3]))
+        InverseGamma(natural_parameter=tf.placeholder(tf.float32, [None, 1, None]))
+        InverseGamma(natural_parameter=tf.placeholder(tf.float32, [None, 1, 2]))
+
+    def test_natural_parameter(self):
+        alpha = tf.ones([2, 3])
+        beta = tf.ones([2, 3])
+        tmp = tf.convert_to_tensor([[[-2.,  -1.]]])
+        natural_parameter = tf.tile(tmp, [2, 3, 1])
+        inverse_gamma_rep = InverseGamma(alpha, beta)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(inverse_gamma_rep.natural_param.eval(), natural_parameter.eval())
+            inverse_gamma_rep = InverseGamma(natural_parameter=natural_parameter)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(inverse_gamma_rep.alpha.eval(), alpha.eval())
+            self.assertAllClose(inverse_gamma_rep.beta.eval(), beta.eval())
+
 
     def test_value_shape(self):
         # static
