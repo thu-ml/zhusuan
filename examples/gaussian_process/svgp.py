@@ -10,14 +10,12 @@ For the formulation you can refer to, e.g., Section 2.1 of the following paper:
 Salimbeni and Deisenroth 2017, Doubly Stochastic Variational Inference for Deep
 Gaussian Processes.
 
-Results (RMSE, NLL):
+Results (mean and std.dev.) with 100 inducing points:
 
- N_Z     Boston     Protein
-------  ---------  ---------
- 100    3.00,2.44 
- 500               4.35,2.91
-
-NEpoch    4000        400
+Dataset        RMSE           NLL        Number of Epochs
+--------  -------------  -------------  ------------------
+Boston     2.77 (0.22)    2.46 (0.06)    4000
+Protein    4.49 (0.03)    2.93 (0.01)    400             
 """
 
 from __future__ import absolute_import
@@ -93,8 +91,8 @@ def build_variational(hps, kernel, z_pos, x, n_particles):
 
 
 def main():
-    tf.set_random_seed(1237)
-    np.random.seed(1234)
+    # tf.set_random_seed(1237)
+    # np.random.seed(1234)
     hps = parser.parse_args()
 
     # Load data
