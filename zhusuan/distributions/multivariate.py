@@ -966,17 +966,17 @@ class MatrixVariateNormalCholesky(Distribution):
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param mean: An N-D `float` Tensor of shape [..., n_row, n_col]. Each slice
-        [i, j, ..., k, :, :] represents the mean of a single matrix variate
-        normal distribution.
+    :param mean: An N-D `float` Tensor of shape [..., n_row, n_col].
+        Each slice [i, j, ..., k, :, :] represents the mean of a single
+        matrix variate normal distribution.
     :param u_tril: An N-D `float` Tensor of shape [..., n_row, n_row].
-        Each slice [i, ..., k, :, :] represents the lower triangular matrix in
-        the Cholesky decomposition of the among-row covariance of a single
-        distribution.
+        Each slice [i, j, ..., k, :, :] represents the lower triangular matrix
+        in the Cholesky decomposition of the among-row covariance of a single
+        matrix variate normal distribution.
     :param v_tril: An N-D `float` Tensor of shape [..., n_col, n_col].
-        Each slice [i, ..., k, :, :] represents the lower triangular matrix in
-        the Cholesky decomposition of the among-col covariance of a single
-        distribution.
+        Each slice [i, j, ..., k, :, :] represents the lower triangular matrix
+        in the Cholesky decomposition of the among-column covariance of a
+        single matrix variate normal distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -1057,13 +1057,13 @@ class MatrixVariateNormalCholesky(Distribution):
 
     @property
     def mean(self):
-        """The mean of the normal distribution."""
+        """The mean of the matrix variate normal distribution."""
         return self._mean
 
     @property
     def u_tril(self):
         """
-        The lower triangular matrix in the cholosky decomposition of the
+        The lower triangular matrix in the Cholesky decomposition of the
         among-row covariance.
         """
         return self._u_tril
@@ -1071,8 +1071,8 @@ class MatrixVariateNormalCholesky(Distribution):
     @property
     def v_tril(self):
         """
-        The lower triangular matrix in the cholosky decomposition of the
-        among-col covariance.
+        The lower triangular matrix in the Cholesky decomposition of the
+        among-column covariance.
         """
         return self._v_tril
 
