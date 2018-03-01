@@ -20,12 +20,12 @@ from examples.utils import dataset, save_image_collections
 def vae(observed, x_dim, z_dim, n, n_particles=1):
     with zs.BayesianNet(observed=observed) as model:
         z_mean = tf.zeros([n, z_dim])
-        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
+        z = zs.Normal('z', z_mean, std=1., group_ndims=1, n_samples=n_particles)
         lx_z = tf.layers.dense(z, 500, activation=tf.nn.relu)
         lx_z = tf.layers.dense(lx_z, 500, activation=tf.nn.relu)
         x_logits = tf.layers.dense(lx_z, x_dim)
         x_mean = zs.Implicit("x_mean", tf.sigmoid(x_logits), group_ndims=1)
-        x = zs.Bernoulli('x', x_logits, group_ndims=1, n_samples=n_particles)
+        x = zs.Bernoulli('x', x_logits, group_ndims=1)
     return model
 
 
