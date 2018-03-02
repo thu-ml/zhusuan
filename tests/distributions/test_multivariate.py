@@ -32,6 +32,23 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                     tf.errors.InvalidArgumentError, 'compatible'):
                 dst.sample().eval(feed_dict={u: np.ones((3,))})
 
+    def test_natural_parameter(self):
+        mean = np.ones([2])
+        cov_tril = np.array([[1., 0], [1., 1.]])
+        natural_parameter = np.array([ 1., 0.,  -1.,   0.5,  0.5, -0.5])
+        #mean = np.tile(mean, [10,11,1])
+        #cov_tril = np.tile(cov_tril, [10,11,1,1])
+        #natural_parameter = np.tile(natural_parameter, [10,11,1])
+        rep = MultivariateNormalCholesky(mean, cov_tril)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(rep.natural_parameter.eval(), natural_parameter)
+        rep = MultivariateNormalCholesky.init_from_natural_parameter(natural_parameter)
+        with self.test_session(use_gpu=True):
+            self.assertAllClose(rep.mean.eval(), mean)
+            self.assertAllClose(rep.cov_tril.eval(), cov_tril)
+
+
+
     def test_shape_inference(self):
         with self.test_session(use_gpu=True):
             # Static

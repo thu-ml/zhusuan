@@ -42,9 +42,9 @@ class ExponentialFamily(Distribution):
         raise NotImplementedError()
 
     @property
-    def natural_param(self):
+    def natural_parameter(self):
         """The natural parameter of the distribution."""
-        return self._natural_param
+        return self._natural_parameter
 
     @property
     def Z(self):

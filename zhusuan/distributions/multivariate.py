@@ -103,9 +103,14 @@ class MultivariateNormalCholesky(ExponentialFamily):
         with tf.control_dependencies(assert_ops):
             self._cov_tril = tf.identity(self._cov_tril)
         inv_cov_tril = tf.matrix_inverse(self._cov_tril)
-        pre = tf.matmul(inv_cov_tril, inv_cov_tril, transpose_b=True)
+        pre = tf.matmul(inv_cov_tril, inv_cov_tril, transpose_a=True)
         #print(tf.shape(pre), tf.shape(self._mean))
-        natural_parameters = tf.concat([tf.reshape(pre,tf.concat([tf.shape(pre)[:-2],[-1]],0)), - tf.squeeze(tf.matmul(tf.expand_dims(self._mean, -1), pre, transpose_a=True), -2)], -1)
+        self._natural_parameter = tf.concat([
+                                            tf.squeeze(
+                                            tf.matmul(tf.expand_dims(self._mean, -1), pre, transpose_a=True)
+                                            , -2),
+                                            tf.reshape(pre,tf.concat([tf.shape(pre)[:-2],[-1]],0))/(-2.)]
+                                            ,-1)
 
         dtype = assert_same_float_dtype(
             [(self._mean, 'MultivariateNormalCholesky.mean'),
@@ -136,31 +141,18 @@ class MultivariateNormalCholesky(ExponentialFamily):
         natural_parameters = tf.convert_to_tensor(natural_parameter)
         param_num = tf.shape(natural_parameters)[-1]
         # print(param_num)
-        n_dim = tf.cast(tf.sqrt(1 + 4 * tf.cast(param_num, tf.float32)) - 1. / 2 + 0.001, tf.int32)
-        # print(n_dim, param_num)
+        n_dim = tf.cast((tf.sqrt(1 + 4 * tf.cast(param_num, tf.float32)) - 1. )/ 2 + 0.001, tf.int32)
+
         # assert(param_num == n_dim * n_dim + n_dim)
-        pre, mean = tf.split(natural_parameters, [n_dim ** 2, n_dim], -1)
-        pre = tf.reshape(pre, tf.concat([tf.shape(pre)[:-1], [n_dim, n_dim]], 0))
-        # Static shape check
-        expected_shape = self._mean.get_shape().concatenate(
-            [n_dim if isinstance(n_dim, int) else None])
-        pre.get_shape().assert_is_compatible_with(expected_shape)
-        # Dynamic
-        expected_shape = tf.concat(
-            [tf.shape(mean), [n_dim]], axis=0)
-        actual_shape = tf.shape(pre)
-        msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
-               'shape with mean. Expected', expected_shape, ' got ',
-               actual_shape]
-        assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
+        mean, pre = natural_parameters[...,:n_dim], natural_parameters[...,n_dim:]
+        pre = tf.reshape(pre, tf.concat([tf.shape(pre)[:-1], [n_dim, n_dim]], 0)) * (-2)
 
-        with tf.control_dependencies(assert_ops):
-            inv_cov_tril = tf.cholesky(pre)
+        inv_cov_tril = tf.cholesky(pre)
 
-        tmp = tf.reshape(mean, tf.concat([tf.shape(mean)[:-1], [1, n_dim]], 0))
+        tmp = tf.expand_dims(mean, -1)
         tmp = tf.matrix_triangular_solve(inv_cov_tril, tmp)
-        mean = tf.matrix_triangular_solve(inv_cov_tril, tmp)
-        cov_tril = tf.matrix_inverse(inv_cov_tril)
+        mean = tf.squeeze(tf.matrix_triangular_solve(tf.transpose(inv_cov_tril, tf.concat([tf.range(0, tf.rank(inv_cov_tril)-2), [tf.rank(inv_cov_tril)-1, tf.rank(inv_cov_tril)-2]], 0)), tmp, lower = False), -1)
+        cov_tril = tf.cholesky(tf.matrix_inverse(pre))
         return MultivariateNormalCholesky(
             mean,
             cov_tril,
@@ -247,7 +239,7 @@ class MultivariateNormalCholesky(ExponentialFamily):
         return tf.exp(self._log_prob(given))
 
 
-class Multinomial(Distribution):
+class Multinomial(ExponentialFamily):
     """
     The class of Multinomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -288,6 +280,7 @@ class Multinomial(Distribution):
                  group_ndims=0,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
+        self._natural_parameter = self._logits
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Multinomial.logits')])
 
@@ -314,6 +307,11 @@ class Multinomial(Distribution):
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        logits = tf.convert_to_tensor(natural_parameter)
+        return Multinomial(logits, **kwargs)
 
     @property
     def logits(self):
@@ -390,7 +388,7 @@ class Multinomial(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-class UnnormalizedMultinomial(Distribution):
+class UnnormalizedMultinomial(ExponentialFamily):
     """
     The class of UnnormalizedMultinomial distribution.
     UnnormalizedMultinomial distribution calculates probabilities differently
@@ -432,6 +430,7 @@ class UnnormalizedMultinomial(Distribution):
                  group_ndims=0,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
+        self._natural_parameter = self._logits
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'UnnormalizedMultinomial.logits')])
 
@@ -452,6 +451,12 @@ class UnnormalizedMultinomial(Distribution):
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        logits = tf.convert_to_tensor(natural_parameter)
+        return UnnormalizedMultinomial(logits, **kwargs)
+
 
     @property
     def logits(self):
@@ -502,7 +507,7 @@ class UnnormalizedMultinomial(Distribution):
 BagofCategorical = UnnormalizedMultinomial
 
 
-class OnehotCategorical(Distribution):
+class OnehotCategorical(ExponentialFamily):
     """
     The class of one-hot Categorical distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -527,6 +532,7 @@ class OnehotCategorical(Distribution):
 
     def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
+        self._natural_parameter = self._logits
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'OnehotCategorical.logits')])
 
@@ -545,6 +551,11 @@ class OnehotCategorical(Distribution):
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        logits = tf.convert_to_tensor(natural_parameter)
+        return OnehotCategorical(logits, **kwargs)
 
     @property
     def logits(self):
@@ -619,7 +630,7 @@ class OnehotCategorical(Distribution):
 OnehotDiscrete = OnehotCategorical
 
 
-class Dirichlet(Distribution):
+class Dirichlet(ExponentialFamily):
     """
     The class of Dirichlet distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
@@ -648,6 +659,7 @@ class Dirichlet(Distribution):
                  check_numerics=False,
                  **kwargs):
         self._alpha = tf.convert_to_tensor(alpha)
+        self._natual_parameter = self._alpha
         dtype = assert_same_float_dtype(
             [(self._alpha, 'Dirichlet.alpha')])
 
@@ -682,6 +694,11 @@ class Dirichlet(Distribution):
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        alpha = tf.convert_to_tensor(natural_parameter)
+        return Dirichlet(alpha, **kwargs)
 
     @property
     def alpha(self):
