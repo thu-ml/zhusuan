@@ -12,10 +12,10 @@ Gaussian Processes.
 
 Results (mean and std.dev.) with 100 inducing points:
 
-Dataset        RMSE           NLL        Number of Epochs
---------  -------------  -------------  ------------------
-Boston     2.77 (0.22)    2.46 (0.06)    4000
-Protein    4.49 (0.03)    2.93 (0.01)    400             
+Dataset        RMSE           NLL        n_epochs     lr
+--------  -------------  -------------  ----------    ----
+Boston     2.90 (0.40)    2.52 (0.10)    2000         0.02
+Protein    4.49 (0.03)    2.93 (0.01)    400          0.01
 """
 
 from __future__ import absolute_import
