@@ -10,11 +10,12 @@ For the formulation you can refer to, e.g., Section 2.1 of the following paper:
 Salimbeni and Deisenroth 2017, Doubly Stochastic Variational Inference for Deep
 Gaussian Processes.
 
-Results (RMSE, NLL):
- N_Z   Boston    Protein
------ --------- ---------
- 100  2.73,2.50
- 500            4.08,2.86
+Results (mean and std.dev.) with 100 inducing points:
+
+Dataset        RMSE           NLL        n_epochs     lr
+--------  -------------  -------------  ----------    ----
+Boston     2.90 (0.40)    2.52 (0.10)    2000         0.02
+Protein    4.49 (0.03)    2.93 (0.01)    400          0.01
 """
 
 from __future__ import absolute_import
@@ -43,6 +44,7 @@ parser.add_argument('-dtype', default='float32', type=str,
                     choices=['float32', 'float64'])
 parser.add_argument('-dataset', default='boston_housing', type=str,
                     choices=['boston_housing', 'protein_data'])
+parser.add_argument('-lr', default=1e-2, type=float)
 
 
 @zs.reuse('model')
@@ -89,8 +91,8 @@ def build_variational(hps, kernel, z_pos, x, n_particles):
 
 
 def main():
-    tf.set_random_seed(1237)
-    np.random.seed(1234)
+    # tf.set_random_seed(1237)
+    # np.random.seed(1234)
     hps = parser.parse_args()
 
     # Load data
@@ -137,7 +139,7 @@ def main():
         latent={'fz': var_fz, 'fx': var_fx},
         axis=0)
     cost = lower_bound.sgvb()
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+    optimizer = tf.train.AdamOptimizer(learning_rate=hps.lr)
     infer_op = optimizer.minimize(cost)
 
     # Prediction ops
