@@ -75,84 +75,77 @@ class Normal(ExponentialFamily):
                  mean=0.,
                  logstd=None,
                  std=None,
-                 natural_parameter=None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
-        #TODO: determine priority
-        #if (logstd is not None) or (std is not None):
-        if natural_parameter is None:
-            self._mean = tf.convert_to_tensor(mean)
-            warnings.warn("Normal: The order of arguments logstd/std will change "
-                          "to std/logstd in the coming version.", FutureWarning)
-            if (logstd is None) == (std is None):
-                raise ValueError("Either std or logstd should be passed but not "
-                                 "both of them.")
-            elif logstd is None:
-                self._std = tf.convert_to_tensor(std)
-                dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
-                                                 (self._std, 'Normal.std')])
-                logstd = tf.log(self._std)
-                if check_numerics:
-                    logstd = tf.check_numerics(logstd, "log(std)")
-                self._logstd = logstd
-            else:
-                # std is None
-                self._logstd = tf.convert_to_tensor(logstd)
-                dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
-                                                 (self._logstd, 'Normal.logstd')])
-                std = tf.exp(self._logstd)
-                if check_numerics:
-                    std = tf.check_numerics(std, "exp(logstd)")
-                self._std = std
 
-            try:
-                tf.broadcast_static_shape(self._mean.get_shape(),
-                                          self._std.get_shape())
-            except ValueError:
-                raise ValueError(
-                    "mean and std/logstd should be broadcastable to match each "
-                    "other. ({} vs. {})".format(
-                        self._mean.get_shape(), self._std.get_shape()))
-
-            _m_means = tf.expand_dims(self._mean, -1)
-
-            tmp = -1./2 * tf.ones_like(_m_means, dtype)
-
-            self._natural_parameter = tf.div(tf.concat([_m_means, tmp], -1), tf.expand_dims(self._std, -1))
-            #print(_m_means.get_shape(), self._natural_parameter.get_shape())
-            #norm1 = Normal(
-            #    natural_parameter=self._natural_parameter,
-            #    group_ndims=group_ndims,
-            #    is_reparameterized=is_reparameterized,
-            #    check_numerics=check_numerics,
-            #    **kwargs
-            #)
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            #TODO: how to check the last dimension of natural_parameter?
-            self._natural_parameter = tf.convert_to_tensor(natural_parameter)
-            self._mean =  - natural_parameter[...,0] / 2 / natural_parameter[...,1]
-            self._std = - 1 / 2 / natural_parameter[...,1]
-            self._logstd = tf.log(self._std)
+        self._mean = tf.convert_to_tensor(mean)
+        warnings.warn("Normal: The order of arguments logstd/std will change "
+                      "to std/logstd in the coming version.", FutureWarning)
+        if (logstd is None) == (std is None):
+            raise ValueError("Either std or logstd should be passed but not "
+                             "both of them.")
+        elif logstd is None:
+            self._std = tf.convert_to_tensor(std)
             dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
                                              (self._std, 'Normal.std')])
-            #print(self._mean, self._std, self._logstd)
+            logstd = tf.log(self._std)
+            if check_numerics:
+                logstd = tf.check_numerics(logstd, "log(std)")
+            self._logstd = logstd
+        else:
+            # std is None
+            self._logstd = tf.convert_to_tensor(logstd)
+            dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
+                                             (self._logstd, 'Normal.logstd')])
+            std = tf.exp(self._logstd)
+            if check_numerics:
+                std = tf.check_numerics(std, "exp(logstd)")
+            self._std = std
+
+        try:
+            tf.broadcast_static_shape(self._mean.get_shape(),
+                                      self._std.get_shape())
+        except ValueError:
+            raise ValueError(
+                "mean and std/logstd should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._mean.get_shape(), self._std.get_shape()))
+
+        _m_means = tf.expand_dims(self._mean, -1)
+        tmp = -1./2 * tf.ones_like(_m_means, dtype)
+        self._natural_parameter = tf.div(tf.concat([_m_means, tmp], -1), tf.expand_dims(self._std, -1))
+        self._Z = None
+        #print(_m_means.get_shape(), self._natural_parameter.get_shape())
+
 
         self._check_numerics = check_numerics
         super(Normal, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            natural_param=self._natural_parameter,
-            Z=None,
             is_reparameterized=is_reparameterized,
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter,
+                                    **kwargs):
+        natural_parameter = tf.convert_to_tensor(natural_parameter)
+        mean = - natural_parameter[..., 0] / 2 / natural_parameter[..., 1]
+        std = - 1 / 2 / natural_parameter[..., 1]
+        logstd = tf.log(std)
+        dtype = assert_same_float_dtype([(mean, 'Normal.mean'),
+                                         (std, 'Normal.std')])
+        # print(self._mean, self._std, self._logstd)
+        return Normal(
+            mean=mean,
+            logstd=logstd,
+            **kwargs
+        )
 
     @property
     def mean(self):
@@ -370,15 +363,9 @@ class Bernoulli(ExponentialFamily):
         explanation.
     """
 
-    def __init__(self, logits = None, natural_parameter=None, dtype=None, group_ndims=0, **kwargs):
-        if logits is not None:
-            self._logits = tf.convert_to_tensor(logits)
-            natural_parameter = logits
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            self._logits = tf.convert_to_tensor(natural_parameter)
-            natural_parameter = tf.convert_to_tensor(natural_parameter)
+    def __init__(self, logits = None, dtype=None, group_ndims=0, **kwargs):
+        self._logits = tf.convert_to_tensor(logits)
+        self._natural_parameter = logits
 
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Bernoulli.logits')])
@@ -392,12 +379,17 @@ class Bernoulli(ExponentialFamily):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
-            natural_param=natural_parameter,
-            Z=None,
             is_reparameterized=False,
             use_path_derivative=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        logits = tf.convert_to_tensor(natural_parameter)
+        return Bernoulli(
+            logits=logits, **kwargs
+        )
 
     @property
     def logits(self):
@@ -462,15 +454,9 @@ class Categorical(ExponentialFamily):
     [0, n_categories).
     """
 
-    def __init__(self, logits=None, natural_parameter=None, dtype=None, group_ndims=0, **kwargs):
-        if logits is not None:
-            self._logits = tf.convert_to_tensor(logits)
-            natural_parameter = self._logits
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            self._logits = tf.convert_to_tensor(natural_parameter)
-
+    def __init__(self, logits=None, dtype=None, group_ndims=0, **kwargs):
+        self._logits = tf.convert_to_tensor(logits)
+        self._natural_parameter = self._logits
 
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Categorical.logits')])
@@ -487,11 +473,16 @@ class Categorical(ExponentialFamily):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
-            natural_param=natural_parameter,
-            Z=None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        logits = tf.convert_to_tensor(natural_parameter)
+        return Bernoulli(
+            logits=logits, **kwargs
+        )
 
     @property
     def logits(self):
@@ -723,37 +714,27 @@ class Gamma(ExponentialFamily):
     def __init__(self,
                  alpha = None,
                  beta = None,
-                 natural_parameter = None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        if alpha is not None and beta is not None:
-            self._alpha = tf.convert_to_tensor(alpha)
-            self._beta = tf.convert_to_tensor(beta)
-            dtype = assert_same_float_dtype(
-                [(self._alpha, 'Gamma.alpha'),
-                 (self._beta, 'Gamma.beta')])
 
-            try:
-                tmp = tf.broadcast_static_shape(self._alpha.get_shape(),
-                                          self._beta.get_shape())
-                tmp1 = tf.expand_dims(alpha, -1)
-                tmp2 = tf.expand_dims(beta, -1)
-                natural_parameter = tf.concat([tmp1-1, tf.zeros_like(tmp1)], -1) + \
-                                    tf.concat([tf.zeros_like(tmp2), -tmp2], -1)
-            except ValueError:
-                raise ValueError(
-                    "alpha and beta should be broadcastable to match each "
-                    "other. ({} vs. {})".format(
-                        self._alpha.get_shape(), self._beta.get_shape()))
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            self._alpha = natural_parameter[...,0]+1
-            self._beta = -natural_parameter[...,1]
-            dtype = assert_same_float_dtype(
-                [(self._alpha, 'Gamma.alpha'),
-                 (self._beta, 'Gamma.beta')])
+        self._alpha = tf.convert_to_tensor(alpha)
+        self._beta = tf.convert_to_tensor(beta)
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'Gamma.alpha'),
+             (self._beta, 'Gamma.beta')])
+        try:
+            tf.broadcast_static_shape(self._alpha.get_shape(),
+                                      self._beta.get_shape())
+            tmp1 = tf.expand_dims(alpha, -1)
+            tmp2 = tf.expand_dims(beta, -1)
+            self._natural_parameter = tf.concat([tmp1-1, tf.zeros_like(tmp1)], -1) + \
+                                tf.concat([tf.zeros_like(tmp2), -tmp2], -1)
+        except ValueError:
+            raise ValueError(
+                "alpha and beta should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._alpha.get_shape(), self._beta.get_shape()))
 
 
         self._check_numerics = check_numerics
@@ -761,11 +742,16 @@ class Gamma(ExponentialFamily):
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            natural_param = natural_parameter,
-            Z = None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        natural_parameter = tf.convert_to_tensor(natural_parameter)
+        alpha = natural_parameter[..., 0] + 1
+        beta = -natural_parameter[..., 1]
+        return Gamma(alpha, beta, **kwargs)
 
     @property
     def alpha(self):
@@ -834,50 +820,45 @@ class Beta(ExponentialFamily):
     def __init__(self,
                  alpha = None,
                  beta = None,
-                 natural_parameter=None,
                  dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        if alpha is not None and beta is not None:
-            self._alpha = tf.convert_to_tensor(alpha)
-            self._beta = tf.convert_to_tensor(beta)
-            dtype = assert_same_float_dtype(
-                [(self._alpha, 'Beta.alpha'),
-                 (self._beta, 'Beta.beta')])
+        self._alpha = tf.convert_to_tensor(alpha)
+        self._beta = tf.convert_to_tensor(beta)
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'Beta.alpha'),
+             (self._beta, 'Beta.beta')])
 
-            try:
-                tf.broadcast_static_shape(self._alpha.get_shape(),
-                                          self._beta.get_shape())
+        try:
+            tf.broadcast_static_shape(self._alpha.get_shape(),
+                                      self._beta.get_shape())
 
-                tmp1 = tf.expand_dims(alpha, -1)
-                tmp2 = tf.expand_dims(beta, -1)
-                natural_parameter = tf.concat([tmp1, tf.zeros_like(tmp1)], -1) + \
-                                    tf.concat([tf.zeros_like(tmp2), tmp2], -1)
-            except ValueError:
-                raise ValueError(
-                    "alpha and beta should be broadcastable to match each "
-                    "other. ({} vs. {})".format(
-                        self._alpha.get_shape(), self._beta.get_shape()))
-
-        else:
-            natural_parameter = tf.convert_to_tensor(natural_parameter)
-            self._alpha = natural_parameter[...,0]
-            self._beta = natural_parameter[...,1]
-            dtype = assert_same_float_dtype(
-                [(self._alpha, 'Beta.alpha'),
-                 (self._beta, 'Beta.beta')])
+            tmp1 = tf.expand_dims(alpha, -1)
+            tmp2 = tf.expand_dims(beta, -1)
+            self._natural_parameter = tf.concat([tmp1, tf.zeros_like(tmp1)], -1) + \
+                                tf.concat([tf.zeros_like(tmp2), tmp2], -1)
+        except ValueError:
+            raise ValueError(
+                "alpha and beta should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._alpha.get_shape(), self._beta.get_shape()))
 
         self._check_numerics = check_numerics
         super(Beta, self).__init__(
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            natural_param = natural_parameter,
-            Z = None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        natural_parameter = tf.convert_to_tensor(natural_parameter)
+        alpha = natural_parameter[..., 0]
+        beta = natural_parameter[..., 1]
+        return Beta(alpha, beta, **kwargs)
 
     @property
     def alpha(self):
@@ -953,19 +934,13 @@ class Poisson(ExponentialFamily):
 
     def __init__(self,
                  rate = None,
-                 natural_parameter = None,
                  dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        if rate is not None:
-            self._rate = tf.convert_to_tensor(rate)
-            natural_parameter = tf.log(self._rate)
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            natural_parameter = tf.convert_to_tensor(natural_parameter)
-            self._rate = tf.exp(natural_parameter)
+        self._rate = tf.convert_to_tensor(rate)
+        self._natural_parameter = tf.log(self._rate)
+
 
         param_dtype = assert_same_float_dtype(
             [(self._rate, 'Poisson.rate')])
@@ -980,11 +955,15 @@ class Poisson(ExponentialFamily):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
-            natural_param = natural_parameter,
-            Z = None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        natural_parameter = tf.convert_to_tensor(natural_parameter)
+        rate = tf.exp(natural_parameter)
+        return Poisson(rate, **kwargs)
 
     @property
     def rate(self):
@@ -1082,19 +1061,12 @@ class Binomial(ExponentialFamily):
     def __init__(self,
                  logits = None,
                  n_experiments = 1,
-                 natural_parameter = None,
                  dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        if logits is not None:
-            self._logits = tf.convert_to_tensor(logits)
-            natural_parameter = self._logits
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            self._logits = tf.convert_to_tensor(natural_parameter)
-            natural_parameter = self._logits
+        self._logits = tf.convert_to_tensor(logits)
+        self._natural_parameter = self._logits
 
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Binomial.logits')])
@@ -1127,11 +1099,14 @@ class Binomial(ExponentialFamily):
             dtype=dtype,
             param_dtype=param_dtype,
             is_continuous=False,
-            natural_param=natural_parameter,
-            Z=None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        logits = tf.convert_to_tensor(natural_parameter)
+        return Binomial(logits, **kwargs)
 
     @property
     def n_experiments(self):
@@ -1221,38 +1196,26 @@ class InverseGamma(ExponentialFamily):
     def __init__(self,
                  alpha = None,
                  beta = None,
-                 natural_parameter = None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        if alpha is not None and beta is not None:
-            self._alpha = tf.convert_to_tensor(alpha)
-            self._beta = tf.convert_to_tensor(beta)
-            dtype = assert_same_float_dtype(
-                [(self._alpha, 'InverseGamma.alpha'),
-                 (self._beta, 'InverseGamma.beta')])
-
-            try:
-                tf.broadcast_static_shape(self._alpha.get_shape(),
-                                          self._beta.get_shape())
-                tmp1 = tf.expand_dims(alpha, -1)
-                tmp2 = tf.expand_dims(beta, -1)
-                natural_parameter = tf.concat([-tmp1-1, tf.zeros_like(tmp1)], -1) + \
-                                    tf.concat([tf.zeros_like(tmp2), -tmp2], -1)
-            except ValueError:
-                raise ValueError(
-                    "alpha and beta should be broadcastable to match each "
-                    "other. ({} vs. {})".format(
-                        self._alpha.get_shape(), self._beta.get_shape()))
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            natural_parameter = tf.convert_to_tensor(natural_parameter)
-            self._alpha =-natural_parameter[...,0]-1
-            self._beta = -natural_parameter[...,1]
-            dtype = assert_same_float_dtype(
-                [(self._alpha, 'InverseGamma.alpha'),
-                 (self._beta, 'InverseGamma.beta')])
+        self._alpha = tf.convert_to_tensor(alpha)
+        self._beta = tf.convert_to_tensor(beta)
+        dtype = assert_same_float_dtype(
+            [(self._alpha, 'InverseGamma.alpha'),
+             (self._beta, 'InverseGamma.beta')])
+        try:
+            tf.broadcast_static_shape(self._alpha.get_shape(),
+                                      self._beta.get_shape())
+            tmp1 = tf.expand_dims(alpha, -1)
+            tmp2 = tf.expand_dims(beta, -1)
+            self._natural_parameter = tf.concat([-tmp1-1, tf.zeros_like(tmp1)], -1) + \
+                                tf.concat([tf.zeros_like(tmp2), -tmp2], -1)
+        except ValueError:
+            raise ValueError(
+                "alpha and beta should be broadcastable to match each "
+                "other. ({} vs. {})".format(
+                    self._alpha.get_shape(), self._beta.get_shape()))
 
 
 
@@ -1261,11 +1224,16 @@ class InverseGamma(ExponentialFamily):
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            natural_param= natural_parameter,
-            Z=None,
             is_reparameterized=False,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        natural_parameter = tf.convert_to_tensor(natural_parameter)
+        alpha = -natural_parameter[..., 0] - 1
+        beta = -natural_parameter[..., 1]
+        return InverseGamma(alpha, beta, **kwargs)
 
     @property
     def alpha(self):
@@ -1343,21 +1311,14 @@ class Laplace(ExponentialFamily):
     def __init__(self,
                  loc = 0,
                  scale = None,
-                 natural_parameter = None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
         self._loc = tf.convert_to_tensor(loc)
-        if scale is not None:
-            self._scale = tf.convert_to_tensor(scale)
-            natural_parameter = - self._scale
-        elif natural_parameter is None:
-            raise ValueError("No parameters are passed")
-        else:
-            natural_parameter = tf.convert_to_tensor(natural_parameter)
-            self._scale = - natural_parameter
+        self._scale = tf.convert_to_tensor(scale)
+        self._natural_parameter = - self._scale
 
         dtype = assert_same_float_dtype(
             [(self._loc, 'Laplace.loc'),
@@ -1376,12 +1337,16 @@ class Laplace(ExponentialFamily):
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            natural_param=natural_parameter,
-            Z=None,
             is_reparameterized=is_reparameterized,
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        natural_parameter = tf.convert_to_tensor(natural_parameter)
+        scale = - natural_parameter
+        return Laplace(scale=scale, **kwargs)
 
     @property
     def loc(self):

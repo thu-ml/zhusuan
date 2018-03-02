@@ -36,7 +36,7 @@ class TestNormal(tf.test.TestCase):
                logstd=tf.placeholder(tf.float32, [None, 1, 3]))
         Normal(mean=tf.placeholder(tf.float32, [None, 1]),
                std=tf.placeholder(tf.float32, [None, 1, 3]))
-        Normal(natural_parameter=tf.placeholder(tf.float32, [None, 2]))
+        Normal.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 2]))
 
     def test_natural_parameter(self):
         mean = tf.ones([2, 3])
@@ -45,8 +45,8 @@ class TestNormal(tf.test.TestCase):
         natural_parameter = tf.tile(tmp, [2, 3, 1])
         norm_rep = Normal(mean, std=std)
         with self.test_session(use_gpu=True):
-            self.assertAllClose(norm_rep.natural_param.eval(), natural_parameter.eval())
-        norm_rep = Normal(natural_parameter=natural_parameter)
+            self.assertAllClose(norm_rep._natural_parameter.eval(), natural_parameter.eval())
+        norm_rep = Normal.init_from_natural_parameter(natural_parameter)
         with self.test_session(use_gpu=True):
             self.assertAllClose(norm_rep.mean.eval(), mean.eval())
             self.assertAllClose(norm_rep.std.eval(), std.eval())
@@ -642,7 +642,7 @@ class TestGamma(tf.test.TestCase):
 
         Gamma(tf.placeholder(tf.float32, [None, 1]),
               tf.placeholder(tf.float32, [None, 1, 3]))
-        Gamma(natural_parameter=tf.placeholder(tf.float32, [None, 2]))
+        Gamma.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 2]))
 
     def test_natural_parameter(self):
         alpha = tf.ones([2, 3])
@@ -651,8 +651,8 @@ class TestGamma(tf.test.TestCase):
         natural_parameter = tf.tile(tmp, [2, 3, 1])
         gamma_rep = Gamma(alpha, beta)
         with self.test_session(use_gpu=True):
-            self.assertAllClose(gamma_rep.natural_param.eval(), natural_parameter.eval())
-        gamma_rep = Gamma(natural_parameter=natural_parameter)
+            self.assertAllClose(gamma_rep._natural_parameter.eval(), natural_parameter.eval())
+        gamma_rep = Gamma.init_from_natural_parameter(natural_parameter)
         with self.test_session(use_gpu=True):
             self.assertAllClose(gamma_rep.alpha.eval(), alpha.eval())
             self.assertAllClose(gamma_rep.beta.eval(), beta.eval())
@@ -732,8 +732,8 @@ class TestBeta(tf.test.TestCase):
 
         Beta(tf.placeholder(tf.float32, [None, 1]),
              tf.placeholder(tf.float32, [None, 1, 3]))
-        Beta(natural_parameter=tf.placeholder(tf.float32, [None, 1, 3, 2]))
-        Beta(natural_parameter=tf.placeholder(tf.float32, [None, 1, 3, None]))
+        Beta.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 1, 3, 2]))
+        Beta.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 1, 3, None]))
 
     def test_natural_parameter(self):
         alpha = tf.ones([2, 3])
@@ -742,8 +742,8 @@ class TestBeta(tf.test.TestCase):
         natural_parameter = tf.tile(tmp, [2, 3, 1])
         beta_rep = Beta(alpha, beta)
         with self.test_session(use_gpu=True):
-            self.assertAllClose(beta_rep.natural_param.eval(), natural_parameter.eval())
-        beta_rep = Beta(natural_parameter=natural_parameter)
+            self.assertAllClose(beta_rep._natural_parameter.eval(), natural_parameter.eval())
+        beta_rep = Beta.init_from_natural_parameter(natural_parameter)
         with self.test_session(use_gpu=True):
             self.assertAllClose(beta_rep.alpha.eval(), alpha.eval())
             self.assertAllClose(beta_rep.beta.eval(), beta.eval())
@@ -835,8 +835,8 @@ class TestPoisson(tf.test.TestCase):
         natural_parameter = tf.log(rate)
         poisson_rep = Poisson(rate)
         with self.test_session(use_gpu=True):
-            self.assertAllClose(poisson_rep.natural_param.eval(), natural_parameter.eval())
-        poisson_rep = Poisson(natural_parameter=natural_parameter)
+            self.assertAllClose(poisson_rep._natural_parameter.eval(), natural_parameter.eval())
+        poisson_rep = Poisson.init_from_natural_parameter(natural_parameter)
         with self.test_session(use_gpu=True):
             self.assertAllClose(poisson_rep.rate.eval(), rate.eval())
 
@@ -1002,8 +1002,8 @@ class TestInverseGamma(tf.test.TestCase):
 
         InverseGamma(tf.placeholder(tf.float32, [None, 1]),
                      tf.placeholder(tf.float32, [None, 1, 3]))
-        InverseGamma(natural_parameter=tf.placeholder(tf.float32, [None, 1, None]))
-        InverseGamma(natural_parameter=tf.placeholder(tf.float32, [None, 1, 2]))
+        InverseGamma.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 1, None]))
+        InverseGamma.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 1, 2]))
 
     def test_natural_parameter(self):
         alpha = tf.ones([2, 3])
@@ -1012,8 +1012,8 @@ class TestInverseGamma(tf.test.TestCase):
         natural_parameter = tf.tile(tmp, [2, 3, 1])
         inverse_gamma_rep = InverseGamma(alpha, beta)
         with self.test_session(use_gpu=True):
-            self.assertAllClose(inverse_gamma_rep.natural_param.eval(), natural_parameter.eval())
-            inverse_gamma_rep = InverseGamma(natural_parameter=natural_parameter)
+            self.assertAllClose(inverse_gamma_rep._natural_parameter.eval(), natural_parameter.eval())
+            inverse_gamma_rep = InverseGamma.init_from_natural_parameter(natural_parameter=natural_parameter)
         with self.test_session(use_gpu=True):
             self.assertAllClose(inverse_gamma_rep.alpha.eval(), alpha.eval())
             self.assertAllClose(inverse_gamma_rep.beta.eval(), beta.eval())
@@ -1092,6 +1092,7 @@ class TestLaplace(tf.test.TestCase):
 
         Laplace(tf.placeholder(tf.float32, [None, 1]),
                 tf.placeholder(tf.float32, [None, 1, 3]))
+        Laplace.init_from_natural_parameter(tf.placeholder(tf.float32, [None, 1]), loc=tf.placeholder(tf.float32, [None, 1, 3]))
 
     def test_value_shape(self):
         # static

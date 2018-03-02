@@ -72,7 +72,6 @@ class MultivariateNormalCholesky(ExponentialFamily):
     def __init__(self,
                  mean = None,
                  cov_tril = None,
-                 natural_parameters = None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
@@ -80,71 +79,33 @@ class MultivariateNormalCholesky(ExponentialFamily):
                  **kwargs):
         self._check_numerics = check_numerics
 
-        if mean is not None and cov_tril is not None:
-            self._mean = tf.convert_to_tensor(mean)
-            self._cov_tril = tf.convert_to_tensor(cov_tril)
-            self._mean = assert_rank_at_least_one(
-                self._mean, 'MultivariateNormalCholesky.mean')
-            self._n_dim = get_shape_at(self._mean, -1)
-            self._cov_tril = assert_rank_at_least(
-                self._cov_tril, 2, 'MultivariateNormalCholesky.cov_tril')
 
-            # Static shape check
-            expected_shape = self._mean.get_shape().concatenate(
-                [self._n_dim if isinstance(self._n_dim, int) else None])
-            self._cov_tril.get_shape().assert_is_compatible_with(expected_shape)
-            # Dynamic
-            expected_shape = tf.concat(
-                [tf.shape(self._mean), [self._n_dim]], axis=0)
-            actual_shape = tf.shape(self._cov_tril)
-            msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
-                   'shape with mean. Expected', expected_shape, ' got ',
-                   actual_shape]
-            assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
-            with tf.control_dependencies(assert_ops):
-                self._cov_tril = tf.identity(self._cov_tril)
-            inv_cov_tril = tf.matrix_inverse(self._cov_tril)
-            pre = tf.matmul(inv_cov_tril, inv_cov_tril, transpose_b=True)
-            #print(tf.shape(pre), tf.shape(self._mean))
-            natural_parameters = tf.concat([tf.reshape(pre,tf.concat([tf.shape(pre)[:-2],[-1]],0)), - tf.squeeze(tf.matmul(tf.expand_dims(self._mean, -1), pre, transpose_a=True), -2)], -1)
-        elif natural_parameters is None:
-            raise ValueError("No parameters are passed")
-        else:
-            natural_parameters = tf.convert_to_tensor(natural_parameters)
-            param_num = tf.shape(natural_parameters)[-1]
-            #print(param_num)
-            n_dim = tf.cast(tf.sqrt(1 + 4 * tf.cast(param_num, tf.float32)) - 1./2 + 0.001, tf.int32)
-            #print(n_dim, param_num)
-            #assert(param_num == n_dim * n_dim + n_dim)
-            self._n_dim = n_dim
-            pre, self._mean = tf.split(natural_parameters, [n_dim ** 2, n_dim], -1)
-            pre = tf.reshape(pre, tf.concat([tf.shape(pre)[:-1],[n_dim, n_dim]],0))
-            # Static shape check
-            expected_shape = self._mean.get_shape().concatenate(
-                [self._n_dim if isinstance(self._n_dim, int) else None])
-            pre.get_shape().assert_is_compatible_with(expected_shape)
-            # Dynamic
-            expected_shape = tf.concat(
-                [tf.shape(self._mean), [self._n_dim]], axis=0)
-            actual_shape = tf.shape(pre)
-            msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
-                   'shape with mean. Expected', expected_shape, ' got ',
-                   actual_shape]
-            assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
+        self._mean = tf.convert_to_tensor(mean)
+        self._cov_tril = tf.convert_to_tensor(cov_tril)
+        self._mean = assert_rank_at_least_one(
+            self._mean, 'MultivariateNormalCholesky.mean')
+        self._n_dim = get_shape_at(self._mean, -1)
+        self._cov_tril = assert_rank_at_least(
+            self._cov_tril, 2, 'MultivariateNormalCholesky.cov_tril')
 
-            with tf.control_dependencies(assert_ops):
-                inv_cov_tril = tf.cholesky(pre)
-            try:
-                self._cov_tril = tf.matrix_inverse(inv_cov_tril)
-            except ValueError:
-                raise ValueError("precision matrix must be not singular")
-            tmp = tf.reshape(self._mean, tf.concat([tf.shape(self._mean)[:-1], [1, n_dim]], 0))
-            self._mean = tf.matrix_triangular_solve(inv_cov_tril, tmp)
-            self._mean = tf.matrix_triangular_solve(inv_cov_tril, tmp)
-
-
-
-
+        # Static shape check
+        expected_shape = self._mean.get_shape().concatenate(
+            [self._n_dim if isinstance(self._n_dim, int) else None])
+        self._cov_tril.get_shape().assert_is_compatible_with(expected_shape)
+        # Dynamic
+        expected_shape = tf.concat(
+            [tf.shape(self._mean), [self._n_dim]], axis=0)
+        actual_shape = tf.shape(self._cov_tril)
+        msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
+               'shape with mean. Expected', expected_shape, ' got ',
+               actual_shape]
+        assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
+        with tf.control_dependencies(assert_ops):
+            self._cov_tril = tf.identity(self._cov_tril)
+        inv_cov_tril = tf.matrix_inverse(self._cov_tril)
+        pre = tf.matmul(inv_cov_tril, inv_cov_tril, transpose_b=True)
+        #print(tf.shape(pre), tf.shape(self._mean))
+        natural_parameters = tf.concat([tf.reshape(pre,tf.concat([tf.shape(pre)[:-2],[-1]],0)), - tf.squeeze(tf.matmul(tf.expand_dims(self._mean, -1), pre, transpose_a=True), -2)], -1)
 
         dtype = assert_same_float_dtype(
             [(self._mean, 'MultivariateNormalCholesky.mean'),
@@ -165,12 +126,47 @@ class MultivariateNormalCholesky(ExponentialFamily):
             dtype=dtype,
             param_dtype=dtype,
             is_continuous=True,
-            natural_param=natural_parameters,
-            Z=None,
             is_reparameterized=is_reparameterized,
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        natural_parameters = tf.convert_to_tensor(natural_parameter)
+        param_num = tf.shape(natural_parameters)[-1]
+        # print(param_num)
+        n_dim = tf.cast(tf.sqrt(1 + 4 * tf.cast(param_num, tf.float32)) - 1. / 2 + 0.001, tf.int32)
+        # print(n_dim, param_num)
+        # assert(param_num == n_dim * n_dim + n_dim)
+        pre, mean = tf.split(natural_parameters, [n_dim ** 2, n_dim], -1)
+        pre = tf.reshape(pre, tf.concat([tf.shape(pre)[:-1], [n_dim, n_dim]], 0))
+        # Static shape check
+        expected_shape = self._mean.get_shape().concatenate(
+            [n_dim if isinstance(n_dim, int) else None])
+        pre.get_shape().assert_is_compatible_with(expected_shape)
+        # Dynamic
+        expected_shape = tf.concat(
+            [tf.shape(mean), [n_dim]], axis=0)
+        actual_shape = tf.shape(pre)
+        msg = ['MultivariateNormalCholesky.cov_tril should have compatible '
+               'shape with mean. Expected', expected_shape, ' got ',
+               actual_shape]
+        assert_ops = [tf.assert_equal(expected_shape, actual_shape, msg)]
+
+        with tf.control_dependencies(assert_ops):
+            inv_cov_tril = tf.cholesky(pre)
+
+        tmp = tf.reshape(mean, tf.concat([tf.shape(mean)[:-1], [1, n_dim]], 0))
+        tmp = tf.matrix_triangular_solve(inv_cov_tril, tmp)
+        mean = tf.matrix_triangular_solve(inv_cov_tril, tmp)
+        cov_tril = tf.matrix_inverse(inv_cov_tril)
+        return MultivariateNormalCholesky(
+            mean,
+            cov_tril,
+            **kwargs
+        )
+
 
     @property
     def mean(self):

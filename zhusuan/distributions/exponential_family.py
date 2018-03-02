@@ -20,15 +20,11 @@ class ExponentialFamily(Distribution):
                  dtype,
                  param_dtype,
                  is_continuous,
-                 natural_param,
-                 Z,
                  is_reparameterized,
                  use_path_derivative=False,
                  group_ndims=0,
                  **kwargs
                  ):
-        self._natural_param = natural_param
-        self._Z = Z
         super(ExponentialFamily, self).__init__(
             dtype=dtype,
             param_dtype=param_dtype,
@@ -37,6 +33,13 @@ class ExponentialFamily(Distribution):
             use_path_derivative=use_path_derivative,
             group_ndims=group_ndims,
             **kwargs)
+
+    @staticmethod
+    def init_from_natural_parameter(natural_parameter, **kwargs):
+        """
+        Private method for subclasses to rewrite the :meth:`init_from_natural_parameter` method.
+        """
+        raise NotImplementedError()
 
     @property
     def natural_param(self):
