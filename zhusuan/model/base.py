@@ -159,6 +159,14 @@ class StochasticTensor(TensorArithmeticMixin):
             raise ValueError("{}: Ref type not supported.".format(value))
         return value.tensor
 
+    def variational_message_to_parent(self):
+        raise NotImplementedError()
+
+    def variational_message_from_parents(self):
+        raise NotImplementedError()
+
+
+
 
 tf.register_tensor_conversion_function(
     StochasticTensor, StochasticTensor._to_tensor)
