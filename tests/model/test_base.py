@@ -21,9 +21,11 @@ class TestStochasticTensor(tf.test.TestCase):
         probs = Mock()
         sample_func = Mock(return_value=samples)
         log_prob_func = Mock(return_value=log_probs)
+        sample_and_log_prob_func = Mock(return_value=(samples, log_probs))
         prob_func = Mock(return_value=probs)
         distribution = Mock(sample=sample_func,
                             log_prob=log_prob_func,
+                            sample_and_log_prob=sample_and_log_prob_func,
                             prob=prob_func,
                             dtype=tf.int32)
         with BayesianNet() as model:
@@ -86,9 +88,11 @@ class TestStochasticTensor(tf.test.TestCase):
             probs = Mock()
             sample_func = Mock(return_value=samples)
             log_prob_func = Mock(return_value=log_probs)
+            sample_and_log_prob_func = Mock(return_value=(samples, log_probs))
             prob_func = Mock(return_value=probs)
             distribution = Mock(sample=sample_func,
                                 log_prob=log_prob_func,
+                                sample_and_log_prob=sample_and_log_prob_func,
                                 prob=prob_func,
                                 dtype=tf.int32)
 

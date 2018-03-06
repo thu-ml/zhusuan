@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 import os
 import time
+from functools import partial
 
 import tensorflow as tf
 from six.moves import range
@@ -29,14 +30,17 @@ def vae(observed, n, x_dim, z_dim, n_particles):
     return model
 
 
-def q_net(x, z_dim, n_particles):
+def q_net(x, z_dim, n_particles, n_flows):
+    def forward(samples):
+        return zs.repeated_flow(zs.planar_normalizing_flow, samples, n_iters=n_flows)
+
     with zs.BayesianNet() as variational:
         lz_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
         lz_x = tf.layers.dense(lz_x, 500, activation=tf.nn.relu)
         z_mean = tf.layers.dense(lz_x, z_dim)
         z_logstd = tf.layers.dense(lz_x, z_dim)
-        z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1,
-                      n_samples=n_particles)
+        z = zs.NormalFlow('z', forward, mean=z_mean, logstd=z_logstd, group_ndims=1,
+                          n_samples=n_particles)
     return variational
 
 
@@ -67,14 +71,9 @@ def main():
         log_pz, log_px_z = model.local_log_prob(['z', 'x'])
         return log_pz + log_px_z
 
-    variational = q_net(x, z_dim, n_particles)
+    variational = q_net(x, z_dim, n_particles, n_planar_flows)
     qz_samples, log_qz = variational.query('z', outputs=True,
                                            local_log_prob=True)
-    # TODO: add tests for repeated calls of flows
-    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
-                                                    n_iters=n_planar_flows)
-    qz_samples, log_qz = zs.planar_normalizing_flow(qz_samples, log_qz,
-                                                    n_iters=n_planar_flows)
 
     lower_bound = zs.variational.elbo(log_joint,
                                       observed={'x': x},
