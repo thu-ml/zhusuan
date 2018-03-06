@@ -37,23 +37,20 @@ class ImportanceWeightedObjective(VariationalObjective):
         with tf.Session() as sess:
             print sess.run(lower_bound, feed_dict=...)
 
-    The variational posterior used in this objective is in fact a proposal
-    for importance sampling, thus the typical usage of this objective is
-    jointly doing inference (adapt the proposal to raise the lower bound) and
-    learning the model (optimize the lower bound wrt. model parameters).
-
-    However, this cannot be directly done by calling Tensorflow optimizers on
-    the :class:`ImportanceWeightedObjective` instance because of the outer
-    expectation in the true objective, while our value at hand is a
-    single or a few sample estimates. The correct way for doing this is by
-    calling the gradient estimator provided by
-    :class:`ImportanceWeightedObjective`. Currently there are two of them:
+    The objective computes the same importance-sampling based estimate
+    of the marginal log likelihood of observed variables as
+    :meth:`~zhusuan.evaluation.is_loglikelihood`. The difference is that the
+    estimate now serves as a variational objective, since it is also a lower
+    bound of the marginal log likelihood (as long as the number of samples is
+    finite). The variational posterior here is in fact the proposal. As a
+    variational objective, :class:`ImportanceWeightedObjective` provides two
+    gradient estimators for the variational (proposal) parameters:
 
     * :meth:`sgvb`: The Stochastic Gradient Variational Bayes (SGVB) estimator,
-        also known as "the reparameterization trick", or "path derivative
-        estimator".
+      also known as "the reparameterization trick", or "path derivative
+      estimator".
     * :meth:`vimco`: The multi-sample score function estimator with variance
-        reduction, also known as "VIMCO".
+      reduction, also known as "VIMCO".
 
     The typical code for joint inference and learning is like::
 

@@ -76,7 +76,7 @@ setup(
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['numpy==1.14.0',
+    install_requires=['numpy>=1.14.0',
                       'six'],
 
     # List additional groups of dependencies here (e.g. development
@@ -85,9 +85,9 @@ setup(
     # $ pip install -e .[dev,test]
     extras_require={
         'dev': [
-            'Sphinx',
+            'Sphinx>=1.7.1',
             'sphinx_rtd_theme',
-            'sphinxcontrib-bibtex',
+            'sphinxcontrib-bibtex>=0.3.6',
             'pep8',
             'scipy',
             'coverage',
