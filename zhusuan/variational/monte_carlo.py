@@ -181,7 +181,7 @@ class ImportanceWeightedObjective(VariationalObjective):
 
         # compute variance reduction term
         mean_except_signal = (
-            tf.reduce_sum(l_signal, self._axis, keep_dims=True) - l_signal
+            tf.reduce_sum(l_signal, self._axis, keepdims=True) - l_signal
         ) / tf.to_float(tf.shape(l_signal)[self._axis] - 1)
         x, sub_x = tf.to_float(l_signal), tf.to_float(mean_except_signal)
 
@@ -204,7 +204,7 @@ class ImportanceWeightedObjective(VariationalObjective):
 
         # variance reduced objective
         l_signal = log_mean_exp(l_signal, self._axis,
-                                keep_dims=True) - control_variate
+                                keepdims=True) - control_variate
         fake_term = tf.reduce_sum(
             -self._entropy_term() * tf.stop_gradient(l_signal), self._axis)
         cost = -fake_term - log_mean_exp(log_w, self._axis)

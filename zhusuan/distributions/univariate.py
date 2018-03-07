@@ -3,20 +3,23 @@
 
 from __future__ import absolute_import
 from __future__ import division
-import warnings
 
 import numpy as np
 import tensorflow as tf
 
-from zhusuan.distributions.base import *
-from zhusuan.distributions.utils import \
-        maybe_explicit_broadcast, \
-        assert_same_float_dtype, \
-        assert_same_float_and_int_dtype, \
-        assert_scalar, \
-        assert_rank_at_least_one, \
-        get_shape_at, \
-        open_interval_standard_uniform
+from zhusuan.distributions.base import Distribution
+from zhusuan.distributions.utils import (
+    maybe_explicit_broadcast,
+    assert_same_dtype_in,
+    assert_same_float_dtype,
+    assert_dtype_in_dtypes,
+    assert_dtype_is_int_or_float,
+    assert_scalar,
+    assert_rank_at_least_one,
+    get_shape_at,
+    open_interval_standard_uniform,
+    ensure_logstd_std_order_change,
+)
 
 
 __all__ = [
@@ -44,15 +47,18 @@ class Normal(Distribution):
 
     .. warning::
 
-         The order of arguments `logstd`/`std` will change to `std`/`logstd`
-         in the coming version (0.3.1).
+        The order of arguments `logstd`/`std` has changed to `std`/`logstd`
+        since 0.3.1. Please use named arguments: ``Normal(mean, std=..., ...)``
+        or ``Normal(mean, logstd=..., ...)``.
 
     :param mean: A `float` Tensor. The mean of the Normal distribution.
-        Should be broadcastable to match `logstd`.
-    :param logstd: A `float` Tensor. The log standard deviation of the Normal
-        distribution. Should be broadcastable to match `mean`.
+        Should be broadcastable to match `std` or `logstd`.
+    :param _sentinel: Used to prevent positional parameters. Internal,
+        do not use.
     :param std: A `float` Tensor. The standard deviation of the Normal
         distribution. Should be positive and broadcastable to match `mean`.
+    :param logstd: A `float` Tensor. The log standard deviation of the Normal
+        distribution. Should be broadcastable to match `mean`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -72,16 +78,17 @@ class Normal(Distribution):
 
     def __init__(self,
                  mean=0.,
-                 logstd=None,
+                 _sentinel=None,
                  std=None,
+                 logstd=None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
+        ensure_logstd_std_order_change("Normal", _sentinel)
         self._mean = tf.convert_to_tensor(mean)
-        warnings.warn("Normal: The order of arguments logstd/std will change "
-                      "to std/logstd in the coming version.", FutureWarning)
+
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")
@@ -183,15 +190,19 @@ class FoldNormal(Distribution):
 
     .. warning::
 
-         The order of arguments `logstd`/`std` will change to `std`/`logstd`
-         in the coming version (0.3.1).
+        The order of arguments `logstd`/`std` has changed to `std`/`logstd`
+        since 0.3.1. Please use named arguments:
+        ``FoldNormal(mean, std=..., ...)`` or
+        ``FoldNormal(mean, logstd=..., ...)``.
 
     :param mean: A `float` Tensor. The mean of the FoldNormal distribution.
-        Should be broadcastable to match `logstd`.
-    :param logstd: A `float` Tensor. The log standard deviation of the
-        FoldNormal distribution. Should be broadcastable to match `mean`.
+        Should be broadcastable to match `std` or `logstd`.
+    :param _sentinel: Used to prevent positional parameters. Internal,
+        do not use.
     :param std: A `float` Tensor. The standard deviation of the FoldNormal
         distribution. Should be positive and broadcastable to match `mean`.
+    :param logstd: A `float` Tensor. The log standard deviation of the
+        FoldNormal distribution. Should be broadcastable to match `mean`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -211,17 +222,17 @@ class FoldNormal(Distribution):
 
     def __init__(self,
                  mean=0.,
-                 logstd=None,
+                 _sentinel=None,
                  std=None,
+                 logstd=None,
                  group_ndims=0,
                  is_reparameterized=True,
                  use_path_derivative=False,
                  check_numerics=False,
                  **kwargs):
+        ensure_logstd_std_order_change("FoldNormal", _sentinel)
         self._mean = tf.convert_to_tensor(mean)
-        warnings.warn("FoldNormal: The order of arguments logstd/std will "
-                      "change to std/logstd in the coming version.",
-                      FutureWarning)
+
         if (logstd is None) == (std is None):
             raise ValueError("Either std or logstd should be passed but not "
                              "both of them.")
@@ -328,7 +339,9 @@ class Bernoulli(Distribution):
 
         .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
 
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -337,14 +350,12 @@ class Bernoulli(Distribution):
         explanation.
     """
 
-    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
+    def __init__(self, logits, dtype=tf.int32, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Bernoulli.logits')])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        assert_dtype_is_int_or_float(dtype)
 
         super(Bernoulli, self).__init__(
             dtype=dtype,
@@ -399,13 +410,14 @@ class Categorical(Distribution):
     The class of univariate Categorical distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
+    :param logits: A N-D (N >= 1) `float32` or `float64` Tensor of shape (...,
         n_categories). Each slice `[i, j,..., k, :]` represents the
         un-normalized log probabilities for all categories.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        `float32`, `float64`, `int32`, or `int64`. Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -417,14 +429,14 @@ class Categorical(Distribution):
     [0, n_categories).
     """
 
-    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
+    def __init__(self, logits, dtype=tf.int32, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
-        param_dtype = assert_same_float_dtype(
-            [(self._logits, 'Categorical.logits')])
+        param_dtype = assert_same_dtype_in(
+            [(self._logits, 'Categorical.logits')],
+            [tf.float32, tf.float64])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        allowed_dtypes = [tf.float32, tf.float64, tf.int32, tf.int64]
+        assert_dtype_in_dtypes(dtype, allowed_dtypes)
 
         self._logits = assert_rank_at_least_one(
                 self._logits, 'Categorical.logits')
@@ -491,13 +503,13 @@ class Categorical(Distribution):
             logits *= tf.ones_like(tf.expand_dims(given, -1), self.param_dtype)
             return given, logits
 
-        def _is_same_dynamic_shape(given, logits):
-            return tf.cond(
-                tf.equal(tf.rank(given), tf.rank(logits) - 1),
-                lambda: tf.reduce_all(tf.equal(
-                    tf.concat([tf.shape(given), tf.shape(logits)[:-1]], 0),
-                    tf.concat([tf.shape(logits)[:-1], tf.shape(given)], 0))),
-                lambda: tf.convert_to_tensor(False, tf.bool))
+        # def _is_same_dynamic_shape(given, logits):
+        #     return tf.cond(
+        #         tf.equal(tf.rank(given), tf.rank(logits) - 1),
+        #         lambda: tf.reduce_all(tf.equal(
+        #             tf.concat([tf.shape(given), tf.shape(logits)[:-1]], 0),
+        #             tf.concat([tf.shape(logits)[:-1], tf.shape(given)], 0))),
+        #         lambda: tf.convert_to_tensor(False, tf.bool))
 
         if not (given.get_shape() and logits.get_shape()):
             given, logits = _broadcast(given, logits)
@@ -523,11 +535,9 @@ class Categorical(Distribution):
         # `labels` type of `sparse_softmax_cross_entropy_with_logits` must be
         # int32 or int64
         if self.dtype == tf.float32:
-            given = tf.cast(given, dtype=tf.int32)
+            given = tf.to_int32(given)
         elif self.dtype == tf.float64:
-            given = tf.cast(given, dtype=tf.int64)
-        elif self.dtype not in [tf.int32, tf.int64]:
-            given = tf.cast(given, tf.int32)
+            given = tf.to_int64(given)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
         if given.get_shape() and logits.get_shape():
@@ -761,7 +771,6 @@ class Beta(Distribution):
     def __init__(self,
                  alpha,
                  beta,
-                 dtype=None,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
@@ -850,7 +859,9 @@ class Poisson(Distribution):
 
     :param rate: A `float` Tensor. The rate parameter of Poisson
         distribution. Must be positive.
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -862,7 +873,7 @@ class Poisson(Distribution):
 
     def __init__(self,
                  rate,
-                 dtype=None,
+                 dtype=tf.int32,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
@@ -870,9 +881,7 @@ class Poisson(Distribution):
         param_dtype = assert_same_float_dtype(
             [(self._rate, 'Poisson.rate')])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        assert_dtype_is_int_or_float(dtype)
 
         self._check_numerics = check_numerics
 
@@ -902,41 +911,10 @@ class Poisson(Distribution):
         return self.rate.get_shape()
 
     def _sample(self, n_samples):
-        try:
-            # tf.random_poisson is implemented after v1.2
-            random_poisson = tf.random_poisson
-        except AttributeError:
-            # This algorithm to generate random Poisson-distributed numbers is
-            # given by Kunth [1]
-            # [1]: https://en.wikipedia.org/wiki/
-            #      Poisson_distribution#Generating_Poisson-distributed_random_variables
-            shape = tf.concat([[n_samples], self.batch_shape], 0)
-            static_n_samples = n_samples if isinstance(n_samples,
-                                                       int) else None
-            static_shape = tf.TensorShape([static_n_samples]).concatenate(
-                self.get_batch_shape())
-            enlam = tf.exp(-self.rate)
-            x = tf.zeros(shape, dtype=self.dtype)
-            prod = tf.ones(shape, dtype=self.param_dtype)
-
-            def loop_cond(prod, x):
-                return tf.reduce_any(tf.greater_equal(prod, enlam))
-
-            def loop_body(prod, x):
-                prod *= tf.random_uniform(tf.shape(prod), minval=0, maxval=1)
-                x += tf.cast(tf.greater_equal(prod, enlam), dtype=self.dtype)
-                return prod, x
-
-            _, samples = tf.while_loop(
-                loop_cond, loop_body, loop_vars=[prod, x],
-                shape_invariants=[static_shape, static_shape])
-
-            samples.set_shape(static_shape)
-        else:
-            samples = random_poisson(self.rate, [n_samples],
-                                     dtype=self.param_dtype)
-            if self.param_dtype != self.dtype:
-                samples = tf.cast(samples, self.dtype)
+        samples = tf.random_poisson(self.rate, [n_samples],
+                                    dtype=self.param_dtype)
+        if self.param_dtype != self.dtype:
+            samples = tf.cast(samples, self.dtype)
         return samples
 
     def _log_prob(self, given):
@@ -967,7 +945,9 @@ class Binomial(Distribution):
 
     :param n_experiments: A 0-D `int32` Tensor. The number of experiments
         for each sample.
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -980,7 +960,7 @@ class Binomial(Distribution):
     def __init__(self,
                  logits,
                  n_experiments,
-                 dtype=None,
+                 dtype=tf.int32,
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
@@ -988,9 +968,7 @@ class Binomial(Distribution):
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Binomial.logits')])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        assert_dtype_is_int_or_float(dtype)
 
         sign_err_msg = "n_experiments must be positive"
         if isinstance(n_experiments, int):

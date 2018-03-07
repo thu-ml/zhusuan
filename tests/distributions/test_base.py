@@ -16,12 +16,14 @@ class Dist(Distribution):
                  dtype=tf.float32,
                  param_dtype=tf.float32,
                  group_ndims=0,
-                 shape_fully_defined=True):
+                 shape_fully_defined=True,
+                 **kwargs):
         super(Dist, self).__init__(dtype,
                                    param_dtype,
                                    is_continuous=True,
                                    is_reparameterized=True,
-                                   group_ndims=group_ndims)
+                                   group_ndims=group_ndims,
+                                   **kwargs)
         self._shape_fully_defined = shape_fully_defined
 
     def _value_shape(self):
@@ -154,6 +156,9 @@ class TestDistributions(tf.test.TestCase):
             self.assertAllEqual(
                 p_3.eval(feed_dict={given_3: np.ones((1, 1, 2, 3, 4, 5))}),
                 np.ones((1, 1, 2)))
+
+            with self.assertRaisesRegexp(ValueError, "has been deprecated"):
+                Dist(group_event_ndims=1)
 
             group_ndims = tf.placeholder(tf.int32)
             dist2 = Dist(group_ndims=group_ndims)

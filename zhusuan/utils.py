@@ -150,7 +150,7 @@ class TensorArithmeticMixin(object):
         )
 
 
-def log_sum_exp(x, axis=None, keep_dims=False):
+def log_sum_exp(x, axis=None, keepdims=False):
     """
     Deprecated: Use tf.reduce_logsumexp().
 
@@ -159,39 +159,39 @@ def log_sum_exp(x, axis=None, keep_dims=False):
     :param x: A Tensor.
     :param axis: An int or list or tuple. The dimensions to reduce.
         If `None` (the default), reduces all dimensions.
-    :param keep_dims: Bool. If true, retains reduced dimensions with length 1.
+    :param keepdims: Bool. If true, retains reduced dimensions with length 1.
         Default to be False.
 
     :return: A Tensor after the computation of log sum exp along given axes of
         x.
     """
     x = tf.convert_to_tensor(x)
-    x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
+    x_max = tf.reduce_max(x, axis=axis, keepdims=True)
     ret = tf.log(tf.reduce_sum(tf.exp(x - x_max), axis=axis,
-                               keep_dims=True)) + x_max
-    if not keep_dims:
+                               keepdims=True)) + x_max
+    if not keepdims:
         ret = tf.reduce_sum(ret, axis=axis)
     return ret
 
 
-def log_mean_exp(x, axis=None, keep_dims=False):
+def log_mean_exp(x, axis=None, keepdims=False):
     """
     Tensorflow numerically stable log mean of exps across the `axis`.
 
     :param x: A Tensor.
     :param axis: An int or list or tuple. The dimensions to reduce.
         If `None` (the default), reduces all dimensions.
-    :param keep_dims: Bool. If true, retains reduced dimensions with length 1.
+    :param keepdims: Bool. If true, retains reduced dimensions with length 1.
         Default to be False.
 
     :return: A Tensor after the computation of log mean exp along given axes of
         x.
     """
     x = tf.convert_to_tensor(x)
-    x_max = tf.reduce_max(x, axis=axis, keep_dims=True)
+    x_max = tf.reduce_max(x, axis=axis, keepdims=True)
     ret = tf.log(tf.reduce_mean(tf.exp(x - x_max), axis=axis,
-                                keep_dims=True)) + x_max
-    if not keep_dims:
+                                keepdims=True)) + x_max
+    if not keepdims:
         ret = tf.reduce_mean(ret, axis=axis)
     return ret
 

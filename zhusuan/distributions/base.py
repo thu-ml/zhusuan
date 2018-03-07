@@ -3,7 +3,6 @@
 
 from __future__ import absolute_import
 from __future__ import division
-import warnings
 
 import tensorflow as tf
 
@@ -88,11 +87,9 @@ class Distribution(object):
                  group_ndims=0,
                  **kwargs):
         if 'group_event_ndims' in kwargs:
-            warnings.warn(
-                "The argument `group_event_ndims` has been deprecated and "
-                "will be removed in the coming version (0.3.1). Please use "
-                "`group_ndims` instead.", FutureWarning)
-            group_ndims = kwargs['group_event_ndims']
+            raise ValueError(
+                "The argument `group_event_ndims` has been deprecated "
+                "Please use `group_ndims` instead.")
 
         self._dtype = dtype
         self._param_dtype = param_dtype

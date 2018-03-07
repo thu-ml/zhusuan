@@ -84,6 +84,7 @@ def is_same_dynamic_shape(x, y):
 
     :param x: A Tensor.
     :param y: A Tensor.
+
     :return: A scalar Tensor of `bool`.
     """
     # There is a BUG of Tensorflow for not doing static shape inference
@@ -97,96 +98,102 @@ def is_same_dynamic_shape(x, y):
         lambda: tf.convert_to_tensor(False, tf.bool))
 
 
-def assert_same_dtype(tensors_with_name, dtype=None):
+def floating_dtypes():
+    """Return a list of supported floating dtypes."""
+    return [tf.float16, tf.float32, tf.float64]
+
+
+def integer_dtypes():
+    """Return a list of supported integer dtypes."""
+    return [tf.int16, tf.int32, tf.int64]
+
+
+def assert_same_dtype_in(tensors_with_name, dtypes=None):
     """
-    Whether all types of tensors in `tensors` are the same as `dtype`.
+    Whether all types of tensors in `tensors_with_name` are the same and in the
+    allowed `dtypes`.
 
     :param tensors_with_name: A list of (tensor, tensor_name).
-    :param dtype: Expected type. If `None`, depend on the type of tensors.
-    :return: The type of `tensors`.
-    """
+    :param dtypes: A list of allowed dtypes. If `None`, then all dtypes are
+        allowed.
 
-    expected_dtype = dtype
+    :return: The dtype of `tensors`.
+    """
+    dtypes_set = set(dtypes) if dtypes else None
+    expected_dtype = None
     for tensor, tensor_name in tensors_with_name:
-        tensor_dtype = tensor.dtype
-        if not expected_dtype:
-            expected_dtype = tensor_dtype
-        elif expected_dtype != tensor_dtype:
-            if dtype is None:
-                tensor0, tensor0_name = tensors_with_name[0]
+        if dtypes_set and (tensor.dtype not in dtypes_set):
+            if len(dtypes) == 1:
                 raise TypeError(
-                    '%s(%s), must be the same type as %s(%s).' % (
-                        tensor_name, tensor_dtype,
-                        tensor0_name, tensor0.dtype))
+                    '{}({}) must have dtype {}.'.format(
+                        tensor_name, tensor.dtype, dtypes[0]))
             else:
                 raise TypeError(
-                    '%s(%s), must be %s.' % (
-                        tensor_name, tensor_dtype, expected_dtype))
+                    '{}({}) must have a dtype in {}.'.format(
+                        tensor_name, tensor.dtype, dtypes))
+        if not expected_dtype:
+            expected_dtype = tensor.dtype
+        elif expected_dtype != tensor.dtype:
+            tensor0, tensor0_name = tensors_with_name[0]
+            raise TypeError(
+                '{}({}) must have the same dtype as {}({}).'.format(
+                    tensor_name, tensor.dtype,
+                    tensor0_name, tensor0.dtype))
 
     return expected_dtype
 
 
-def assert_same_specific_dtype(tensors_with_name, dtypes):
+def assert_same_float_dtype(tensors_with_name):
     """
-    Whether all types of tensors in `tensors` are the same and in `dtypes`.
+    Whether all tensors in `tensors_with_name` have the same floating type.
 
     :param tensors_with_name: A list of (tensor, tensor_name).
-    :param dtypes: A list of types.
     :return: The type of `tensors`.
     """
-    if tensors_with_name is None:
-        return None
-    tensors_dtype = assert_same_dtype(tensors_with_name)
-    if tensors_dtype is not None and tensors_dtype not in dtypes:
-        tensor0, tensor0_name = tensors_with_name[0]
-        raise TypeError('%s(%s), must be in %s.' % (
-            tensor0_name, tensor0.dtype, dtypes))
-    return tensors_dtype
+    return assert_same_dtype_in(tensors_with_name, floating_dtypes())
 
 
-def assert_same_float_dtype(tensors_with_name, dtype=None):
+def assert_same_float_or_int_dtype(tensors_with_name):
     """
-    Whether all types of tensors in `tensors` are the same and floating type.
+    Whether all tensors in `tensors_with_name` have the same floating or
+    integer type.
 
     :param tensors_with_name: A list of (tensor, tensor_name).
-    :param dtype: Expected type. If `None`, depend on the type of tensors.
     :return: The type of `tensors`.
     """
-
-    floating_types = [tf.float16, tf.float32, tf.float64]
-    if dtype is None:
-        return assert_same_specific_dtype(tensors_with_name, floating_types)
-    elif dtype in floating_types:
-        return assert_same_dtype(tensors_with_name, dtype)
-    else:
-        raise TypeError("The argument 'dtype' must be in %s" % floating_types)
+    available_dtypes = floating_dtypes() + integer_dtypes()
+    return assert_same_dtype_in(tensors_with_name, available_dtypes)
 
 
-def assert_same_float_and_int_dtype(tensors_with_name, dtype=None):
+def assert_dtype_in_dtypes(dtype, dtypes):
+    """Assert a dtype is in a list of dtypes."""
+    if not dtype in dtypes:
+        raise TypeError("`dtype`({}) not in {}".format(dtype, dtypes))
+
+
+def assert_dtype_is_float(dtype):
+    """Assert a dtype is in [`tf.float16`, `tf.float32`, `tf.float64`]"""
+    assert_dtype_in_dtypes(dtype, floating_dtypes())
+
+
+def assert_dtype_is_int_or_float(dtype):
     """
-    Whether all types of tensors in `tensors` are the same and floating (or
-    integer) type.
-
-    :param tensors_with_name: A list of (tensor, tensor_name).
-    :param dtype: Expected type. If `None`, depend on the type of tensors.
-    :return: The type of `tensors`.
+    Assert a dtype is int (`tf.int16`, `tf.int32`, `tf.int64`) or float (
+    `tf.float16`, `tf.float32`, `tf.float64`).
     """
-
-    available_types = [tf.float16, tf.float32, tf.float64,
-                       tf.int16, tf.int32, tf.int64]
-    if dtype is None:
-        return assert_same_specific_dtype(tensors_with_name, available_types)
-    elif dtype in available_types:
-        return assert_same_dtype(tensors_with_name, dtype)
-    else:
-        raise TypeError("The argument 'dtype' must be in %s" % available_types)
+    assert_dtype_in_dtypes(dtype, integer_dtypes() + floating_dtypes())
 
 
 def get_shape_list(tensor):
     """
+    When the rank of `tensor` is known from the static shape, return a list
+    where each item is either an `int` (known from the static shape) or a
+    scalar `int32` Tensor (picked from the dynamic shape).
+
+    When the rank of `tensor` is unknown, return `None`.
+
     :param tensor: A `tf.Tensor`.
-    :return: A list representing the shape of `tensor`, or None if the shape
-             is unknown. Each item in the list is either int or a `tf.Tensor`.
+    :return: A list or `None`.
     """
     static_shape = tensor.get_shape()
     if not static_shape:
@@ -201,8 +208,9 @@ def get_shape_at(tensor, axis):
     """
     Similar to `tf.shape(tensor)[axis]`, but return a constant when possible.
 
-    :param tensor: A `tf.Tensor`.
+    :param tensor: A Tensor.
     :param axis: `int`.
+
     :return: The shape along the axis specified.
     """
     sizes_of_axes = get_shape_list(tensor)
@@ -215,9 +223,10 @@ def assert_rank_at_least(tensor, k, name):
     """
     Whether the rank of `tensor` is at least k.
 
-    :param tensor: A tensor to be checked.
+    :param tensor: A Tensor to be checked.
     :param k: The least rank allowed.
     :param name: The name of `tensor` for error message.
+
     :return: The checked tensor.
     """
     static_shape = tensor.get_shape()
@@ -236,8 +245,9 @@ def assert_rank_at_least_one(tensor, name):
     """
     Whether the rank of `tensor` is at least one.
 
-    :param tensor: A tensor to be checked.
+    :param tensor: A Tensor to be checked.
     :param name: The name of `tensor` for error message.
+
     :return: The checked tensor.
     """
     return assert_rank_at_least(tensor, 1, name)
@@ -246,8 +256,10 @@ def assert_rank_at_least_one(tensor, name):
 def assert_scalar(tensor, name):
     """
     Whether the `tensor` is a scalar (0-D tensor).
-    :param tensor: A tensor to be checked.
+
+    :param tensor: A Tensor to be checked.
     :param name: The name of `tensor` for error message.
+
     :return: The checked tensor.
     """
     static_shape = tensor.get_shape()
@@ -266,8 +278,10 @@ def assert_positive_int32_scalar(value, name):
     Whether `value` is a integer(or 0-D `tf.int32` tensor) and positive.
     If `value` is the instance of built-in type, it will be checked directly.
     Otherwise, it will be converted to a `tf.int32` tensor and checked.
+
     :param value: The value to be checked.
     :param name: The name of `value` used in error message.
+
     :return: The checked value.
     """
     if isinstance(value, (int, float)):
@@ -300,6 +314,7 @@ def open_interval_standard_uniform(shape, dtype):
 
     :param shape: The shape of generated samples.
     :param dtype: The dtype of generated samples.
+
     :return: A Tensor of samples.
     """
     return tf.random_uniform(
@@ -307,3 +322,12 @@ def open_interval_standard_uniform(shape, dtype):
         minval=np.finfo(dtype.as_numpy_dtype).tiny,
         maxval=1.,
         dtype=dtype)
+
+
+def ensure_logstd_std_order_change(name, sentinel):
+    """Make sure the order of logstd/std has changed to std/logstd."""
+    if sentinel is not None:
+        raise ValueError(
+            "The order of logstd/std has changed to std/logstd since 0.3.1. "
+            "Please use named arguments: {}(mean, std=..., ...) or "
+            "{}(mean, logstd=..., ...).".format(name, name))

@@ -135,13 +135,13 @@ class ExponentialWeightedMovingVariance:
         incr = [weight * (q - mean) for q, mean in zip(x, self.mean)]
         # mean: (1,...,1 data_dims)
         update_mean = [mean.assign_add(
-            tf.reduce_mean(i, axis=self.chain_axes, keep_dims=True))
+            tf.reduce_mean(i, axis=self.chain_axes, keepdims=True))
             for mean, i in zip(self.mean, incr)]
         # var: (1,...,1 data_dims)
         new_var = [
             (1 - weight) * var +
             tf.reduce_mean(i * (q - mean), axis=self.chain_axes,
-                           keep_dims=True)
+                           keepdims=True)
             for var, i, q, mean in zip(self.var, incr, x, update_mean)]
 
         update_var = [tf.assign(var, n_var)

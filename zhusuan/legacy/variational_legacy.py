@@ -133,10 +133,10 @@ def rws(log_joint, observed, latent, axis=None):
     entropy = -sum(latent_logpdfs)
     log_w = log_joint_value + entropy
     if axis is not None:
-        log_w_max = tf.reduce_max(log_w, axis, keep_dims=True)
+        log_w_max = tf.reduce_max(log_w, axis, keepdims=True)
         w_u = tf.exp(log_w - log_w_max)
         w_tilde = tf.stop_gradient(
-            w_u / tf.reduce_sum(w_u, axis, keep_dims=True))
+            w_u / tf.reduce_sum(w_u, axis, keepdims=True))
         log_likelihood = log_mean_exp(log_w, axis)
         fake_log_joint_cost = -tf.reduce_sum(w_tilde * log_joint_value, axis)
         fake_proposal_cost = tf.reduce_sum(w_tilde * entropy, axis)
@@ -291,7 +291,7 @@ def vimco(log_joint, observed, latent, axis=None):
         l_signal = tf.identity(l_signal)
 
     # compute variance reduction term
-    mean_except_signal = (tf.reduce_sum(l_signal, axis, keep_dims=True) -
+    mean_except_signal = (tf.reduce_sum(l_signal, axis, keepdims=True) -
                           l_signal) / tf.to_float(tf.shape(l_signal)[axis] - 1)
     x, sub_x = tf.to_float(l_signal), tf.to_float(mean_except_signal)
 
@@ -311,7 +311,7 @@ def vimco(log_joint, observed, latent, axis=None):
     control_variate = tf.transpose(log_mean_exp(x_ex, n_dim - 1), perm=perm)
 
     # variance reduced objective
-    l_signal = log_mean_exp(l_signal, axis, keep_dims=True) - control_variate
+    l_signal = log_mean_exp(l_signal, axis, keepdims=True) - control_variate
     fake_term = tf.reduce_sum(-entropy * tf.stop_gradient(l_signal), axis)
     lower_bound = log_mean_exp(log_joint_value + entropy, axis)
     cost = -fake_term - log_mean_exp(log_joint_value + entropy, axis)

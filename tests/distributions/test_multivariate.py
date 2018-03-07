@@ -252,8 +252,8 @@ class TestMultinomial(tf.test.TestCase):
                             normalize_logits)
 
     def test_dtype(self):
-        def _distribution(param, dtype=None):
-            return Multinomial(param, n_experiments=10, dtype=dtype)
+        def _distribution(param, **kwargs):
+            return Multinomial(param, n_experiments=10, **kwargs)
         utils.test_dtype_1parameter_discrete(self, _distribution)
 
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):

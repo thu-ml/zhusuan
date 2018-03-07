@@ -1,4 +1,4 @@
-zhusuan\.distributions 
+zhusuan\.distributions
 ==============================
 
 .. automodule:: zhusuan.distributions
@@ -27,6 +27,15 @@ Multivariate distributions
 --------------------------
 
 .. automodule:: zhusuan.distributions.multivariate
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :inherited-members:
+
+Special distributions
+---------------------
+
+.. automodule:: zhusuan.distributions.special
     :members:
     :undoc-members:
     :show-inheritance:

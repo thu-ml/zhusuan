@@ -275,7 +275,7 @@ class TestLogMeanExp(tf.test.TestCase):
                 self.assertEqual(test_values.dtype, true_values.dtype)
 
             b = np.array([[0., 1e-6, 10.1]])
-            test_values = sess.run(log_mean_exp(b, 0, keep_dims=False))
+            test_values = sess.run(log_mean_exp(b, 0, keepdims=False))
             self.assertTrue(np.abs(test_values - b).max() < 1e-6)
 
 

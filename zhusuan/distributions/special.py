@@ -18,26 +18,31 @@ __all__ = [
 
 class Empirical(Distribution):
     """
-    The class of Empirical distribution.
-    Distribution for any variables, which are sampled from an empirical distribution
-    and have no explicit density.
-    You can not sample from the distribution or calculate probabilities and log-probabilities.
+    The class of Empirical distribution. Distribution for any variables,
+    which are sampled from an empirical distribution and have no explicit
+    density. You can not sample from the distribution or calculate
+    probabilities and log-probabilities.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param dtype: The value type of samples from the distribution.
-    :param batch_shape: A `TensorShape` describing the `batch_shape` of the distribution.
-    :param value_shape: A `TensorShape` describing the `value_shape` of the distribution.
+    :param batch_shape: A `TensorShape` describing the `batch_shape` of the
+        distribution.
+    :param value_shape: A `TensorShape` describing the `value_shape` of the
+        distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
         together. Default is 0, which means a single value is an event.
         See :class:`~zhusuan.distributions.base.Distribution` for more detailed
         explanation.
-    :param is_continuous: Whether the distribution is continuous or not.
-        If None will consider it continuous only if `dtype` is a float type.
+    :param is_continuous: A bool or `None`. Whether the distribution is
+        continuous or not. If `None`, will consider it continuous only if
+        `dtype` is a float type.
     """
 
-    def __init__(self, dtype, batch_shape=None,
+    def __init__(self,
+                 dtype,
+                 batch_shape=None,
                  value_shape=None,
                  group_ndims=0,
                  is_continuous=None,
@@ -56,6 +61,7 @@ class Empirical(Distribution):
             param_dtype=None,
             is_continuous=is_continuous,
             is_reparameterized=False,
+            use_path_derivative=False,
             group_ndims=group_ndims,
             **kwargs)
 
@@ -75,21 +81,24 @@ class Empirical(Distribution):
         raise ValueError("You can not sample from an Empirical distribution.")
 
     def _log_prob(self, given):
-        raise ValueError("An empirical distribution has no probability measure.")
+        raise ValueError(
+            "An empirical distribution has no probability measure.")
 
     def _prob(self, given):
-        raise ValueError("An empirical distribution has no probability measure.")
+        raise ValueError(
+            "An empirical distribution has no probability measure.")
 
 
 class Implicit(Distribution):
     """
-    The class of Implicit distribution.
-    The distribution abstracts variables whose distribution have no explicit form.
-    A common example of implicit variables are the generated samples from a GAN.
+    The class of Implicit distribution. The distribution abstracts variables
+    whose distribution have no explicit form. A common example of implicit
+    variables are the generated samples from a GAN.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
     :param samples: A Tensor.
-    :param value_shape: A `TensorShape` describing the `value_shape` of the distribution.
+    :param value_shape: A `TensorShape` describing the `value_shape` of the
+        distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -111,8 +120,9 @@ class Implicit(Distribution):
             dtype=samples.dtype,
             param_dtype=samples.dtype,
             is_continuous=samples.dtype.is_floating,
-            group_ndims=group_ndims,
             is_reparameterized=False,
+            use_path_derivative=False,
+            group_ndims=group_ndims,
             **kwargs)
 
     def _value_shape(self):
@@ -122,17 +132,10 @@ class Implicit(Distribution):
         return self.explicit_value_shape
 
     def _batch_shape(self):
-        d = self.explicit_value_shape.ndims
-        if d is None:
-            raise NotImplementedError()
-        elif d == 0:
-            return tf.shape(self.samples)
-        else:
-            return tf.shape(self.samples)[:-d]
+        raise NotImplementedError()
 
     def _get_batch_shape(self):
-        if self.samples.get_shape() == tf.TensorShape(None) or \
-                        self.explicit_value_shape == tf.TensorShape(None):
+        if (not self.samples.get_shape()) or (not self.explicit_value_shape):
             return tf.TensorShape(None)
         else:
             d = self.explicit_value_shape.ndims
@@ -143,7 +146,8 @@ class Implicit(Distribution):
 
     def _sample(self, n_samples=None):
         if n_samples is not None and n_samples != 1:
-            raise ValueError("Implicit distribution does not accept `n_samples` argument.")
+            raise ValueError(
+                "Implicit distribution does not accept `n_samples` argument.")
         return tf.expand_dims(self.samples, 0)
 
     def _log_prob(self, given):
