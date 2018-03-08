@@ -1,4 +1,1 @@
-Sphinx>=1.7.1
-sphinx-rtd-theme>=0.2.4
-tensorflow>=1.5.0
-sphinxcontrib-bibtex>=0.3.6
+tensorflow<=1.4.0
