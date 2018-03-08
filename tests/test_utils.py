@@ -5,7 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 
 import tensorflow as tf
-from scipy import misc
+from scipy.special import logsumexp
 import numpy as np
 import six
 
@@ -254,7 +254,7 @@ class TestLogSumExp(tf.test.TestCase):
             a = np.array([[[1., 3., 0.2], [0.7, 2., 1e-6]],
                           [[0., 1e6, 1.], [1., 1., 1.]]])
             for keepdims in [True, False]:
-                true_values = misc.logsumexp(a, (0, 2), keepdims=keepdims)
+                true_values = logsumexp(a, (0, 2), keepdims=keepdims)
                 test_values = sess.run(log_sum_exp(
                     tf.constant(a), (0, 2), keepdims))
                 self.assertAllClose(test_values, true_values)
@@ -267,7 +267,7 @@ class TestLogMeanExp(tf.test.TestCase):
             a = np.array([[[1., 3., 0.2], [0.7, 2., 1e-6]],
                           [[0., 1e6, 1.], [1., 1., 1.]]])
             for keepdims in [True, False]:
-                true_values = misc.logsumexp(a, (0, 2), keepdims=keepdims) - \
+                true_values = logsumexp(a, (0, 2), keepdims=keepdims) - \
                               np.log(a.shape[0] * a.shape[2])
                 test_values = sess.run(log_mean_exp(
                     tf.constant(a), (0, 2), keepdims))

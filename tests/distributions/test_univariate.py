@@ -7,7 +7,8 @@ from __future__ import division
 
 import tensorflow as tf
 import numpy as np
-from scipy import stats, misc
+from scipy import stats
+from scipy.special import logsumexp
 
 from tests.distributions import utils
 from zhusuan.distributions.univariate import *
@@ -537,7 +538,7 @@ class TestCategorical(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             def _test_value(logits, given):
                 logits = np.array(logits, np.float32)
-                normalized_logits = logits - misc.logsumexp(
+                normalized_logits = logits - logsumexp(
                     logits, axis=-1, keepdims=True)
                 given = np.array(given, np.int32)
                 cat = Categorical(logits)

@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Stochastic sparse variational Gaussian process (SVGP) with normal approximation
-for posterior.
+Stochastic variational inference for sparse Gaussian process (SVGP).
 
 For the formulation you can refer to, e.g., Section 2.1 of the following paper:
 
