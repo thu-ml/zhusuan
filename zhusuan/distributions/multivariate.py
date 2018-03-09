@@ -8,24 +8,25 @@ import numpy as np
 import tensorflow as tf
 
 from zhusuan.distributions.base import Distribution
-from zhusuan.distributions.utils import \
-        maybe_explicit_broadcast, \
-        assert_same_float_dtype, \
-        assert_same_float_and_int_dtype, \
-        assert_rank_at_least, \
-        assert_rank_at_least_one, \
-        assert_scalar, \
-        assert_positive_int32_scalar, \
-        get_shape_at, \
-        get_shape_list, \
-        open_interval_standard_uniform, \
-        log_combination
+from zhusuan.distributions.utils import (
+    maybe_explicit_broadcast,
+    assert_same_float_dtype,
+    assert_dtype_is_int_or_float,
+    assert_rank_at_least,
+    assert_rank_at_least_one,
+    assert_scalar,
+    assert_positive_int32_scalar,
+    get_shape_at,
+    open_interval_standard_uniform,
+    log_combination
+)
 
 
 __all__ = [
     'MultivariateNormalCholesky',
     'Multinomial',
     'UnnormalizedMultinomial',
+    'BagofCategoricals',
     'OnehotCategorical',
     'OnehotDiscrete',
     'Dirichlet',
@@ -170,12 +171,12 @@ class MultivariateNormalCholesky(Distribution):
                           self.path_param(self.cov_tril))
         log_det = 2 * tf.reduce_sum(
             tf.log(tf.matrix_diag_part(cov_tril)), axis=-1)
-        N = tf.cast(self._n_dim, self.dtype)
-        logZ = - N / 2 * tf.log(2 * tf.constant(np.pi, dtype=self.dtype)) - \
-            log_det / 2
-        # logZ.shape == batch_shape
+        n_dim = tf.cast(self._n_dim, self.dtype)
+        log_z = - n_dim / 2 * tf.log(
+            2 * tf.constant(np.pi, dtype=self.dtype)) - log_det / 2
+        # log_z.shape == batch_shape
         if self._check_numerics:
-            logZ = tf.check_numerics(logZ, "log[det(Cov)]")
+            log_z = tf.check_numerics(log_z, "log[det(Cov)]")
         # (given-mean)' Sigma^{-1} (given-mean) =
         # (g-m)' L^{-T} L^{-1} (g-m) = |x|^2, where Lx = g-m =: y.
         y = tf.expand_dims(given - mean, -1)
@@ -185,7 +186,7 @@ class MultivariateNormalCholesky(Distribution):
         x = tf.matrix_triangular_solve(L, y, lower=True)
         x = tf.squeeze(x, -1)
         stoc_dist = -0.5 * tf.reduce_sum(tf.square(x), axis=-1)
-        return logZ + stoc_dist
+        return log_z + stoc_dist
 
     def _prob(self, given):
         return tf.exp(self._log_prob(given))
@@ -212,7 +213,9 @@ class Multinomial(Distribution):
     :param normalize_logits: A bool indicating whether `logits` should be
         normalized when computing probability. If you believe `logits` is
         already normalized, set it to `False` to speed up. Default is True.
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -228,16 +231,14 @@ class Multinomial(Distribution):
                  logits,
                  n_experiments,
                  normalize_logits=True,
-                 dtype=None,
+                 dtype=tf.int32,
                  group_ndims=0,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'Multinomial.logits')])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        assert_dtype_is_int_or_float(dtype)
 
         self._logits = assert_rank_at_least_one(
             self._logits, 'Multinomial.logits')
@@ -321,7 +322,7 @@ class Multinomial(Distribution):
             given, self.logits, 'given', 'logits')
         if self.normalize_logits:
             logits = logits - tf.reduce_logsumexp(
-                logits, axis=-1, keep_dims=True)
+                logits, axis=-1, keepdims=True)
         if self.n_experiments is None:
             n = tf.reduce_sum(given, -1)
         else:
@@ -357,7 +358,9 @@ class UnnormalizedMultinomial(Distribution):
     :param normalize_logits: A bool indicating whether `logits` should be
         normalized when computing probability. If you believe `logits` is
         already normalized, set it to `False` to speed up. Default is True.
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -372,16 +375,14 @@ class UnnormalizedMultinomial(Distribution):
     def __init__(self,
                  logits,
                  normalize_logits=True,
-                 dtype=None,
+                 dtype=tf.int32,
                  group_ndims=0,
                  **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'UnnormalizedMultinomial.logits')])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        assert_dtype_is_int_or_float(dtype)
 
         self._logits = assert_rank_at_least_one(
             self._logits, 'UnnormalizedMultinomial.logits')
@@ -435,7 +436,7 @@ class UnnormalizedMultinomial(Distribution):
             given, self.logits, 'given', 'logits')
         if self.normalize_logits:
             logits = logits - tf.reduce_logsumexp(
-                logits, axis=-1, keep_dims=True)
+                logits, axis=-1, keepdims=True)
         log_p = tf.reduce_sum(given * logits, -1)
         return log_p
 
@@ -443,7 +444,7 @@ class UnnormalizedMultinomial(Distribution):
         return tf.exp(self._log_prob(given))
 
 
-BagofCategorical = UnnormalizedMultinomial
+BagofCategoricals = UnnormalizedMultinomial
 
 
 class OnehotCategorical(Distribution):
@@ -457,7 +458,9 @@ class OnehotCategorical(Distribution):
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
-    :param dtype: The value type of samples from the distribution.
+    :param dtype: The value type of samples from the distribution. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
         into a single event, so that their probabilities are calculated
@@ -469,14 +472,12 @@ class OnehotCategorical(Distribution):
     `[i, j, ..., k, :]` is a one-hot vector of the selected category.
     """
 
-    def __init__(self, logits, dtype=None, group_ndims=0, **kwargs):
+    def __init__(self, logits, dtype=tf.int32, group_ndims=0, **kwargs):
         self._logits = tf.convert_to_tensor(logits)
         param_dtype = assert_same_float_dtype(
             [(self._logits, 'OnehotCategorical.logits')])
 
-        if dtype is None:
-            dtype = tf.int32
-        assert_same_float_and_int_dtype([], dtype)
+        assert_dtype_is_int_or_float(dtype)
 
         self._logits = assert_rank_at_least_one(
             self._logits, 'OnehotCategorical.logits')
@@ -656,7 +657,7 @@ class Dirichlet(Distribution):
     def _sample(self, n_samples):
         samples = tf.random_gamma([n_samples], self.alpha,
                                   beta=1, dtype=self.dtype)
-        return samples / tf.reduce_sum(samples, -1, keep_dims=True)
+        return samples / tf.reduce_sum(samples, -1, keepdims=True)
 
     def _log_prob(self, given):
         given, alpha = maybe_explicit_broadcast(

@@ -94,8 +94,8 @@ class TestImportanceWeightedObjective(tf.test.TestCase):
             with self.test_session(use_gpu=True) as sess:
                 g1 = sess.run(sgvb_grads)
                 g2 = sess.run(true_grads)
-                print('sgvb_grads:', g1)
-                print('true_grads:', g2)
+                # print('sgvb_grads:', g1)
+                # print('true_grads:', g2)
                 self.assertAllClose(g1, g2, threshold, threshold)
 
         _check_sgvb(0., 1., 0.04)

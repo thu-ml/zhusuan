@@ -7,7 +7,7 @@ from __future__ import division
 
 import tensorflow as tf
 import numpy as np
-from scipy import misc
+from scipy.special import factorial
 
 from zhusuan.distributions.utils import *
 from zhusuan.distributions.utils import get_shape_list, get_shape_at, \
@@ -20,8 +20,8 @@ class TestLogCombination(tf.test.TestCase):
             def _test_func(n, ks):
                 tf_n = tf.convert_to_tensor(n, tf.float32)
                 tf_ks = tf.convert_to_tensor(ks, tf.float32)
-                true_value = np.log(misc.factorial(n)) - \
-                    np.sum(np.log(misc.factorial(ks)), axis=-1)
+                true_value = np.log(factorial(n)) - \
+                    np.sum(np.log(factorial(ks)), axis=-1)
                 test_value = log_combination(tf_n, tf_ks).eval()
                 self.assertAllClose(true_value, test_value)
 

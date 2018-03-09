@@ -7,7 +7,8 @@ from __future__ import division
 
 import tensorflow as tf
 import numpy as np
-from scipy import stats, misc
+from scipy import stats
+from scipy.special import logsumexp
 
 from tests.distributions import utils
 from zhusuan.distributions.univariate import *
@@ -16,8 +17,17 @@ from zhusuan.distributions.univariate import *
 # TODO: test sample value
 
 class TestNormal(tf.test.TestCase):
+    def setUp(self):
+        self._Normal_std = lambda mean, std, **kwargs: Normal(
+            mean, std=std, **kwargs)
+        self._Normal_logstd = lambda mean, logstd, **kwargs: Normal(
+            mean, logstd=logstd, **kwargs)
+
     def test_init(self):
         with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(
+                    ValueError, "Please use named arguments"):
+                Normal(tf.ones(1), tf.ones(1))
             with self.assertRaisesRegexp(
                     ValueError, "Either.*should be passed but not both"):
                 Normal(mean=tf.ones([2, 1]))
@@ -54,22 +64,26 @@ class TestNormal(tf.test.TestCase):
 
     def test_batch_shape(self):
         utils.test_batch_shape_2parameter_univariate(
-            self, Normal, np.zeros, np.zeros)
+            self, self._Normal_std, np.zeros, np.ones)
+        utils.test_batch_shape_2parameter_univariate(
+            self, self._Normal_logstd, np.zeros, np.zeros)
 
     def test_sample_shape(self):
         utils.test_2parameter_sample_shape_same(
-            self, Normal, np.zeros, np.zeros)
+            self, self._Normal_std, np.zeros, np.ones)
+        utils.test_2parameter_sample_shape_same(
+            self, self._Normal_logstd, np.zeros, np.zeros)
 
     def test_sample_reparameterized(self):
         mean = tf.ones([2, 3])
         logstd = tf.ones([2, 3])
-        norm_rep = Normal(mean, logstd)
+        norm_rep = Normal(mean, logstd=logstd)
         samples = norm_rep.sample(tf.placeholder(tf.int32, shape=[]))
         mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
         self.assertTrue(mean_grads is not None)
         self.assertTrue(logstd_grads is not None)
 
-        norm_no_rep = Normal(mean, logstd, is_reparameterized=False)
+        norm_no_rep = Normal(mean, logstd=logstd, is_reparameterized=False)
         samples = norm_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
         mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
         self.assertEqual(mean_grads, None)
@@ -80,7 +94,7 @@ class TestNormal(tf.test.TestCase):
         logstd = tf.ones([2, 3])
         n_samples = tf.placeholder(tf.int32, shape=[])
 
-        norm_rep = Normal(mean, logstd, use_path_derivative=True)
+        norm_rep = Normal(mean, logstd=logstd, use_path_derivative=True)
         samples = norm_rep.sample(n_samples)
         log_prob = norm_rep.log_prob(samples)
         mean_path_grads, logstd_path_grads = tf.gradients(log_prob,
@@ -96,7 +110,7 @@ class TestNormal(tf.test.TestCase):
             self.assertAllClose(mean_path, mean_true)
             self.assertAllClose(logstd_path, logstd_true)
 
-        norm_no_rep = Normal(mean, logstd, is_reparameterized=False,
+        norm_no_rep = Normal(mean, logstd=logstd, is_reparameterized=False,
                              use_path_derivative=True)
         samples = norm_no_rep.sample(n_samples)
         log_prob = norm_no_rep.log_prob(samples)
@@ -107,7 +121,9 @@ class TestNormal(tf.test.TestCase):
 
     def test_log_prob_shape(self):
         utils.test_2parameter_log_prob_shape_same(
-            self, Normal, np.zeros, np.zeros, np.zeros)
+            self, self._Normal_std, np.zeros, np.ones, np.zeros)
+        utils.test_2parameter_log_prob_shape_same(
+            self, self._Normal_logstd, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -155,12 +171,22 @@ class TestNormal(tf.test.TestCase):
                 norm3.log_prob(0.).eval()
 
     def test_dtype(self):
-        utils.test_dtype_2parameter(self, Normal)
+        utils.test_dtype_2parameter(self, self._Normal_std)
+        utils.test_dtype_2parameter(self, self._Normal_logstd)
 
 
 class TestFoldNormal(tf.test.TestCase):
+    def setUp(self):
+        self._FoldNormal_std = lambda mean, std, **kwargs: FoldNormal(
+            mean, std=std, **kwargs)
+        self._FoldNormal_logstd = lambda mean, logstd, **kwargs: FoldNormal(
+            mean, logstd=logstd, **kwargs)
+
     def test_init(self):
         with self.test_session(use_gpu=True):
+            with self.assertRaisesRegexp(
+                    ValueError, "Please use named arguments"):
+                FoldNormal(tf.ones(1), tf.ones(1))
             with self.assertRaisesRegexp(
                     ValueError, "Either.*should be passed but not both"):
                 FoldNormal(mean=tf.ones([2, 1]))
@@ -197,22 +223,26 @@ class TestFoldNormal(tf.test.TestCase):
 
     def test_batch_shape(self):
         utils.test_batch_shape_2parameter_univariate(
-            self, FoldNormal, np.zeros, np.zeros)
+            self, self._FoldNormal_std, np.zeros, np.ones)
+        utils.test_batch_shape_2parameter_univariate(
+            self, self._FoldNormal_logstd, np.zeros, np.zeros)
 
     def test_sample_shape(self):
         utils.test_2parameter_sample_shape_same(
-            self, FoldNormal, np.zeros, np.zeros)
+            self, self._FoldNormal_std, np.zeros, np.ones)
+        utils.test_2parameter_sample_shape_same(
+            self, self._FoldNormal_logstd, np.zeros, np.zeros)
 
     def test_sample_reparameterized(self):
         mean = tf.ones([2, 3])
         logstd = tf.ones([2, 3])
-        norm_rep = FoldNormal(mean, logstd)
+        norm_rep = FoldNormal(mean, logstd=logstd)
         samples = norm_rep.sample(tf.placeholder(tf.int32, shape=[]))
         mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
         self.assertTrue(mean_grads is not None)
         self.assertTrue(logstd_grads is not None)
 
-        norm_no_rep = FoldNormal(mean, logstd, is_reparameterized=False)
+        norm_no_rep = FoldNormal(mean, logstd=logstd, is_reparameterized=False)
         samples = norm_no_rep.sample(tf.placeholder(tf.int32, shape=[]))
         mean_grads, logstd_grads = tf.gradients(samples, [mean, logstd])
         self.assertEqual(mean_grads, None)
@@ -223,7 +253,7 @@ class TestFoldNormal(tf.test.TestCase):
         logstd = tf.ones([2, 3])
         n_samples = tf.placeholder(tf.int32, shape=[])
 
-        norm_rep = FoldNormal(mean, logstd, use_path_derivative=True)
+        norm_rep = FoldNormal(mean, logstd=logstd, use_path_derivative=True)
         samples = norm_rep.sample(n_samples)
         log_prob = norm_rep.log_prob(samples)
         mean_path_grads, logstd_path_grads = tf.gradients(log_prob,
@@ -239,7 +269,7 @@ class TestFoldNormal(tf.test.TestCase):
             self.assertAllClose(mean_path, mean_true)
             self.assertAllClose(logstd_path, logstd_true)
 
-        norm_no_rep = FoldNormal(mean, logstd, is_reparameterized=False,
+        norm_no_rep = FoldNormal(mean, logstd=logstd, is_reparameterized=False,
                                  use_path_derivative=True)
         samples = norm_no_rep.sample(n_samples)
         log_prob = norm_no_rep.log_prob(samples)
@@ -250,7 +280,9 @@ class TestFoldNormal(tf.test.TestCase):
 
     def test_log_prob_shape(self):
         utils.test_2parameter_log_prob_shape_same(
-            self, FoldNormal, np.zeros, np.zeros, np.zeros)
+            self, self._FoldNormal_std, np.zeros, np.ones, np.zeros)
+        utils.test_2parameter_log_prob_shape_same(
+            self, self._FoldNormal_logstd, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
         with self.test_session(use_gpu=True):
@@ -266,7 +298,6 @@ class TestFoldNormal(tf.test.TestCase):
 
                 norm1 = FoldNormal(mean, logstd=logstd)
                 log_p1 = norm1.log_prob(given)
-
                 self.assertAllClose(log_p1.eval(), target_log_p)
                 p1 = norm1.prob(given)
                 self.assertAllClose(p1.eval(), target_p)
@@ -301,7 +332,8 @@ class TestFoldNormal(tf.test.TestCase):
                 norm3.log_prob(0.).eval()
 
     def test_dtype(self):
-        utils.test_dtype_2parameter(self, FoldNormal)
+        utils.test_dtype_2parameter(self, self._FoldNormal_std)
+        utils.test_dtype_2parameter(self, self._FoldNormal_logstd)
 
 
 class TestBernoulli(tf.test.TestCase):
@@ -506,7 +538,7 @@ class TestCategorical(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             def _test_value(logits, given):
                 logits = np.array(logits, np.float32)
-                normalized_logits = logits - misc.logsumexp(
+                normalized_logits = logits - logsumexp(
                     logits, axis=-1, keepdims=True)
                 given = np.array(given, np.int32)
                 cat = Categorical(logits)
@@ -533,7 +565,8 @@ class TestCategorical(tf.test.TestCase):
                         np.ones([3, 1, 1], dtype=np.int32))
 
     def test_dtype(self):
-        utils.test_dtype_1parameter_discrete(self, Categorical)
+        utils.test_dtype_1parameter_discrete(
+            self, Categorical, allow_16bit=False)
 
 
 class TestUniform(tf.test.TestCase):
@@ -929,8 +962,8 @@ class TestBinomial(tf.test.TestCase):
                 log_p.eval(feed_dict={logits: 1., given: 12})
 
     def test_dtype(self):
-        def _distribution(param, dtype=None):
-            return Binomial(param, 10, dtype)
+        def _distribution(param, **kwargs):
+            return Binomial(param, 10, **kwargs)
         utils.test_dtype_1parameter_discrete(self, _distribution)
 
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):

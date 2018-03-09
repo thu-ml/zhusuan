@@ -1,8 +1,8 @@
 -r requirements.txt
-tensorflow>=1.0.0
-Sphinx
+tensorflow>=1.5.0
+Sphinx>=1.7.1
 sphinx_rtd_theme
-sphinxcontrib-bibtex
+sphinxcontrib-bibtex>=0.3.6
 coverage
 pep8
 matplotlib

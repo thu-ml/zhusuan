@@ -110,10 +110,10 @@ class InclusiveKLObjective(VariationalObjective):
         """
         log_w = self._log_joint_term() + self._entropy_term()
         if self._axis is not None:
-            log_w_max = tf.reduce_max(log_w, self._axis, keep_dims=True)
+            log_w_max = tf.reduce_max(log_w, self._axis, keepdims=True)
             w_u = tf.exp(log_w - log_w_max)
             w_tilde = tf.stop_gradient(
-                w_u / tf.reduce_sum(w_u, self._axis, keep_dims=True))
+                w_u / tf.reduce_sum(w_u, self._axis, keepdims=True))
             cost = tf.reduce_sum(w_tilde * self._entropy_term(),
                                  self._axis)
         else:

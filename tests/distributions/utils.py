@@ -55,9 +55,9 @@ def test_dtype_2parameter(test_class, Distribution):
 
     def _test_parameter_dtype_raise(param1_dtype, param2_dtype):
         if param1_dtype != param2_dtype:
-            regexp_msg = "must be the same type as"
+            regexp_msg = "must have the same dtype as"
         else:
-            regexp_msg = "must be in"
+            regexp_msg = "must have a dtype in"
         with test_class.assertRaisesRegexp(TypeError, regexp_msg):
             _test_parameter_dtype(None, param1_dtype, param2_dtype)
 
@@ -66,26 +66,49 @@ def test_dtype_2parameter(test_class, Distribution):
     _test_parameter_dtype_raise(tf.int32, tf.int32)
 
 
-def test_dtype_1parameter_discrete(test_class, Distribution, prob_only=False):
-    def _test_sample_dtype(input_, result_dtype, dtype):
-        distribution = Distribution(input_, dtype=dtype)
+def test_dtype_1parameter_discrete(
+        test_class, Distribution, prob_only=False, allow_16bit=True):
+    def _test_sample_dtype(input_, result_dtype, **kwargs):
+        distribution = Distribution(input_, **kwargs)
         samples = distribution.sample(2)
         test_class.assertEqual(distribution.dtype, result_dtype)
         test_class.assertEqual(samples.dtype, result_dtype)
 
+    def _test_sample_dtype_raise(input_, dtype):
+        with test_class.assertRaisesRegexp(TypeError,
+                                           r"`dtype`.*not in"):
+            _ = Distribution(input_, dtype=dtype)
+
     if not prob_only:
         for input_ in [[1.], [[2., 3.], [4., 5.]]]:
-            _test_sample_dtype(input_, tf.int32, None)
-            _test_sample_dtype(input_, tf.int16, tf.int16)
-            _test_sample_dtype(input_, tf.int32, tf.int32)
-            _test_sample_dtype(input_, tf.float32, tf.float32)
-            _test_sample_dtype(input_, tf.float64, tf.float64)
+            _test_sample_dtype(input_, tf.int32)
+
+            if allow_16bit:
+                _test_sample_dtype(input_, tf.int16, dtype=tf.int16)
+                _test_sample_dtype(input_, tf.float16, dtype=tf.float16)
+            else:
+                _test_sample_dtype_raise(input_, dtype=tf.int16)
+                _test_sample_dtype_raise(input_, dtype=tf.float16)
+
+            _test_sample_dtype(input_, tf.int32, dtype=tf.int32)
+            _test_sample_dtype(input_, tf.int64, dtype=tf.int64)
+            _test_sample_dtype(input_, tf.float32, dtype=tf.float32)
+            _test_sample_dtype(input_, tf.float64, dtype=tf.float64)
+            _test_sample_dtype_raise(input_, dtype=tf.uint8)
+            _test_sample_dtype_raise(input_, dtype=tf.bool)
 
     def _test_parameter_dtype_raise(param_dtype):
         param = tf.placeholder(param_dtype, [1])
-        with test_class.assertRaises(TypeError):
+        with test_class.assertRaisesRegexp(TypeError,
+                                           "must have a dtype in"):
             Distribution(param)
 
+    if not allow_16bit:
+        _test_parameter_dtype_raise(tf.float16)
+
+    _test_parameter_dtype_raise(tf.uint8)
+    _test_parameter_dtype_raise(tf.bool)
+    _test_parameter_dtype_raise(tf.int16)
     _test_parameter_dtype_raise(tf.int32)
     _test_parameter_dtype_raise(tf.int64)
 
@@ -111,7 +134,9 @@ def test_dtype_1parameter_discrete(test_class, Distribution, prob_only=False):
         test_class.assertEqual(prob_np.dtype, param_dtype)
         test_class.assertEqual(log_prob_np.dtype, param_dtype)
 
-    _test_log_prob_dtype(tf.float16, tf.int32)
+    if allow_16bit:
+        _test_log_prob_dtype(tf.float16, tf.int32)
+
     _test_log_prob_dtype(tf.float32, tf.int32)
     _test_log_prob_dtype(tf.float64, tf.int64)
     _test_log_prob_dtype(tf.float32, tf.float32)

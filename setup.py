@@ -6,12 +6,17 @@ from setuptools import setup, find_packages
 # To use a consistent encoding
 from codecs import open
 from os import path
+import re
 
 here = path.abspath(path.dirname(__file__))
 
+# Get the version string
+with open(path.join(here, 'zhusuan', '__init__.py'), encoding='utf-8') as f:
+    version = re.search(r'__version__ = \'(.*?)\'', f.read()).group(1)
+
 # Get the long description from the README file
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+    readme = f.read()
 
 setup(
     name='zhusuan',
@@ -19,10 +24,10 @@ setup(
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='0.3.0',
+    version=version,
 
-    description='A Library for Generative Models',
-    long_description=long_description,
+    description='A Library for Bayesian Deep Learning',
+    long_description=readme,
 
     # The project's main homepage.
     url='https://github.com/thu-ml/zhusuan',
@@ -76,7 +81,7 @@ setup(
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['numpy==1.14.0',
+    install_requires=['numpy>=1.14.0',
                       'six'],
 
     # List additional groups of dependencies here (e.g. development
@@ -85,9 +90,9 @@ setup(
     # $ pip install -e .[dev,test]
     extras_require={
         'dev': [
-            'Sphinx',
+            'Sphinx>=1.7.1',
             'sphinx_rtd_theme',
-            'sphinxcontrib-bibtex',
+            'sphinxcontrib-bibtex>=0.3.6',
             'pep8',
             'scipy',
             'coverage',

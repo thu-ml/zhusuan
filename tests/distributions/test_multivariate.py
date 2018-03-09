@@ -8,7 +8,8 @@ from __future__ import division
 from contextlib import contextmanager
 import tensorflow as tf
 import numpy as np
-from scipy import stats, misc, special
+from scipy import stats
+from scipy.special import logsumexp, factorial, gammaln
 
 from tests.distributions import utils
 from zhusuan.distributions.multivariate import *
@@ -230,11 +231,11 @@ class TestMultinomial(tf.test.TestCase):
 
                 maybe_normalized_logits = logits
                 if normalize_logits:
-                    maybe_normalized_logits -= misc.logsumexp(
+                    maybe_normalized_logits -= logsumexp(
                         logits, axis=-1, keepdims=True)
                 n_experiments = np.sum(given, axis=-1)
-                target_log_p = np.log(misc.factorial(n_experiments)) - \
-                    np.sum(np.log(misc.factorial(given)), -1) + \
+                target_log_p = np.log(factorial(n_experiments)) - \
+                    np.sum(np.log(factorial(given)), -1) + \
                     np.sum(given * maybe_normalized_logits, -1)
                 self.assertAllClose(log_p.eval(), target_log_p)
                 p = dist.prob(given)
@@ -252,8 +253,8 @@ class TestMultinomial(tf.test.TestCase):
                             normalize_logits)
 
     def test_dtype(self):
-        def _distribution(param, dtype=None):
-            return Multinomial(param, n_experiments=10, dtype=dtype)
+        def _distribution(param, **kwargs):
+            return Multinomial(param, n_experiments=10, **kwargs)
         utils.test_dtype_1parameter_discrete(self, _distribution)
 
         with self.assertRaisesRegexp(TypeError, "n_experiments must be"):
@@ -334,7 +335,7 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
 
                 maybe_normalized_logits = logits
                 if normalize_logits:
-                    maybe_normalized_logits -= misc.logsumexp(
+                    maybe_normalized_logits -= logsumexp(
                         logits, axis=-1, keepdims=True)
                 target_log_p = np.sum(given * maybe_normalized_logits, -1)
                 self.assertAllClose(log_p.eval(), target_log_p)
@@ -414,7 +415,7 @@ class TestOnehotCategorical(tf.test.TestCase):
         with self.test_session(use_gpu=True):
             def _test_value(logits, given):
                 logits = np.array(logits, np.float32)
-                normalized_logits = logits - misc.logsumexp(
+                normalized_logits = logits - logsumexp(
                     logits, axis=-1, keepdims=True)
                 given = np.array(given, np.int32)
                 cat = OnehotCategorical(logits)
@@ -510,8 +511,7 @@ class TestDirichlet(tf.test.TestCase):
             # scipy's implementation of dirichlet logpdf doesn't support
             # batch of x, we use this modified version.
             def _lnB(alpha):
-                return np.sum(special.gammaln(alpha)) - \
-                    special.gammaln(np.sum(alpha))
+                return np.sum(gammaln(alpha)) - gammaln(np.sum(alpha))
 
             lnB = _lnB(alpha)
             return - lnB + np.sum(np.log(x) * (alpha - 1), -1)
@@ -655,7 +655,7 @@ class TestExpConcrete(tf.test.TestCase):
                 n = logits.shape[-1]
 
                 t = temperature
-                target_log_p = special.gammaln(n) + (n - 1) * np.log(t) + \
+                target_log_p = gammaln(n) + (n - 1) * np.log(t) + \
                     (logits - t * given).sum(axis=-1) - \
                     n * np.log(np.exp(logits - t * given).sum(axis=-1))
 
@@ -816,7 +816,7 @@ class TestConcrete(tf.test.TestCase):
                 n = logits.shape[-1]
 
                 t = temperature
-                target_log_p = special.gammaln(n) + (n - 1) * np.log(t) + \
+                target_log_p = gammaln(n) + (n - 1) * np.log(t) + \
                     (logits - (t + 1) * np.log(given)).sum(axis=-1) - \
                     n * np.log(np.exp(logits - t * np.log(given)).sum(axis=-1))
 

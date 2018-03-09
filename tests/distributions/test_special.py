@@ -26,13 +26,17 @@ class TestEmpirical(tf.test.TestCase):
             empirical = Empirical(tf.float32, batch_shape, value_shape)
 
             # static
-            self.assertEqual(empirical.get_batch_shape().as_list(), batch_shape)
+            self.assertEqual(empirical.get_batch_shape().as_list(),
+                             batch_shape)
             if value_shape is None:
-                self.assertEqual(empirical.get_value_shape(), tf.TensorShape(None))
+                self.assertEqual(empirical.get_value_shape(),
+                                 tf.TensorShape(None))
             elif isinstance(value_shape, (list, tuple)):
-                self.assertEqual(empirical.get_value_shape().as_list(), value_shape)
+                self.assertEqual(empirical.get_value_shape().as_list(),
+                                 value_shape)
             else:
-                self.assertEqual(empirical.get_value_shape().as_list(), [value_shape])
+                self.assertEqual(empirical.get_value_shape().as_list(),
+                                 [value_shape])
 
             # Error for _batch_shape:
             with self.assertRaises(NotImplementedError):
@@ -55,17 +59,22 @@ class TestEmpirical(tf.test.TestCase):
 
     def test_sample(self):
         with self.assertRaisesRegexp(
-                ValueError, "You can not sample from an Empirical distribution."):
+                ValueError,
+                "You can not sample from an Empirical distribution."):
             Empirical(tf.float32, batch_shape=[None, 1]).sample()
 
     def test_prob(self):
         with self.assertRaisesRegexp(
-                ValueError, "An empirical distribution has no probability measure."):
-            Empirical(tf.float32, batch_shape=[None, 1]).prob(np.zeros((5, 1)))
+                ValueError,
+                "An empirical distribution has no probability measure."):
+            Empirical(tf.float32, batch_shape=[None, 1]).prob(
+                np.zeros((5, 1)))
 
         with self.assertRaisesRegexp(
-                ValueError, "An empirical distribution has no probability measure."):
-            Empirical(tf.float32, batch_shape=[None, 1]).log_prob(np.zeros((5, 1)))
+                ValueError,
+                "An empirical distribution has no probability measure."):
+            Empirical(tf.float32, batch_shape=[None, 1]).log_prob(
+                np.zeros((5, 1)))
 
     def test_dtype(self):
         def _test_dtype(batch_shape, dtype):
@@ -84,12 +93,15 @@ class TestImplicit(tf.test.TestCase):
     def test_init(self):
         Implicit(samples=tf.placeholder(tf.float32, [None, 1]))
         Implicit(samples=tf.placeholder(tf.float32, [None, 1, 3]))
-        Implicit(samples=tf.placeholder(tf.float32, [None, 1]), value_shape=10)
-        Implicit(samples=tf.placeholder(tf.float32, [None, 1, 3]), value_shape=10)
+        Implicit(samples=tf.placeholder(tf.float32, [None, 1]),
+                 value_shape=10)
+        Implicit(samples=tf.placeholder(tf.float32, [None, 1, 3]),
+                 value_shape=10)
 
     def test_shape(self):
         def _test_shape(batch_shape, value_shape):
-            shape = tf.TensorShape(batch_shape).concatenate(tf.TensorShape(value_shape))
+            shape = tf.TensorShape(batch_shape).concatenate(
+                tf.TensorShape(value_shape))
             implicit = tf.placeholder(tf.float32, shape)
             dist = Implicit(implicit, value_shape)
 
@@ -102,12 +114,8 @@ class TestImplicit(tf.test.TestCase):
                 self.assertEqual(dist.get_value_shape().as_list(), value_shape)
 
             # dynamic
-            if value_shape is not None and None not in batch_shape:
-                self.assertTrue(dist._batch_shape().dtype is tf.int32)
-                with self.test_session(use_gpu=True):
-                    self.assertEqual(dist._batch_shape().eval().tolist(), batch_shape)
-
-            # Error for _value_shape()
+            with self.assertRaises(NotImplementedError):
+                dist._batch_shape()
             with self.assertRaises(NotImplementedError):
                 dist._value_shape()
 
@@ -130,24 +138,31 @@ class TestImplicit(tf.test.TestCase):
         # with no value_shape
         implicit = Implicit(samples=tf.placeholder(tf.float32, [None, 3]))
         with self.assertRaisesRegexp(
-                ValueError, "Implicit distribution does not accept `n_samples` argument."):
+                ValueError,
+                "Implicit distribution does not accept `n_samples` argument."):
             implicit.sample(3)
         with self.assertRaisesRegexp(
-                ValueError, "Implicit distribution does not accept `n_samples` argument."):
+                ValueError,
+                "Implicit distribution does not accept `n_samples` argument."):
             implicit.sample(tf.placeholder(tf.int32, None))
 
-        utils.test_1parameter_sample_shape_same(self, Implicit, np.zeros, only_one_sample=True)
+        utils.test_1parameter_sample_shape_same(
+            self, Implicit, np.zeros, only_one_sample=True)
 
         # with value_shape
-        implicit = Implicit(samples=tf.placeholder(tf.float32, [None, 3]), value_shape=5)
+        implicit = Implicit(samples=tf.placeholder(tf.float32, [None, 3]),
+                            value_shape=5)
         with self.assertRaisesRegexp(
-                ValueError, "Implicit distribution does not accept `n_samples` argument."):
+                ValueError,
+                "Implicit distribution does not accept `n_samples` argument."):
             implicit.sample(3)
         with self.assertRaisesRegexp(
-                ValueError, "Implicit distribution does not accept `n_samples` argument."):
+                ValueError,
+                "Implicit distribution does not accept `n_samples` argument."):
             implicit.sample(tf.placeholder(tf.int32, None))
 
-        utils.test_1parameter_sample_shape_same(self, Implicit, np.zeros, only_one_sample=True)
+        utils.test_1parameter_sample_shape_same(self, Implicit, np.zeros,
+                                                only_one_sample=True)
 
     def test_log_prob_shape(self):
         def _make_param(shape):

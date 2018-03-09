@@ -37,23 +37,20 @@ class ImportanceWeightedObjective(VariationalObjective):
         with tf.Session() as sess:
             print sess.run(lower_bound, feed_dict=...)
 
-    The variational posterior used in this objective is in fact a proposal
-    for importance sampling, thus the typical usage of this objective is
-    jointly doing inference (adapt the proposal to raise the lower bound) and
-    learning the model (optimize the lower bound wrt. framework parameters).
-
-    However, this cannot be directly done by calling Tensorflow optimizers on
-    the :class:`ImportanceWeightedObjective` instance because of the outer
-    expectation in the true objective, while our value at hand is a
-    single or a few sample estimates. The correct way for doing this is by
-    calling the gradient estimator provided by
-    :class:`ImportanceWeightedObjective`. Currently there are two of them:
+    The objective computes the same importance-sampling based estimate
+    of the marginal log likelihood of observed variables as
+    :meth:`~zhusuan.evaluation.is_loglikelihood`. The difference is that the
+    estimate now serves as a variational objective, since it is also a lower
+    bound of the marginal log likelihood (as long as the number of samples is
+    finite). The variational posterior here is in fact the proposal. As a
+    variational objective, :class:`ImportanceWeightedObjective` provides two
+    gradient estimators for the variational (proposal) parameters:
 
     * :meth:`sgvb`: The Stochastic Gradient Variational Bayes (SGVB) estimator,
-        also known as "the reparameterization trick", or "path derivative
-        estimator".
+      also known as "the reparameterization trick", or "path derivative
+      estimator".
     * :meth:`vimco`: The multi-sample score function estimator with variance
-        reduction, also known as "VIMCO".
+      reduction, also known as "VIMCO".
 
     The typical code for joint inference and learning is like::
 
@@ -184,7 +181,7 @@ class ImportanceWeightedObjective(VariationalObjective):
 
         # compute variance reduction term
         mean_except_signal = (
-            tf.reduce_sum(l_signal, self._axis, keep_dims=True) - l_signal
+            tf.reduce_sum(l_signal, self._axis, keepdims=True) - l_signal
         ) / tf.to_float(tf.shape(l_signal)[self._axis] - 1)
         x, sub_x = tf.to_float(l_signal), tf.to_float(mean_except_signal)
 
@@ -207,7 +204,7 @@ class ImportanceWeightedObjective(VariationalObjective):
 
         # variance reduced objective
         l_signal = log_mean_exp(l_signal, self._axis,
-                                keep_dims=True) - control_variate
+                                keepdims=True) - control_variate
         fake_term = tf.reduce_sum(
             -self._entropy_term() * tf.stop_gradient(l_signal), self._axis)
         cost = -fake_term - log_mean_exp(log_w, self._axis)
