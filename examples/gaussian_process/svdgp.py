@@ -38,10 +38,10 @@ from examples.utils import dataset
 parser = argparse.ArgumentParser()
 parser.add_argument('-n_z', default=100, type=int)
 parser.add_argument('-n_covariates', default=1, type=int)
-parser.add_argument('-n_particles', default=1, type=int)
+parser.add_argument('-n_particles', default=20, type=int)
 parser.add_argument('-n_particles_test', default=100, type=int)
-parser.add_argument('-batch_size', default=500, type=int)
-parser.add_argument('-n_epoch', default=5000, type=int)
+parser.add_argument('-batch_size', default=10000, type=int)
+parser.add_argument('-n_epoch', default=100000, type=int)
 parser.add_argument('-dtype', default='float32', type=str,
                     choices=['float32', 'float64'])
 parser.add_argument('-dataset', default='boston_housing', type=str,
@@ -56,7 +56,7 @@ def inducing_prior(kernel, inducing_points, n_particles, name):
                                          cov_z_cholesky, n_samples=n_particles, group_ndims=1)
 
 
-def variational_prior(kernel, inducing_points, n_particles, name):
+def variational_prior(kernel, inducing_points, n_particles, name, inner_layer=False):
     inducing_num = int(inducing_points.shape[-2])
     u_mean = tf.get_variable(
         name + '/variational_u_mean', [kernel.kernel_num, inducing_num], tf.float32, tf.zeros_initializer())
@@ -65,7 +65,9 @@ def variational_prior(kernel, inducing_points, n_particles, name):
         initializer=tf.tile(tf.expand_dims(tf.eye(inducing_num, dtype=tf.float32), 0), [kernel.kernel_num, 1, 1]))
     u_cov_tril = tf.matrix_set_diag(
         tf.matrix_band_part(u_cov, -1, 0),
-        tf.nn.softplus(tf.matrix_diag_part(u_cov)))
+        tf.matrix_diag_part(u_cov))
+    if inner_layer:
+        u_cov_tril *= 1e-5
     return tf.tile(tf.expand_dims(inducing_points, 0), [n_particles, 1, 1]), \
            zs.MultivariateNormalCholesky('u_' + name, u_mean, u_cov_tril, n_samples=n_particles,
                                          group_ndims=1)
@@ -86,15 +88,15 @@ def build_model(observed, x, kernels, inducing_points, n_particles, factorized=T
         h = x
         for kernel, inducing_point, num in list(zip(kernels, inducing_points, list(range(len(kernels))))):
             assert int(inducing_point.shape[-1]) == kernel.covariates_num, msg
+            noise = 1e-5
             if num == len(kernels) - 1:
                 mean_function = zs.stochastic_process.ConstantMeanFunction(1, 0.)
             else:
                 mean_function = zs.stochastic_process.LinearMeanFunction(kernel.covariates_num,
                                                                          np.eye(kernel.covariates_num))
-            group_ndims = 2
             z, u = inducing_prior(kernel, inducing_point, n_particles, name='cond_' + str(num))
             h = zs.GaussianProcess('f_' + str(num), mean_function, kernel, x=h, inducing_points=z,
-                                   inducing_values=u, factorized=factorized, group_ndims=group_ndims)
+                                   inducing_values=u, factorized=factorized, noise_level=noise, group_ndims=2)
             h = tf.matrix_transpose(h)
         f1_given_x = tf.squeeze(h, -1)
         noise_level = tf.get_variable(
@@ -113,15 +115,18 @@ def build_variational(x, kernels, inducing_points, n_particles, factorized=True)
         h = x
         for kernel, inducing_point, num in list(zip(kernels, inducing_points, list(range(len(kernels))))):
             assert int(inducing_point.shape[-1]) == kernel.covariates_num, msg
-            if num == len(kernels) - 1:
-                mean_function = zs.stochastic_process.ConstantMeanFunction(1, 0.)
-            else:
+            if num < len(kernels) - 1:
+                inner_layer = True
                 mean_function = zs.stochastic_process.LinearMeanFunction(kernel.covariates_num,
                                                                          np.eye(kernel.covariates_num))
-            group_ndims = 2
-            z, u = variational_prior(kernel, inducing_point, n_particles, name='cond_' + str(num))
+            else:
+                inner_layer = False
+                mean_function = zs.stochastic_process.ConstantMeanFunction(1, 0.)
+            noise = 1e-5
+            z, u = variational_prior(kernel, inducing_point, n_particles, name='cond_' + str(num),
+                                     inner_layer=inner_layer)
             h = zs.GaussianProcess('f_' + str(num), mean_function, kernel, x=h, inducing_points=z,
-                                   inducing_values=u, factorized=factorized, group_ndims=group_ndims)
+                                   inducing_values=u, factorized=factorized, noise_level=noise, group_ndims=2)
             h = tf.matrix_transpose(h)
     return variational
 
@@ -153,39 +158,47 @@ def main():
     batch_size = tf.cast(tf.shape(x_ph)[0], hps.dtype)
 
     x_obs = tf.tile(tf.expand_dims(x_ph, 0), [n_particles_ph, 1, 1])
-    kernels = [
-        zs.kernels.RBFKernel(1, hps.n_covariates, name='RBFkernel_0')]
-    inducing_points = [
-        tf.get_variable('z_0', [hps.n_z, hps.n_covariates], hps.dtype,
-                        initializer=tf.random_uniform_initializer(-1, 1))]
-
+    y_obs = tf.tile(tf.expand_dims(y_ph, 0), [n_particles_ph, 1])
+    kernels = [zs.kernels.RBFKernel(hps.n_covariates, hps.n_covariates, name='RBFkernel_0'),
+               zs.kernels.RBFKernel(1, hps.n_covariates, name='RBFkernel_1')]
+    inducing_points = [tf.get_variable('z_0', [hps.n_z, hps.n_covariates], hps.dtype,
+                                       initializer=tf.random_uniform_initializer(-1, 1)),
+                       tf.get_variable('z_1', [hps.n_z, hps.n_covariates], hps.dtype,
+                                       initializer=tf.random_uniform_initializer(-1, 1))]
     # Training ops
     # ELBO = E_q log (p(y|fx)p(fx|fz)p(fz) / p(fx|fz)q(fz))
     # So we remove p(fx|fz) in both log_joint and latent
+    u_name = ['u_cond_' + str(i) for i in list(range(2))]
+    f_name = ['f_' + str(i) for i in list(range(2))]
+
     def log_joint(observed):
         model, _ = build_model(observed, x_obs, kernels, inducing_points, n_particles_ph)
-        prior = model.local_log_prob(['u_cond_0'])
+        prior = model.local_log_prob(u_name)
         log_py_given_fx = model.local_log_prob(['y'])
         return tf.add_n(prior) + log_py_given_fx / batch_size * n_train
 
     variational = build_variational(x_obs, kernels, inducing_points, n_particles_ph)
-    [var_u_0, var_f_0] = variational.query(
-        ['u_cond_0', 'f_0'], outputs=True, local_log_prob=True)
-    var_f_0 = (var_f_0[0], tf.zeros_like(var_f_0[1]))
+    var_u = variational.query(u_name, outputs=True, local_log_prob=True)
+    var_f = variational.query(f_name, outputs=True, local_log_prob=True)
+    var_f = [(samples, tf.zeros_like(densities)) for (samples, densities) in var_f]
+    # var_f_0 = (var_f_0[0], tf.zeros_like(var_f_0[1]))
     # var_f_1 = (var_f_1[0], tf.zeros_like(var_f_1[1]))
+    # var_f_2 = (var_f_2[0], tf.zeros_like(var_f_2[1]))
+    latent = dict(zip(u_name + f_name, var_u + var_f))
     lower_bound = zs.variational.elbo(
         log_joint,
-        observed={'y': y_ph},
-        latent={'u_cond_0': var_u_0, 'f_0': var_f_0},
+        observed={'y': y_obs},
+        latent=latent,
         axis=0)
     cost = lower_bound.sgvb()
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
     var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
     print(var_list)
-    infer_op = optimizer.minimize(cost)
+    grads = optimizer.compute_gradients(cost)
+    infer_op = optimizer.apply_gradients(grads)
 
     # Prediction ops
-    observed = {'f_0': var_f_0[0], 'y': y_ph}
+    observed = {'f_2': var_f[-1][0], 'y': y_obs}
     model, y_inferred = build_model(observed, x_obs, kernels, inducing_points, n_particles_ph)
     log_likelihood = model.local_log_prob('y')
     std_y_train = tf.cast(std_y_train, hps.dtype)
@@ -211,7 +224,7 @@ def main():
         return sess.run([log_likelihood, pred_mse], fd)
 
     iters = int(np.ceil(x_train.shape[0] / float(hps.batch_size)))
-    test_freq = 100
+    test_freq = 10
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, hps.n_epoch + 1):
@@ -227,6 +240,10 @@ def main():
                     y_train[t * hps.batch_size: (t + 1) * hps.batch_size])
                 lbs.append(lb)
             if 10 * epoch % test_freq == 0:
+                # grad = sess.run(grads, feed_dict={x_ph: x_train[t * hps.batch_size: (t + 1) * hps.batch_size],
+                #                                   y_ph: y_train[t * hps.batch_size: (t + 1) * hps.batch_size],
+                #                                   n_particles_ph: hps.n_particles})
+                # print(list(zip(grads, grad)))
                 print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
             if epoch % test_freq == 0:
                 test_lls = []
