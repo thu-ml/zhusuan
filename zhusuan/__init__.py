@@ -3,6 +3,8 @@
 
 from . import distributions
 from . import variational
+from . import kernels
+from . import stochastic_process
 from .model import *
 from .hmc import *
 from .evaluation import *
