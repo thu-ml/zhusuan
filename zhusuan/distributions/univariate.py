@@ -90,8 +90,9 @@ class Normal(Distribution):
         self._mean = tf.convert_to_tensor(mean)
 
         if (logstd is None) == (std is None):
-            raise ValueError("Either std or logstd should be passed but not "
-                             "both of them.")
+            raise ValueError(
+                "Either `std` or `logstd` should be passed. It is not allowed "
+                "that both are specified or both are not.")
         elif logstd is None:
             self._std = tf.convert_to_tensor(std)
             dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),

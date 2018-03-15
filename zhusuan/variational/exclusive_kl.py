@@ -110,13 +110,20 @@ class EvidenceLowerBoundObjective(VariationalObjective):
         reduced.
     """
 
-    def __init__(self, log_joint, observed, latent, axis=None):
+    def __init__(self, meta_model, observed, latent=None, axis=None,
+                 variational=None, allow_default=False):
         self._axis = axis
         super(EvidenceLowerBoundObjective, self).__init__(
-            log_joint, observed, latent)
+            meta_model,
+            observed,
+            latent=latent,
+            variational=variational,
+            allow_default=allow_default)
 
     def _objective(self):
-        lower_bound = self._log_joint_term() + self._entropy_term()
+        lower_bound = self._log_joint_term()
+        if self._entropy_term() is not None:
+            lower_bound += self._entropy_term()
         if self._axis is not None:
             lower_bound = tf.reduce_mean(lower_bound, self._axis)
         return lower_bound
@@ -178,7 +185,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
         :return: A Tensor. The surrogate cost for Tensorflow optimizers to
             minimize.
         """
-        l_signal = self._log_joint_term() + self._entropy_term()
+        l_signal = self.tensor
         baseline_cost = None
 
         if variance_reduction:
@@ -203,8 +210,9 @@ class EvidenceLowerBoundObjective(VariationalObjective):
             with tf.control_dependencies([update_mean]):
                 l_signal = tf.identity(l_signal)
 
-        cost = tf.stop_gradient(l_signal) * self._entropy_term() - \
-            self._log_joint_term()
+        cost = -self._log_joint_term()
+        if self._entropy_term():
+            cost += tf.stop_gradient(l_signal) * self._entropy_term()
 
         if self._axis is not None:
             cost = tf.reduce_mean(cost, self._axis)
@@ -215,7 +223,8 @@ class EvidenceLowerBoundObjective(VariationalObjective):
             return cost
 
 
-def elbo(log_joint, observed, latent, axis=None):
+def elbo(meta_model, observed, latent=None, axis=None, variational=None,
+         allow_default=False):
     """
     The evidence lower bound (ELBO) objective for variational inference. The
     returned value is a :class:`EvidenceLowerBoundObjective` instance.
@@ -238,4 +247,10 @@ def elbo(log_joint, observed, latent, axis=None):
 
     :return: An :class:`EvidenceLowerBoundObjective` instance.
     """
-    return EvidenceLowerBoundObjective(log_joint, observed, latent, axis=axis)
+    return EvidenceLowerBoundObjective(
+        meta_model,
+        observed,
+        latent=latent,
+        axis=axis,
+        variational=variational,
+        allow_default=allow_default)

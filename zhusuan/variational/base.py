@@ -4,12 +4,14 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+import warnings
 
 import six
 import tensorflow as tf
 from tensorflow.python.client.session import \
     register_session_run_conversion_functions
 
+from zhusuan.framework import StochasticTensor, BayesianNet, MetaBayesianNet
 from zhusuan.utils import TensorArithmeticMixin, merge_dicts
 
 
@@ -38,61 +40,78 @@ class VariationalObjective(TensorArithmeticMixin):
         log probabilities.
     """
 
-    def __init__(self, log_joint, observed, latent):
-        self._log_joint = log_joint
+    def __init__(self, meta_model, observed, latent=None, variational=None,
+                 allow_default=False):
+        if callable(meta_model):
+            # TODO: raise warning
+            self._meta_model = None
+            self._log_joint = meta_model
+        else:
+            self._meta_model = meta_model
+
+        if (variational is None) == (latent is None):
+            raise ValueError(
+                "Either a BayesianNet `variational` representing "
+                "the variational family or a dictionary `latent` "
+                "representing the variational inputs should be passed. "
+                "It is not allowed that both are specified or both are not.")
+        elif latent is None:
+            if isinstance(variational, BayesianNet):
+                self._variational = variational
+            elif isinstance(variational, MetaBayesianNet):
+                self._meta_variational = variational
+                self._variational = self._meta_variational.observe(**observed)
+            else:
+                raise TypeError(
+                    "`variational` should be either MetaBayesianNet or "
+                    "BayesianNet instance.")
+            v_inputs = [i for i in six.iteritems(self._variational.nodes)
+                        if isinstance(i[1], StochasticTensor) and
+                        not i[1].is_observed()]
+            v_log_probs = [(name, node.cond_log_p) for name, node in v_inputs]
+        else:
+            # Deprecated styles of passing variational inputs
+            warnings.warn(
+                "The `latent` argument has been deprecated and will be "
+                "removed in the coming version (0.4.1), use the `variational` "
+                "argument instead.", DeprecationWarning)
+            self._variational = None
+            v_names, v_inputs_and_log_probs = zip(*six.iteritems(latent))
+            v_inputs = zip(v_names,
+                           map(lambda x: x[0], v_inputs_and_log_probs))
+            v_log_probs = zip(v_names,
+                              map(lambda x: x[1], v_inputs_and_log_probs))
+
+        # TODO: remove v_log_probs
+        self._v_inputs = dict(v_inputs)
+        self._v_log_probs = dict(v_log_probs)
+        # TODO: Whether to copy?
         self._observed = observed
-        self._latent = latent
-        # TODO: Add input name check by matching them
-        latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
-        self._latent_outputs = dict(
-            zip(latent_k, map(lambda x: x[0], latent_v)))
-        self._latent_logpdfs = dict(
-            zip(latent_k, map(lambda x: x[1], latent_v)))
-        self._joint_obs = merge_dicts(observed, self._latent_outputs)
-        try:
-            self._dict_key = (log_joint,
-                              frozenset(latent_k),
-                              frozenset(map(tuple, latent_v)),
-                              frozenset(six.iteritems(observed)))
-        except TypeError:
-            # Unhashable type
-            self._dict_key = None
+        self._allow_default = allow_default
 
-    @classmethod
-    def _get_log_p_cache(cls):
-        if not hasattr(cls, '_global_log_p'):
-            cls._global_log_p = {}
-        return cls._global_log_p
+    def _validate_variational_inputs(self, bn):
+        if self._allow_default:
+            # This only works for pure inference settings, or parameter
+            # learning when the default variational distribution (i.e., the
+            # prior) can be optimized with the chosen estimator.
+            return
+        for node in bn.nodes:
+            if isinstance(node, StochasticTensor) and (not node.is_observed()):
+                raise ValueError(
+                    "Stochastic node '{}' in the model is neither "
+                    "observed nor provided with a variational posterior."
+                    .format(node.name))
 
-    @classmethod
-    def _get_log_q_cache(cls):
-        if not hasattr(cls, '_global_log_q'):
-            cls._global_log_q = {}
-        return cls._global_log_q
-
-    def _log_joint_term(self):
-        if self._dict_key is not None:
-            log_p_cache = VariationalObjective._get_log_p_cache()
-            if self._dict_key not in log_p_cache:
-                log_p_cache[self._dict_key] = self._log_joint(self._joint_obs)
-            return log_p_cache[self._dict_key]
+    @property
+    def bn(self):
+        if self._meta_model:
+            if not hasattr(self, "_bn"):
+                self._bn = self._meta_model.observe(
+                    **merge_dicts(self._v_inputs, self._observed))
+                self._validate_variational_inputs(self._bn)
+            return self._bn
         else:
-            if not hasattr(self, '_log_p'):
-                self._log_p = self._log_joint(self._joint_obs)
-            return self._log_p
-
-    def _entropy_term(self):
-        if self._dict_key is not None:
-            log_q_cache = VariationalObjective._get_log_q_cache()
-            if self._dict_key not in log_q_cache:
-                log_q_cache[self._dict_key] = -tf.add_n(
-                    list(six.itervalues(self._latent_logpdfs)))
-            return log_q_cache[self._dict_key]
-        else:
-            if not hasattr(self, '_log_q'):
-                self._log_q = -tf.add_n(
-                    list(six.itervalues(self._latent_logpdfs)))
-            return self._log_q
+            return None
 
     def _objective(self):
         """
@@ -109,7 +128,7 @@ class VariationalObjective(TensorArithmeticMixin):
 
         :return: A Tensor.
         """
-        if not hasattr(self, '_tensor'):
+        if not hasattr(self, "_tensor"):
             self._tensor = self._objective()
         return self._tensor
 
@@ -123,6 +142,23 @@ class VariationalObjective(TensorArithmeticMixin):
         if as_ref:
             raise ValueError("{}: Ref type not supported.".format(value))
         return tensor
+
+    # TODO: remove deprecated features
+    def _log_joint_term(self):
+        if self._meta_model:
+            return self.bn.log_joint()
+        elif not hasattr(self, '_log_joint_cache'):
+            self._log_joint_cache = self._log_joint(
+                merge_dicts(self._v_inputs, self._observed))
+        return self._log_joint_cache
+
+    def _entropy_term(self):
+        if not hasattr(self, '_entropy_cache'):
+            if len(self._v_log_probs) > 0:
+                self._entropy_cache = -sum(six.itervalues(self._v_log_probs))
+            else:
+                self._entropy_cache = None
+        return self._entropy_cache
 
 
 tf.register_tensor_conversion_function(
