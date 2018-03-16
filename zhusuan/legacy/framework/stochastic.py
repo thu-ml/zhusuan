@@ -8,7 +8,8 @@ from __future__ import division
 import tensorflow as tf
 
 from zhusuan import distributions
-from zhusuan.framework.base import StochasticTensor
+from zhusuan.framework.bn import StochasticTensor
+from zhusuan.legacy.distributions import special
 
 
 __all__ = [
@@ -89,7 +90,7 @@ class Normal(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        norm = distributions.Normal(
+        dist = distributions.Normal(
             mean,
             _sentinel=_sentinel,
             std=std,
@@ -99,7 +100,8 @@ class Normal(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Normal, self).__init__(name, norm, n_samples)
+        super(Normal, self).__init__(None, name, dist, n_samples=n_samples,
+                                     **kwargs)
 
 
 class FoldNormal(StochasticTensor):
@@ -149,7 +151,7 @@ class FoldNormal(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        norm = distributions.FoldNormal(
+        dist = distributions.FoldNormal(
             mean,
             _sentinel=_sentinel,
             std=std,
@@ -159,7 +161,8 @@ class FoldNormal(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(FoldNormal, self).__init__(name, norm, n_samples)
+        super(FoldNormal, self).__init__(None, name, dist, n_samples=n_samples,
+                                         **kwargs)
 
 
 class Bernoulli(StochasticTensor):
@@ -193,13 +196,14 @@ class Bernoulli(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        bernoulli = distributions.Bernoulli(
+        dist = distributions.Bernoulli(
             logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
-        super(Bernoulli, self).__init__(name, bernoulli, n_samples)
+        super(Bernoulli, self).__init__(None, name, dist, n_samples=n_samples,
+                                        **kwargs)
 
 
 class Categorical(StochasticTensor):
@@ -237,13 +241,14 @@ class Categorical(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        cat = distributions.Categorical(
+        dist = distributions.Categorical(
             logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
-        super(Categorical, self).__init__(name, cat, n_samples)
+        super(Categorical, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 Discrete = Categorical
@@ -283,7 +288,7 @@ class Uniform(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        uniform = distributions.Uniform(
+        dist = distributions.Uniform(
             minval,
             maxval,
             group_ndims=group_ndims,
@@ -291,7 +296,8 @@ class Uniform(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Uniform, self).__init__(name, uniform, n_samples)
+        super(Uniform, self).__init__(None, name, dist, n_samples=n_samples,
+                                      **kwargs)
 
 
 class Gamma(StochasticTensor):
@@ -324,14 +330,15 @@ class Gamma(StochasticTensor):
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        gamma = distributions.Gamma(
+        dist = distributions.Gamma(
             alpha,
             beta,
             group_ndims=group_ndims,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Gamma, self).__init__(name, gamma, n_samples)
+        super(Gamma, self).__init__(None, name, dist, n_samples=n_samples,
+                                    **kwargs)
 
 
 class Beta(StochasticTensor):
@@ -366,14 +373,15 @@ class Beta(StochasticTensor):
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        beta = distributions.Beta(
+        dist = distributions.Beta(
             alpha,
             beta,
             group_ndims=group_ndims,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Beta, self).__init__(name, beta, n_samples)
+        super(Beta, self).__init__(None, name, dist, n_samples=n_samples,
+                                   **kwargs)
 
 
 class Poisson(StochasticTensor):
@@ -407,14 +415,15 @@ class Poisson(StochasticTensor):
                  dtype=tf.int32,
                  check_numerics=False,
                  **kwargs):
-        poisson = distributions.Poisson(
+        dist = distributions.Poisson(
             rate,
             group_ndims=group_ndims,
             dtype=dtype,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Poisson, self).__init__(name, poisson, n_samples)
+        super(Poisson, self).__init__(None, name, dist, n_samples=n_samples,
+                                      **kwargs)
 
 
 class Binomial(StochasticTensor):
@@ -453,7 +462,7 @@ class Binomial(StochasticTensor):
                  dtype=tf.int32,
                  check_numerics=False,
                  **kwargs):
-        binomial = distributions.Binomial(
+        dist = distributions.Binomial(
             logits,
             n_experiments,
             group_ndims=group_ndims,
@@ -461,7 +470,8 @@ class Binomial(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Binomial, self).__init__(name, binomial, n_samples)
+        super(Binomial, self).__init__(None, name, dist, n_samples=n_samples,
+                                       **kwargs)
 
 
 class MultivariateNormalCholesky(StochasticTensor):
@@ -505,7 +515,7 @@ class MultivariateNormalCholesky(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        mvn = distributions.MultivariateNormalCholesky(
+        dist = distributions.MultivariateNormalCholesky(
             mean,
             cov_tril,
             group_ndims,
@@ -513,7 +523,8 @@ class MultivariateNormalCholesky(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(MultivariateNormalCholesky, self).__init__(name, mvn, n_samples)
+        super(MultivariateNormalCholesky, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 class Multinomial(StochasticTensor):
@@ -564,7 +575,7 @@ class Multinomial(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        multinomial = distributions.Multinomial(
+        dist = distributions.Multinomial(
             logits,
             n_experiments,
             normalize_logits=normalize_logits,
@@ -572,7 +583,8 @@ class Multinomial(StochasticTensor):
             dtype=dtype,
             **kwargs
         )
-        super(Multinomial, self).__init__(name, multinomial, n_samples)
+        super(Multinomial, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 class UnnormalizedMultinomial(StochasticTensor):
@@ -621,15 +633,15 @@ class UnnormalizedMultinomial(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        unnormalized_multinomial = distributions.UnnormalizedMultinomial(
+        dist = distributions.UnnormalizedMultinomial(
             logits,
             normalize_logits=normalize_logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
-        super(UnnormalizedMultinomial, self) \
-            .__init__(name, unnormalized_multinomial, None)
+        super(UnnormalizedMultinomial, self).__init__(
+            None, name, dist, **kwargs)
 
 
 BagofCategoricals = UnnormalizedMultinomial
@@ -671,13 +683,14 @@ class OnehotCategorical(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        onehot_cat = distributions.OnehotCategorical(
+        dist = distributions.OnehotCategorical(
             logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
-        super(OnehotCategorical, self).__init__(name, onehot_cat, n_samples)
+        super(OnehotCategorical, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 OnehotDiscrete = OnehotCategorical
@@ -718,13 +731,14 @@ class Dirichlet(StochasticTensor):
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        dirichlet = distributions.Dirichlet(
+        dist = distributions.Dirichlet(
             alpha,
             group_ndims=group_ndims,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Dirichlet, self).__init__(name, dirichlet, n_samples)
+        super(Dirichlet, self).__init__(None, name, dist, n_samples=n_samples,
+                                        **kwargs)
 
 
 class InverseGamma(StochasticTensor):
@@ -757,14 +771,15 @@ class InverseGamma(StochasticTensor):
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        inv_gamma = distributions.InverseGamma(
+        dist = distributions.InverseGamma(
             alpha,
             beta,
             group_ndims=group_ndims,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(InverseGamma, self).__init__(name, inv_gamma, n_samples)
+        super(InverseGamma, self).__init__(None, name, dist,
+                                           n_samples=n_samples, **kwargs)
 
 
 class Laplace(StochasticTensor):
@@ -801,7 +816,7 @@ class Laplace(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        laplace = distributions.Laplace(
+        dist = distributions.Laplace(
             loc,
             scale,
             group_ndims=group_ndims,
@@ -809,7 +824,8 @@ class Laplace(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Laplace, self).__init__(name, laplace, n_samples)
+        super(Laplace, self).__init__(None, name, dist, n_samples=n_samples,
+                                      **kwargs)
 
 
 class BinConcrete(StochasticTensor):
@@ -853,7 +869,7 @@ class BinConcrete(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        bin_concrete = distributions.BinConcrete(
+        dist = distributions.BinConcrete(
             temperature,
             logits,
             group_ndims=group_ndims,
@@ -861,7 +877,8 @@ class BinConcrete(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(BinConcrete, self).__init__(name, bin_concrete, n_samples)
+        super(BinConcrete, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 BinGumbelSoftmax = BinConcrete
@@ -908,7 +925,7 @@ class ExpConcrete(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        exp_concrete = distributions.ExpConcrete(
+        dist = distributions.ExpConcrete(
             temperature,
             logits,
             group_ndims=group_ndims,
@@ -916,7 +933,8 @@ class ExpConcrete(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(ExpConcrete, self).__init__(name, exp_concrete, n_samples)
+        super(ExpConcrete, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 ExpGumbelSoftmax = ExpConcrete
@@ -964,7 +982,7 @@ class Concrete(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        concrete = distributions.Concrete(
+        dist = distributions.Concrete(
             temperature,
             logits,
             group_ndims=group_ndims,
@@ -972,7 +990,8 @@ class Concrete(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Concrete, self).__init__(name, concrete, n_samples)
+        super(Concrete, self).__init__(None, name, dist, n_samples=n_samples,
+                                       **kwargs)
 
 
 GumbelSoftmax = Concrete
@@ -1013,14 +1032,16 @@ class Empirical(StochasticTensor):
                  value_shape=None,
                  is_continuous=None,
                  **kwargs):
-        norm = distributions.Empirical(
-            dtype, batch_shape,
+        dist = special.Empirical(
+            dtype,
+            batch_shape,
             value_shape=value_shape,
             group_ndims=group_ndims,
             is_continous=is_continuous,
             **kwargs
         )
-        super(Empirical, self).__init__(name, norm, n_samples)
+        super(Empirical, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 class Implicit(StochasticTensor):
@@ -1052,10 +1073,11 @@ class Implicit(StochasticTensor):
                  group_ndims=0,
                  n_samples=None,
                  **kwargs):
-        norm = distributions.Implicit(
+        dist = special.Implicit(
             samples,
             value_shape=value_shape,
             group_ndims=group_ndims,
             **kwargs
         )
-        super(Implicit, self).__init__(name, norm, n_samples)
+        super(Implicit, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)

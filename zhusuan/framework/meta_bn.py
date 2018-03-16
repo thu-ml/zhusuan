@@ -6,6 +6,7 @@ from __future__ import print_function
 from __future__ import division
 
 import tensorflow as tf
+from functools import wraps
 
 from zhusuan.framework.utils import Context
 
@@ -68,6 +69,7 @@ class MetaBayesianNet(object):
 
 def meta_bayesian_net(scope=None, reuse_variables=False):
     def wrapper(f):
+        @wraps(f)
         def _wrapped(*args, **kwargs):
             meta_bn = MetaBayesianNet(
                 f, args=args, kwargs=kwargs, scope=scope,

@@ -102,8 +102,9 @@ if __name__ == '__main__':
     qe_samples, log_qes = zip(*qe_queries)
     log_qes = [log_qe / x_train.shape[0] for log_qe in log_qes]
     e_dict = dict(zip(e_names, zip(qe_samples, log_qes)))
-    lower_bound = tf.reduce_mean(
-        zs.sgvb(log_joint, {'y': y_obs}, e_dict, axis=0))
+    lower_bound = zs.variational.elbo(log_joint, {'y': y_obs}, e_dict, axis=0)
+    cost = tf.reduce_mean(lower_bound.sgvb())
+    lower_bound = tf.reduce_mean(lower_bound)
 
     _, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
                             x_obs, n, net_size,
@@ -115,7 +116,7 @@ if __name__ == '__main__':
 
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
-    infer = optimizer.minimize(-lower_bound)
+    infer = optimizer.minimize(cost)
 
     params = tf.trainable_variables()
     for i in params:

@@ -211,7 +211,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
                 l_signal = tf.identity(l_signal)
 
         cost = -self._log_joint_term()
-        if self._entropy_term():
+        if self._entropy_term() is not None:
             cost += tf.stop_gradient(l_signal) * self._entropy_term()
 
         if self._axis is not None:

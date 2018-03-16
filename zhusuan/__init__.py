@@ -8,7 +8,8 @@ from .hmc import *
 from .evaluation import *
 from .transform import *
 from .utils import *
-from .legacy import *
+from .legacy.distributions import *
+from .legacy.framework import *
 
 
 __version__ = '0.3.1'

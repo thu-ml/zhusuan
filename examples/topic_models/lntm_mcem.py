@@ -14,7 +14,7 @@ import os
 import time
 
 import tensorflow as tf
-from six.moves import range
+from six.moves import range, zip
 from functools import partial
 import numpy as np
 import zhusuan as zs
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     num_e_steps = 5
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
-    epochs = 100
+    epochs = 1
     learning_rate_0 = 1.0
     t0 = 10
 
@@ -116,10 +116,6 @@ if __name__ == "__main__":
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
     infer = optimizer.minimize(-log_joint, var_list=[beta])
-
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
 
     # Below is the evaluation part.
     # Variables whose name starts with '_' is only used in the evaluation part,
@@ -210,7 +206,7 @@ if __name__ == "__main__":
         # Output topics
         p = sess.run(phi)
         for k in range(n_topics):
-            rank = zip(list(p[k, :]), range(n_vocab))
+            rank = list(zip(list(p[k, :]), range(n_vocab)))
             rank.sort()
             rank.reverse()
             sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '

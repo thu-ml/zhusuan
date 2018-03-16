@@ -158,7 +158,7 @@ def main():
             y_ph: y_batch,
             n_particles_ph: hps.n_particles
         }
-        return sess.run([infer_op, cost], fd)[1]
+        return sess.run([infer_op, lower_bound], fd)[1]
 
     def predict_step(sess, x_batch, y_batch):
         fd = {

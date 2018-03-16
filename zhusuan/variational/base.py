@@ -11,7 +11,8 @@ import tensorflow as tf
 from tensorflow.python.client.session import \
     register_session_run_conversion_functions
 
-from zhusuan.framework import StochasticTensor, BayesianNet, MetaBayesianNet
+from zhusuan.framework.bn import StochasticTensor, BayesianNet
+from zhusuan.framework.meta_bn import MetaBayesianNet
 from zhusuan.utils import TensorArithmeticMixin, merge_dicts
 
 
@@ -104,6 +105,7 @@ class VariationalObjective(TensorArithmeticMixin):
 
     @property
     def bn(self):
+        # TODO: cache bn for the same `meta_model` and `variational`.
         if self._meta_model:
             if not hasattr(self, "_bn"):
                 self._bn = self._meta_model.observe(

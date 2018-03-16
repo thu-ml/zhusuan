@@ -16,7 +16,7 @@ from examples.utils import dataset
 
 
 @zs.reuse('model')
-def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
+def bayesianNN(observed, x, layer_sizes, n_particles):
     with zs.BayesianNet(observed=observed) as model:
         ws = []
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
@@ -90,7 +90,7 @@ def main():
     w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
 
     def log_joint(observed):
-        model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+        model, _ = bayesianNN(observed, x, layer_sizes, n_particles)
         log_pws = model.local_log_prob(w_names)
         log_py_xw = model.local_log_prob('y')
         return tf.add_n(log_pws) + log_py_xw * N
@@ -109,7 +109,7 @@ def main():
     # prediction: rmse & log likelihood
     observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
     observed.update({'y': y})
-    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
+    model, y_mean = bayesianNN(observed, x, layer_sizes, n_particles)
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
     log_py_xw = model.local_log_prob('y')
