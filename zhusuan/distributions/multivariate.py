@@ -196,9 +196,9 @@ class Multinomial(Distribution):
     The class of Multinomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
         Each slice `[i, j, ..., k, :]` represents the log probabilities for
-        all categories. By default (when `normalize_logits` = True), the
+        all categories. By default (when `normalize_logits=True`), the
         probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
@@ -349,9 +349,10 @@ class UnnormalizedMultinomial(Distribution):
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
