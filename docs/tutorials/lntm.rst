@@ -1,4 +1,4 @@
-Logistic Normal Topic Models and its inference using HMC-EM
+Logistic Normal Topic Models and its Inference Using HMC-EM
 ===========================================================
 
 The full script for this tutorial is at `examples/topic_models/lntm_mcem.py
@@ -48,8 +48,8 @@ The generative process is:
 
     \vec{\phi}_k &\sim \mathrm{Dir}_V(\delta), k=1,2,...,K \\
     \vec{\theta}_d &\sim \mathrm{Dir}_K(\vec{\alpha}), d=1,2,...,D \\
-    z_{dn} &\sim \mathrm{Catg}(\vec{\theta}_d), d=1,2,...,D, n=1,2,...,L_d \\
-    w_{dn} &\sim \mathrm{Catg}(\vec{\phi}_{z_{dn}}), d=1,2,...,D, n=1,2,...,L_d
+    z_{dn} &\sim \mathrm{Catg}(\vec{\theta}_d), d=1,2,...,D, n=1,2,...,N_d \\
+    w_{dn} &\sim \mathrm{Catg}(\vec{\phi}_{z_{dn}}), d=1,2,...,D, n=1,2,...,N_d
 
 In more detail, we first sample :math:`K` **topics**
 :math:`\{\vec{\phi}_k\}_{k=1}^K` from the symmetric Dirichlet prior with
@@ -64,7 +64,12 @@ sample the **topic assignment** :math:`z_{dn}` from the categorical distribution
 with parameter :math:`\vec{\theta}_d`; secondly, sample the word :math:`w_{dn}`
 from the categorical distribution with parameter :math:`\vec{\phi}_{z_{dn}}`.
 The range of :math:`d` is :math:`1` to :math:`D`, and the range of :math:`n` is
-:math:`1` to :math:`N_d` in the :math:`d`\ th document.
+:math:`1` to :math:`N_d` in the :math:`d`\ th document. The model is shown as a
+directed graphical model in the following figure.
+
+.. image:: ../_static/images/lda.png
+    :align: center
+    :width: 75%
 
 .. note::
 
@@ -174,7 +179,8 @@ verify the following concise formula:
 
 .. math::
 
-    \log p(\mathbf{X}|\mathbf{\Theta}, \mathbf{\Phi})=-\mathrm{CE}(\mathbf{X}, \mathbf{\Theta}\mathbf{\Phi})
+    \log p(\mathbf{X}|\mathbf{\Theta}, \mathbf{\Phi})=-\mathrm{CE}(\mathbf{X},
+    \mathbf{\Theta}\mathbf{\Phi})
 
 Here, CE means cross entropy, which is defined for matrices as
 :math:`\mathrm{CE}(\mathbf{A},\mathbf{B})=-\sum_{i,j}A_{ij}\log B_{ij}`. Note
@@ -182,6 +188,16 @@ that :math:`p(\mathbf{X}|\mathbf{\Theta}, \mathbf{\Phi})` is not a proper
 distribution; It is a convenient term representing the likelihood of parameters.
 What we actually means is :math:`\log p(w_{1:D,1:N}|\mathbf{\Theta},
 \mathbf{\Phi})=-\mathrm{CE}(\mathbf{X}, \mathbf{\Theta}\mathbf{\Phi})`.
+
+A intuitive demonstration of :math:`\mathbf{\Theta}`, :math:`\mathbf{\Phi}` and
+:math:`\mathbf{\Theta\Phi}` is shown in the following picture.
+:math:`\mathbf{\Theta}` is the document-topic matrix, :math:`\mathbf{\Phi}` is
+the topic-word matrix, and then :math:`\mathbf{\Theta\Phi}` is the document-word
+matrix, which contains the word sampling distribution of each document.
+
+.. image:: ../_static/images/matrixmul.png
+    :align: center
+    :width: 90%
 
 As minimizing the cross entropy encourages :math:`\mathbf{X}` and
 :math:`\mathbf{\Theta}\mathbf{\Phi}` to be similar, this may reminds you of
@@ -219,8 +235,20 @@ The logistic normal topic model can be described as follows:
     \vec{\phi}_k &= \mathrm{softmax}(\vec{\beta}_k), k=1,2,...,K \\
     \vec{\eta}_d &\sim \mathcal{N}(\vec{\mu}, \mathrm{diag}(\vec{\sigma}^2)), d=1,2,...,D \\
     \vec{\theta}_d &= \mathrm{softmax}(\vec{\eta}_d), d=1,2,...,D \\
-    z_{dn} &\sim \mathrm{Catg}(\vec{\theta}_d), d=1,2,...,D, n=1,2,...,L_d \\
-    w_{dn} &\sim \mathrm{Catg}(\vec{\phi}_{z_{dn}}), d=1,2,...,D, n=1,2,...,L_d
+    z_{dn} &\sim \mathrm{Catg}(\vec{\theta}_d), d=1,2,...,D, n=1,2,...,N_d \\
+    w_{dn} &\sim \mathrm{Catg}(\vec{\phi}_{z_{dn}}), d=1,2,...,D, n=1,2,...,N_d
+
+The graphical model representation is shown in the following figure.
+
+.. image:: ../_static/images/lntm.png
+    :align: center
+    :width: 75%
+
+Since :math:`\vec{\theta}_d` is a deterministic function of
+:math:`\vec{\eta}_d`, we can omit one of them in the probabilistic graphical
+model representation. Here :math:`\vec{\eta}_d` is omitted because
+:math:`\vec{\theta}_d` has a simpler prior. Similarly, we omit
+:math:`\vec{\phi}_k` and keep :math:`\vec{\beta}_k`.
 
 .. note::
 
@@ -235,12 +263,19 @@ The logistic normal topic model can be described as follows:
 We denote :math:`\mathbf{H}=(\vec{\eta}_1, \vec{\eta}_2, ..., \vec{\eta}_D)^T`,
 :math:`\mathbf{B}=(\vec{\beta}_1, \vec{\beta}_2, ..., \vec{\beta}_K)^T`. Then
 :math:`\mathbf{\Theta}=\mathrm{softmax}(\mathbf{H})`, and
-:math:`\mathbf{\Phi}=\mathrm{softmax}(\mathbf{B})`. After integrating
-:math:`\{z_{dn}\}`, the last two lines of the generating process become
-:math:`\log p(\mathbf{X}|\mathbf{\Theta},
-\mathbf{\Phi})=-\mathrm{CE}(\mathbf{X}, \mathbf{\Theta}\mathbf{\Phi})`. So using
-the notations defined before, we can write the joint probability distribution as
-follows:
+:math:`\mathbf{\Phi}=\mathrm{softmax}(\mathbf{B})`. Recall our notation that
+:math:`\mathbf{X}=(\vec{x}_1, \vec{x}_2, ..., \vec{x}_D)^T` where
+:math:`\vec{x}_d=\sum_{n=1}^{N_d}\mathrm{one\_hot}(w_{dn})`. After integrating
+:math:`\{z_{dn}\}`, the last two lines of the generating process:
+
+.. math::
+
+    z_{dn} \sim \mathrm{Catg}(\vec{\theta}_d), w_{dn} \sim
+    \mathrm{Catg}(\vec{\phi}_{z_{dn}})
+
+become :math:`\log p(\mathbf{X}|\mathbf{\Theta},
+\mathbf{\Phi})=-\mathrm{CE}(\mathbf{X}, \mathbf{\Theta}\mathbf{\Phi})`. So we
+can write the joint probability distribution as follows:
 
 .. math::
 
@@ -250,7 +285,7 @@ follows:
 
 where both :math:`p(\mathbf{B}; \delta)` and :math:`p(\mathbf{H}; \vec{\mu},
 \vec{\sigma})` are Gaussian distribution and
-:math:`p(\mathbf{X}|\mathbf{H}\mathbf{B})=-\mathrm{CE}(\mathbf{X},
+:math:`p(\mathbf{X}|\mathbf{H}, \mathbf{B})=-\mathrm{CE}(\mathbf{X},
 \mathrm{softmax}(\mathbf{H})\mathrm{softmax}(\mathbf{B}))`.
 
 In ZhuSuan, the code for constructing such a model is::
