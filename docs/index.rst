@@ -75,7 +75,6 @@ If no error occurs, you've successfully installed ZhuSuan.
    api/zhusuan.transform
    api/zhusuan.diagnostics
    api/zhusuan.utils
-   api/zhusuan.legacy
 
 
 Indices and tables

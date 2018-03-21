@@ -227,7 +227,10 @@ conjugacy. That is because our inference technique can also apply to other
 models which do not have conjugacy from the beginning, such as Neural
 Variational Document Model (:cite:`lntm-miao2016neural`).
 
-The logistic normal topic model can be described as follows:
+The logistic normal topic model can be described as follows, where
+:math:`\{\vec{0}, \delta^2 \mathbf{I}\}` is a :math:`V`-dimensional mean
+vector and covariance matrix, and :math:`\vec{\mu}` and :math:`\vec{\sigma}` are
+:math:`K`-dimensional vectors:
 
 .. math::
 
