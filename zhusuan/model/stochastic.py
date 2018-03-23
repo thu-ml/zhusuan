@@ -467,10 +467,9 @@ class Binomial(StochasticTensor):
 class MultivariateNormalCholesky(StochasticTensor):
     """
 
-    The class of multivariate normal `StochasticTensor`,  where covariance is
-    parameterized with the lower triangular matrix in Cholesky decomposition,
-
-        .. math :: L \\text{s.t.} LL^T = \Sigma.
+    The class of multivariate normal `StochasticTensor`, where covariance is
+    parameterized with the lower triangular matrix :math:`L` in Cholesky
+    decomposition :math:`LL^T = \Sigma`.
 
     See :class:`~zhusuan.model.base.StochasticTensor` for details.
 
@@ -523,9 +522,10 @@ class Multinomial(StochasticTensor):
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -591,9 +591,10 @@ class UnnormalizedMultinomial(StochasticTensor):
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 

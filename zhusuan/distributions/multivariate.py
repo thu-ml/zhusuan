@@ -40,17 +40,16 @@ __all__ = [
 class MultivariateNormalCholesky(Distribution):
     """
     The class of multivariate normal distribution, where covariance is
-    parameterized with the lower triangular matrix in Cholesky decomposition,
-
-        .. math :: L \\text{s.t.} LL^T = \Sigma.
+    parameterized with the lower triangular matrix :math:`L` in Cholesky
+    decomposition :math:`LL^T = \Sigma`.
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param mean: An N-D `float` Tensor of shape [..., n_dim]. Each slice
-        [i, j, ..., k, :] represents the mean of a single multivariate normal
+    :param mean: An N-D `float` Tensor of shape `[..., n_dim]`. Each slice
+        `[i, j, ..., k, :]` represents the mean of a single multivariate normal
         distribution.
-    :param cov_tril: An (N+1)-D `float` Tensor of shape [..., n_dim, n_dim].
-        Each slice [i, ..., k, :, :] represents the lower triangular matrix in
+    :param cov_tril: An (N+1)-D `float` Tensor of shape `[..., n_dim, n_dim]`.
+        Each slice `[i, ..., k, :, :]` represents the lower triangular matrix in
         the Cholesky decomposition of the covariance of a single distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -197,9 +196,10 @@ class Multinomial(Distribution):
     The class of Multinomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -349,9 +349,10 @@ class UnnormalizedMultinomial(Distribution):
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
