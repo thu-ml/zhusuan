@@ -97,4 +97,9 @@ Ziyu Wang (`meta-inf <https://github.com/meta-inf>`_),
 Alexander Botev (`botev <https://github.com/botev>`_),
 Shuyu Cheng (`csy530216 <https://github.com/csy530216>`_),
 Haowen Xu (`korepwx <https://github.com/korepwx>`_),
-Huajun Wu (`CaptainMushroom <https://github.com/CaptainMushroom>`_)
+Huajun Wu (`CaptainMushroom <https://github.com/CaptainMushroom>`_),
+...
+
+We welcome collaboration to the project. To help develop ZhuSuan, you can
+refer to `CONTRIBUTING.md
+<https://github.com/thu-ml/zhusuan/blob/master/CONTRIBUTING.md>`_.
