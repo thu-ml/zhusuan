@@ -78,9 +78,15 @@ class InclusiveKLObjective(VariationalObjective):
         reduced.
     """
 
-    def __init__(self, log_joint, observed, latent, axis=None):
+    def __init__(self, meta_model, observed, latent=None, axis=None,
+                 variational=None, allow_default=False):
         self._axis = axis
-        super(InclusiveKLObjective, self).__init__(log_joint, observed, latent)
+        super(InclusiveKLObjective, self).__init__(
+            meta_model,
+            observed,
+            latent=latent,
+            variational=variational,
+            allow_default=allow_default)
 
     def _objective(self):
         raise NotImplementedError(
@@ -88,6 +94,10 @@ class InclusiveKLObjective(VariationalObjective):
             "of being evaluated.")
 
     def rws(self):
+        # TODO: raise warning
+        return self.importance()
+
+    def importance(self):
         """
         Implements the self-normalized importance sampling gradient estimator
         for variational inference. This was used in the Reweighted Wake-Sleep
@@ -125,7 +135,8 @@ class InclusiveKLObjective(VariationalObjective):
         return cost
 
 
-def klpq(log_joint, observed, latent, axis=None):
+def klpq(meta_model, observed, latent=None, axis=None, variational=None,
+         allow_default=False):
     """
     The inclusive KL objective for variational inference. The
     returned value is an :class:`InclusiveKLObjective` instance.
@@ -148,4 +159,10 @@ def klpq(log_joint, observed, latent, axis=None):
 
     :return: An :class:`InclusiveKLObjective` instance.
     """
-    return InclusiveKLObjective(log_joint, observed, latent, axis=axis)
+    return InclusiveKLObjective(
+        meta_model,
+        observed,
+        latent=latent,
+        axis=axis,
+        variational=variational,
+        allow_default=allow_default)

@@ -11,7 +11,8 @@ import tensorflow as tf
 
 __all__ = [
     'get_backward_ops',
-    'reuse',
+    'reuse_variables',
+    'reuse'
 ]
 
 
@@ -83,7 +84,7 @@ def get_backward_ops(seed_tensors, treat_as_inputs=None):
     return ret
 
 
-def reuse(scope):
+def reuse_variables(scope):
     """
     A decorator for transparent reuse of tensorflow
     `Variables <https://www.tensorflow.org/api_docs/python/tf/Variable>`_ in a
@@ -102,3 +103,8 @@ def reuse(scope):
         <https://www.tensorflow.org/api_docs/python/tf/variable_scope>`_.
     """
     return lambda f: tf.make_template(scope, f)
+
+
+def reuse(scope):
+    # TODO: raise warning
+    return reuse_variables(scope)

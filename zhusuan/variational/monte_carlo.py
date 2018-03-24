@@ -110,14 +110,19 @@ class ImportanceWeightedObjective(VariationalObjective):
         reduced.
     """
 
-    def __init__(self, log_joint, observed, latent, axis=None):
+    def __init__(self, meta_model, observed, latent=None, axis=None,
+                 variational=None, allow_default=False):
         if axis is None:
             raise ValueError(
                 "ImportanceWeightedObjective is a multi-sample objective, "
                 "the `axis` argument must be specified.")
         self._axis = axis
         super(ImportanceWeightedObjective, self).__init__(
-            log_joint, observed, latent)
+            meta_model,
+            observed,
+            latent=latent,
+            variational=variational,
+            allow_default=allow_default)
 
     def _objective(self):
         log_w = self._log_joint_term() + self._entropy_term()
@@ -212,7 +217,9 @@ class ImportanceWeightedObjective(VariationalObjective):
         return cost
 
 
-def importance_weighted_objective(log_joint, observed, latent, axis=None):
+def importance_weighted_objective(
+        meta_model, observed, latent=None, axis=None, variational=None,
+        allow_default=False):
     """
     The importance weighted objective for variational inference (Burda, 2015).
     The returned value is an :class:`ImportanceWeightedObjective` instance.
@@ -235,7 +242,13 @@ def importance_weighted_objective(log_joint, observed, latent, axis=None):
 
     :return: An :class:`ImportanceWeightedObjective` instance.
     """
-    return ImportanceWeightedObjective(log_joint, observed, latent, axis=axis)
+    return ImportanceWeightedObjective(
+        meta_model,
+        observed,
+        latent=latent,
+        axis=axis,
+        variational=variational,
+        allow_default=allow_default)
 
 
 # alias
