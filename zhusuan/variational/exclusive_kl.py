@@ -69,7 +69,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
     .. note::
 
         Don't directly optimize the :class:`EvidenceLowerBoundObjective`
-        instance wrt. to variational parameters, i.e., parameters in
+        instance wrt. variational parameters, i.e., parameters in
         :math:`q`. Instead a proper gradient estimator should be chosen to
         produce the correct surrogate cost to minimize, as shown in the above
         code snippet.

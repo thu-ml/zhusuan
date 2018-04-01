@@ -14,7 +14,7 @@ import os
 import time
 
 import tensorflow as tf
-from six.moves import range
+from six.moves import range, zip
 from functools import partial
 import numpy as np
 import zhusuan as zs
@@ -32,11 +32,10 @@ log_delta = 10.0
 @zs.reuse('model')
 def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
-        eta_mean = tf.tile(tf.expand_dims(
-                           tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1]),
-                           0), [n_chains, 1, 1])
+        eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
         # eta/theta: Unnormalized/normalized document-topic matrix
-        eta = zs.Normal('eta', eta_mean, logstd=eta_logstd, group_ndims=1)
+        eta = zs.Normal('eta', eta_mean, logstd=eta_logstd, n_samples=n_chains,
+                        group_ndims=1)
         theta = tf.nn.softmax(eta)
         # beta/phi: Unnormalized/normalized topic-word matrix
         beta = zs.Normal('beta', tf.zeros([n_topics, n_vocab]),
@@ -210,7 +209,7 @@ if __name__ == "__main__":
         # Output topics
         p = sess.run(phi)
         for k in range(n_topics):
-            rank = zip(list(p[k, :]), range(n_vocab))
+            rank = list(zip(list(p[k, :]), range(n_vocab)))
             rank.sort()
             rank.reverse()
             sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
