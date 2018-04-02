@@ -140,9 +140,9 @@ def main():
         log_pr = tf.reduce_sum(log_pr, axis=1)
         return log_pu + log_pv + log_pr
 
-    hmc_u = zs.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
+    hmc_u = zs.sampling.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
                    target_acceptance_rate=0.9)
-    hmc_v = zs.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
+    hmc_v = zs.sampling.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
                    target_acceptance_rate=0.9)
     target_u = tf.gather(U, select_u, axis=1)
     target_v = tf.gather(V, select_v, axis=1)

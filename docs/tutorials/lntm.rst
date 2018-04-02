@@ -480,8 +480,8 @@ if you are interested.
 
 To use HMC in ZhuSuan, first define the HMC object and its parameters::
 
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
-                 target_acceptance_rate=0.6)
+    hmc = zs.sampling.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
+                          target_acceptance_rate=0.6)
 
 Then write the log joint probability :math:`\log p(\mathbf{X},\mathbf{H}|
 \mathbf{B}; \vec{\mu}, \vec{\sigma})= \log p(\mathbf{X}| \mathbf{B},\mathbf{H})
