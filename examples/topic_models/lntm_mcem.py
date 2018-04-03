@@ -68,8 +68,8 @@ if __name__ == "__main__":
     n_chains = 1
 
     num_e_steps = 5
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
-                 target_acceptance_rate=0.6)
+    hmc = zs.sampling.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
+                          target_acceptance_rate=0.6)
     epochs = 100
     learning_rate_0 = 1.0
     t0 = 10
@@ -139,8 +139,8 @@ if __name__ == "__main__":
     _prior_samples = {'eta': lntm({}, _n_chains, n_docs_test, n_topics,
                       n_vocab, eta_mean, eta_logstd).outputs('eta')}
 
-    _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
-                  target_acceptance_rate=0.6)
+    _hmc = zs.sampling.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
+                           target_acceptance_rate=0.6)
 
     _ais = zs.evaluation.AIS(_log_prior,
                              partial(e_obj, n_chains=_n_chains,

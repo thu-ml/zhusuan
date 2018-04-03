@@ -42,9 +42,9 @@ if __name__ == "__main__":
 
     adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")
     adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
-                 adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
-                 target_acceptance_rate=0.9)
+    hmc = zs.sampling.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
+                          adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
+                          target_acceptance_rate=0.9)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
     sample_op, hmc_info = hmc.sample(log_joint, {}, {'x': x})
 

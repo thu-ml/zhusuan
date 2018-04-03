@@ -3,8 +3,8 @@
 
 from . import distributions
 from . import variational
+from . import sampling
 from .model import *
-from .hmc import *
 from .evaluation import *
 from .transform import *
 from .utils import *
