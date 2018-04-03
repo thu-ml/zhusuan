@@ -29,7 +29,6 @@ from examples.utils import dataset
 log_delta = 10.0
 
 
-@zs.reuse('model')
 def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
     with zs.BayesianNet(observed=observed) as model:
         eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])

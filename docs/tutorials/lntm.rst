@@ -293,7 +293,6 @@ where both :math:`p(\mathbf{B}; \delta)` and :math:`p(\mathbf{H}; \vec{\mu},
 
 In ZhuSuan, the code for constructing such a model is::
 
-    @zs.reuse('model')
     def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
         with zs.BayesianNet(observed=observed) as model:
             eta_mean = tf.tile(tf.expand_dims(
