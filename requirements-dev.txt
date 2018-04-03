@@ -9,3 +9,4 @@ matplotlib
 mock
 scikit-image
 scipy
+progressbar2

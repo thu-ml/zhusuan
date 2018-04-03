@@ -8,6 +8,8 @@ import os
 import gzip
 import tarfile
 import zipfile
+import progressbar
+import math
 
 import numpy as np
 import six
@@ -47,10 +49,53 @@ def to_one_hot(x, depth):
     ret[np.arange(x.shape[0]), x] = 1
     return ret
 
+pbar = None
+
+
+def show_progress(block_num, block_size, total_size):
+    global pbar
+
+    if pbar is None:
+        if total_size > 0:
+            prefixes = ('', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi', 'Yi')
+            power = min(int(math.log(total_size, 2) / 10), len(prefixes) - 1)
+            scaled = float(total_size) / (2 ** (10 * power))
+            total_size_str = '{:.1f} {}B'.format(scaled, prefixes[power])
+            try:
+                marker = '█'
+            except UnicodeEncodeError:
+                marker = '*'
+            widgets = [
+                progressbar.Percentage(),
+                ' ', progressbar.DataSize(),
+                ' / ', total_size_str,
+                ' ', progressbar.Bar(marker=marker),
+                ' ', progressbar.ETA(),
+                ' ', progressbar.AdaptiveTransferSpeed(),
+            ]
+            pbar = progressbar.ProgressBar(widgets=widgets,
+                                           max_value=total_size)
+        else:
+            widgets = [
+                progressbar.DataSize(),
+                ' ', progressbar.Bar(marker=progressbar.RotatingMarker()),
+                ' ', progressbar.Timer(),
+                ' ', progressbar.AdaptiveTransferSpeed(),
+            ]
+            pbar = progressbar.ProgressBar(widgets=widgets,
+                                           max_value=progressbar.UnknownLength)
+
+    downloaded = block_num * block_size
+    if downloaded < total_size:
+        pbar.update(downloaded)
+    else:
+        pbar.finish()
+        pbar = None
+
 
 def download_dataset(url, path):
     print('Downloading data from %s' % url)
-    urllib.request.urlretrieve(url, path)
+    urllib.request.urlretrieve(url, path, show_progress)
 
 
 def load_mnist_realval(path, one_hot=True, dequantify=False):
