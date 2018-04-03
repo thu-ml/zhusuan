@@ -35,7 +35,7 @@ extensions = ['sphinx.ext.doctest',
               'sphinxcontrib.bibtex',
               'sphinx.ext.intersphinx']
 
-mathjax_path = 'http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML'
+mathjax_path = 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.3/MathJax.js?config=TeX-AMS-MML_HTMLorMML'
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -51,7 +51,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'ZhuSuan'
-copyright = u'2017, ZhuSuan contributors'
+copyright = u'2018, ZhuSuan contributors'
 author = u'ZhuSuan contributors'
 
 # The version info for the project you're documenting, acts as replacement for

@@ -101,7 +101,8 @@ setup(
         'examples': [
             'scipy',
             'matplotlib',
-            'scikit-image'
+            'scikit-image',
+            'progressbar2'
         ],
     },
 

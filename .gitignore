@@ -92,3 +92,6 @@ ENV/
 
 # Vim
 *.sw*
+
+# vscode
+.vscode/

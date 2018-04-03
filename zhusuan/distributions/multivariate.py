@@ -34,23 +34,23 @@ __all__ = [
     'ExpGumbelSoftmax',
     'Concrete',
     'GumbelSoftmax',
+    'MatrixVariateNormalCholesky',
 ]
 
 
 class MultivariateNormalCholesky(Distribution):
     """
     The class of multivariate normal distribution, where covariance is
-    parameterized with the lower triangular matrix in Cholesky decomposition,
-
-        .. math :: L \\text{s.t.} LL^T = \Sigma.
+    parameterized with the lower triangular matrix :math:`L` in Cholesky
+    decomposition :math:`LL^T = \Sigma`.
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param mean: An N-D `float` Tensor of shape [..., n_dim]. Each slice
-        [i, j, ..., k, :] represents the mean of a single multivariate normal
+    :param mean: An N-D `float` Tensor of shape `[..., n_dim]`. Each slice
+        `[i, j, ..., k, :]` represents the mean of a single multivariate normal
         distribution.
-    :param cov_tril: An (N+1)-D `float` Tensor of shape [..., n_dim, n_dim].
-        Each slice [i, ..., k, :, :] represents the lower triangular matrix in
+    :param cov_tril: An (N+1)-D `float` Tensor of shape `[..., n_dim, n_dim]`.
+        Each slice `[i, ..., k, :, :]` represents the lower triangular matrix in
         the Cholesky decomposition of the covariance of a single distribution.
     :param group_ndims: A 0-D `int32` Tensor representing the number of
         dimensions in `batch_shape` (counted from the end) that are grouped
@@ -197,9 +197,10 @@ class Multinomial(Distribution):
     The class of Multinomial distribution.
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -349,9 +350,10 @@ class UnnormalizedMultinomial(Distribution):
 
     See :class:`~zhusuan.distributions.base.Distribution` for details.
 
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
 
         .. math:: \\mathrm{logits} \\propto \\log p
 
@@ -953,3 +955,205 @@ class Concrete(Distribution):
 
 
 GumbelSoftmax = Concrete
+
+
+class MatrixVariateNormalCholesky(Distribution):
+    """
+    The class of matrix variate normal distribution, where covariances
+    :math:`U` and :math:`V` are parameterized with the lower triangular
+    matrix in Cholesky decomposition,
+
+    .. math ::
+        L_u \\text{s.t.} L_u L_u^T = U,\\; L_v \\text{s.t.} L_v L_v^T = V
+
+    See :class:`~zhusuan.distributions.base.Distribution` for details.
+
+    :param mean: An N-D `float` Tensor of shape [..., n_row, n_col].
+        Each slice [i, j, ..., k, :, :] represents the mean of a single
+        matrix variate normal distribution.
+    :param u_tril: An N-D `float` Tensor of shape [..., n_row, n_row].
+        Each slice [i, j, ..., k, :, :] represents the lower triangular matrix
+        in the Cholesky decomposition of the among-row covariance of a single
+        matrix variate normal distribution.
+    :param v_tril: An N-D `float` Tensor of shape [..., n_col, n_col].
+        Each slice [i, j, ..., k, :, :] represents the lower triangular matrix
+        in the Cholesky decomposition of the among-column covariance of a
+        single matrix variate normal distribution.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        distribution are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param use_path_derivative: A bool. Whether when taking the gradients
+        of the log-probability to propagate them through the parameters
+        of the distribution (False meaning you do propagate them). This
+        is based on the paper "Sticking the Landing: Simple,
+        Lower-Variance Gradient Estimators for Variational Inference"
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 mean,
+                 u_tril,
+                 v_tril,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 use_path_derivative=False,
+                 check_numerics=False,
+                 **kwargs):
+        self._check_numerics = check_numerics
+        self._mean = tf.convert_to_tensor(mean)
+        self._mean = assert_rank_at_least(
+            self._mean, 2, 'MatrixVariateNormalCholesky.mean')
+        self._n_row = get_shape_at(self._mean, -2)
+        self._n_col = get_shape_at(self._mean, -1)
+        self._u_tril = tf.convert_to_tensor(u_tril)
+        self._u_tril = assert_rank_at_least(
+            self._u_tril, 2, 'MatrixVariateNormalCholesky.u_tril')
+        self._v_tril = tf.convert_to_tensor(v_tril)
+        self._v_tril = assert_rank_at_least(
+            self._v_tril, 2, 'MatrixVariateNormalCholesky.v_tril')
+
+        # Static shape check
+        expected_u_shape = self._mean.get_shape()[:-1].concatenate(
+            [self._n_row if isinstance(self._n_row, int) else None])
+        self._u_tril.get_shape().assert_is_compatible_with(expected_u_shape)
+        expected_v_shape = self._mean.get_shape()[:-2].concatenate(
+            [self._n_col if isinstance(self._n_col, int) else None] * 2)
+        self._v_tril.get_shape().assert_is_compatible_with(expected_v_shape)
+        # Dynamic
+        expected_u_shape = tf.concat(
+            [tf.shape(self._mean)[:-1], [self._n_row]], axis=0)
+        actual_u_shape = tf.shape(self._u_tril)
+        msg = ['MatrixVariateNormalCholesky.u_tril should have compatible '
+               'shape with mean. Expected', expected_u_shape, ' got ',
+               actual_u_shape]
+        assert_u_ops = tf.assert_equal(expected_u_shape, actual_u_shape, msg)
+        expected_v_shape = tf.concat(
+            [tf.shape(self._mean)[:-2], [self._n_col, self._n_col]], axis=0)
+        actual_v_shape = tf.shape(self._v_tril)
+        msg = ['MatrixVariateNormalCholesky.v_tril should have compatible '
+               'shape with mean. Expected', expected_v_shape, ' got ',
+               actual_v_shape]
+        assert_v_ops = tf.assert_equal(expected_v_shape, actual_v_shape, msg)
+        with tf.control_dependencies([assert_u_ops, assert_v_ops]):
+            self._u_tril = tf.identity(self._u_tril)
+            self._v_tril = tf.identity(self._v_tril)
+
+        dtype = assert_same_float_dtype(
+            [(self._mean, 'MatrixVariateNormalCholesky.mean'),
+             (self._u_tril, 'MatrixVariateNormalCholesky.u_tril'),
+             (self._v_tril, 'MatrixVariateNormalCholesky.v_tril')])
+        super(MatrixVariateNormalCholesky, self).__init__(
+            dtype=dtype,
+            param_dtype=dtype,
+            is_continuous=True,
+            is_reparameterized=is_reparameterized,
+            use_path_derivative=use_path_derivative,
+            group_ndims=group_ndims,
+            **kwargs)
+
+    @property
+    def mean(self):
+        """The mean of the matrix variate normal distribution."""
+        return self._mean
+
+    @property
+    def u_tril(self):
+        """
+        The lower triangular matrix in the Cholesky decomposition of the
+        among-row covariance.
+        """
+        return self._u_tril
+
+    @property
+    def v_tril(self):
+        """
+        The lower triangular matrix in the Cholesky decomposition of the
+        among-column covariance.
+        """
+        return self._v_tril
+
+    def _value_shape(self):
+        return tf.convert_to_tensor([self._n_row, self._n_col], tf.int32)
+
+    def _get_value_shape(self):
+        shape_ = tf.TensorShape([
+            self._n_row if isinstance(self._n_row, int) else None,
+            self._n_col if isinstance(self._n_col, int) else None])
+        return shape_
+
+    def _batch_shape(self):
+        return tf.shape(self.mean)[:-2]
+
+    def _get_batch_shape(self):
+        if self.mean.get_shape():
+            return self.mean.get_shape()[:-2]
+        return tf.TensorShape(None)
+
+    def _sample(self, n_samples):
+        mean, u_tril, v_tril = self.mean, self.u_tril, self.v_tril
+        if not self.is_reparameterized:
+            mean = tf.stop_gradient(mean)
+            u_tril = tf.stop_gradient(u_tril)
+            v_tril = tf.stop_gradient(v_tril)
+
+        def tile(t):
+            new_shape = tf.concat([[n_samples], tf.ones_like(tf.shape(t))], 0)
+            return tf.tile(tf.expand_dims(t, 0), new_shape)
+
+        batch_u_tril = tile(u_tril)
+        batch_v_tril = tile(v_tril)
+        noise = tf.random_normal(
+            tf.concat([[n_samples], tf.shape(mean)], axis=0), dtype=self.dtype)
+        samples = mean + \
+            tf.matmul(tf.matmul(batch_u_tril, noise),
+                      tf.matrix_transpose(batch_v_tril))
+        # Update static shape
+        static_n_samples = n_samples if isinstance(n_samples, int) else None
+        samples.set_shape(tf.TensorShape([static_n_samples])
+                          .concatenate(self.get_batch_shape())
+                          .concatenate(self.get_value_shape()))
+        return samples
+
+    def _log_prob(self, given):
+        mean, u_tril, v_tril = (self.path_param(self.mean),
+                                self.path_param(self.u_tril),
+                                self.path_param(self.v_tril))
+
+        log_det_u = 2 * tf.reduce_sum(
+            tf.log(tf.matrix_diag_part(u_tril)), axis=-1)
+        log_det_v = 2 * tf.reduce_sum(
+            tf.log(tf.matrix_diag_part(v_tril)), axis=-1)
+        n_row = tf.cast(self._n_row, self.dtype)
+        n_col = tf.cast(self._n_col, self.dtype)
+        logZ = - (n_row * n_col) / 2. * \
+            tf.log(2. * tf.constant(np.pi, dtype=self.dtype)) - \
+            n_row / 2. * log_det_v - n_col / 2. * log_det_u
+        # logZ.shape == batch_shape
+        if self._check_numerics:
+            logZ = tf.check_numerics(logZ, "log[det(Cov)]")
+
+        y = given - mean
+        y_with_last_dim_changed = tf.expand_dims(tf.ones(tf.shape(y)[:-1]), -1)
+        Lu, _ = maybe_explicit_broadcast(
+            u_tril, y_with_last_dim_changed,
+            'MatrixVariateNormalCholesky.u_tril', 'expand_dims(given, -1)')
+        y_with_sec_last_dim_changed = tf.expand_dims(tf.ones(
+            tf.concat([tf.shape(y)[:-2], tf.shape(y)[-1:]], axis=0)), -1)
+        Lv, _ = maybe_explicit_broadcast(
+            v_tril, y_with_sec_last_dim_changed,
+            'MatrixVariateNormalCholesky.v_tril',
+            'expand_dims(given, -1)')
+        x_Lb_inv_t = tf.matrix_triangular_solve(Lu, y, lower=True)
+        x_t = tf.matrix_triangular_solve(Lv, tf.matrix_transpose(x_Lb_inv_t),
+                                         lower=True)
+        stoc_dist = -0.5 * tf.reduce_sum(tf.square(x_t), [-1, -2])
+        return logZ + stoc_dist
+
+    def _prob(self, given):
+        return tf.exp(self._log_prob(given))
