@@ -467,6 +467,27 @@ class BayesianNet(_BayesianNet, Context):
         )
         return self.stochastic(name, dist, n_samples=n_samples, **kwargs)
 
+    def matrix_variate_normal_cholesky(self,
+                                       name,
+                                       mean,
+                                       u_tril,
+                                       v_tril,
+                                       n_samples=None,
+                                       group_ndims=0,
+                                       is_reparameterized=True,
+                                       check_numerics=False,
+                                       **kwargs):
+        dist = distributions.MatrixVariateNormalCholesky(
+            mean,
+            u_tril,
+            v_tril,
+            group_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        return self.stochastic(name, dist, n_samples=n_samples, **kwargs)
+
     def multinomial(self,
                     name,
                     logits,
