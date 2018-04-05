@@ -249,8 +249,8 @@ The graphical model representation is shown in the following figure.
 
 Since :math:`\vec{\theta}_d` is a deterministic function of
 :math:`\vec{\eta}_d`, we can omit one of them in the probabilistic graphical
-model representation. Here :math:`\vec{\eta}_d` is omitted because
-:math:`\vec{\theta}_d` has a simpler prior. Similarly, we omit
+model representation. Here :math:`\vec{\theta}_d` is omitted because
+:math:`\vec{\eta}_d` has a simpler prior. Similarly, we omit
 :math:`\vec{\phi}_k` and keep :math:`\vec{\beta}_k`.
 
 .. note::
