@@ -69,7 +69,7 @@ if __name__ == "__main__":
     num_e_steps = 5
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
-    epochs = 1
+    epochs = 100
     learning_rate_0 = 1.0
     t0 = 10
 

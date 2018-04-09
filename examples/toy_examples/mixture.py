@@ -14,40 +14,30 @@ import tensorflow as tf
 import zhusuan as zs
 
 
-def gaussian(observed, n_x, stdev, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
-        x_mean = tf.zeros([n_x])
-        x = zs.Normal('x', x_mean, std=stdev, n_samples=n_particles,
-                      group_ndims=1)
-    return model
-
-
 if __name__ == "__main__":
     tf.set_random_seed(1)
 
     # Define model parameters
-    n_x = 1
-    # n_x = 10
-    stdev = 1 / (np.arange(n_x, dtype=np.float32) + 1)
+    stdev = 0.8
+    mu1 = -1
+    mu2 = 3
 
     # Define HMC parameters
     kernel_width = 0.1
     n_chains = 1000
-    n_iters = 200
-    burnin = n_iters // 2
-    n_leapfrogs = 5
+    n_iters = 30000
+    burnin = n_iters * 2 // 3
+    n_leapfrogs = 1
 
     # Build the computation graph
     def log_joint(observed):
-        model = gaussian(observed, n_x, stdev, n_chains)
-        return model.local_log_prob('x')
+        x = observed['x']
+        return tf.log(tf.exp(-0.5*((x-mu1)/stdev)**2)+tf.exp(-0.5*((x-mu2)/stdev)**2))
 
     adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")
-    adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
-                 adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
-                 target_acceptance_rate=0.9)
-    x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
+    hmc = zs.HMC(step_size=1., n_leapfrogs=n_leapfrogs,
+                 adapt_step_size=adapt_step_size, target_acceptance_rate=0.9)
+    x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
     sample_op, hmc_info = hmc.sample(log_joint, {}, {'x': x})
 
     # Run the inference
@@ -59,22 +49,24 @@ if __name__ == "__main__":
             _, x_sample, acc, ss = sess.run(
                 [sample_op, hmc_info.samples['x'], hmc_info.acceptance_rate,
                  hmc_info.updated_step_size],
-                feed_dict={adapt_step_size: i < burnin // 2,
-                           adapt_mass: i < burnin // 2})
-            print('Sample {}: Acceptance rate = {}, updated step size = {}'
-                  .format(i, np.mean(acc), ss))
-            if i >= burnin and i % 10 == 0:
+                feed_dict={adapt_step_size: i < burnin // 2})
+            if i % 1000 == 0:
+                print('Sample {}: Acceptance rate = {}, updated step size = {}'
+                      .format(i, np.mean(acc), ss))
+            if i >= burnin and i % 100 == 0:
                 samples.append(x_sample)
         print('Finished.')
-        samples = np.vstack(samples)
+        samples = np.array(samples)
+        samples = samples.reshape(-1)
 
     # Check & plot the results
-    print('Expected mean = {}'.format(np.zeros(n_x)))
-    print('Sample mean = {}'.format(np.mean(samples, 0)))
-    print('Expected stdev = {}'.format(stdev))
-    print('Sample stdev = {}'.format(np.std(samples, 0)))
+    print('Expected mean = {}'.format(0.5*(mu1+mu2)))
+    print('Sample mean = {}'.format(np.mean(samples)))
+    total_stdev = np.sqrt(stdev**2+0.5*(mu1**2+mu2**2)-(0.5*(mu1+mu2))**2)
+    print('Expected stdev = {}'.format(total_stdev))
+    print('Sample stdev = {}'.format(np.std(samples)))
     print('Relative error of stdev = {}'.format(
-        (np.std(samples, 0) - stdev) / stdev))
+        (np.std(samples) - total_stdev) / total_stdev))
 
     def kde(xs, mu, batch_size):
         mu_n = len(mu)
@@ -89,10 +81,9 @@ if __name__ == "__main__":
         ys /= (mu_n / batch_size)
         return ys
 
-    if n_x == 1:
-        xs = np.linspace(-5, 5, 1000)
-        ys = kde(xs, np.squeeze(samples), n_chains)
-        f, ax = plt.subplots()
-        ax.plot(xs, ys)
-        ax.plot(xs, stats.norm.pdf(xs, scale=stdev[0]))
-        plt.show()
+    xs = np.linspace(-5, 5, 1000)
+    ys = kde(xs, samples, n_chains)
+    f, ax = plt.subplots()
+    ax.plot(xs, ys)
+    ax.plot(xs, 0.5*stats.norm.pdf(xs, loc=mu1, scale=stdev)+0.5*stats.norm.pdf(xs, loc=mu2, scale=stdev))
+    plt.show()

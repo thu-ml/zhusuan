@@ -23,7 +23,7 @@ def gaussian(observed, n_x, stdev, n_particles):
 
 
 if __name__ == "__main__":
-    tf.set_random_seed(1)
+    # tf.set_random_seed(1)
 
     # Define model parameters
     n_x = 1
@@ -33,22 +33,18 @@ if __name__ == "__main__":
     # Define HMC parameters
     kernel_width = 0.1
     n_chains = 1000
-    n_iters = 200
-    burnin = n_iters // 2
-    n_leapfrogs = 5
+    n_iters = 3000
+    burnin = n_iters * 2 // 3
 
     # Build the computation graph
     def log_joint(observed):
         model = gaussian(observed, n_x, stdev, n_chains)
         return model.local_log_prob('x')
 
-    adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")
-    adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
-    hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
-                 adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
-                 target_acceptance_rate=0.9)
+    sgmcmc = zs.SGLD(initial_step_size=0.1, final_step_size=0.001, gamma=0.55,
+                     n_iters_to_final=burnin)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
-    sample_op, hmc_info = hmc.sample(log_joint, {}, {'x': x})
+    sample_op, new_samples = sgmcmc.sample(log_joint, {}, {'x': x})
 
     # Run the inference
     with tf.Session() as sess:
@@ -56,13 +52,7 @@ if __name__ == "__main__":
         samples = []
         print('Sampling...')
         for i in range(n_iters):
-            _, x_sample, acc, ss = sess.run(
-                [sample_op, hmc_info.samples['x'], hmc_info.acceptance_rate,
-                 hmc_info.updated_step_size],
-                feed_dict={adapt_step_size: i < burnin // 2,
-                           adapt_mass: i < burnin // 2})
-            print('Sample {}: Acceptance rate = {}, updated step size = {}'
-                  .format(i, np.mean(acc), ss))
+            _, x_sample = sess.run([sample_op, new_samples['x']])
             if i >= burnin and i % 10 == 0:
                 samples.append(x_sample)
         print('Finished.')
