@@ -1,11 +1,11 @@
-Logistic Normal Topic Models and its Inference Using HMC-EM
-===========================================================
+Logistic Normal Topic Models
+============================
 
 The full script for this tutorial is at `examples/topic_models/lntm_mcem.py
 <https://github.com/thu-ml/zhusuan/blob/master/examples/topic_models/lntm_mcem.py>`_.
 
-A Brief Introduction to Topic Models and Latent Dirichlet Allocation
---------------------------------------------------------------------
+An Introduction to Topic Models and Latent Dirichlet Allocation
+---------------------------------------------------------------
 
 Nowadays it is much easier to get large corpus of documents. Even if there are
 no suitable labels with these documents, much information can be extracted. We
@@ -249,8 +249,8 @@ The graphical model representation is shown in the following figure.
 
 Since :math:`\vec{\theta}_d` is a deterministic function of
 :math:`\vec{\eta}_d`, we can omit one of them in the probabilistic graphical
-model representation. Here :math:`\vec{\eta}_d` is omitted because
-:math:`\vec{\theta}_d` has a simpler prior. Similarly, we omit
+model representation. Here :math:`\vec{\theta}_d` is omitted because
+:math:`\vec{\eta}_d` has a simpler prior. Similarly, we omit
 :math:`\vec{\phi}_k` and keep :math:`\vec{\beta}_k`.
 
 .. note::

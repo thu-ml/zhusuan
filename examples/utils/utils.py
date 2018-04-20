@@ -9,6 +9,9 @@ import numpy as np
 from six.moves import range
 from skimage import io, img_as_ubyte
 from skimage.exposure import rescale_intensity
+from tensorflow.contrib.framework.python.ops import add_arg_scope
+import tensorflow as tf
+from tensorflow.contrib import layers
 
 
 def makedirs(filename):
@@ -65,3 +68,46 @@ def average_rmse_over_batches(rmses, sizes):
     rmses = np.array(rmses)
     sizes = np.array(sizes)
     return np.sqrt(np.sum(rmses ** 2 * sizes) / np.sum(sizes))
+
+
+@add_arg_scope
+def conv2d_transpose(
+        inputs,
+        out_shape,
+        kernel_size=(5, 5),
+        stride=(1, 1),
+        activation_fn=tf.nn.relu,
+        normalizer_fn=None,
+        normalizer_params=None,
+        weights_initializer=layers.xavier_initializer(),
+        scope=None,
+        reuse=None):
+    batchsize = tf.shape(inputs)[0]
+    in_channels = int(inputs.get_shape()[-1])
+
+    output_shape = tf.stack([batchsize, out_shape[0],
+                             out_shape[1], out_shape[2]])
+    filter_shape = [kernel_size[0], kernel_size[1], out_shape[2], in_channels]
+
+    with tf.variable_scope(scope, 'Conv2d_transpose', [inputs], reuse=reuse):
+        w = tf.get_variable('weights', filter_shape,
+                            initializer=weights_initializer)
+
+        outputs = tf.nn.conv2d_transpose(
+            inputs, w, output_shape=output_shape,
+            strides=[1, stride[0], stride[1], 1])
+        outputs.set_shape([None] + out_shape)
+
+        if not normalizer_fn:
+            biases = tf.get_variable('biases', [out_shape[2]],
+                                     initializer=tf.constant_initializer(0.0))
+            outputs = tf.nn.bias_add(outputs, biases)
+
+        if normalizer_fn is not None:
+            normalizer_params = normalizer_params or {}
+            outputs = normalizer_fn(outputs, **normalizer_params)
+
+        if activation_fn is not None:
+            outputs = activation_fn(outputs)
+
+    return outputs

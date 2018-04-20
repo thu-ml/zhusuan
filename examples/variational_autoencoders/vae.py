@@ -79,7 +79,7 @@ def main():
     epochs = 3000
     batch_size = 128
     iters = x_train.shape[0] // batch_size
-    save_freq = 1
+    save_freq = 10
     test_freq = 10
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size

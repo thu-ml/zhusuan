@@ -493,7 +493,7 @@ class HMC:
 
         # Pack HMC statistics
         hmc_info = HMCInfo(
-            samples=dict(zip(latent_k, update_q)),
+            samples=dict(zip(latent_k, new_q)),
             acceptance_rate=acceptance_rate,
             updated_step_size=update_step_size,
             init_momentum=dict(zip(latent_k, p)),
