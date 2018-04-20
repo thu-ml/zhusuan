@@ -1,5 +1,5 @@
-Bayesian Neural Networks for Multivariate Regression
-====================================================
+Bayesian Neural Networks for Regression
+=======================================
 
 .. note::
 
