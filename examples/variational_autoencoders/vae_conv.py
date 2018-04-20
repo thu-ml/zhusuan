@@ -52,6 +52,7 @@ def conv_resnet_block(input_, out_channel, resize=False):
     lz_x = tf.nn.relu(lz_x)
     return lz_x
 
+
 @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
 def build_gen(n, x_dim, z_dim, n_particles, nf=16):
     bn = zs.BayesianNet()
@@ -91,7 +92,7 @@ def build_q_net(x, z_dim, n_particles, nf=16):
     z_logstd = tf.layers.dense(lz_x, z_dim)
     bn.normal("z", z_mean, logstd=z_logstd, group_ndims=1,
               n_samples=n_particles)
-    return variational
+    return bn
 
 
 def main():
@@ -113,14 +114,12 @@ def main():
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
     x_input = tf.placeholder(tf.float32, shape=[None, x_dim])
     x = tf.to_int32(tf.random_uniform(tf.shape(x_input)) <= x_input)
-    # TODO: fix n for generation
-    n = tf.shape(x)[0]
+    n = tf.placeholder(tf.int32, shape=[], name="n")
 
     gen = build_gen(n, x_dim, z_dim, n_particles)
     q_net = build_q_net(x, z_dim, n_particles)
 
-    lower_bound = zs.variational.elbo(gen, {'x': x},
-                                      variational=q_net, axis=0)
+    lower_bound = zs.variational.elbo(gen, {'x': x}, variational=q_net, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
@@ -143,6 +142,7 @@ def main():
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+
         for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
             np.random.shuffle(x_train)
@@ -151,7 +151,8 @@ def main():
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x_input: x_batch,
-                                            n_particles: 1})
+                                            n_particles: 1,
+                                            n: batch_size})
                 lbs.append(lb)
             time_epoch += time.time()
             print("Epoch {} ({:.1f}s): Lower bound = {}".format(
@@ -165,7 +166,8 @@ def main():
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: 1})
+                                                  n_particles: 1,
+                                                  n: test_batch_size})
                     test_lbs.append(test_lb)
                 time_test += time.time()
                 print(">>> TEST ({:.1f}s)".format(time_test))
@@ -173,7 +175,7 @@ def main():
 
             if epoch % save_freq == 0:
                 print("Saving images...")
-                images = sess.run(x_gen)
+                images = sess.run(x_gen, feed_dict={n: 100, n_particles: 1})
                 name = os.path.join(result_path,
                                     "vae.epoch.{}.png".format(epoch))
                 save_image_collections(images, name)
