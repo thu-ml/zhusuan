@@ -76,6 +76,13 @@ If no error occurs, you've successfully installed ZhuSuan.
    api/zhusuan.diagnostics
    api/zhusuan.utils
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Community
+
+   contributing
+
+
 
 Indices and tables
 ------------------

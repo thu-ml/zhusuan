@@ -1,11 +1,11 @@
-Logistic Normal Topic Models and its Inference Using HMC-EM
-===========================================================
+Logistic Normal Topic Models
+============================
 
 The full script for this tutorial is at `examples/topic_models/lntm_mcem.py
 <https://github.com/thu-ml/zhusuan/blob/master/examples/topic_models/lntm_mcem.py>`_.
 
-A Brief Introduction to Topic Models and Latent Dirichlet Allocation
---------------------------------------------------------------------
+An Introduction to Topic Models and Latent Dirichlet Allocation
+---------------------------------------------------------------
 
 Nowadays it is much easier to get large corpus of documents. Even if there are
 no suitable labels with these documents, much information can be extracted. We
