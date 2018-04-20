@@ -74,7 +74,7 @@ def build_gen(n, x_dim, z_dim, n_particles, nf=16):
     return bn
 
 
-@zs.meta_bayesian_net(scope="q_net")
+@zs.meta_bayesian_net(scope="q_net", reuse_variables=True)
 def build_q_net(x, z_dim, n_particles, nf=16):
     bn = zs.BayesianNet()
     lz_x = 2 * tf.to_float(x) - 1

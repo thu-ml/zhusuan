@@ -29,7 +29,7 @@ def build_gen(x_dim, z_dim, n, n_particles=1):
     return bn
 
 
-@zs.meta_bayesian_net(scope="q_net")
+@zs.meta_bayesian_net(scope="q_net", reuse_variables=True)
 def build_q_net(x, z_dim, n_z_per_x):
     bn = zs.BayesianNet()
     h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
