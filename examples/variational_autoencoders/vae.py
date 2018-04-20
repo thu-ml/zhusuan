@@ -79,7 +79,7 @@ def main():
         zs.is_loglikelihood(log_joint, {'x': x},
                             {'z': [qz_samples, log_qz]}, axis=0))
 
-    optimizer = tf.train.AdamOptimizer(0.001)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
     infer_op = optimizer.minimize(cost)
 
     # Generate images
@@ -91,7 +91,7 @@ def main():
     epochs = 3000
     batch_size = 128
     iters = x_train.shape[0] // batch_size
-    save_freq = 1
+    save_freq = 10
     test_freq = 10
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
