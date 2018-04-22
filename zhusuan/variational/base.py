@@ -52,20 +52,18 @@ class VariationalObjective(TensorArithmeticMixin):
 
         if (variational is None) == (latent is None):
             raise ValueError(
-                "Either a BayesianNet `variational` representing "
+                "Either a {} `variational` representing "
                 "the variational family or a dictionary `latent` "
                 "representing the variational inputs should be passed. "
-                "It is not allowed that both are specified or both are not.")
+                "It is not allowed that both are specified or both are not."
+                .format(BayesianNet))
         elif latent is None:
             if isinstance(variational, BayesianNet):
                 self._variational = variational
-            elif isinstance(variational, MetaBayesianNet):
-                self._meta_variational = variational
-                self._variational = self._meta_variational.observe(**observed)
             else:
                 raise TypeError(
-                    "`variational` should be either MetaBayesianNet or "
-                    "BayesianNet instance.")
+                    "`variational` should be a {} instance, got {}."
+                    .format(BayesianNet.__name__, repr(variational)))
             v_inputs = [i for i in six.iteritems(self._variational.nodes)
                         if isinstance(i[1], StochasticTensor) and
                         not i[1].is_observed()]
@@ -102,6 +100,14 @@ class VariationalObjective(TensorArithmeticMixin):
                     "Stochastic node '{}' in the model is neither "
                     "observed nor provided with a variational posterior."
                     .format(node.name))
+
+    @property
+    def meta_model(self):
+        return self._meta_model
+
+    @property
+    def variational(self):
+        return self._variational
 
     @property
     def bn(self):

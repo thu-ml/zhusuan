@@ -12,40 +12,33 @@ import tensorflow as tf
 import zhusuan as zs
 
 
-def toy2d_intractable_posterior(observed, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
-        z2 = zs.Normal('z2', 0., std=1.35, n_samples=n_particles)
-        z1 = zs.Normal('z1', 0., logstd=z2)
-    return model
+@zs.meta_bayesian_net(scope="model")
+def build_toy2d_intractable(n_particles):
+    bn = zs.BayesianNet()
+    z2 = bn.normal('z2', 0., std=1.35, n_samples=n_particles)
+    bn.normal('z1', 0., logstd=z2)
+    return bn
 
 
-def mean_field_variational(n_particles):
-    with zs.BayesianNet() as variational:
-        z_mean, z_logstd = [], []
-        for i in range(2):
-            z_mean.append(tf.Variable(-2.))
-            z_logstd.append(tf.Variable(-5.))
-            _ = zs.Normal('z' + str(i + 1), z_mean[i], logstd=z_logstd[i],
-                          n_samples=n_particles)
-    return variational, z_mean, z_logstd
+@zs.reuse_variables(scope="variational")
+def build_mean_field_variational(n_particles):
+    bn = zs.BayesianNet()
+    for name in ["z1", "z2"]:
+        z_mean = bn.deterministic(name + "_mean", tf.Variable(-2.))
+        z_logstd = bn.deterministic(name + "_logstd", tf.Variable(-5.))
+        bn.normal(name, z_mean, logstd=z_logstd, n_samples=n_particles)
+    return bn
 
 
 if __name__ == "__main__":
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[])
 
-    def log_joint(observed):
-        model = toy2d_intractable_posterior(observed, n_particles)
-        log_pz1, log_pz2 = model.local_log_prob(['z1', 'z2'])
-        return log_pz1 + log_pz2
-
-    variational, z_mean, z_logstd = mean_field_variational(n_particles)
-    [qz1_samples, log_qz1], [qz2_samples, log_qz2] = variational.query(
-        ['z1', 'z2'], outputs=True, local_log_prob=True)
+    meta_model = build_toy2d_intractable(n_particles)
+    variational = build_mean_field_variational(n_particles)
 
     lower_bound = zs.variational.elbo(
-        log_joint, {}, {'z1': [qz1_samples, log_qz1],
-                        'z2': [qz2_samples, log_qz2]}, axis=0)
+        meta_model, {}, variational=variational, axis=0)
     cost = lower_bound.sgvb()
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer_op = optimizer.minimize(cost)
@@ -87,8 +80,8 @@ if __name__ == "__main__":
         plt.draw()
         plt.pause(1.0 / 30.0)
 
-    z_mean = tf.stack(z_mean)
-    z_logstd = tf.stack(z_logstd)
+    z_mean = tf.stack(variational.get(["z1_mean", "z2_mean"]))
+    z_logstd = tf.stack(variational.get(["z1_logstd", "z2_logstd"]))
 
     # Run the inference
     iters = 1000

@@ -32,7 +32,7 @@ def build_gen(n, x_dim, z_dim, n_particles):
     return bn
 
 
-@zs.meta_bayesian_net(scope="q_net", reuse_variables=True)
+@zs.reuse_variables(scope="q_net")
 def build_q_net(x, z_dim, n_particles):
     bn = zs.BayesianNet()
     h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
@@ -65,11 +65,11 @@ def main():
     x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
     n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    gen = build_gen(n, x_dim, z_dim, n_particles)
-    q_net = build_q_net(x, z_dim, n_particles)
+    meta_model = build_gen(n, x_dim, z_dim, n_particles)
+    variational = build_q_net(x, z_dim, n_particles)
 
     lower_bound = zs.variational.importance_weighted_objective(
-        gen, {'x': x}, variational=q_net, axis=0)
+        meta_model, {'x': x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
