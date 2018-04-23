@@ -19,13 +19,13 @@ networks and supervised tasks, ZhuSuan provides deep learning style primitives
 and algorithms for building probabilistic models and applying Bayesian
 inference. The supported inference algorithms include:
 
-* **Variational inference** with programmable variational posteriors, various
+* **Variational Inference (VI)** with programmable variational posteriors, various
   objectives and advanced gradient estimators (SGVB, REINFORCE, VIMCO, etc.).
 
-* **Importance sampling** for learning and evaluating models, with programmable
+* **Importance sampling (IS)** for learning and evaluating models, with programmable
   proposals.
 
-* **Hamiltonian Monte Carlo** (HMC) with parallel chains, and optional
+* **Hamiltonian Monte Carlo (HMC)** with parallel chains, and optional
   automatic parameter tuning.
 
 ## Installation
@@ -72,9 +72,9 @@ pip install ".[examples]"
   [SGVB](examples/variational_autoencoders/vae_conv.py)
 * Semi-supervised VAE (Kingma, 2014):
   [SGVB](examples/semi_supervised_vae/vae_ssl.py),
-  [RWS](examples/semi_supervised_vae/vae_ssl_rws.py)
+  [Adaptive IS](examples/semi_supervised_vae/vae_ssl_rws.py)
 * Deep Sigmoid Belief Networks
-  [RWS](examples/sigmoid_belief_nets/sbn_rws.py),
+  [Adaptive IS](examples/sigmoid_belief_nets/sbn_rws.py),
   [VIMCO](examples/sigmoid_belief_nets/sbn_vimco.py)
 * Logistic Normal Topic Model:
   [HMC](examples/topic_models/lntm_mcem.py)
