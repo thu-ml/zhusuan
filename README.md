@@ -22,7 +22,7 @@ inference. The supported inference algorithms include:
 * **Variational Inference (VI)** with programmable variational posteriors, various
   objectives and advanced gradient estimators (SGVB, REINFORCE, VIMCO, etc.).
 
-* **Importance sampling (IS)** for learning and evaluating models, with programmable
+* **Importance Sampling (IS)** for learning and evaluating models, with programmable
   proposals.
 
 * **Hamiltonian Monte Carlo (HMC)** with parallel chains, and optional
