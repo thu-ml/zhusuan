@@ -18,19 +18,14 @@ from examples.utils import dataset
 @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
 def build_bnn(x, layer_sizes, n_particles):
     bn = zs.BayesianNet()
-    ws = []
-    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        w_mu = tf.zeros([n_out, n_in + 1])
-        ws.append(
-            bn.normal("w" + str(i), w_mu, std=1.,
-                      n_samples=n_particles, group_ndims=2))
-
-    # forward
     h = tf.tile(x[None, ...], [n_particles, 1, 1])
-    for i in range(len(ws)):
+    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
+                      group_ndims=2, n_samples=n_particles)
         h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
-        h = tf.einsum("imk,ijk->ijm", ws[i], h) / tf.sqrt(tf.to_float(tf.shape(h)[2]))
-        if i < len(ws) - 1:
+        h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
+            tf.to_float(tf.shape(h)[2]))
+        if i < len(layer_sizes) - 2:
             h = tf.nn.relu(h)
 
     y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
@@ -65,7 +60,7 @@ def main():
         dataset.load_uci_boston_housing(data_path)
     x_train = np.vstack([x_train, x_valid])
     y_train = np.hstack([y_train, y_valid])
-    N, x_dim = x_train.shape
+    n_train, x_dim = x_train.shape
 
     # Standardize data
     x_train, x_test, _, _ = dataset.standardize(x_train, x_test)
@@ -88,7 +83,7 @@ def main():
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)
         log_py_xw = bn.cond_log_prob('y')
-        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * N
+        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
     meta_model.log_joint = log_joint
 
@@ -105,8 +100,8 @@ def main():
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
     log_py_xw = obj.bn.cond_log_prob("y")
-    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - \
-        tf.log(std_y_train)
+    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - tf.log(
+        std_y_train)
 
     # Define training/evaluation parameters
     lb_samples = 10
