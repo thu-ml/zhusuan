@@ -72,9 +72,9 @@ pip install ".[examples]"
   [SGVB](examples/variational_autoencoders/vae_conv.py)
 * Semi-supervised VAE (Kingma, 2014):
   [SGVB](examples/semi_supervised_vae/vae_ssl.py),
-  [Adaptive IS](examples/semi_supervised_vae/vae_ssl_rws.py)
+  [Adaptive IS](examples/semi_supervised_vae/vae_ssl_adaptive_is.py)
 * Deep Sigmoid Belief Networks
-  [Adaptive IS](examples/sigmoid_belief_nets/sbn_rws.py),
+  [Adaptive IS](examples/sigmoid_belief_nets/sbn_adaptive_is.py),
   [VIMCO](examples/sigmoid_belief_nets/sbn_vimco.py)
 * Logistic Normal Topic Model:
   [HMC](examples/topic_models/lntm_mcem.py)
