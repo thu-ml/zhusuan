@@ -20,23 +20,20 @@ def build_bnn(x, layer_sizes, n_particles):
     bn = zs.BayesianNet()
     ws = []
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        w_mu = tf.zeros([1, n_out, n_in + 1])
+        w_mu = tf.zeros([n_out, n_in + 1])
         ws.append(
             bn.normal("w" + str(i), w_mu, std=1.,
                       n_samples=n_particles, group_ndims=2))
 
     # forward
-    ly_x = tf.expand_dims(
-        tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
+    h = tf.tile(x[None, ...], [n_particles, 1, 1])
     for i in range(len(ws)):
-        w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
-        ly_x = tf.concat(
-            [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-        ly_x = tf.matmul(w, ly_x) / tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
+        h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
+        h = tf.einsum("imk,ijk->ijm", ws[i], h) / tf.sqrt(tf.to_float(tf.shape(h)[2]))
         if i < len(ws) - 1:
-            ly_x = tf.nn.relu(ly_x)
+            h = tf.nn.relu(h)
 
-    y_mean = bn.deterministic("y_mean", tf.squeeze(ly_x, [2, 3]))
+    y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
     y_logstd = tf.get_variable("y_logstd", shape=[],
                                initializer=tf.constant_initializer(0.))
     bn.normal("y", y_mean, logstd=y_logstd)
@@ -48,10 +45,10 @@ def build_mean_field_variational(layer_sizes, n_particles):
     bn = zs.BayesianNet()
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
         w_mean = tf.get_variable(
-            "w_mean_" + str(i), shape=[1, n_out, n_in + 1],
+            "w_mean_" + str(i), shape=[n_out, n_in + 1],
             initializer=tf.constant_initializer(0.))
         w_logstd = tf.get_variable(
-            "w_logstd_" + str(i), shape=[1, n_out, n_in + 1],
+            "w_logstd_" + str(i), shape=[n_out, n_in + 1],
             initializer=tf.constant_initializer(0.))
         bn.normal("w" + str(i), w_mean, logstd=w_logstd,
                   n_samples=n_particles, group_ndims=2)
@@ -68,7 +65,7 @@ def main():
         dataset.load_uci_boston_housing(data_path)
     x_train = np.vstack([x_train, x_valid])
     y_train = np.hstack([y_train, y_valid])
-    N, n_x = x_train.shape
+    N, x_dim = x_train.shape
 
     # Standardize data
     x_train, x_test, _, _ = dataset.standardize(x_train, x_test)
@@ -80,9 +77,9 @@ def main():
 
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
-    x = tf.placeholder(tf.float32, shape=[None, n_x])
+    x = tf.placeholder(tf.float32, shape=[None, x_dim])
     y = tf.placeholder(tf.float32, shape=[None])
-    layer_sizes = [n_x] + n_hiddens + [1]
+    layer_sizes = [x_dim] + n_hiddens + [1]
     w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
 
     meta_model = build_bnn(x, layer_sizes, n_particles)
@@ -91,7 +88,7 @@ def main():
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)
         log_py_xw = bn.cond_log_prob('y')
-        return tf.add_n(log_pws) + log_py_xw * N
+        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * N
 
     meta_model.log_joint = log_joint
 
