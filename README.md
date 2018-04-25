@@ -78,7 +78,7 @@ pip install ".[examples]"
   [VIMCO](examples/sigmoid_belief_nets/sbn_vimco.py)
 * Logistic Normal Topic Model:
   [HMC](examples/topic_models/lntm_mcem.py)
-* Probabilistic Matrix Factorization on MovieLens 1M:
+* Probabilistic Matrix Factorization:
   [HMC](examples/probabilistic_matrix_factorization/logistic_pmf_hmc.py)
 * Sparse Variational Gaussian Process:
   [SGVB](examples/gaussian_process/svgp.py)
