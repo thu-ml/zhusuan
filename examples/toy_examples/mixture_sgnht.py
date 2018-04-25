@@ -15,7 +15,7 @@ import zhusuan as zs
 
 
 if __name__ == "__main__":
-    # tf.set_random_seed(1)
+    tf.set_random_seed(1)
 
     # Define model parameters
     stdev = 0.5
@@ -38,8 +38,9 @@ if __name__ == "__main__":
         return amax + tf.log(tf.exp(a1-amax)+tf.exp(a2-amax))
 
     learning_rate = tf.placeholder(tf.float32, shape=[], name="learning_rate")
-    sgmcmc = zs.SGNHT(learning_rate=learning_rate, variance_extra=0.)
-    x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
+    sgmcmc = zs.SGNHT(learning_rate=learning_rate, variance_extra=0.2, tune_rate=0.01)
+    # x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
+    x = tf.Variable(tf.random_uniform([n_chains])*10-5)
     sample_op, new_samples = sgmcmc.sample(log_joint, {}, {'x': x})
 
     # Run the inference
@@ -49,7 +50,7 @@ if __name__ == "__main__":
         print('Sampling...')
         for t in range(n_iters):
             _, x_sample = sess.run([sample_op, new_samples['x']],
-                                   feed_dict={learning_rate: 0.01})
+                                   feed_dict={learning_rate: 0.1})
             # print(np.amax(x_sample), np.amin(x_sample))
             if t >= burnin and t % 100 == 0:
                 samples.append(x_sample)

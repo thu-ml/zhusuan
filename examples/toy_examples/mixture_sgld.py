@@ -62,6 +62,7 @@ if __name__ == "__main__":
         for t in range(n_iters):
             _, x_sample = sess.run([sample_op, new_samples['x']],
                                    feed_dict={learning_rate: a*(b+t)**(-gamma)})
+            #                        feed_dict={learning_rate: 0.1})
             if t >= burnin and t % 100 == 0:
                 samples.append(x_sample)
         print('Finished.')
