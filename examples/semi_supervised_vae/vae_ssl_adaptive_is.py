@@ -20,33 +20,33 @@ from examples.utils import dataset
 def build_gen(n, x_dim, n_class, z_dim, n_particles):
     bn = zs.BayesianNet()
     z_mean = tf.zeros([n, z_dim])
-    z = bn.normal("z", z_mean, std=1., n_samples=n_particles, group_ndims=1)
+    z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
     h_from_z = tf.layers.dense(z, 500)
     y_logits = tf.zeros([n, n_class])
-    y = bn.onehot_categorical("y", y_logits, n_samples=n_particles)
+    y = bn.onehot_categorical("y", y_logits)
     h_from_y = tf.layers.dense(tf.to_float(y), 500)
     h = tf.nn.relu(h_from_z + h_from_y)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     x_logits = tf.layers.dense(h, x_dim)
-    bn.bernoulli('x', x_logits, group_ndims=1)
+    bn.bernoulli("x", x_logits, group_ndims=1)
     return bn
 
 
 @zs.reuse_variables(scope="qz_xy")
 def qz_xy(x, y, z_dim):
-    lz_xy = tf.layers.dense(tf.to_float(tf.concat([x, y], -1)), 500,
-                            activation=tf.nn.relu)
-    lz_xy = tf.layers.dense(lz_xy, 500, activation=tf.nn.relu)
-    z_mean = tf.layers.dense(lz_xy, z_dim)
-    z_logstd = tf.layers.dense(lz_xy, z_dim)
+    h = tf.layers.dense(tf.to_float(tf.concat([x, y], -1)), 500,
+                        activation=tf.nn.relu)
+    h = tf.layers.dense(h, 500, activation=tf.nn.relu)
+    z_mean = tf.layers.dense(h, z_dim)
+    z_logstd = tf.layers.dense(h, z_dim)
     return z_mean, z_logstd
 
 
 @zs.reuse_variables(scope="qy_x")
-def qy_x(x, n_y):
-    ly_x = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
-    ly_x = tf.layers.dense(ly_x, 500, activation=tf.nn.relu)
-    y_logits = tf.layers.dense(ly_x, n_y)
+def qy_x(x, n_class):
+    h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+    h = tf.layers.dense(h, 500, activation=tf.nn.relu)
+    y_logits = tf.layers.dense(h, n_class)
     return y_logits
 
 
@@ -61,11 +61,10 @@ def labeled_proposal(x, y, z_dim, n_particles):
 def unlabeled_proposal(x, n_class, z_dim, n_particles):
     bn = zs.BayesianNet()
     y_logits = qy_x(x, n_class)
-    y = bn.onehot_categorical("y", y_logits, n_samples=n_particles)
-    x_tiled = tf.tile(x[None, ...], [n_particles, 1, 1])
-    z_mean, z_logstd = qz_xy(x_tiled, y, z_dim)
+    y = bn.onehot_categorical("y", y_logits)
+    z_mean, z_logstd = qz_xy(x, y, z_dim)
     bn.normal("z", z_mean, logstd=z_logstd, group_ndims=1,
-              is_reparameterized=False)
+              is_reparameterized=False, n_samples=n_particles)
     return bn
 
 
@@ -74,28 +73,16 @@ def main():
     np.random.seed(1234)
 
     # Load MNIST
-    data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
+    data_path = os.path.join(conf.data_dir, "mnist.pkl.gz")
     x_labeled, t_labeled, x_unlabeled, x_test, t_test = \
         dataset.load_mnist_semi_supervised(data_path, one_hot=True)
-    x_test = np.random.binomial(1, x_test, size=x_test.shape).astype('float32')
+    x_test = np.random.binomial(1, x_test, size=x_test.shape)
     n_labeled, x_dim = x_labeled.shape
     n_class = 10
 
     # Define model parameters
     z_dim = 100
-
-    # Define training/evaluation parameters
-    ll_samples = 10
     beta = 1200.
-    epochs = 3000
-    batch_size = 100
-    test_batch_size = 100
-    iters = x_unlabeled.shape[0] // batch_size
-    test_iters = x_test.shape[0] // test_batch_size
-    test_freq = 10
-    learning_rate = 0.0003
-    anneal_lr_freq = 200
-    anneal_lr_rate = 0.75
 
     # Build the computation graph
     n = tf.placeholder(tf.int32, shape=[], name="n")
@@ -103,10 +90,10 @@ def main():
     meta_model = build_gen(n, x_dim, n_class, z_dim, n_particles)
 
     # Labeled
-    x_labeled_ph = tf.placeholder(tf.float32, shape=(None, x_dim), name="x_l")
+    x_labeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim], name="x_l")
     x_labeled = tf.to_int32(
         tf.less(tf.random_uniform(tf.shape(x_labeled_ph)), x_labeled_ph))
-    y_labeled_ph = tf.placeholder(tf.int32, shape=(None, n_class), name="y_l")
+    y_labeled_ph = tf.placeholder(tf.int32, shape=[None, n_class], name="y_l")
     proposal = labeled_proposal(x_labeled, y_labeled_ph, z_dim, n_particles)
 
     # adapting the proposal
@@ -124,7 +111,7 @@ def main():
             variational=proposal, axis=0))
 
     # Unlabeled
-    x_unlabeled_ph = tf.placeholder(tf.float32, shape=(None, x_dim),
+    x_unlabeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim],
                                     name="x_u")
     x_unlabeled = tf.to_int32(
         tf.less(tf.random_uniform(tf.shape(x_unlabeled_ph)), x_unlabeled_ph))
@@ -159,8 +146,7 @@ def main():
     proposal_cost = labeled_q_cost + unlabeled_q_cost + classifier_cost
     model_cost = -labeled_lower_bound - unlabeled_lower_bound
 
-    learning_rate_ph = tf.placeholder(tf.float32, shape=[], name="lr")
-    optimizer = tf.train.AdamOptimizer(learning_rate_ph)
+    optimizer = tf.train.AdamOptimizer(learning_rate=3e-4)
     model_params = tf.trainable_variables(scope="gen")
     model_grads = optimizer.compute_gradients(model_cost,
                                               var_list=model_params)
@@ -170,17 +156,20 @@ def main():
                                                  var_list=proposal_params)
     infer_op = optimizer.apply_gradients(model_grads + proposal_grads)
 
-    params = tf.trainable_variables()
-    for i in params:
-        print(i.name, i.get_shape())
+    # Define training/evaluation parameters
+    ll_samples = 10
+    epochs = 3000
+    batch_size = 100
+    iters = x_unlabeled.shape[0] // batch_size
+    test_freq = 10
+    test_batch_size = 100
+    test_iters = x_test.shape[0] // test_batch_size
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
-            if epoch % anneal_lr_freq == 0:
-                learning_rate *= anneal_lr_rate
             np.random.shuffle(x_unlabeled)
             lbs_labeled, lbs_unlabeled, train_accs = [], [], []
 
@@ -197,7 +186,6 @@ def main():
                     feed_dict={x_labeled_ph: x_labeled_batch,
                                y_labeled_ph: y_labeled_batch,
                                x_unlabeled_ph: x_unlabeled_batch,
-                               learning_rate_ph: learning_rate,
                                n_particles: ll_samples,
                                n: batch_size})
                 lbs_labeled.append(lb_labeled)
@@ -220,8 +208,7 @@ def main():
                     test_y_batch = t_test[
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
-                        [labeled_lower_bound, unlabeled_lower_bound,
-                         acc],
+                        [labeled_lower_bound, unlabeled_lower_bound, acc],
                         feed_dict={x_labeled: test_x_batch,
                                    y_labeled_ph: test_y_batch,
                                    x_unlabeled: test_x_batch,
