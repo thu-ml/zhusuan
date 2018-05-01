@@ -14,6 +14,7 @@ from zhusuan.utils import log_mean_exp, merge_dicts
 
 __all__ = [
     'is_loglikelihood',
+    "AIS",
 ]
 
 
@@ -53,9 +54,8 @@ class AIS:
     Estimates a stochastic lower bound of the marginal log likelihood
     using annealed importance sampling (AIS).
     """
-    def __init__(self, log_prior, log_joint, prior_sampler,
-                 hmc, observed, latent, n_chains=25, n_temperatures=1000,
-                 verbose=False):
+    def __init__(self, meta_model, proposal_meta_model, hmc, observed, latent,
+                 n_chains=25, n_temperatures=1000, verbose=False):
         # Shape of latent: [chain_axis, num_data, data dims]
         # Construct the tempered objective
         self.n_chains = n_chains
@@ -63,6 +63,16 @@ class AIS:
         self.verbose = verbose
 
         with tf.name_scope("AIS"):
+            if callable(meta_model):
+                log_joint = meta_model
+            else:
+                log_joint = lambda obs: meta_model.observe(**obs).log_joint()
+
+            latent_k, latent_v = zip(*six.iteritems(latent))
+
+            prior_samples = proposal_meta_model.observe().get(latent_k)
+            log_prior = lambda obs: proposal_meta_model.observe(**obs).log_joint()
+
             self.temperature = tf.placeholder(tf.float32, shape=[],
                                               name="temperature")
 
@@ -75,21 +85,20 @@ class AIS:
             self.sample_op, self.hmc_info = hmc.sample(
                 log_fn, observed, latent)
             self.init_latent = [tf.assign(z, z_s)
-                                for z, z_s in zip(latent.values(),
-                                                  prior_sampler.values())]
+                                for z, z_s in zip(latent_v, prior_samples)]
 
-    def map_t(self, t):
+    def _map_t(self, t):
         return 1. / (1. + np.exp(-4*(2*t / self.n_temperatures - 1)))
 
-    def get_schedule_t(self, t):
-        return (self.map_t(t) - self.map_t(0)) \
-            / (self.map_t(self.n_temperatures) - self.map_t(0))
+    def _get_schedule_t(self, t):
+        return (self._map_t(t) - self._map_t(0)) \
+            / (self._map_t(self.n_temperatures) - self._map_t(0))
 
     def run(self, sess, feed_dict):
         # Help adapt the hmc size
         n_adp = 30
         adp_num_t = 2 if self.n_temperatures > 1 else 1
-        adp_t = self.get_schedule_t(adp_num_t)
+        adp_t = self._get_schedule_t(adp_num_t)
         sess.run(self.init_latent, feed_dict=feed_dict)
         for i in range(n_adp):
             _, acc = sess.run([self.sample_op, self.hmc_info.acceptance_rate],
@@ -107,7 +116,7 @@ class AIS:
 
         for num_t in range(self.n_temperatures):
             # current_temperature = 1.0 / self.n_temperatures * (num_t + 1)
-            current_temperature = self.get_schedule_t(num_t + 1)
+            current_temperature = self._get_schedule_t(num_t + 1)
 
             _, old_log_p, new_log_p, acc = sess.run(
                 [self.sample_op, self.hmc_info.orig_log_prob,
@@ -124,9 +133,9 @@ class AIS:
                 print('Finished step {}, Temperature = {:.4f}, acc = {:.3f}'
                       .format(num_t+1, current_temperature, np.mean(acc)))
 
-        return np.mean(self.get_lower_bound(log_weights))
+        return np.mean(self._get_lower_bound(log_weights))
 
-    def get_lower_bound(self, log_weights):
+    def _get_lower_bound(self, log_weights):
         max_log_weights = np.max(log_weights, axis=0)
         offset_log_weights = np.sum(np.exp(log_weights - max_log_weights),
                                     axis=0)

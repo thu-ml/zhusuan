@@ -380,7 +380,7 @@ class HMC:
         update_step_size = tf.assign(self.step_size, new_step_size)
         return tf.stop_gradient(update_step_size)
 
-    def sample(self, log_joint, observed, latent):
+    def sample(self, meta_model, observed, latent):
         """
         Return the sampling `Operation` that runs a HMC iteration and
         the statistics collected during it.
@@ -400,6 +400,12 @@ class HMC:
         :return: A :class:`HMCInfo` instance that collects sampling statistics
             during an iteration.
         """
+
+        if callable(meta_model):
+            self._log_joint = meta_model
+        else:
+            self._log_joint = lambda obs: meta_model.observe(**obs).log_joint()
+
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
         for i, v in enumerate(latent_v):
@@ -410,13 +416,11 @@ class HMC:
 
         def get_log_posterior(var_list):
             joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
-            log_p = log_joint(joint_obs)
-            return log_p
+            return self._log_joint(joint_obs)
 
         def get_gradient(var_list):
             log_p = get_log_posterior(var_list)
-            latent_grads = tf.gradients(log_p, var_list)
-            return latent_grads
+            return tf.gradients(log_p, var_list)
 
         self.static_shapes = [q.get_shape() for q in self.q]
         self.dynamic_shapes = [tf.shape(q) for q in self.q]

@@ -16,6 +16,7 @@ import time
 import tensorflow as tf
 from six.moves import range, zip
 from functools import partial
+from copy import copy
 import numpy as np
 import zhusuan as zs
 
@@ -29,24 +30,23 @@ from examples.utils import dataset
 log_delta = 10.0
 
 
-def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
-    with zs.BayesianNet(observed=observed) as model:
-        eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
-        # eta/theta: Unnormalized/normalized document-topic matrix
-        eta = zs.Normal('eta', eta_mean, logstd=eta_logstd, n_samples=n_chains,
-                        group_ndims=1)
-        theta = tf.nn.softmax(eta)
-        # beta/phi: Unnormalized/normalized topic-word matrix
-        beta = zs.Normal('beta', tf.zeros([n_topics, n_vocab]),
-                         logstd=log_delta, group_ndims=1)
-        phi = tf.nn.softmax(beta)
-        # doc_word: Document-word matrix
-        doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
-        doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
-        x = zs.UnnormalizedMultinomial('x', tf.log(doc_word),
-                                       normalize_logits=False,
-                                       dtype=tf.float32)
-    return model
+@zs.meta_bayesian_net()
+def lntm(n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
+    bn = zs.BayesianNet()
+    eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
+    eta = bn.normal('eta', eta_mean, logstd=eta_logstd, n_samples=n_chains,
+                    group_ndims=1)
+    theta = tf.nn.softmax(eta)
+    beta = bn.normal('beta', tf.zeros([n_topics, n_vocab]),
+                     logstd=log_delta, group_ndims=1)
+    phi = tf.nn.softmax(beta)
+    # doc_word: Document-word matrix
+    doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
+    doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
+    x = bn.unnormalized_multinomial('x', tf.log(doc_word),
+                                    normalize_logits=False,
+                                    dtype=tf.float32)
+    return bn
 
 
 if __name__ == "__main__":
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     num_e_steps = 5
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
-    epochs = 1
+    epochs = 100
     learning_rate_0 = 1.0
     t0 = 10
 
@@ -95,25 +95,25 @@ if __name__ == "__main__":
     phi = tf.nn.softmax(beta)
     init_eta_ph = tf.assign(eta, eta_ph)
 
-    def e_obj(observed, n_chains, n_docs):
-        model = lntm(observed, n_chains, n_docs, n_topics, n_vocab,
-                     eta_mean, eta_logstd)
-        return model.local_log_prob('eta') + model.local_log_prob('x')
+    def e_obj(bn):
+        return bn.cond_log_prob('eta') + bn.cond_log_prob('x')
 
     # E step: sample eta using HMC
-    sample_op, hmc_info = hmc.sample(partial(e_obj, n_chains=n_chains,
-                                             n_docs=batch_size),
+    meta_model = lntm(n_chains, batch_size, n_topics, n_vocab,
+                      eta_mean, eta_logstd)
+    meta_model.log_joint = e_obj
+    sample_op, hmc_info = hmc.sample(meta_model,
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
     # M step: optimize beta
-    model = lntm({'x': x, 'eta': eta, 'beta': beta}, n_chains, batch_size,
-                 n_topics, n_vocab, eta_mean, eta_logstd)
-    log_p_beta, log_px = model.local_log_prob(['beta', 'x'])
-    log_likelihood = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
-    log_joint = tf.reduce_sum(log_p_beta) + log_likelihood
+    bn = meta_model.observe(x=x, eta=eta, beta=beta)
+    log_p_beta, log_px = bn.cond_log_prob(['beta', 'x'])
+    log_p_beta = tf.reduce_sum(log_p_beta)
+    log_px = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
+    log_joint_beta = log_p_beta + log_px
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    infer = optimizer.minimize(-log_joint, var_list=[beta])
+    infer = optimizer.minimize(-log_joint_beta, var_list=[beta])
 
     # Below is the evaluation part.
     # Variables whose name starts with '_' is only used in the evaluation part,
@@ -127,24 +127,25 @@ if __name__ == "__main__":
     _eta = tf.Variable(tf.zeros([_n_chains, n_docs_test, n_topics]),
                        name='eta')
 
-    def _log_prior(observed):
-        return lntm(observed, _n_chains, n_docs_test, n_topics, n_vocab,
-                    eta_mean, eta_logstd).local_log_prob('eta')
+    _meta_model = lntm(_n_chains, n_docs_test, n_topics, n_vocab,
+                       eta_mean, eta_logstd)
+    _meta_model.log_joint = e_obj
 
-    _prior_samples = {'eta': lntm({}, _n_chains, n_docs_test, n_topics,
-                      n_vocab, eta_mean, eta_logstd).outputs('eta')}
+    proposal_meta_model = copy(_meta_model)
+
+    def log_prior(bn):
+        return bn.cond_log_prob('eta')
+    
+    proposal_meta_model.log_joint = log_prior
 
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)
 
-    _ais = zs.evaluation.AIS(_log_prior,
-                             partial(e_obj, n_chains=_n_chains,
-                                     n_docs=n_docs_test),
-                             _prior_samples, _hmc,
-                             observed={'x': _x, 'beta': beta},
-                             latent={'eta': _eta},
-                             n_chains=_n_chains,
-                             n_temperatures=_n_temperatures)
+    ais = zs.evaluation.AIS(_meta_model, proposal_meta_model, _hmc,
+                            observed={'x': _x, 'beta': beta},
+                            latent={'eta': _eta},
+                            n_chains=_n_chains,
+                            n_temperatures=_n_temperatures)
 
     # -------------------
 
@@ -181,7 +182,7 @@ if __name__ == "__main__":
 
                 # M step
                 _, ll = sess.run(
-                    [infer, log_likelihood],
+                    [infer, log_px],
                     feed_dict={x: x_batch,
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
@@ -218,9 +219,9 @@ if __name__ == "__main__":
 
         time_ais = -time.time()
 
-        ll_lb = _ais.run(sess, feed_dict={_x: X_test,
-                                          eta_mean: Eta_mean,
-                                          eta_logstd: Eta_logstd})
+        ll_lb = ais.run(sess, feed_dict={_x: X_test,
+                                         eta_mean: Eta_mean,
+                                         eta_logstd: Eta_logstd})
 
         time_ais += time.time()
 
