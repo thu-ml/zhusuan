@@ -106,8 +106,7 @@ if __name__ == "__main__":
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
     # M step: optimize beta
-    bn = meta_model.observe(x=x, eta=eta, beta=beta)
-    log_p_beta, log_px = bn.cond_log_prob(['beta', 'x'])
+    log_p_beta, log_px = hmc.bn.cond_log_prob(['beta', 'x'])
     log_p_beta = tf.reduce_sum(log_p_beta)
     log_px = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
     log_joint_beta = log_p_beta + log_px
