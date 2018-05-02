@@ -54,11 +54,12 @@ class SGMCMC:
         def get_gradient(var_list):
             return tf.gradients(get_log_posterior(var_list), var_list)
 
-        update_ops, new_qs = zip(*self._update(qs, get_gradient))
+        update_ops, new_qs, infos = zip(*self._update(qs, get_gradient))
 
         sample_op = tf.group(*update_ops)
         new_samples = dict(zip(latent_k, new_qs))
-        return sample_op, new_samples
+        sample_info = dict(zip(latent_k, infos))
+        return sample_op, new_samples, sample_info
 
     def _update(self, qs, grad_func):
         return NotImplementedError()
@@ -97,7 +98,7 @@ class SGLD(SGMCMC):
         new_q = q + 0.5 * self.lr * grad + \
                     tf.random_normal(tf.shape(q), stddev=tf.sqrt(self.lr))
         update_q = q.assign(new_q)
-        return update_q, new_q
+        return update_q, new_q, None
 
 
 class SGHMC(SGMCMC):
@@ -136,13 +137,14 @@ class SGHMC(SGMCMC):
         new_v = (1 - self.alpha) * old_v + self.lr * grad + tf.random_normal(
             tf.shape(old_v), stddev=tf.sqrt(2*(self.alpha-self.beta)*self.lr))
         new_q = q + new_v
+        mean_k = tf.reduce_mean(new_v**2)
 
         with tf.control_dependencies([new_q, new_v]):
             update_q = q.assign(new_q)
             update_v = v.assign(new_v)
         update_op = tf.group(update_q, update_v)
 
-        return update_op, new_q
+        return update_op, new_q, {"mean_k": mean_k}
 
 
 class SGNHT(SGMCMC):
@@ -177,9 +179,7 @@ class SGNHT(SGMCMC):
             tf.shape(old_v), stddev=tf.sqrt(2*self.alpha*self.lr))
         new_q = q + new_v
         mean_k = tf.reduce_mean(new_v**2)
-        # mean_k = tf.Print(mean_k, [mean_k])
         new_xi = xi + self.tune_rate * (mean_k - self.lr)
-        # new_xi = tf.Print(new_xi, [new_xi])
 
         with tf.control_dependencies([new_q, new_v, new_xi]):
             update_q = q.assign(new_q)
@@ -187,6 +187,6 @@ class SGNHT(SGMCMC):
             update_xi = xi.assign(new_xi)
         update_op = tf.group(update_q, update_v, update_xi)
 
-        return update_op, new_q
+        return update_op, new_q, {"mean_k": mean_k, "xi": new_xi}
 
 # TODO: 1. enable matrix parameter 2. enable mass setting

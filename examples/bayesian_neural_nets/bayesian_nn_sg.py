@@ -78,7 +78,7 @@ def main():
     sgnht = zs.SGHMC(learning_rate=1e-4, friction=0.2, n_iter_resample_v=1000, variance_estimate=0.2)
     # sgnht = zs.SGNHT(learning_rate=1e-5, variance_extra=0.1, tune_rate=0.1)
     latent = dict(zip(w_names, wv))
-    sample_op, new_w = sgnht.sample(meta_model, observed={'y': y}, latent=latent)
+    sample_op, new_w, sample_info = sgnht.sample(meta_model, observed={'y': y}, latent=latent)
 
     # prediction: rmse & log likelihood
     y_mean = sgnht.bn["y_mean"]
@@ -104,8 +104,8 @@ def main():
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
-                _, w = sess.run([sample_op, new_w],
-                                feed_dict={x: x_batch, y: y_batch})
+                _, w, info = sess.run([sample_op, new_w, sample_info],
+                                      feed_dict={x: x_batch, y: y_batch})
 
             test_rmse = sess.run(rmse,
                                  feed_dict={x: x_test, y: y_test})
