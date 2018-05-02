@@ -87,19 +87,18 @@ def main():
 
     meta_model.log_joint = log_joint
 
-    obj = zs.variational.elbo(
+    lower_bound = zs.variational.elbo(
         meta_model, {'y': y}, variational=variational, axis=0)
-    cost = tf.reduce_mean(obj.sgvb())
-    lower_bound = tf.reduce_mean(obj)
+    cost = lower_bound.sgvb()
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
     infer_op = optimizer.minimize(cost)
 
     # prediction: rmse & log likelihood
-    y_mean = obj.bn["y_mean"]
+    y_mean = lower_bound.bn["y_mean"]
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
-    log_py_xw = obj.bn.cond_log_prob("y")
+    log_py_xw = lower_bound.bn.cond_log_prob("y")
     log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - tf.log(
         std_y_train)
 
