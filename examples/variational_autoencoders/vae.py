@@ -29,7 +29,7 @@ def build_gen(x_dim, z_dim, n, n_particles=1):
     return bn
 
 
-@zs.meta_bayesian_net(scope="q_net")
+@zs.reuse_variables(scope="q_net")
 def build_q_net(x, z_dim, n_z_per_x):
     bn = zs.BayesianNet()
     h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
@@ -58,28 +58,29 @@ def main():
     x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
     n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    gen = build_gen(x_dim, z_dim, n, n_particles)
-    q_net = build_q_net(x, z_dim, n_particles)
+    meta_model = build_gen(x_dim, z_dim, n, n_particles)
+    variational = build_q_net(x, z_dim, n_particles)
 
-    lower_bound = zs.variational.elbo(gen, {'x': x}, variational=q_net, axis=0)
+    lower_bound = zs.variational.elbo(
+        meta_model, {"x": x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
     # # Importance sampling estimates of marginal log likelihood
     # is_log_likelihood = tf.reduce_mean(
-    #     zs.is_loglikelihood(gen, observed={'x': x}, proposal=q_net, axis=0))
+    #     zs.is_loglikelihood(gen, observed={"x": x}, proposal=q_net, axis=0))
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
     infer_op = optimizer.minimize(cost)
 
     # Random generation
-    x_gen = tf.reshape(gen.observe()['x_mean'], [-1, 28, 28, 1])
+    x_gen = tf.reshape(meta_model.observe()["x_mean"], [-1, 28, 28, 1])
 
     # Define training/evaluation parameters
     epochs = 3000
     batch_size = 128
     iters = x_train.shape[0] // batch_size
-    save_freq = 1
+    save_freq = 10
     test_freq = 10
     test_batch_size = 400
     test_iters = x_test.shape[0] // test_batch_size
