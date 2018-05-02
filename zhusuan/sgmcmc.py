@@ -27,7 +27,18 @@ class SGMCMC:
     def __init__(self):
         self.t = tf.Variable(-1, name="t", trainable=False, dtype=tf.int32)
 
-    def sample(self, log_joint, observed, latent):
+    def sample(self, meta_model, observed, latent):
+        if callable(meta_model):
+            # TODO: raise warning
+            self._meta_model = None
+            self._log_joint = meta_model
+        else:
+            self._meta_model = meta_model
+            self._log_joint = lambda obs: meta_model.observe(**obs).log_joint()
+
+        self._observed = observed
+        self._latent = latent
+
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
         for i, v in enumerate(latent_v):
             if not isinstance(v, tf.Variable):
@@ -36,14 +47,14 @@ class SGMCMC:
         qs = copy(latent_v)
         self._define_variables(qs)
 
-        def _log_joint(var_list):
+        def get_log_posterior(var_list):
             joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
-            return log_joint(joint_obs)
+            return self._log_joint(joint_obs)
 
-        def _gradient(var_list):
-            return tf.gradients(_log_joint(var_list), var_list)
+        def get_gradient(var_list):
+            return tf.gradients(get_log_posterior(var_list), var_list)
 
-        update_ops, new_qs = zip(*self._update(qs, _gradient))
+        update_ops, new_qs = zip(*self._update(qs, get_gradient))
 
         sample_op = tf.group(*update_ops)
         new_samples = dict(zip(latent_k, new_qs))
@@ -54,6 +65,17 @@ class SGMCMC:
     
     def _define_variables(self, qs):
         return NotImplementedError()
+
+    @property
+    def bn(self):
+        try:
+            if self._meta_model:
+                return self._meta_model.observe(
+                    **merge_dicts(self._latent, self._observed))
+            else:
+                return None
+        except AttributeError:
+            return None
 
 
 class SGLD(SGMCMC):

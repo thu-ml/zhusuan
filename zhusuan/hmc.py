@@ -409,8 +409,8 @@ class HMC:
             self._meta_model = meta_model
             self._log_joint = lambda obs: meta_model.observe(**obs).log_joint()
 
-        self._latent = latent
         self._observed = observed
+        self._latent = latent
 
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
