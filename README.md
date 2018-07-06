@@ -36,7 +36,7 @@ please clone the repository and run
 pip install .
 ```
 in the main directory. This will install ZhuSuan and its dependencies
-automatically. ZhuSuan also requires **Tensorflow 1.4.0 or later**. Because
+automatically. ZhuSuan also requires **Tensorflow 1.5.0 or later**. Because
 users should choose whether to install the cpu or gpu version of Tensorflow,
 we do not include it in the dependencies. See
 [Installing Tensorflow](https://www.tensorflow.org/install/).
