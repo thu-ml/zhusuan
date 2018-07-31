@@ -69,7 +69,7 @@ def build_gen(n, x_dim, z_dim, n_particles, nf=16):
     lx_z = conv2d_transpose(lx_z, [28, 28, 1], kernel_size=(3, 3),
                             stride=(1, 1), activation_fn=None)
     x_logits = tf.reshape(lx_z, [n_particles, -1, x_dim])
-    bn.deterministic("x_mean", tf.sigmoid(x_logits))
+    bn.output("x_mean", tf.sigmoid(x_logits))
     bn.bernoulli("x", x_logits, group_ndims=1)
     return bn
 

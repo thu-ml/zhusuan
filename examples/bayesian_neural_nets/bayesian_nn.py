@@ -16,8 +16,9 @@ from examples.utils import dataset
 
 
 @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
-def build_bnn(x, layer_sizes, n_particles):
+def build_bnn(layer_sizes, n_particles):
     bn = zs.BayesianNet()
+    x = bn.input("x")
     h = tf.tile(x[None, ...], [n_particles, 1, 1])
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
         w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
@@ -28,7 +29,7 @@ def build_bnn(x, layer_sizes, n_particles):
         if i < len(layer_sizes) - 2:
             h = tf.nn.relu(h)
 
-    y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
+    y_mean = bn.output("y_mean", tf.squeeze(h, 2))
     y_logstd = tf.get_variable("y_logstd", shape=[],
                                initializer=tf.constant_initializer(0.))
     bn.normal("y", y_mean, logstd=y_logstd)
@@ -77,7 +78,7 @@ def main():
     layer_sizes = [x_dim] + n_hiddens + [1]
     w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
 
-    meta_model = build_bnn(x, layer_sizes, n_particles)
+    meta_model = build_bnn(layer_sizes, n_particles)
     variational = build_mean_field_variational(layer_sizes, n_particles)
 
     def log_joint(bn):
@@ -88,7 +89,7 @@ def main():
     meta_model.log_joint = log_joint
 
     lower_bound = zs.variational.elbo(
-        meta_model, {'y': y}, variational=variational, axis=0)
+        meta_model, {'x': x, 'y': y}, variational=variational, axis=0)
     cost = lower_bound.sgvb()
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
@@ -107,13 +108,16 @@ def main():
     ll_samples = 5000
     epochs = 500
     batch_size = 10
-    iters = int(np.floor(x_train.shape[0] / float(batch_size)))
+    iters = (n_train-1) // batch_size + 1
     test_freq = 10
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epochs + 1):
+            perm = np.random.permutation(x_train.shape[0])
+            x_train = x_train[perm, :]
+            y_train = y_train[perm]
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]

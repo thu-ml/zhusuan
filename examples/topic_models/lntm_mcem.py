@@ -43,9 +43,8 @@ def lntm(n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
     # doc_word: Document-word matrix
     doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
     doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
-    x = bn.unnormalized_multinomial('x', tf.log(doc_word),
-                                    normalize_logits=False,
-                                    dtype=tf.float32)
+    bn.unnormalized_multinomial('x', tf.log(doc_word), normalize_logits=False,
+                                dtype=tf.float32)
     return bn
 
 

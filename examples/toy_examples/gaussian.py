@@ -14,12 +14,12 @@ import tensorflow as tf
 import zhusuan as zs
 
 
-def gaussian(observed, n_x, stdev, n_particles):
-    with zs.BayesianNet(observed=observed) as model:
-        x_mean = tf.zeros([n_x])
-        x = zs.Normal('x', x_mean, std=stdev, n_samples=n_particles,
-                      group_ndims=1)
-    return model
+@zs.meta_bayesian_net()
+def gaussian(n_x, stdev, n_particles):
+    bn = zs.BayesianNet()
+    bn.normal('x', tf.zeros([n_x]), std=stdev, n_samples=n_particles,
+              group_ndims=1)
+    return bn
 
 
 if __name__ == "__main__":
@@ -38,17 +38,14 @@ if __name__ == "__main__":
     n_leapfrogs = 5
 
     # Build the computation graph
-    def log_joint(observed):
-        model = gaussian(observed, n_x, stdev, n_chains)
-        return model.local_log_prob('x')
-
+    meta_model = gaussian(n_x, stdev, n_chains)
     adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")
     adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
                  adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
                  target_acceptance_rate=0.9)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
-    sample_op, hmc_info = hmc.sample(log_joint, {}, {'x': x})
+    sample_op, hmc_info = hmc.sample(meta_model, {}, {'x': x})
 
     # Run the inference
     with tf.Session() as sess:
