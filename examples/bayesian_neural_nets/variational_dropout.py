@@ -18,11 +18,11 @@ from examples.utils import dataset
 
 
 @zs.meta_bayesian_net(scope="model", reuse_variables=True)
-def var_dropout(x, n, net_size, n_particles, is_training):
+def var_dropout(n, net_size, n_particles, is_training):
     normalizer_params = {'is_training': is_training,
                          'updates_collections': None}
     bn = zs.BayesianNet()
-    h = x
+    h = bn.input("x")
     for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
         eps_mean = tf.ones([n, n_in])
         eps = bn.normal(
@@ -34,7 +34,7 @@ def var_dropout(x, n, net_size, n_particles, is_training):
         if i < len(net_size) - 2:
             h = tf.nn.relu(h)
     y = bn.categorical('y', h)
-    bn.deterministic('y_logit', h)
+    bn.output('y_logit', h)
     return bn
 
 
@@ -90,7 +90,7 @@ if __name__ == '__main__':
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
 
-    meta_model = var_dropout(x_obs, n, net_size, n_particles, is_training)
+    meta_model = var_dropout(n, net_size, n_particles, is_training)
     variational = q(n, net_size, n_particles)
 
     def log_joint(bn):
@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
     meta_model.log_joint = log_joint
 
-    lower_bound = zs.variational.elbo(meta_model, {'y': y_obs},
+    lower_bound = zs.variational.elbo(meta_model, {'x': x_obs, 'y': y_obs},
                                       variational=variational, axis=0)
     y_logit = lower_bound.bn["y_logit"]
     h_pred = tf.reduce_mean(tf.nn.softmax(y_logit), 0)

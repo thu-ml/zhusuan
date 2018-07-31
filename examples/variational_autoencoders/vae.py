@@ -24,7 +24,7 @@ def build_gen(x_dim, z_dim, n, n_particles=1):
     h = tf.layers.dense(z, 500, activation=tf.nn.relu)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     x_logits = tf.layers.dense(h, x_dim)
-    bn.deterministic("x_mean", tf.sigmoid(x_logits))
+    bn.output("x_mean", tf.sigmoid(x_logits))
     bn.bernoulli("x", x_logits, group_ndims=1)
     return bn
 
