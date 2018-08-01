@@ -7,8 +7,6 @@ from __future__ import division
 
 import numpy as np
 from scipy import stats
-import matplotlib
-matplotlib.use("tkAgg")
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import zhusuan as zs
@@ -60,7 +58,7 @@ if __name__ == "__main__":
                            adapt_mass: i < burnin // 2})
             print('Sample {}: Acceptance rate = {}, updated step size = {}'
                   .format(i, np.mean(acc), ss))
-            if i >= burnin and i % 10 == 0:
+            if i >= burnin:
                 samples.append(x_sample)
         print('Finished.')
         samples = np.vstack(samples)
