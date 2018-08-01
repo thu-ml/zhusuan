@@ -8,7 +8,7 @@ from __future__ import division
 import numpy as np
 from scipy import stats
 import matplotlib
-matplotlib.use("tkAgg")
+# matplotlib.use("tkAgg")
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import zhusuan as zs
@@ -31,17 +31,20 @@ if __name__ == "__main__":
     # Build the computation graph
     def log_joint(observed):
         x = observed['x']
-        # return tf.log(tf.exp(-0.5*((x-mu1)/stdev)**2)+tf.exp(-0.5*((x-mu2)/stdev)**2))
+        # return tf.log(tf.exp(-0.5*((x-mu1)/stdev)**2) +
+        #               tf.exp(-0.5*((x-mu2)/stdev)**2))
         a1 = -0.5*((x-mu1)/stdev)**2
         a2 = -0.5*((x-mu2)/stdev)**2
         amax = tf.maximum(a1, a2)
         return amax + tf.log(tf.exp(a1-amax)+tf.exp(a2-amax))
 
-    learning_rate = tf.placeholder(tf.float32, shape=[], name="learning_rate")
-    sgmcmc = zs.SGNHT(learning_rate=learning_rate, variance_extra=0.2, tune_rate=0.01)
+    sgmcmc = zs.SGNHT(learning_rate=0.2, variance_extra=0.1, tune_rate=0.01,
+                      second_order=False, use_vector_xi=False)
     # x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
-    x = tf.Variable(tf.random_uniform([n_chains])*10-5)
-    sample_op, new_samples = sgmcmc.sample(log_joint, {}, {'x': x})
+    x = tf.Variable(tf.random_uniform([n_chains])*10-5, trainable=False,
+                    name='x')
+    sample_op, new_samples, sample_info = sgmcmc.sample(log_joint, {},
+                                                        {'x': x})
 
     # Run the inference
     with tf.Session() as sess:
@@ -49,9 +52,10 @@ if __name__ == "__main__":
         samples = []
         print('Sampling...')
         for t in range(n_iters):
-            _, x_sample = sess.run([sample_op, new_samples['x']],
-                                   feed_dict={learning_rate: 0.1})
-            # print(np.amax(x_sample), np.amin(x_sample))
+            _, x_sample, info = sess.run(
+                [sample_op, new_samples['x'], sample_info])
+            if t % 500 == 0:
+                print(info)
             if t >= burnin and t % 100 == 0:
                 samples.append(x_sample)
         print('Finished.')
@@ -84,5 +88,6 @@ if __name__ == "__main__":
     ys = kde(xs, samples, n_chains)
     f, ax = plt.subplots()
     ax.plot(xs, ys)
-    ax.plot(xs, 0.5*stats.norm.pdf(xs, loc=mu1, scale=stdev)+0.5*stats.norm.pdf(xs, loc=mu2, scale=stdev))
+    ax.plot(xs, 0.5*stats.norm.pdf(xs, loc=mu1, scale=stdev) +
+            0.5*stats.norm.pdf(xs, loc=mu2, scale=stdev))
     plt.show()
