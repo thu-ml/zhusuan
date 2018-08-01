@@ -25,8 +25,8 @@ The full script for this tutorial is at
 `examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_.
 
 We use a regression dataset called
-`Boston housing <https://archive.ics.uci.edu/ml/datasets/Housing>`_. This has
-:math:`N = 506` data points, with :math:`D = 13` dimensions.
+`Boston housing <https://archive.ics.uci.edu/ml/machine-learning-databases/housing/>`_.
+This has :math:`N = 506` data points, with :math:`D = 13` dimensions.
 The forwarding process of a BayesianNN for modeling multivariate regression is
 as follows:
 

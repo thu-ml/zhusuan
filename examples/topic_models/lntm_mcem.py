@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
         for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
-            learning_rate = learning_rate_0 / (t0 + epoch) * t0
+            learning_rate = learning_rate_0 * (t0 / (t0 + epoch))**2
             perm = list(range(X_train.shape[0]))
             np.random.shuffle(perm)
             X_train = X_train[perm, :]
@@ -184,8 +184,7 @@ if __name__ == "__main__":
                     feed_dict={x: x_batch,
                                eta_mean: Eta_mean,
                                eta_logstd: Eta_logstd,
-                               learning_rate_ph: learning_rate * t0 / (
-                                   t0 + epoch)})
+                               learning_rate_ph: learning_rate})
                 lls.append(ll)
 
             # Update hyper-parameters
