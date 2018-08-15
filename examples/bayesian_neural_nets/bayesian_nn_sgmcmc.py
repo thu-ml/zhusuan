@@ -87,11 +87,14 @@ def main():
     # sgmcmc = zs.SGNHT(learning_rate=1e-5, variance_extra=0.1, tune_rate=50.,
     #                   second_order=True)
     latent = dict(zip(w_names, wv))
+
+    # E step: Sample the parameters
     sample_op, new_w, sample_info = sgmcmc.sample(meta_model,
                                                   observed={'x': x, 'y': y},
                                                   latent=latent,
                                                   record_full=record_full)
 
+    # M step: Update the logstd hyperparameters
     esti_logstds = [0.5*tf.log(tf.reduce_mean(w*w, axis=0)) for w in wv]
     output_logstds = dict(zip(w_names,
                               [0.5*tf.log(tf.reduce_mean(w*w)) for w in wv]))

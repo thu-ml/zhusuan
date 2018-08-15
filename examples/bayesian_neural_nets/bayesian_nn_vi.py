@@ -52,8 +52,8 @@ def build_mean_field_variational(layer_sizes, n_particles):
 
 
 def main():
-    tf.set_random_seed(1234)
-    np.random.seed(1234)
+    tf.set_random_seed(1237)
+    np.random.seed(2345)
 
     # Load UCI Boston housing data
     data_path = os.path.join(conf.data_dir, "housing.data")
