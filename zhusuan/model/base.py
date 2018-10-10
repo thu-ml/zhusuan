@@ -118,7 +118,21 @@ class StochasticTensor(TensorArithmeticMixin):
                 self._tensor = self.sample(self._n_samples)
         return self._tensor
 
+    @property
+    def shape(self):
+        """
+        Return the static shape of `self.tensor`.
+
+        :return: A `TensorShape` instance.
+        """
+        return self.get_shape()
+
     def get_shape(self):
+        """
+        Static :attr:`shape`.
+
+        :return: A `TensorShape` instance.
+        """
         return self.tensor.get_shape()
 
     def sample(self, n_samples):

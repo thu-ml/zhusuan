@@ -16,7 +16,9 @@ from zhusuan.model.stochastic import *
 
 class TestStochasticTensor(tf.test.TestCase):
     def test_init(self):
-        samples = Mock()
+        static_shape = Mock()
+        get_shape_func = Mock(return_value=static_shape)
+        samples = Mock(get_shape=get_shape_func)
         log_probs = Mock()
         probs = Mock()
         sample_func = Mock(return_value=samples)
@@ -35,6 +37,8 @@ class TestStochasticTensor(tf.test.TestCase):
         self.assertTrue(s_tensor.tensor is samples)
         self.assertTrue(s_tensor.log_prob(None) is log_probs)
         self.assertTrue(s_tensor.prob(None) is probs)
+        self.assertTrue(s_tensor.get_shape() is static_shape)
+        self.assertTrue(s_tensor.shape is static_shape)
 
         obs_int32 = tf.placeholder(tf.int32, None)
         obs_float32 = tf.placeholder(tf.float32, None)
