@@ -11,6 +11,7 @@ import tensorflow as tf
 
 import zhusuan as zs
 from zhusuan.framework import *
+from zhusuan.framework.bn import Rule
 
 
 class TestStochasticTensor(tf.test.TestCase):
@@ -172,6 +173,32 @@ class TestBayesianNet(tf.test.TestCase):
             log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
             self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
             self.assertNear(log_pc_2_out, log_pc_t_out, 1e-6)
+
+
+    def test_observations(self):
+        @meta_bayesian_net()
+        def prior():
+            bn = BayesianNet()
+            bn.normal('a', 0., std=1., tag='a')
+            bn.normal('b', 0., std=100., tag='a', n_samples=1000)
+            bn.normal('c', 0., std=100., n_samples=1000)
+            return bn
+
+        @meta_bayesian_net()
+        def variational():
+            return LazyBayesianNet(
+                [Rule(r'a', zs.nn.construct_standard_mean_field)])
+
+        var_meta_bn = variational()
+        var_bn = var_meta_bn.observe(a=100)
+        substituted_bn = prior().observe_storage(BayesianNetStorage(var_bn))
+        with self.test_session(use_gpu=False) as sess:
+            sess.run(tf.global_variables_initializer())
+            self.assertNear(sess.run(substituted_bn['a']), 100, 1e-3)
+            b_var = np.mean(sess.run(substituted_bn['b']) ** 2)
+            self.assertNear(b_var, 1, 0.5)
+            c_var = np.mean(sess.run(substituted_bn['c']) ** 2)
+            self.assertNear(c_var, 10000, 5000)
 
 
 class TestReuse(tf.test.TestCase):

@@ -24,7 +24,9 @@ def construct_standard_mean_field(bn, name, tag, shape, n_samples):
         group_ndims=len(shape),
         is_reparameterized=True,
         check_numerics=False)
-    return zs.StochasticTensor(bn, name, dist, n_samples=n_samples)
+    # When bn.stochastic look up name in meta_bn, it uses bn._local_cxt, which
+    # is assigned in the lazy bn's constructor, as intended
+    return bn.stochastic(name, dist, tag=tag, n_samples=n_samples)
 
 
 def mean_field_for_dense_weights():

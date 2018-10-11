@@ -211,6 +211,19 @@ class _BaseBayesianNet(object):
         """ Check if a node with (name, tag) exist. """
         raise NotImplementedError()
 
+    def stochastic(self, name, dist, tag=None, **kwargs):
+        """ register a stochastic node. """
+        # TODO: check whether `self` is BayesianNet or _BayesianNet
+        print(name, "add stochastic node")
+        tensor_shape = dist.get_batch_shape().concatenate(
+            dist.get_value_shape()).as_list()
+        kwargs['tensor_shape'] = tensor_shape
+        kwargs['tag'] = tag
+        observation = self._get_observation(name, **kwargs)
+        node = StochasticTensor(
+            self, name, dist, observation=observation, **kwargs)
+        return node
+
 
 class _StrictBayesianNet(_BaseBayesianNet):
 
@@ -233,15 +246,7 @@ class _StrictBayesianNet(_BaseBayesianNet):
             raise ValueError(
                 "There exists a node with name '{}' in the {}. Names should "
                 "be unique.".format(name, BayesianNet.__name__))
-        # TODO: check whether `self` is BayesianNet or _BayesianNet
-        print(name, "add stochastic node")
-        tensor_shape = dist.get_batch_shape().concatenate(
-            dist.get_value_shape()).as_list()
-        kwargs['tensor_shape'] = tensor_shape
-        kwargs['tag'] = tag
-        observation = self._get_observation(name, **kwargs)
-        node = StochasticTensor(
-            self, name, dist, observation=observation, **kwargs)
+        node = _BaseBayesianNet.stochastic(self, name, dist, tag=tag, **kwargs)
         self._nodes[name] = node
         return node
 
