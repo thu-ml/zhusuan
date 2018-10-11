@@ -53,14 +53,14 @@ class VariationalObjective(TensorArithmeticMixin):
                 "the variational family or a dictionary `latent` "
                 "representing the variational inputs should be passed. "
                 "It is not allowed that both are specified or both are not."
-                .format(BaseBayesianNet))
+                .format(_BaseBayesianNet))
         elif latent is None:
-            if isinstance(variational, BaseBayesianNet):
+            if isinstance(variational, _BaseBayesianNet):
                 self._variational = variational
             else:
                 raise TypeError(
                     "`variational` should be a {} instance, got {}."
-                    .format(BaseBayesianNet.__name__, repr(variational)))
+                    .format(_BaseBayesianNet.__name__, repr(variational)))
             v_inputs = FilteredStorage(
                 BayesianNetStorage(self._variational),
                 lambda t: isinstance(t, StochasticTensor) and \
@@ -112,7 +112,7 @@ class VariationalObjective(TensorArithmeticMixin):
                 self._bn = self._meta_model.observe_storage(
                     self._v_inputs.merge_with(self._observed))
                 self._validate_variational_inputs(self._bn)
-            assert isinstance(self._bn, ExplicitBayesianNet)
+            assert isinstance(self._bn, _StrictBayesianNet)
             return self._bn
         else:
             return None
@@ -161,18 +161,14 @@ class VariationalObjective(TensorArithmeticMixin):
     def _entropy_term(self):
         if not hasattr(self, '_entropy_cache'):
             bn = self.bn
-
             # find all nodes coming from variational, and sum their log_prob
             var_log_probs = []
             for name, node in six.iteritems(self.bn.nodes):
-                # node could be input/output Tensor
                 if isinstance(node, StochasticTensor):
                     var_nd = self._v_inputs.get_node(
                         name, node._tag, node._tensor_shape, node._n_samples)
                     if var_nd is not None:
-                        print('added for entropy: ', name)
                         var_log_probs.append(var_nd.cond_log_p)
-
             if len(var_log_probs) > 0:
                 self._entropy_cache = -tf.add_n(var_log_probs)
             else:

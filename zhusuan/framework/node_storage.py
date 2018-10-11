@@ -1,9 +1,13 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 class ObservationStorage(object):
 
     def __init__(self):
         pass
 
     def get_node(self, name, tag=None, shape=None, n_samples=None):
+        """ Get the corresponding node. If not exists, return None. """
         raise NotImplementedError()
 
     def merge_with(self, another_storage):
@@ -16,7 +20,7 @@ class FixedObservations(ObservationStorage):
         self._dict = node_dict
 
     def get_node(self, name, tag=None, shape=None, n_samples=None):
-        # TODO optionally, validate the fetched node
+        # the constructor of StochasticTensor will check for consistency
         return self._dict.get(name, None)
 
 
@@ -28,7 +32,8 @@ class BayesianNetStorage(ObservationStorage):
     def get_node(self, name, tag=None, shape=None, n_samples=None):
         if not self._bn.has_node(name, tag):
             return None
-        return self._bn.get_node(name, tag=tag, shape=shape, n_samples=n_samples)
+        return self._bn.get_node(
+            name, tag=tag, shape=shape, n_samples=n_samples)
 
 
 class FilteredStorage(ObservationStorage):
@@ -52,6 +57,6 @@ class StorageCollection(ObservationStorage):
     def get_node(self, name, tag=None, shape=None, n_samples=None):
         ret = [s.get_node(name, tag, shape, n_samples) for s in self._storages]
         ret = [nd for nd in ret if nd is not None]
-        assert len(ret) <= 1
+        assert len(ret) <= 1, 'observation sets should be mutually exclusive'
         return ret[0] if len(ret) > 0 else None
 

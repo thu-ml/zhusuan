@@ -20,8 +20,8 @@ from zhusuan.framework.utils import Context
 
 __all__ = [
     'StochasticTensor',
-    'BaseBayesianNet',
-    'ExplicitBayesianNet',
+    '_BaseBayesianNet',
+    '_StrictBayesianNet',
     'BayesianNet',
     'LazyBayesianNet'
 ]
@@ -30,11 +30,26 @@ __all__ = [
 # TODO: __str__, __repr__ for StochasticTensor
 
 class StochasticTensor(TensorArithmeticMixin):
+
+    """
+    :param bn: A `_BaseBayesianNet`. The Bayesian network the 
+        `StochasticTensor` belongs to.
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param dist: A :class:`~zhusuan.distributions.base.Distribution` instance
+        that determines the distribution used in this stochastic node.
+    :param observation: A Tensor, which matches the shape of `distribution`.
+        If specified, will be used as the value of this stochastic tensor,
+        instead of sampling from the distribution. This argument will
+        also overwrite the value provided via BayesianNet context.
+    :param tag: A string. The tag of the `StochasticTensor`.
+    """
+
     def __init__(self, bn, name, dist, observation=None, tag=None,
                  tensor_shape=None, **kwargs):
+        # TODO what about add a `full_shape` method in `Distribution`?
         if bn is None:
             try:
-                # TODO make sure this is a v3 BN
                 bn = BayesianNet.get_context()
             except RuntimeError:
                 pass
@@ -166,13 +181,7 @@ register_session_run_conversion_functions(
 )
 
 
-class BaseBayesianNet(object):
-
-    """
-    A BaseBayesianNet is a Name->StochasticTensor store. 
-    Optionally, it maintains a pointer to the MetaBayesianNet, and fetch
-    observations from it.
-    """
+class _BaseBayesianNet(object):
 
     def __init__(self):
         try:
@@ -183,10 +192,10 @@ class BaseBayesianNet(object):
             self._meta_bn = self._local_cxt.meta_bn
         else:
             self._meta_bn = None
-        super(BaseBayesianNet, self).__init__()
+        super(_BaseBayesianNet, self).__init__()
 
-    def _get_observation(self, name, tag=None, tensor_shape=None, n_samples=None,
-                         **kwargs):
+    def _get_observation(self, name, tag=None, tensor_shape=None,
+                         n_samples=None, **kwargs):
         if self._local_cxt:
             ret = self._local_cxt.observations.get_node(
                 name, tag, tensor_shape, n_samples)
@@ -195,20 +204,21 @@ class BaseBayesianNet(object):
         return None
 
     def get_node(self, name, tag=None, shape=None, n_samples=None):
+        """ Get the node with name, tag, etc. The node must exist. """
         raise NotImplementedError()
 
     def has_node(self, name, tag=None):
+        """ Check if a node with (name, tag) exist. """
         raise NotImplementedError()
 
 
-class ExplicitBayesianNet(BaseBayesianNet):
+class _StrictBayesianNet(_BaseBayesianNet):
 
     def __init__(self):
         self._nodes = {}
-        super(ExplicitBayesianNet, self).__init__()
+        super(_StrictBayesianNet, self).__init__()
 
     def get_node(self, name, tag=None, shape=None, n_samples=None):
-        # TODO: optionally, check if tag and shape agree with what we have.
         return self._nodes.get(name)
 
     def has_node(self, name, tag=None):
@@ -330,7 +340,8 @@ class ExplicitBayesianNet(BaseBayesianNet):
                 MetaBayesianNet.observe.__name__))
 
 
-class BayesianNet(ExplicitBayesianNet, Context):
+class BayesianNet(_StrictBayesianNet, Context):
+
     def __init__(self, observed=None):
         # To support deprecated features
         self._observed = observed if observed else {}
@@ -738,10 +749,10 @@ class BayesianNet(ExplicitBayesianNet, Context):
             return tuple(ret)
 
 
-Rule = namedtuple('Rule', 'tag_pattern constructor')
+Rule = namedtuple("Rule", "tag_pattern constructor")
 
 
-class LazyBayesianNet(BaseBayesianNet):
+class LazyBayesianNet(_BaseBayesianNet):
 
     def __init__(self, rules):
         self._rules = rules
@@ -751,7 +762,7 @@ class LazyBayesianNet(BaseBayesianNet):
     def _find_rule(self, tag):
         matched = [rule for rule in self._rules
                    if re.match(rule.tag_pattern, tag) is not None]
-        assert len(matched) <= 1
+        assert len(matched) <= 1, "rules should be mutually exclusive"
         return matched
         
     def get_node(self, name, tag=None, shape=None, n_samples=None):
@@ -761,7 +772,6 @@ class LazyBayesianNet(BaseBayesianNet):
             return self._node_cache[name]
 
         matched = self._find_rule(tag)
-        assert len(matched) == 1
         self._node_cache[name] = matched[0].constructor(
             self, name, tag, shape, n_samples)
         return self._node_cache[name]

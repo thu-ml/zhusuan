@@ -2,3 +2,4 @@
 # -*- coding: utf-8 -*-
 
 from .variationals import *
+from .layers import *
