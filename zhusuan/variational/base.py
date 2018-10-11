@@ -76,6 +76,8 @@ class VariationalObjective(TensorArithmeticMixin):
             v_inputs = FixedObservations(dict(zip(
                 v_names,
                 map(lambda x: x[0], v_inputs_and_log_probs))))
+            self._v_log_probs = dict(zip(
+                v_names, map(lambda x: x[1], v_inputs_and_log_probs)))
 
         self._v_inputs = v_inputs
         # TODO: Whether to copy?
@@ -152,28 +154,32 @@ class VariationalObjective(TensorArithmeticMixin):
         if self._meta_model:
             return self.bn.log_joint()
         elif not hasattr(self, '_log_joint_cache'):
-            raise NotImplementedError(
-                "VariationalObjective is called with a log_joint function which\
-                 takes a observed dictionary. Haven't yet implemented the\
-                 conversion from ObservationStorage to dict.")
+            # called with log_joint, type(_v_inputs) == FixedStorage
+            self._log_joint_cache = self._log_joint(
+                merge_dicts(self._v_inputs._dict, self._observed._dict))
         return self._log_joint_cache
 
     def _entropy_term(self):
         if not hasattr(self, '_entropy_cache'):
             bn = self.bn
-            # find all nodes coming from variational, and sum their log_prob
-            var_log_probs = []
-            for name, node in six.iteritems(self.bn.nodes):
-                if isinstance(node, StochasticTensor):
-                    var_nd = self._v_inputs.get_node(
-                        name, node._tag, node._tensor_shape, node._n_samples)
-                    if var_nd is not None:
-                        var_log_probs.append(var_nd.cond_log_p)
-            if len(var_log_probs) > 0:
-                self._entropy_cache = -tf.add_n(var_log_probs)
+            if bn is not None:
+                var_log_probs = []
+                for name, node in six.iteritems(self.bn.nodes):
+                    # find nodes coming from variational
+                    if isinstance(node, StochasticTensor):
+                        var_nd = self._v_inputs.get_node(
+                            name, node._tag, node._tensor_shape,
+                            node._n_samples)
+                        if var_nd is not None:
+                            var_log_probs.append(var_nd.cond_log_p)
+                if len(var_log_probs) > 0:
+                    self._entropy_cache = -tf.add_n(var_log_probs)
+                else:
+                    self._entropy_cache = None # NOTE why None?
+            elif len(self._v_log_probs) > 0:
+                self._entropy_cache = -sum(six.itervalues(self._v_log_probs))
             else:
-                self._entropy_cache = None # NOTE why None?
-
+                self._entropy_cache = None
         return self._entropy_cache
 
 
