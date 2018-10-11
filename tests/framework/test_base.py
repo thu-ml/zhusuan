@@ -10,8 +10,8 @@ import numpy as np
 import tensorflow as tf
 
 import zhusuan as zs
-from zhusuan.framework.base import *
-from zhusuan.framework.stochastic import *
+from zhusuan.framework import *
+from zhusuan.framework.bn import Rule
 
 
 class TestStochasticTensor(tf.test.TestCase):
@@ -26,12 +26,12 @@ class TestStochasticTensor(tf.test.TestCase):
                             log_prob=log_prob_func,
                             prob=prob_func,
                             dtype=tf.int32)
-        with BayesianNet() as model:
-            s_tensor = StochasticTensor('test', distribution, 2)
+        with BayesianNet() as bn:
+            s_tensor = bn.stochastic('test', distribution, n_samples=2)
         self.assertEqual(s_tensor.name, 'test')
         self.assertTrue(s_tensor.distribution is distribution)
         self.assertEqual(s_tensor.dtype, tf.int32)
-        self.assertTrue(s_tensor.net is model)
+        self.assertTrue(s_tensor.bn is bn)
         self.assertTrue(s_tensor.tensor is samples)
         self.assertTrue(s_tensor.log_prob(None) is log_probs)
         self.assertTrue(s_tensor.prob(None) is probs)
@@ -40,25 +40,18 @@ class TestStochasticTensor(tf.test.TestCase):
         obs_float32 = tf.placeholder(tf.float32, None)
         with self.assertRaisesRegexp(
                 ValueError,
-                "StochasticTensor\(\'a\'\) not compatible.*observed"):
-            with BayesianNet(observed={'a': obs_float32}):
-                _ = StochasticTensor('a', distribution, 2).tensor
-        with self.assertRaisesRegexp(
-                ValueError,
-                "StochasticTensor\(\'a\'\) not compatible.*observed"):
-            _ = StochasticTensor(
-                'a', distribution, 2, observed=obs_float32).tensor
-        with BayesianNet(observed={'a': obs_int32}):
-            s_tensor = StochasticTensor('a', distribution, 2)
-        self.assertTrue(s_tensor.tensor is obs_int32)
-        s_tensor = StochasticTensor('a', distribution, 2, observed=obs_int32)
+                "Incompatible types of StochasticTensor\(\'a\'\)"):
+            bn = BayesianNet(observed={'a': obs_float32})
+            _ = bn.stochastic('a', distribution, n_samples=2).tensor
+        bn2 = BayesianNet(observed={'a': obs_int32})
+        s_tensor = bn2.stochastic('a', distribution, n_samples=2)
         self.assertTrue(s_tensor.tensor is obs_int32)
 
     def test_tensor_conversion(self):
-        with BayesianNet(observed={'a': 1., 'c': 1.}):
-            a = StochasticTensor('a', Mock(dtype=tf.float32), 1)
+        with BayesianNet(observed={'a': 1., 'c': 1.}) as bn:
+            a = bn.normal('a', 0., std=1.)
             b = tf.add(1., a)
-            c = StochasticTensor('c', Mock(dtype=tf.float32), 1)
+            c = bn.normal('c', 0., std=1.)
             # tensorflow will try to convert c to the same type with 1 (int32)
             # calling the registered tensor conversion function of c.
             # If failed, it will try not to request the type. So an error
@@ -72,8 +65,8 @@ class TestStochasticTensor(tf.test.TestCase):
             _ = StochasticTensor._to_tensor(a, as_ref=True)
 
     def test_overload_operator(self):
-        with BayesianNet(observed={'a': 1.}):
-            a = StochasticTensor('a', Mock(dtype=tf.float32), 1)
+        with BayesianNet(observed={'a': 1.}) as bn:
+            a = bn.normal('a', 0., std=1.)
             b = a + 1
             # TODO: test all operators
         with self.test_session(use_gpu=True):
@@ -81,20 +74,11 @@ class TestStochasticTensor(tf.test.TestCase):
 
     def test_session_run(self):
         with self.test_session(use_gpu=True) as sess:
-            samples = tf.constant([1, 2, 3])
-            log_probs = Mock()
-            probs = Mock()
-            sample_func = Mock(return_value=samples)
-            log_prob_func = Mock(return_value=log_probs)
-            prob_func = Mock(return_value=probs)
-            distribution = Mock(sample=sample_func,
-                                log_prob=log_prob_func,
-                                prob=prob_func,
-                                dtype=tf.int32)
-
+            samples = tf.constant([1., 2., 3.])
             # test session.run
-            t = StochasticTensor('t', distribution, 1, samples)
-            self.assertAllEqual(sess.run(t), np.asarray([1, 2, 3]))
+            bn = BayesianNet(observed={'t': samples})
+            t = bn.normal('t', tf.zeros((3,)), std=tf.zeros((3,)))
+            self.assertAllEqual(sess.run(t), np.asarray([1., 2., 3.]))
 
             # test using as feed dict
             self.assertAllEqual(
@@ -123,19 +107,13 @@ class TestBayesianNet(tf.test.TestCase):
         with self.assertRaisesRegexp(RuntimeError, "No contexts on the stack"):
             BayesianNet.get_context()
 
-    def test_add_stochastic_tensor(self):
-        s_tensor = Mock(name=Mock())
-        model = BayesianNet()
-        model._add_stochastic_tensor(s_tensor)
-        self.assertTrue(model._stochastic_tensors[s_tensor.name] is s_tensor)
-
     def test_query(self):
         # outputs
         a_observed = tf.zeros([])
         with BayesianNet({'a': a_observed}) as model:
-            a = Normal('a', 0., logstd=1.)
-            b = Normal('b', 0., logstd=1.)
-            c = Normal('c', b, logstd=1.)
+            a = model.normal('a', 0., logstd=1.)
+            b = model.normal('b', 0., logstd=1.)
+            c = model.normal('c', b, logstd=1.)
         self.assertTrue(model.outputs('a') is a_observed)
         b_out, c_out = model.outputs(['b', 'c'])
         self.assertTrue(b_out is b.tensor)
@@ -195,6 +173,32 @@ class TestBayesianNet(tf.test.TestCase):
             log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
             self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
             self.assertNear(log_pc_2_out, log_pc_t_out, 1e-6)
+
+
+    def test_observations(self):
+        @meta_bayesian_net()
+        def prior():
+            bn = BayesianNet()
+            bn.normal('a', 0., std=1., tag='a')
+            bn.normal('b', 0., std=100., tag='a', n_samples=1000)
+            bn.normal('c', 0., std=100., n_samples=1000)
+            return bn
+
+        @meta_bayesian_net()
+        def variational():
+            return LazyBayesianNet(
+                [Rule(r'a', zs.nn.construct_standard_mean_field)])
+
+        var_meta_bn = variational()
+        var_bn = var_meta_bn.observe(a=100)
+        substituted_bn = prior().observe_storage(BayesianNetStorage(var_bn))
+        with self.test_session(use_gpu=False) as sess:
+            sess.run(tf.global_variables_initializer())
+            self.assertNear(sess.run(substituted_bn['a']), 100, 1e-3)
+            b_var = np.mean(sess.run(substituted_bn['b']) ** 2)
+            self.assertNear(b_var, 1, 0.5)
+            c_var = np.mean(sess.run(substituted_bn['c']) ** 2)
+            self.assertNear(c_var, 10000, 5000)
 
 
 class TestReuse(tf.test.TestCase):

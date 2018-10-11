@@ -8,8 +8,8 @@ from __future__ import division
 import numpy as np
 import tensorflow as tf
 
-from zhusuan.framework.stochastic import *
-from zhusuan.framework.base import BayesianNet
+from zhusuan.legacy.framework.stochastic import *
+from zhusuan import BayesianNet
 from zhusuan.framework.utils import get_backward_ops
 
 

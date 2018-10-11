@@ -20,34 +20,14 @@ def build_bnn(layer_sizes, n_particles):
     bn = zs.BayesianNet()
     x = bn.input("x")
     h = tf.tile(x[None, ...], [n_particles, 1, 1])
-    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
-                      group_ndims=2, n_samples=n_particles)
-        h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
-        h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
-            tf.to_float(tf.shape(h)[2]))
-        if i < len(layer_sizes) - 2:
-            h = tf.nn.relu(h)
+    for i, n_out in enumerate(layer_sizes[1:]):
+        activation = tf.nn.relu if i < len(layer_sizes) - 2 else None
+        h = zs.nn.dense(bn, h, n_out, name=str(i), activation=activation)
 
     y_mean = bn.output("y_mean", tf.squeeze(h, 2))
     y_logstd = tf.get_variable("y_logstd", shape=[],
                                initializer=tf.constant_initializer(0.))
     bn.normal("y", y_mean, logstd=y_logstd)
-    return bn
-
-
-@zs.reuse_variables(scope="variational")
-def build_mean_field_variational(layer_sizes, n_particles):
-    bn = zs.BayesianNet()
-    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        w_mean = tf.get_variable(
-            "w_mean_" + str(i), shape=[n_out, n_in + 1],
-            initializer=tf.constant_initializer(0.))
-        w_logstd = tf.get_variable(
-            "w_logstd_" + str(i), shape=[n_out, n_in + 1],
-            initializer=tf.constant_initializer(0.))
-        bn.normal("w" + str(i), w_mean, logstd=w_logstd,
-                  n_samples=n_particles, group_ndims=2)
     return bn
 
 
@@ -79,7 +59,7 @@ def main():
     w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
 
     meta_model = build_bnn(layer_sizes, n_particles)
-    variational = build_mean_field_variational(layer_sizes, n_particles)
+    variational = zs.nn.mean_field_for_dense_weights()
 
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)

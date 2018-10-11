@@ -9,6 +9,8 @@ import tensorflow as tf
 from functools import wraps
 
 from zhusuan.framework.utils import Context
+from zhusuan.framework.node_storage import FixedObservations, \
+    ObservationStorage
 
 
 __all__ = [
@@ -38,6 +40,7 @@ class MetaBayesianNet(object):
             self._f = f
         # TODO: Whether to copy?
         # TODO: make args and kwargs changeable after construction.
+        # TODO: figure out why the above comment is made.
         self._args = args
         self._kwargs = kwargs
         self._scope = scope
@@ -53,18 +56,22 @@ class MetaBayesianNet(object):
         self._log_joint = value
 
     def _run_with_observations(self, func, observations):
+        assert isinstance(observations, ObservationStorage)
         with Local() as local_cxt:
             local_cxt.observations = observations
             local_cxt.meta_bn = self
             return func(*self._args, **self._kwargs)
 
-    def observe(self, **kwargs):
-        print("observe:", kwargs)
+    def observe_storage(self, storage):
         if (self._scope is not None) and (not self._reuse_variables):
             with tf.variable_scope(self._scope):
-                return self._run_with_observations(self._f, kwargs)
+                return self._run_with_observations(self._f, storage)
         else:
-            return self._run_with_observations(self._f, kwargs)
+            return self._run_with_observations(self._f, storage)
+
+    def observe(self, **kwargs):
+        print("observe:", kwargs)
+        return self.observe_storage(FixedObservations(kwargs))
 
 
 def meta_bayesian_net(scope=None, reuse_variables=False):
