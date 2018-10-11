@@ -64,8 +64,7 @@ def main():
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)
         log_py_xw = bn.cond_log_prob('y')
-        ret = tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
-        return ret
+        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
     meta_model.log_joint = log_joint
 
