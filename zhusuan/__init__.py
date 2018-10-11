@@ -3,6 +3,7 @@
 
 from . import distributions
 from . import variational
+from . import nn
 from .framework import *
 from .hmc import *
 from .evaluation import *

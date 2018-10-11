@@ -4,3 +4,4 @@
 from .bn import *
 from .meta_bn import *
 from .utils import *
+from .node_storage import *
