@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 from __future__ import division
 from copy import copy
+from collections import namedtuple
 
 import six
 from six.moves import zip
@@ -15,6 +16,7 @@ from zhusuan.utils import merge_dicts
 __all__ = [
     "SGMCMC",
     "SGLD",
+    "PSGLD",
     "SGHMC",
     "SGNHT",
 ]
@@ -150,6 +152,8 @@ class SGLD(SGMCMC):
     def __init__(self, learning_rate=0.1, variance_reduction=None, add_noise=True):
         self.lr = tf.convert_to_tensor(learning_rate, tf.float32,
                                        name="learning_rate")
+        if type(add_noise) == bool:
+            add_noise = tf.constant(add_noise)
         self.add_noise = add_noise
         super(SGLD, self).__init__(variance_reduction)
 
@@ -161,8 +165,53 @@ class SGLD(SGMCMC):
 
     def _update_single(self, q, grad):
         new_q = q + 0.5 * self.lr * grad
-        if self.add_noise:
-            new_q += tf.random_normal(tf.shape(q), stddev=tf.sqrt(self.lr))
+        new_q_with_noise = new_q + tf.random_normal(
+            tf.shape(q), stddev=tf.sqrt(self.lr))
+        new_q = tf.cond(self.add_noise, lambda: new_q_with_noise, lambda: new_q)
+        update_q = q.assign(new_q)
+        return update_q, new_q, tf.constant("No info.")
+
+
+class PSGLD(SGLD):
+    """
+    Preconditioned Stochastic Gradient Langevin Dynamics
+    """
+
+    class RMSPreconditioner:
+        HParams = namedtuple('RMSHParams', 'decay epsilon')
+        default_hps = HParams(decay=0.9, epsilon=1e-3)
+        @staticmethod
+        def _define_variables(qs):
+            return [tf.Variable(tf.zeros_like(q)) for q in qs]
+        @staticmethod
+        def _get_preconditioner(hps, q, grad, aux):
+            aux = tf.assign(aux, hps.decay * aux + (1-hps.decay) * grad**2)
+            return 1 / (hps.epsilon + tf.sqrt(aux))
+
+    def __init__(self, learning_rate=0.1, variance_reduction=None, add_noise=True,
+                 preconditioner='rms', preconditioner_hparams=None):
+        self.preconditioner = {
+            'rms': PSGLD.RMSPreconditioner
+        }[preconditioner]
+        if preconditioner_hparams is None:
+            preconditioner_hparams = self.preconditioner.default_hps
+        self.preconditioner_hparams = preconditioner_hparams
+        super(PSGLD, self).__init__(learning_rate, variance_reduction, add_noise)
+
+    def _define_variables(self, qs):
+        self.vs = self.preconditioner._define_variables(qs)
+
+    def _update(self, qs, grad_func):
+        return zip(*[self._update_single(q, grad, aux)
+                     for q, grad, aux in zip(qs, grad_func(qs), self.vs)])
+
+    def _update_single(self, q, grad, aux):
+        g = self.preconditioner._get_preconditioner(
+            self.preconditioner_hparams, q, grad, aux)
+        new_q = q + 0.5 * self.lr * g * grad
+        new_q_with_noise = new_q + tf.random_normal(
+            tf.shape(q), stddev=tf.sqrt(self.lr * g))
+        new_q = tf.cond(self.add_noise, lambda: new_q_with_noise, lambda: new_q)
         update_q = q.assign(new_q)
         return update_q, new_q, tf.constant("No info.")
 
