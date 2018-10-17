@@ -26,7 +26,7 @@ class SGMCMC:
     """
     Base class for stochastic gradient MCMC algorithms.
     """
-    def __init__(self, variance_reduction=None):
+    def __init__(self):
         self.t = tf.Variable(0, name="t", trainable=False, dtype=tf.int32)
 
     def sample(self, meta_model, observed, latent, record_full=None, split_k=None, batch_size=None):
@@ -112,10 +112,7 @@ class SGMCMC:
                     return [now - old + full for (now, old, full) in
                         zip(now_batch_gradients, old_batch_gradients, self._full_gradients)]
 
-                def use_svrg():
-                    return tf.cond(record_full, collect_full_gradients, estimate_gradients)
-
-                return tf.cond(tf.greater(self.t, 0), use_svrg, lambda: _get_gradient(var_list))
+                return tf.cond(record_full, collect_full_gradients, estimate_gradients)
 
         update_ops, new_qs, infos = self._update(qs, get_gradient)
 
@@ -149,13 +146,13 @@ class SGLD(SGMCMC):
     """
     Stochastic Gradient Langevin Dynamics
     """
-    def __init__(self, learning_rate=0.1, variance_reduction=None, add_noise=True):
+    def __init__(self, learning_rate=0.1, add_noise=True):
         self.lr = tf.convert_to_tensor(learning_rate, tf.float32,
                                        name="learning_rate")
         if type(add_noise) == bool:
             add_noise = tf.constant(add_noise)
         self.add_noise = add_noise
-        super(SGLD, self).__init__(variance_reduction)
+        super(SGLD, self).__init__()
 
     def _define_variables(self, qs):
         pass
@@ -188,7 +185,7 @@ class PSGLD(SGLD):
             aux = tf.assign(aux, hps.decay * aux + (1-hps.decay) * grad**2)
             return 1 / (hps.epsilon + tf.sqrt(aux))
 
-    def __init__(self, learning_rate=0.1, variance_reduction=None, add_noise=True,
+    def __init__(self, learning_rate=0.1, add_noise=True,
                  preconditioner='rms', preconditioner_hparams=None):
         self.preconditioner = {
             'rms': PSGLD.RMSPreconditioner
@@ -196,7 +193,7 @@ class PSGLD(SGLD):
         if preconditioner_hparams is None:
             preconditioner_hparams = self.preconditioner.default_hps
         self.preconditioner_hparams = preconditioner_hparams
-        super(PSGLD, self).__init__(learning_rate, variance_reduction, add_noise)
+        super(PSGLD, self).__init__(learning_rate, add_noise)
 
     def _define_variables(self, qs):
         self.vs = self.preconditioner._define_variables(qs)
@@ -221,7 +218,7 @@ class SGHMC(SGMCMC):
     Stochastic Gradient Hamiltonian Monte Carlo
     """
     def __init__(self, learning_rate=0.1, friction=0.25, variance_estimate=0.,
-                 n_iter_resample_v=20, second_order=True, variance_reduction=None):
+                 n_iter_resample_v=20, second_order=True):
         self.lr = tf.convert_to_tensor(learning_rate, tf.float32,
                                         name="learning_rate")
         self.alpha = tf.convert_to_tensor(friction, tf.float32,
@@ -233,7 +230,7 @@ class SGHMC(SGMCMC):
         self.n_iter_resample_v = tf.convert_to_tensor(n_iter_resample_v, tf.int32,
                                                       name="n_iter_resample_v")
         self.second_order = second_order
-        super(SGHMC, self).__init__(variance_reduction)
+        super(SGHMC, self).__init__()
 
     def _define_variables(self, qs):
         self.vs = [tf.Variable(tf.random_normal(tf.shape(q), stddev=tf.sqrt(self.lr))) for q in qs]
@@ -276,8 +273,7 @@ class SGNHT(SGMCMC):
     Stochastic Gradient Nosé-Hoover Thermostat
     """
     def __init__(self, learning_rate=0.1, variance_extra=0., tune_rate=1.,
-                 n_iter_resample_v=None, second_order=True, variance_reduction=None,
-                 use_vector_xi=True):
+                 n_iter_resample_v=None, second_order=True, use_vector_xi=True):
         self.lr = tf.convert_to_tensor(learning_rate, tf.float32,
                                         name="learning_rate")
         self.alpha = tf.convert_to_tensor(variance_extra, tf.float32,
@@ -290,7 +286,7 @@ class SGNHT(SGMCMC):
                                                       name="n_iter_resample_v")
         self.second_order = second_order
         self.use_vector_xi = use_vector_xi
-        super(SGNHT, self).__init__(variance_reduction)
+        super(SGNHT, self).__init__()
 
     def _define_variables(self, qs):
         self.vs = [tf.Variable(tf.random_normal(tf.shape(q), stddev=tf.sqrt(self.lr))) for q in qs]
