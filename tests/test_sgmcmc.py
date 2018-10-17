@@ -40,7 +40,6 @@ def sample_error_with(sampler, sess, n_chains=1, n_iters=80000, thinning=50,
             [sample_op, new_samples['x'], sample_info])
         if np.isnan(x_sample.sum()):
             raise ValueError('nan encountered')
-            break
         if t >= burnin and t % thinning == 0:
             samples.append(x_sample)
     samples = np.array(samples)
