@@ -89,7 +89,7 @@ If you find ZhuSuan useful, please consider citing it in your publications.
 We provide a BibTeX entry of the ZhuSuan white paper below.
 ```
 @ARTICLE{zhusuan2017,
-    title={ZhuSuan: A Library for Bayesian Deep Learning},
+    title={Zhu{S}uan: A Library for {B}ayesian Deep Learning},
     author={Shi, Jiaxin and Chen, Jianfei. and Zhu, Jun and Sun, Shengyang
     and Luo, Yucen and Gu, Yihong and Zhou, Yuhao},
     journal={arXiv preprint arXiv:1709.05870},
