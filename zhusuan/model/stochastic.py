@@ -8,6 +8,7 @@ from __future__ import division
 import tensorflow as tf
 
 from zhusuan import distributions
+from zhusuan import stochastic_process
 from zhusuan.model.base import StochasticTensor
 
 
@@ -37,6 +38,7 @@ __all__ = [
     'ExpGumbelSoftmax',
     'Concrete',
     'GumbelSoftmax',
+    'GaussianProcess',
     'Empirical',
     'Implicit',
     'MatrixVariateNormalCholesky',
@@ -978,6 +980,38 @@ class Concrete(StochasticTensor):
 
 
 GumbelSoftmax = Concrete
+
+
+class GaussianProcess(StochasticTensor):
+    def __init__(self,
+                 name,
+                 mean_function,
+                 kernel,
+                 x,
+                 inducing_points=None,
+                 inducing_values=None,
+                 factorized=False,
+                 noise_level=0,
+                 n_samples=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        gaussian_process = stochastic_process.GaussianProcess(mean_function, kernel)
+        assert (inducing_points is None and inducing_values is None) or (
+                inducing_points is not None and inducing_values is not None), "Inputs and values should appear simultaneously"
+        if inducing_points is None:
+            super(GaussianProcess, self).__init__(name, gaussian_process.instantiate(x, noise_level, group_ndims,
+                                                                                     is_reparameterized,
+                                                                                     check_numerics, **kwargs),
+                                                  n_samples)
+        else:
+            super(GaussianProcess, self).__init__(name,
+                                                  gaussian_process.conditional(x, inducing_points, inducing_values,
+                                                                               factorized, noise_level,
+                                                                               group_ndims, is_reparameterized,
+                                                                               check_numerics, **kwargs),
+                                                  n_samples)
 
 
 class Empirical(StochasticTensor):
