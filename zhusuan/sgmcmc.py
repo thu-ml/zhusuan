@@ -57,7 +57,7 @@ class SGMCMC:
             return tf.gradients(_get_log_posterior(var_list, observed), var_list)
 
         def _get_gradient(var_list):
-            if split_k is None or split_k == {}:
+            if split_k is None or len(split_k) == 0:
                 return _get_gradient_direct(var_list, observed)
             else:
                 obs_size = tf.shape(observed[split_k[0]])[0]
