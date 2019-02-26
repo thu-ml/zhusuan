@@ -29,7 +29,8 @@ class SGMCMC:
     def __init__(self):
         self.t = tf.Variable(0, name="t", trainable=False, dtype=tf.int32)
 
-    def sample(self, meta_model, observed, latent, record_full=None, split_k=None, batch_size=None):
+    def sample(self, meta_model, observed, latent, record_full=None, batch_size=None, split_k=None):
+        # TODO: remove direct; use tf.greater
         if callable(meta_model):
             # TODO: raise warning
             self._meta_model = None
@@ -40,6 +41,8 @@ class SGMCMC:
 
         self._observed = observed
         self._latent = latent
+        if batch_size is not None and split_k is None:
+            split_k = list(observed.keys())
 
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
         for i, v in enumerate(latent_v):
@@ -56,8 +59,8 @@ class SGMCMC:
         def _get_gradient_direct(var_list, observed):
             return tf.gradients(_get_log_posterior(var_list, observed), var_list)
 
-        def _get_gradient(var_list):
-            if split_k is None or len(split_k) == 0:
+        def _get_gradient(var_list, direct=False):
+            if batch_size is None or len(split_k) == 0 or direct:
                 return _get_gradient_direct(var_list, observed)
             else:
                 obs_size = tf.shape(observed[split_k[0]])[0]
@@ -66,28 +69,28 @@ class SGMCMC:
                     other = copy(observed)
                     for k in split_k:
                         del other[k]
-                    slice_v = [observed[k] for k in split_k]
-                    obs_v = [tf.Variable(lambda: tf.zeros([batch_size] + list(v.shape)[1:], v.dtype)) for v in slice_v]
-                    obs = merge_dicts(dict(zip(split_k, obs_v)), other)
-                    gradient = _get_gradient_direct(var_list, obs)
+                    slice_v = [tf.convert_to_tensor(observed[k]) for k in split_k]
 
                     def cond(i, total_gradient):
                         return tf.less(i, iters)
 
                     def body(i, total_gradient):
-                        with tf.control_dependencies([ov.assign(v[i * batch_size:(i + 1) * batch_size])
-                                for (ov, v) in zip(obs_v, slice_v)]):
-                            total_gradient = [old + this / tf.cast(iters, tf.float32)
-                                for (old, this) in zip(total_gradient, gradient)]
+                        assigned = [v[i * batch_size:(i + 1) * batch_size] for v in slice_v]
+                        obs_body = merge_dicts(dict(zip(split_k, assigned)), other)
+                        true_batch_size = tf.shape(observed[split_k[0]][i * batch_size:(i + 1) * batch_size])[0]
+                        discount = tf.cast(true_batch_size, tf.float32) / tf.cast(obs_size, tf.float32)
+                        total_gradient = [old + this * discount
+                            for (old, this) in zip(total_gradient, _get_gradient_direct(var_list, obs_body))]
                         return i+1, total_gradient
 
                     i = tf.constant(0)
                     gradients = [tf.zeros_like(grad) for grad in _get_gradient_direct(var_list, observed)]
 
-                    return tf.while_loop(cond, body, [i, gradients])[1]
+                    return tf.while_loop(cond, body, [i, gradients], parallel_iterations=1)[1]
 
-                return tf.cond(tf.greater(obs_size, batch_size), lambda: _get_gradient_sum(var_list),
-                               lambda: _get_gradient_direct(var_list, observed))
+                return _get_gradient_sum(var_list)
+                # return tf.cond(tf.greater(obs_size, batch_size), lambda: _get_gradient_sum(var_list),
+                               # lambda: _get_gradient_direct(var_list, observed))
 
         if record_full is not None:
             self._old_values = [tf.Variable(tf.zeros_like(q)) for q in qs]
@@ -107,8 +110,8 @@ class SGMCMC:
 
                 def estimate_gradients():
                     # Remark: Objective function should not change except for random batching
-                    now_batch_gradients = _get_gradient(var_list)
-                    old_batch_gradients = _get_gradient(self._old_values)
+                    now_batch_gradients = _get_gradient(var_list, direct=True)
+                    old_batch_gradients = _get_gradient(self._old_values, direct=True)
                     return [now - old + full for (now, old, full) in
                         zip(now_batch_gradients, old_batch_gradients, self._full_gradients)]
 
