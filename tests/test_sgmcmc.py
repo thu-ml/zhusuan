@@ -77,3 +77,44 @@ class TestSGMCMC(tf.test.TestCase):
             e = sample_error_with(sampler, sess, n_chains=100, n_iters=8000)
             self.assertLessEqual(e, 0.016)
 
+    def test_get_gradient_sum(self):
+        n_train = 1000
+        n_chains = 10
+        x_dim = 100
+
+        def log_joint(observed):
+            x = observed['x']
+            y = observed['y']
+            w = observed['w']
+            log_prior = tf.reduce_sum(w * w, -1)
+            log_likelihood = (tf.einsum("ik,jk->ij", w, tf.convert_to_tensor(x)) - y) ** 2
+            return log_prior + tf.reduce_mean(log_likelihood, -1) * n_train
+
+        sampler = zs.SGLD(learning_rate=1e-3, add_noise=False)
+        x = np.random.normal(size=[n_train, x_dim])
+        w_truth = np.random.normal(size=[x_dim])
+        y = np.matmul(x, w_truth) + np.random.normal(scale=x_dim*0.01, size=[n_train])
+        x = x.astype(np.float32)
+        y = y.astype(np.float32)
+        w_initial = np.random.normal(size=[n_chains, x_dim]).astype(np.float32)
+        w = tf.Variable(w_initial, name='w')
+        initialize_w = tf.assign(w, w_initial)
+        # x = tf.placeholder(tf.float32, shape=[None, x_dim], name='x')
+        # y = tf.placeholder(tf.float32, shape=[None], name='y')
+        sample_op1, new_samples1, _ = sampler.sample(
+            log_joint, {'x': x, 'y': y}, {'w': w})
+        sample_op2, new_samples2, _ = sampler.sample(
+            log_joint, {'x': x, 'y': y}, {'w': w}, record_full=tf.convert_to_tensor(True), batch_size=100)
+        sample_op3, new_samples3, _ = sampler.sample(
+            log_joint, {'x': x, 'y': y}, {'w': w}, record_full=tf.convert_to_tensor(True), batch_size=89)
+
+        with self.test_session() as sess:
+            sess.run(tf.global_variables_initializer())
+            _, w_sample1 = sess.run([sample_op1, new_samples1['w']])
+            sess.run(initialize_w)
+            _, w_sample2 = sess.run([sample_op2, new_samples2['w']])
+            sess.run(initialize_w)
+            _, w_sample3 = sess.run([sample_op3, new_samples3['w']])
+            self.assertAllClose(w_sample1, w_sample2)
+            self.assertAllClose(w_sample1, w_sample3)
+

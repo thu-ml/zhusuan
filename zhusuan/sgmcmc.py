@@ -64,7 +64,7 @@ class SGMCMC:
                 return _get_gradient_direct(var_list, observed)
             else:
                 obs_size = tf.shape(observed[split_k[0]])[0]
-                iters = (obs_size-1) // batch_size + 1
+
                 def _get_gradient_sum(var_list):
                     other = copy(observed)
                     for k in split_k:
@@ -72,12 +72,13 @@ class SGMCMC:
                     slice_v = [tf.convert_to_tensor(observed[k]) for k in split_k]
 
                     def cond(i, total_gradient):
+                        iters = (obs_size-1) // batch_size + 1
                         return tf.less(i, iters)
 
                     def body(i, total_gradient):
                         assigned = [v[i * batch_size:(i + 1) * batch_size] for v in slice_v]
                         obs_body = merge_dicts(dict(zip(split_k, assigned)), other)
-                        true_batch_size = tf.shape(observed[split_k[0]][i * batch_size:(i + 1) * batch_size])[0]
+                        true_batch_size = tf.shape(slice_v[0][i * batch_size:(i + 1) * batch_size])[0]
                         discount = tf.cast(true_batch_size, tf.float32) / tf.cast(obs_size, tf.float32)
                         total_gradient = [old + this * discount
                             for (old, this) in zip(total_gradient, _get_gradient_direct(var_list, obs_body))]
@@ -114,8 +115,12 @@ class SGMCMC:
                     old_batch_gradients = _get_gradient(self._old_values, direct=True)
                     return [now - old + full for (now, old, full) in
                         zip(now_batch_gradients, old_batch_gradients, self._full_gradients)]
-
-                return tf.cond(record_full, collect_full_gradients, estimate_gradients)
+                
+                grad = tf.cond(record_full, collect_full_gradients, estimate_gradients)
+                if len(qs) != 1:
+                    return grad
+                else:
+                    return [grad]
 
         update_ops, new_qs, infos = self._update(qs, get_gradient)
 
