@@ -340,8 +340,8 @@ class BayesianNet(_BayesianNet, Context):
     def bernoulli(self,
                   name,
                   logits,
-                  group_ndims=0,
                   n_samples=None,
+                  group_ndims=0,
                   dtype=tf.int32,
                   **kwargs):
         dist = distributions.Bernoulli(
