@@ -25,7 +25,6 @@ class Local(Context):
         self.__dict__[key] = value
 
 
-
 class MetaBayesianNet(object):
     def __init__(self, f, args=None, kwargs=None, scope=None,
                  reuse_variables=False):

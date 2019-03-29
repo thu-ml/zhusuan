@@ -190,6 +190,16 @@ class _BayesianNet(object):
         self._nodes[name] = node
         return node
 
+    def input(self, name):
+        input_tensor = tf.convert_to_tensor(self._get_observation(name))
+        self._nodes[name] = input_tensor
+        return input_tensor
+
+    def output(self, name, input_tensor):
+        self._nodes[name] = input_tensor
+        return input_tensor
+
+    # TODO: Deprecate deterministic?
     def deterministic(self, name, input_tensor):
         input_tensor = tf.convert_to_tensor(input_tensor)
         self._nodes[name] = input_tensor
@@ -205,7 +215,7 @@ class _BayesianNet(object):
                              .format(name, BayesianNet.__name__))
         elif only_stochastic and not isinstance(
                 self._nodes[name], StochasticTensor):
-            raise ValueError("Node '{}' is deterministic.".format(name))
+            raise ValueError("Node '{}' is deterministic (input or output).".format(name))
         return name
 
     def _check_names_exist(self, name_or_names, only_stochastic=False):
@@ -330,8 +340,8 @@ class BayesianNet(_BayesianNet, Context):
     def bernoulli(self,
                   name,
                   logits,
-                  group_ndims=0,
                   n_samples=None,
+                  group_ndims=0,
                   dtype=tf.int32,
                   **kwargs):
         dist = distributions.Bernoulli(
