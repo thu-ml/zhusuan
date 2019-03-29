@@ -29,10 +29,10 @@ class TestNormal(tf.test.TestCase):
                     ValueError, "Please use named arguments"):
                 Normal(tf.ones(1), tf.ones(1))
             with self.assertRaisesRegexp(
-                    ValueError, "Either.*should be passed but not both"):
+                    ValueError, "Either.*should be passed"):
                 Normal(mean=tf.ones([2, 1]))
             with self.assertRaisesRegexp(
-                    ValueError, "Either.*should be passed but not both"):
+                    ValueError, "Either.*should be passed"):
                 Normal(mean=tf.ones([2, 1]), std=1., logstd=0.)
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
