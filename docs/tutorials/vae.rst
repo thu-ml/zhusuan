@@ -4,7 +4,7 @@ Variational Autoencoders: Step by Step
 **Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
 most widely used deep generative models. In this tutorial, we show how to
 implement VAE in ZhuSuan step by step. The full script is at
-`examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/variational_autoencoders/vae.py>`_.
+`examples/semi_supervised_vae/vae_ssl.py <https://github.com/thu-ml/zhusuan/tree/v4/examples/semi_supervised_vae/vae_ssl.py>`_.
 
 The generative process of a VAE for modeling binarized
 `MNIST <https://www.tensorflow.org/get_started/mnist/beginners>`_ data is as
@@ -29,17 +29,17 @@ Build the Model
 ---------------
 
 In ZhuSuan, a model is constructed under a
-:class:`~zhusuan.model.base.BayesianNet` context, which enables transparent
+:class:`~zhusuan.framework.bn.BayesianNet`#TODO CHANGE context, which enables transparent
 building of directed graphical models using both Tensorflow operations and
-ZhuSuan's :class:`~zhusuan.model.base.StochasticTensor` s.
+ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor`#TODO CHANGE s.
 
-To start a :class:`~zhusuan.model.base.BayesianNet` context, use "with"
+To start a :class:`~zhusuan.framework.bn.BayesianNet`#TODO CHANGE context, use "with"
 statement in python::
 
     import zhusuan as zs
 
-    with zs.BayesianNet() as model:
-        # Start building the model
+    bn = zs.BayesianNet()
+    # Start building the model 
 
 Following the generative process, first we need a standard Normal
 distribution to generate the latent representations (:math:`z`). As presented
@@ -47,14 +47,14 @@ in our graphical model, the data is generated in batches with batch size ``n``,
 and for each data, the latent representation is of dimension ``z_dim``. So we
 need the Normal to generate samples of shape ``[n, z_dim]``::
 
-    with zs.BayesianNet() as model:
-        # z ~ N(z|0, I)
-        z_mean = tf.zeros([n, z_dim])
-        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
+    bn = zs.BayesianNet()
+    # z ~ N(z|0, I)
+    z_mean = tf.zeros([n, z_dim])
+    z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
 
 The shape of ``z_mean`` is ``[n, z_dim]``, which means that
 we have ``[n, z_dim]`` independent inputs fed into the univariate
-:class:`~zhusuan.model.stochastic.Normal` StochasticTensor. Because
+:class:`~zhusuan.distributions.univariate.Normal`#TODO CHANGE StochasticTensor. Because
 input parameters are allowed to
 `broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
 to match each other's shape, the standard deviation ``std`` is simply set to
@@ -66,52 +66,51 @@ And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, z_dim]``. In ZhuSuan, the way to achieve this is by setting
 ``group_ndims``, as we do in the above model definition code. To
-understand this, see :ref:`dist-and-stochastic`.
+understand this, see :ref:`dist-and-stochastic`.#TODO:N_SAMPLES
 
-Then we build a neural network of two fully-connected layers with :math:`z` as
-the input, which is supposed to learn the complex transformation that
+Then we build a neural network of two fully-connected layers with :math:`z` and :math:`y\_logits`
+as the input, which is supposed to learn the complex transformation that
 generates images from their latent representations::
 
-    from tensorflow.contrib import layers
+    import tensorflow as tf
 
-    with zs.BayesianNet() as model:
-        ...
-        # x_logits = f_NN(z)
-        lx_z = layers.fully_connected(z, 500)
-        lx_z = layers.fully_connected(lx_z, 500)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
+    bn = zs.BayesianNet()
+    ...
+    h = tf.layers.dense(z, 500, activation=tf.nn.relu)
+    h = tf.layers.dense(h, 500, activation=tf.nn.relu)
+    x_logits = tf.layers.dense(h, x_dim)
 
 Next, we add an observation distribution (noise) to get a tractable
 likelihood when evaluating the probability of an image::
 
-    with zs.BayesianNet() as model:
-        ...
-        # x ~ Bernoulli(x|sigmoid(x_logits))
-        x = zs.Bernoulli('x', x_logits, group_ndims=1)
+    bn = zs.BayesianNet()
+    ...
+    # x ~ Bernoulli(x|sigmoid(x_logits))
+    bn.output("x_mean", tf.sigmoid(x_logits))
+    bn.bernoulli("x", x_logits, group_ndims=1)
 
 .. note::
 
-    The :class:`~zhusuan.model.stochastic.Bernoulli` StochasticTensor
+    The :class:`~zhusuan.model.stochastic.Bernoulli`#TODO CHANGE StochasticTensor
     accepts log-odds of probabilities instead of probabilities of being 1.
     This is designed for numeric stability reasons. Similar tricks are used in
-    :class:`~zhusuan.model.stochastic.Categorical`, which accepts log
+    :class:`~zhusuan.model.stochastic.Categorical`#TODO CHANGE, which accepts log
     probabilities instead of probabilities.
 
 Putting together, the code for constructing a VAE is::
 
     import tensorflow as tf
-    from tensorflow.contrib import layers
     import zhusuan as zs
 
-    with zs.BayesianNet() as model:
-        z_mean = tf.zeros([n, z_dim])
-        z = zs.Normal('z', z_mean, std=1., group_ndims=1)
-
-        lx_z = layers.fully_connected(z, 500)
-        lx_z = layers.fully_connected(lx_z, 500)
-        x_logits = layers.fully_connected(lx_z, n_x, activation_fn=None)
-
-        x = zs.Bernoulli('x', x_logits, group_ndims=1)
+    bn = zs.BayesianNet()
+    
+    z_mean = tf.zeros([n, z_dim])
+    z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
+    h = tf.layers.dense(z, 500, activation=tf.nn.relu)
+    h = tf.layers.dense(h, 500, activation=tf.nn.relu)
+    x_logits = tf.layers.dense(h, x_dim)
+    bn.output("x_mean", tf.sigmoid(x_logits))
+    bn.bernoulli("x", x_logits, group_ndims=1)
 
 Reuse the Model
 ---------------
