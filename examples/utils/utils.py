@@ -7,8 +7,6 @@ import os
 
 import numpy as np
 from six.moves import range
-from skimage import io, img_as_ubyte
-from skimage.exposure import rescale_intensity
 from tensorflow.contrib.framework.python.ops import add_arg_scope
 import tensorflow as tf
 from tensorflow.contrib import layers
@@ -35,6 +33,8 @@ def save_image_collections(x, filename, shape=(10, 10), scale_each=False,
     :return: `uint8` numpy array
         The output image.
     """
+    from skimage import io, img_as_ubyte
+    from skimage.exposure import rescale_intensity
     makedirs(filename)
     n = x.shape[0]
     if transpose:
