@@ -40,7 +40,6 @@ class StochasticTensor(TensorArithmeticMixin):
         self._dtype = dist.dtype
         self._n_samples = kwargs.get("n_samples", None)
         if observation is not None:
-            print(name, "set obs: {}".format(observation))
             self._observation = self._check_observation(observation)
         elif (self._bn is not None) and (self._name in self._bn._observed):
             self._observation = self._check_observation(
@@ -94,16 +93,25 @@ class StochasticTensor(TensorArithmeticMixin):
         if self._observation is not None:
             return self._observation
         elif not hasattr(self, "_samples"):
-            print(self._name, "sample")
             self._samples = self._dist.sample(n_samples=self._n_samples)
         return self._samples
 
     @property
     def shape(self):
+        """
+        Return the static shape of `self.tensor`.
+
+        :return: A `TensorShape` instance.
+        """
         return self.tensor.shape
 
     def get_shape(self):
-        return self.tensor.get_shape()
+        """
+        Alias of :attr:`shape`.
+
+        :return: A `TensorShape` instance.
+        """
+        return self.shape
 
     @property
     def cond_log_p(self):
@@ -174,7 +182,6 @@ class _BayesianNet(object):
     def _get_observation(self, name):
         if self._local_cxt:
             ret = self._local_cxt.observations.get(name, None)
-            print(name, "get obs: {}".format(ret))
             return ret
         return None
 
@@ -184,7 +191,6 @@ class _BayesianNet(object):
                 "There exists a node with name '{}' in the {}. Names should "
                 "be unique.".format(name, BayesianNet.__name__))
         # TODO: check whether `self` is BayesianNet or _BayesianNet
-        print(name, "add stochastic node")
         node = StochasticTensor(
             self, name, dist, observation=self._get_observation(name), **kwargs)
         self._nodes[name] = node

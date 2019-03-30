@@ -16,8 +16,7 @@ from zhusuan.framework import *
 class TestStochasticTensor(tf.test.TestCase):
     def test_init(self):
         static_shape = Mock()
-        get_shape_func = Mock(return_value=static_shape)
-        samples = Mock(get_shape=get_shape_func)
+        samples = Mock(shape=static_shape)
         log_probs = Mock()
         probs = Mock()
         sample_func = Mock(return_value=samples)
@@ -92,7 +91,7 @@ class TestStochasticTensor(tf.test.TestCase):
         with self.session(use_gpu=True):
             self.assertNear(b.eval(), 2, 1e-6)
 
-    def session_run(self):
+    def test_session_run(self):
         with self.session(use_gpu=True) as sess:
             samples = tf.constant([1, 2, 3], dtype=tf.float32)
             # test session.run
@@ -108,7 +107,7 @@ class TestStochasticTensor(tf.test.TestCase):
                 np.asarray([4, 5, 6])
             )
 
-    def session_run_issue_49(self):
+    def test_session_run_issue_49(self):
         # test fix for the bug at https://github.com/thu-ml/zhusuan/issues/49
         bn = zs.BayesianNet(observed={})
         x_mean = tf.zeros([1, 2])
@@ -241,7 +240,7 @@ class TestReuse(tf.test.TestCase):
             _, m1 = mbn.observe()
             with tf.variable_scope('you_might_want_do_this'):
                 _, m2 = mbn.observe()
-            self.assertNotEquals(m1.name, m2.name)
+            self.assertNotEqual(m1.name, m2.name)
         with tf.variable_scope('when_you_are_perfectly_conscious'):
             _, m2 = build_mbn('a_mean').observe()
         self.assertNotEquals(m1.name, m2.name)
@@ -255,7 +254,7 @@ class TestReuse(tf.test.TestCase):
         _, m2 = meta_bn.observe()
         _, m3 = build_mbn('a_mean').observe()
         self.assertEquals(m1.name, m2.name)
-        self.assertNotEquals(m1.name, m3.name)
+        self.assertNotEqual(m1.name, m3.name)
 
         with self.assertRaisesRegexp(ValueError, 'Cannot reuse'):
             @meta_bayesian_net(reuse_variables=True)
