@@ -37,7 +37,7 @@ class TestInclusiveKLObjective(tf.test.TestCase):
         err_msg = "can only be optimized instead of being evaluated"
         with self.assertRaisesRegexp(NotImplementedError, err_msg):
             _ = lower_bound + 1.
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             with self.assertRaisesRegexp(NotImplementedError, err_msg):
                 sess.run(lower_bound)
 
@@ -61,7 +61,7 @@ class TestInclusiveKLObjective(tf.test.TestCase):
             true_cost = _kl_normal_normal(x_mean, x_std, mu, sigma)
             true_grads = tf.gradients(true_cost, [mu, sigma])
 
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 g1 = sess.run(rws_grads)
                 g2 = sess.run(true_grads)
                 # print('rws_grads:', g1)

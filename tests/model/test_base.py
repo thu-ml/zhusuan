@@ -75,7 +75,7 @@ class TestStochasticTensor(tf.test.TestCase):
         with self.assertRaisesRegexp(
                 TypeError, "type float32.*not match.*type int32"):
             _ = tf.add(1, c)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertNear(b.eval(), 2., 1e-6)
         with self.assertRaisesRegexp(ValueError, "Ref type not supported"):
             _ = StochasticTensor._to_tensor(a, as_ref=True)
@@ -85,11 +85,11 @@ class TestStochasticTensor(tf.test.TestCase):
         a = bn.normal('a', 0., logstd=1.)
         b = a + 1
         # TODO: test all operators
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertNear(b.eval(), 2, 1e-6)
 
-    def test_session_run(self):
-        with self.test_session(use_gpu=True) as sess:
+    def session_run(self):
+        with self.session(use_gpu=True) as sess:
             samples = tf.constant([1, 2, 3], dtype=tf.float32)
             # test session.run
             bn = BayesianNet({'t': samples})
@@ -104,14 +104,14 @@ class TestStochasticTensor(tf.test.TestCase):
                 np.asarray([4, 5, 6])
             )
 
-    def test_session_run_issue_49(self):
+    def session_run_issue_49(self):
         # test fix for the bug at https://github.com/thu-ml/zhusuan/issues/49
         bn = zs.BayesianNet(observed={})
         x_mean = tf.zeros([1, 2])
         x_logstd = tf.zeros([1, 2])
         x = bn.normal('x', mean=x_mean, logstd=x_logstd, group_ndims=1)
 
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             sess.run(tf.global_variables_initializer())
             _ = sess.run(x)
 
@@ -155,12 +155,12 @@ class TestBayesianNet(tf.test.TestCase):
         # local_log_prob
         log_pa = model.local_log_prob('a')
         log_pa_t = a.log_prob(a_observed)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pa_out, log_pa_t_out = sess.run([log_pa, log_pa_t])
             self.assertNear(log_pa_out, log_pa_t_out, 1e-6)
         log_pb, log_pc = model.local_log_prob(['b', 'c'])
         log_pb_t, log_pc_t = b.log_prob(b), c.log_prob(c)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pb_out, log_pb_t_out = sess.run([log_pb, log_pb_t])
             log_pc_out, log_pc_t_out = sess.run([log_pc, log_pc_t])
             self.assertNear(log_pb_out, log_pb_t_out, 1e-6)
@@ -168,7 +168,7 @@ class TestBayesianNet(tf.test.TestCase):
 
         # local_log_prob by iterator
         log_pb_2, log_pc_2 = model.local_log_prob(iter(['b', 'c']))
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pb_2_out, log_pb_t_out = sess.run([log_pb_2, log_pb_t])
             log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
             self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
@@ -183,7 +183,7 @@ class TestBayesianNet(tf.test.TestCase):
         self.assertTrue(a_out is a.tensor)
         self.assertTrue(b_out is b.tensor)
         self.assertTrue(c_out is c.tensor)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pa_out, log_pa_t_out, log_pb_out, log_pb_t_out, log_pc_out, \
                 log_pc_t_out = sess.run([log_pa, log_pa_t, log_pb, log_pb_t,
                                          log_pc, log_pc_t])
@@ -196,7 +196,7 @@ class TestBayesianNet(tf.test.TestCase):
             model.query(iter(['b', 'c']), outputs=True, local_log_prob=True)
         self.assertIs(b_out_2, b_out)
         self.assertIs(c_out_2, c_out)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pb_2_out, log_pb_t_out = sess.run([log_pb_2, log_pb_t])
             log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
             self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)

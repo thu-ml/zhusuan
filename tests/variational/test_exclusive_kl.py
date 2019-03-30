@@ -37,7 +37,7 @@ class TestEvidenceLowerBound(tf.test.TestCase):
             lower_bound = elbo(log_joint, observed={},
                                latent={'x': [qx_samples, log_qx]}, axis=0)
             analytic_lower_bound = -_kl_normal_normal(0., 1., x_mean, x_std)
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 a = sess.run(lower_bound)
                 b = sess.run(analytic_lower_bound)
                 # print(a, b)
@@ -66,7 +66,7 @@ class TestEvidenceLowerBound(tf.test.TestCase):
             true_cost = _kl_normal_normal(mu, sigma, x_mean, x_std)
             true_grads = tf.gradients(true_cost, [mu, sigma])
 
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 g1 = sess.run(sgvb_grads)
                 g2 = sess.run(true_grads)
                 print('sgvb_grads:', g1)
@@ -98,7 +98,7 @@ class TestEvidenceLowerBound(tf.test.TestCase):
             true_cost = _kl_normal_normal(mu, sigma, x_mean, x_std)
             true_grads = tf.gradients(true_cost, [mu, sigma])
 
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 sess.run(tf.global_variables_initializer())
                 g1 = sess.run(reinforce_grads)
                 g2 = sess.run(true_grads)

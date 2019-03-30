@@ -5,5 +5,7 @@ sphinx_rtd_theme
 sphinxcontrib-bibtex>=0.3.6
 coverage
 pep8
+matplotlib
 mock
 scipy
+progressbar2
