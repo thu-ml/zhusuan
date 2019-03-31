@@ -29,12 +29,11 @@ Build the Model
 ---------------
 
 In ZhuSuan, a model is constructed under a
-:class:`~zhusuan.framework.bn.BayesianNet` #TODO CHANGE context, which enables transparent
+:class:`~zhusuan.framework.bn.BayesianNet` context, which enables transparent
 building of directed graphical models using both Tensorflow operations and
-ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor` #TODO CHANGE s.
+ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor` s.
 
-To start a :class:`~zhusuan.framework.bn.BayesianNet` #TODO CHANGE context, use "with"
-statement in python::
+To start a :class:`~zhusuan.framework.bn.BayesianNet` context, create a new variable::
 
     import zhusuan as zs
 
@@ -54,7 +53,7 @@ need the Normal to generate samples of shape ``[n, z_dim]``::
 
 The shape of ``z_mean`` is ``[n, z_dim]``, which means that
 we have ``[n, z_dim]`` independent inputs fed into the univariate
-:class:`~zhusuan.distributions.univariate.Normal` #TODO CHANGE StochasticTensor. Because
+:class:`~zhusuan.distributions.univariate.Normal` StochasticTensor. Because
 input parameters are allowed to
 `broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
 to match each other's shape, the standard deviation ``std`` is simply set to
@@ -77,6 +76,7 @@ generates images from their latent representations::
 
     bn = zs.BayesianNet()
     ...
+    # x_logits = f_NN(z)
     h = tf.layers.dense(z, 500, activation=tf.nn.relu)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     x_logits = tf.layers.dense(h, x_dim)
@@ -91,10 +91,10 @@ likelihood when evaluating the probability of an image::
 
 .. note::
 
-    The :class:`~zhusuan.model.stochastic.Bernoulli`#TODO CHANGE StochasticTensor
+    The :class:`~zhusuan.distributions.univariate.Bernoulli` StochasticTensor
     accepts log-odds of probabilities instead of probabilities of being 1.
     This is designed for numeric stability reasons. Similar tricks are used in
-    :class:`~zhusuan.model.stochastic.Categorical`#TODO CHANGE, which accepts log
+    :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log
     probabilities instead of probabilities.
 
 Putting together, the code for constructing a VAE is::
@@ -103,12 +103,12 @@ Putting together, the code for constructing a VAE is::
     import zhusuan as zs
 
     bn = zs.BayesianNet()
-    
     z_mean = tf.zeros([n, z_dim])
     z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
     h = tf.layers.dense(z, 500, activation=tf.nn.relu)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     x_logits = tf.layers.dense(h, x_dim)
+    bn.output("x_mean", tf.sigmoid(x_logits))
     bn.bernoulli("x", x_logits, group_ndims=1)
 
 Reuse the Model
