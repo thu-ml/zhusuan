@@ -9,7 +9,7 @@ zhusuan\.framework
 BayesianNet
 ------------
 
-.. automodule:: zhusuan.model.bn
+.. automodule:: zhusuan.framework.bn
     :members:
     :undoc-members:
     :show-inheritance:
@@ -17,7 +17,7 @@ BayesianNet
 MetaBayesianNet
 -----------------
 
-.. automodule:: zhusuan.model.meta_bn
+.. automodule:: zhusuan.framework.meta_bn
     :members:
     :undoc-members:
     :show-inheritance:
@@ -26,7 +26,7 @@ MetaBayesianNet
 Utils
 -----
 
-.. automodule:: zhusuan.model.utils
+.. automodule:: zhusuan.framework.utils
     :members:
     :undoc-members:
     :show-inheritance:
