@@ -4,7 +4,7 @@ Variational Autoencoders: Step by Step
 **Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
 most widely used deep generative models. In this tutorial, we show how to
 implement VAE in ZhuSuan step by step. The full script is at
-`examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/v4/examples/variational_autoencoders/vae.py>`_.
+`examples/variational_autoencoders/vae.py <https://github.com/thu-ml/zhusuan/blob/master/examples/variational_autoencoders/vae.py>`_.
 
 The generative process of a VAE for modeling binarized
 `MNIST <https://www.tensorflow.org/get_started/mnist/beginners>`_ data is as
@@ -28,8 +28,8 @@ its parameters output by the neural network.
 Build the Model
 ---------------
 
-In ZhuSuan, a model is constructed under a
-:class:`~zhusuan.framework.bn.BayesianNet` context, which enables transparent
+In ZhuSuan, a model is constructed using
+:class:`~zhusuan.framework.bn.BayesianNet` , which enables transparent
 building of directed graphical models using both Tensorflow operations and
 ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor` s.
 
@@ -53,7 +53,7 @@ need the Normal to generate samples of shape ``[n, z_dim]``::
 
 The shape of ``z_mean`` is ``[n, z_dim]``, which means that
 we have ``[n, z_dim]`` independent inputs fed into the univariate
-:class:`~zhusuan.distributions.univariate.Normal` StochasticTensor. Because
+:class:`~zhusuan.framework.bn.StochasticTensor` StochasticTensor. Because
 input parameters are allowed to
 `broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
 to match each other's shape, the standard deviation ``std`` is simply set to
@@ -66,7 +66,7 @@ together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, z_dim]``. In ZhuSuan, the way to achieve this is by setting
 ``group_ndims``, as we do in the above model definition code. To
 understand this, see :ref:`dist-and-stochastic`. ``n_samples`` is the number of samples to generate. 
-``n _samples`` is None by default, in which case one sample is generated.
+``n _samples`` is None by default, in which case one sample is generated without adding a new dimension.
 
 Then we build a neural network of two fully-connected layers with :math:`z` 
 as the input, which is supposed to learn the complex transformation that
@@ -91,7 +91,7 @@ likelihood when evaluating the probability of an image::
 
 .. note::
 
-    The :class:`~zhusuan.distributions.univariate.Bernoulli` StochasticTensor
+    The :class:`~zhusuan.framework.bn.StochasticTensor` StochasticTensor
     accepts log-odds of probabilities instead of probabilities.
     This is designed for numeric stability reasons. Similar tricks are used in
     :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log-probabilities instead of probabilities.
