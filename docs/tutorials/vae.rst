@@ -68,7 +68,7 @@ together, so the shape of local probabilities should be ``[n]`` instead of
 understand this, see :ref:`dist-and-stochastic`. `n_samples` is the number of samples to generate. 
 `n_samples` is None by default, in which case one sample is generated.
 
-Then we build a neural network of two fully-connected layers with :math:`z` and :math:`y\_logits`
+Then we build a neural network of two fully-connected layers with :math:`z` 
 as the input, which is supposed to learn the complex transformation that
 generates images from their latent representations::
 
@@ -126,13 +126,13 @@ If there are many stochastic nodes in the model, this process will be really
 painful.
 
 **ZhuSuan has a novel solution for this.** To observe any stochastic nodes, 
-we can simply apply the function: ``observe`` of :class:`~zhusuan.framework.MetaBayesianNet"`，
- which a dict of observed nodes.
+we can simply apply the function: ``observe`` of :class:`~zhusuan.framework.MetaBayesianNet` ，
+which a dict of observed nodes.
 However, in most circumstances we would like to use 
-:class:`~zhusuan.framework.BayesianNet"` rather than
-:class:`~zhusuan.framework.MetaBayesianNet"`.
+:class:`~zhusuan.framework.BayesianNet`  rather than
+:class:`~zhusuan.framework.MetaBayesianNet` .
 Therefore, a common practice in ZhuSuan is to use a dectorator of 
-:class:`~zhusuan.framework.MetaBayesianNet"`, like this::
+:class:`~zhusuan.framework.MetaBayesianNet` , like this::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
     def build_gen(x_dim, z_dim, n, n_particles=1):
