@@ -65,8 +65,8 @@ And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, z_dim]``. In ZhuSuan, the way to achieve this is by setting
 ``group_ndims``, as we do in the above model definition code. To
-understand this, see :ref:`dist-and-stochastic`. `n_samples` is the number of samples to generate. 
-`n_samples` is None by default, in which case one sample is generated.
+understand this, see :ref:`dist-and-stochastic`. ``n_samples`` is the number of samples to generate. 
+``n _samples`` is None by default, in which case one sample is generated.
 
 Then we build a neural network of two fully-connected layers with :math:`z` 
 as the input, which is supposed to learn the complex transformation that
@@ -92,7 +92,7 @@ likelihood when evaluating the probability of an image::
 .. note::
 
     The :class:`~zhusuan.distributions.univariate.Bernoulli` StochasticTensor
-    accepts log-odds of probabilities instead of probabilities of being 1.
+    accepts log-odds of probabilities instead of probabilities.
     This is designed for numeric stability reasons. Similar tricks are used in
     :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log
     probabilities instead of probabilities.
@@ -131,7 +131,7 @@ which a dict of observed nodes.
 However, in most circumstances we would like to use 
 :class:`~zhusuan.framework.BayesianNet`  rather than
 :class:`~zhusuan.framework.MetaBayesianNet` .
-Therefore, a common practice in ZhuSuan is to use a dectorator of 
+Therefore, a common practice in ZhuSuan is to use a decorator of 
 :class:`~zhusuan.framework.MetaBayesianNet` , like this::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
