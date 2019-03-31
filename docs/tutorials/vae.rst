@@ -260,17 +260,15 @@ is also parameterized by a neural network (:math:`g`), which accepts input
 In ZhuSuan, the variational posterior can also be defined as a
 :class:`~zhusuan.model.base.BayesianNet`. The code for above definition is::
 
-    @zs.reuse('variational')
-    def q_net(x, z_dim):
-        with zs.BayesianNet() as variational:
-            lz_x = layers.fully_connected(tf.to_float(x), 500)
-            lz_x = layers.fully_connected(lz_x, 500)
-            z_mean = layers.fully_connected(lz_x, z_dim,
-                                            activation_fn=None)
-            z_logstd = layers.fully_connected(lz_x, z_dim,
-                                              activation_fn=None)
-            z = zs.Normal('z', z_mean, logstd=z_logstd, group_ndims=1)
-        return variational
+    @zs.reuse_variables(scope="q_net")
+    def build_q_net(x, z_dim, n_z_per_x):
+        bn = zs.BayesianNet()
+        h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+        h = tf.layers.dense(h, 500, activation=tf.nn.relu)
+        z_mean = tf.layers.dense(h, z_dim)
+        z_logstd = tf.layers.dense(h, z_dim)
+        bn.normal("z", z_mean, logstd=z_logstd, group_ndims=1, n_samples=n_z_per_x)
+        return bn
 
 There are many ways to optimize this lower bound. One of the easiest way is
 to do
@@ -297,21 +295,17 @@ gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
 :func:`~sgvb` of the output of :func:`~zhusuan.variational.elbo`.
 The code for this part is::
 
-    x = tf.placeholder(tf.int32, shape=[None, x_dim], name='x')
-    n = tf.shape(x)[0]
+    x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
+    n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    def log_joint(observed):
-        model = vae(observed, n, x_dim, z_dim)
-        log_pz, log_px_z = model.local_log_prob(['z', 'x'])
-        return log_pz + log_px_z
+    meta_model = build_gen(x_dim, z_dim, n, n_particles)
+    variational = build_q_net(x, z_dim, n_particles)
 
-    variational = q_net(x, z_dim)
-    qz_samples, log_qz = variational.query('z', outputs=True,
-                                           local_log_prob=True)
     lower_bound = zs.variational.elbo(
-        log_joint, observed={'x': x}, latent={'z': [qz_samples, log_qz]})
+        meta_model, {"x": x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
+
 
 .. note::
 
