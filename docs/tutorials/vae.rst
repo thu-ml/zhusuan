@@ -94,8 +94,7 @@ likelihood when evaluating the probability of an image::
     The :class:`~zhusuan.distributions.univariate.Bernoulli` StochasticTensor
     accepts log-odds of probabilities instead of probabilities.
     This is designed for numeric stability reasons. Similar tricks are used in
-    :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log
-    probabilities instead of probabilities.
+    :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log-probabilities instead of probabilities.
 
 Putting together, the code for constructing a VAE is::
 
@@ -126,8 +125,7 @@ If there are many stochastic nodes in the model, this process will be really
 painful.
 
 **ZhuSuan has a novel solution for this.** To observe any stochastic nodes, 
-we can simply apply the function: ``observe`` of :class:`~zhusuan.framework.MetaBayesianNet` ，
-which a dict of observed nodes.
+we can simply apply the function: ``observe`` of :class:`~zhusuan.framework.MetaBayesianNet` ，which a dict of observed nodes.
 However, in most circumstances we would like to use 
 :class:`~zhusuan.framework.BayesianNet`  rather than
 :class:`~zhusuan.framework.MetaBayesianNet` .
