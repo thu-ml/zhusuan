@@ -125,50 +125,39 @@ another computation graph from scratch and reuse the Variables (weights here).
 If there are many stochastic nodes in the model, this process will be really
 painful.
 
-**ZhuSuan has a novel solution for this.** To observe any stochastic nodes,
-pass a dictionary mapping of ``(name, Tensor)`` pairs when constructing
-:class:`~zhusuan.model.base.BayesianNet`. This will assign observed values
-to corresponding ``StochasticTensor`` s. For example, to observe
-a batch of images ``x_batch``, write::
+**ZhuSuan has a novel solution for this.** To observe any stochastic nodes, 
+we can simply apply the function: ``observe`` of :class:`~zhusuan.framework.MetaBayesianNet"`，
+ which a dict of observed nodes.
+However, in most circumstances we would like to use 
+:class:`~zhusuan.framework.BayesianNet"` rather than
+:class:`~zhusuan.framework.MetaBayesianNet"`.
+Therefore, a common practice in ZhuSuan is to use a dectorator of 
+:class:`~zhusuan.framework.MetaBayesianNet"`, like this::
 
-    with zs.BayesianNet(observed={'x': x_batch}):
+    @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
+    def build_gen(x_dim, z_dim, n, n_particles=1):
         ...
-        x = zs.Bernoulli('x', x_logits, group_ndims=1)
-
-In this case, when ``x`` is used in further computation, it will convert to
-the observed value, i.e., ``x_batch``, instead of the sampled tensor.
+        return bn
 
 .. note::
-
-    The observation passed must have the same type and shape as the
-    `StochasticTensor`.
-
-..
    With the help of both the ``BayesianNet`` context and factory pattern
    style programing.
 
-To reuse the code above for different observations, a common practice in
-ZhuSuan is to wrap it in a function, like this::
+so that we can observe stochastic nodes in this way::
 
-    @zs.reuse('model')
-    def vae(observed, n, n_x, z_dim):
-        with zs.BayesianNet(observed=observed) as model:
-            z_mean = tf.zeros([n, z_dim])
-            z = zs.Normal('z', z_mean, std=1., group_ndims=1)
-            lx_z = layers.fully_connected(z, 500)
-            lx_z = layers.fully_connected(lx_z, 500)
-            x_logits = layers.fully_connected(lx_z, n_x,
-                                              activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_ndims=1)
-        return model
+    meta_model = build_gen(x_dim, z_dim, n, n_particles)
+    x_mean = meta_model.observe()["x_mean"]
 
 Each time the function is called, a different observation assignment can be
-passed. One may ask how to **reuse tensorflow variables** created in this
-function. ZhuSuan provides an very easy way to achieve this, that is, without
-careful management of variable scopes, one could just add a decorator to the
-function: ``@zs.reuse(scope)``, as shown in the above code. Then this function
+passed. One could also add a decorator to the function: ``@zs.reuse_variables(scope)`` 
+to **reuse tensorflow variables** in this function. Then this function
 will automatically create variables the first time they are called and reuse
-them thereafter.
+them thereafter, as shown in the following code::
+
+    @zs.reuse_variables(scope="q_net")
+    def build_q_net(x, z_dim, n_z_per_x):
+        ...
+        return bn
 
 Inference and Learning
 ----------------------
