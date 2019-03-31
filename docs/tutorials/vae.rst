@@ -29,11 +29,11 @@ Build the Model
 ---------------
 
 In ZhuSuan, a model is constructed under a
-:class:`~zhusuan.framework.bn.BayesianNet`#TODO CHANGE context, which enables transparent
+:class:`~zhusuan.framework.bn.BayesianNet` #TODO CHANGE context, which enables transparent
 building of directed graphical models using both Tensorflow operations and
-ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor`#TODO CHANGE s.
+ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor` #TODO CHANGE s.
 
-To start a :class:`~zhusuan.framework.bn.BayesianNet`#TODO CHANGE context, use "with"
+To start a :class:`~zhusuan.framework.bn.BayesianNet` #TODO CHANGE context, use "with"
 statement in python::
 
     import zhusuan as zs
@@ -54,7 +54,7 @@ need the Normal to generate samples of shape ``[n, z_dim]``::
 
 The shape of ``z_mean`` is ``[n, z_dim]``, which means that
 we have ``[n, z_dim]`` independent inputs fed into the univariate
-:class:`~zhusuan.distributions.univariate.Normal`#TODO CHANGE StochasticTensor. Because
+:class:`~zhusuan.distributions.univariate.Normal` #TODO CHANGE StochasticTensor. Because
 input parameters are allowed to
 `broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
 to match each other's shape, the standard deviation ``std`` is simply set to
@@ -66,7 +66,8 @@ And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, z_dim]``. In ZhuSuan, the way to achieve this is by setting
 ``group_ndims``, as we do in the above model definition code. To
-understand this, see :ref:`dist-and-stochastic`.#TODO:N_SAMPLES
+understand this, see :ref:`dist-and-stochastic`. `n_samples` is the number of samples to generate. 
+`n_samples` is None by default, in which case one sample is generated.
 
 Then we build a neural network of two fully-connected layers with :math:`z` and :math:`y\_logits`
 as the input, which is supposed to learn the complex transformation that
@@ -86,7 +87,6 @@ likelihood when evaluating the probability of an image::
     bn = zs.BayesianNet()
     ...
     # x ~ Bernoulli(x|sigmoid(x_logits))
-    bn.output("x_mean", tf.sigmoid(x_logits))
     bn.bernoulli("x", x_logits, group_ndims=1)
 
 .. note::
@@ -109,7 +109,6 @@ Putting together, the code for constructing a VAE is::
     h = tf.layers.dense(z, 500, activation=tf.nn.relu)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     x_logits = tf.layers.dense(h, x_dim)
-    bn.output("x_mean", tf.sigmoid(x_logits))
     bn.bernoulli("x", x_logits, group_ndims=1)
 
 Reuse the Model
@@ -370,25 +369,30 @@ Generate Images
 What we've done above is to define and learn the model. To see how it
 performs, we would like to let it generate some images in the learning process.
 For the generating process, we remove the observation noise, i.e.,
-the ``Bernoulli`` StochasticTensor. We do this by first change the model
-function a little to return one more instance,
-the direct output of the neural network (``x_logits``)::
+the ``Bernoulli`` StochasticTensor. 
+We do this by using the direct output of the nueral network (``x_logits``)::
 
-    @zs.reuse('model')
-    def vae(observed, n, x_dim, z_dim):
-        with zs.BayesianNet(observed=observed) as model:
+    @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
+    def build_gen(x_dim, z_dim, n, n_particles=1):
+        bn = zs.BayesianNet()
             ...
-            x_logits = layers.fully_connected(lx_z, x_dim, activation_fn=None)
-            x = zs.Bernoulli('x', x_logits, group_ndims=1)
-        # before change: return model
-        return model, x_logits
+        x_logits = tf.layers.dense(h, x_dim)
+            ...
 
-Then we add a sigmoid function to it to get a "mean" image.
+Then we add a sigmoid function to it to get a "mean" image. 
+After that, we use the function: ``output`` to provide the value ``x_mean``,
+so that we can easily access it by using the function: ``observe``.
 This is done by::
 
-    n_gen = 100
-    _, x_logits = vae({}, n_gen, x_dim, z_dim)
-    x_gen = tf.reshape(tf.sigmoid(x_logits), [-1, 28, 28, 1])
+    @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
+    def build_gen(x_dim, z_dim, n, n_particles=1):
+        bn = zs.BayesianNet()
+            ...
+        x_logits = tf.layers.dense(h, x_dim)
+        bn.output("x_mean", tf.sigmoid(x_logits))
+            ...
+    
+    x_gen = tf.reshape(meta_model.observe()["x_mean"], [-1, 28, 28, 1])
 
 Run Gradient Descent
 --------------------
@@ -402,20 +406,25 @@ images to disk. Keep watching them and have fun :)
         sess.run(tf.global_variables_initializer())
 
         for epoch in range(1, epochs + 1):
+            time_epoch = -time.time()
             np.random.shuffle(x_train)
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
-                _, lb = sess.run([infer, lower_bound],
-                                 feed_dict={x: x_batch})
+                _, lb = sess.run([infer_op, lower_bound],
+                                 feed_dict={x_input: x_batch,
+                                            n_particles: 1,
+                                            n: batch_size})
                 lbs.append(lb)
+            time_epoch += time.time()
+            print("Epoch {} ({:.1f}s): Lower bound = {}".format(
+                epoch, time_epoch, np.mean(lbs)))
 
-            print('Epoch {}: Lower bound = {}'.format(
-                  epoch, np.mean(lbs)))
 
             if epoch % save_freq == 0:
-                images = sess.run(x_gen)
-                name = "results/vae/vae.epoch.{}.png".format(epoch)
+                images = sess.run(x_gen, feed_dict={n: 100, n_particles: 1})
+                name = os.path.join(result_path,
+                                    "vae.epoch.{}.png".format(epoch))
                 save_image_collections(images, name)
 
 
