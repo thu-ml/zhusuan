@@ -79,7 +79,7 @@ pip install ".[examples]"
 * Logistic Normal Topic Model:
   [HMC](examples/topic_models/lntm_mcem.py)
 * Probabilistic Matrix Factorization:
-  [HMC](examples/probabilistic_matrix_factorization/logistic_pmf_hmc.py)
+  [HMC](examples/probabilistic_matrix_factorization/pmf_hmc.py)
 * Sparse Variational Gaussian Process:
   [SGVB](examples/gaussian_process/svgp.py)
 
