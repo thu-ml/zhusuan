@@ -33,7 +33,7 @@ In ZhuSuan, a model is constructed using
 building of directed graphical models using both Tensorflow operations and
 ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor` s.
 
-To start a :class:`~zhusuan.framework.bn.BayesianNet` context, create a new variable::
+To construct a :class:`~zhusuan.framework.bn.BayesianNet` in this way::
 
     import zhusuan as zs
 
@@ -53,7 +53,7 @@ need the Normal to generate samples of shape ``[n, z_dim]``::
 
 The shape of ``z_mean`` is ``[n, z_dim]``, which means that
 we have ``[n, z_dim]`` independent inputs fed into the univariate
-:class:`~zhusuan.framework.bn.StochasticTensor` StochasticTensor. Because
+:class:`~zhusuan.distributions.univariate.Normal` distribution. Because
 input parameters are allowed to
 `broadcast <https://docs.scipy.org/doc/numpy-1.12.0/user/basics.broadcasting.html>`_
 to match each other's shape, the standard deviation ``std`` is simply set to
@@ -91,7 +91,7 @@ likelihood when evaluating the probability of an image::
 
 .. note::
 
-    The :class:`~zhusuan.framework.bn.StochasticTensor` StochasticTensor
+    The :class:`~zhusuan.distribution.univariate.Bernoulli` distribution
     accepts log-odds of probabilities instead of probabilities.
     This is designed for numeric stability reasons. Similar tricks are used in
     :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log-probabilities instead of probabilities.
@@ -124,13 +124,20 @@ another computation graph from scratch and reuse the Variables (weights here).
 If there are many stochastic nodes in the model, this process will be really
 painful.
 
-**ZhuSuan has a novel solution for this.** To observe any stochastic nodes, 
-we can simply apply the function: ``observe`` of :class:`~zhusuan.framework.MetaBayesianNet` ，which a dict of observed nodes.
-However, in most circumstances we would like to use 
-:class:`~zhusuan.framework.BayesianNet`  rather than
-:class:`~zhusuan.framework.MetaBayesianNet` .
-Therefore, a common practice in ZhuSuan is to use a decorator of 
-:class:`~zhusuan.framework.MetaBayesianNet` , like this::
+**ZhuSuan has a novel solution for this.** To observe any stochastic nodes,
+pass a dictionary mapping of ``(name, Tensor)`` pairs when constructing
+:class:`~zhusuan.framework.bn.BayesianNet`. This will assign observed values
+to corresponding ``StochasticTensor`` s. For example, to observe
+a batch of images ``x_batch``, write::
+
+    bn = zs.BayesianNet(observed={'x': x_batch})
+
+However, we usually need to pass different observations to the same :class:`~zhusuan.framework.bn.BayesianNet` 
+more than once. To achieve this, ZhuSuan provides a new class called :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` 
+to represent the meta version of BayesianNet which can repeatly produce 
+BayesianNet objects by accepting different observations. 
+The recommended way to construct a MetaBayesianNet is by wrapping the function 
+with an decorator(more details in :ref:`bayesian-net`)::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
     def build_gen(x_dim, z_dim, n, n_particles=1):
@@ -138,8 +145,9 @@ Therefore, a common practice in ZhuSuan is to use a decorator of
         return bn
 
 .. note::
-   With the help of both the ``BayesianNet`` context and factory pattern
-   style programing.
+
+    The observation passed must have the same type and shape as the
+    `StochasticTensor`.
 
 so that we can observe stochastic nodes in this way::
 
@@ -408,6 +416,9 @@ images to disk. Keep watching them and have fun :)
                                     "vae.epoch.{}.png".format(epoch))
                 save_image_collections(images, name)
 
+.. image:: ../_static/images/vae_mnist.png
+    :align: center
+    :width: 25%
 
 .. rubric:: References
 
