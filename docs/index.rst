@@ -70,12 +70,12 @@ If no error occurs, you've successfully installed ZhuSuan.
    api/zhusuan.distributions
    api/zhusuan.framework
    api/zhusuan.variational
+   api/zhusuan.legacy
    api/zhusuan.hmc
    api/zhusuan.evaluation
    api/zhusuan.transform
    api/zhusuan.diagnostics
    api/zhusuan.utils
-   api/zhusuan.legacy
 
 .. toctree::
    :maxdepth: 1
