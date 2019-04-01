@@ -16,20 +16,19 @@ from examples import conf
 from examples.utils import dataset, average_rmse_over_batches
 
 
-def pmf(observed, n, m, D, n_particles, select_u, select_v,
-        alpha_u, alpha_v, alpha_pred):
-    with zs.BayesianNet(observed=observed) as model:
-        mu_u = tf.zeros(shape=[n, D])
-        u = zs.Normal('u', mu_u, std=alpha_u,
-                      n_samples=n_particles, group_ndims=1)
-        mu_v = tf.zeros(shape=[m, D])
-        v = zs.Normal('v', mu_v, std=alpha_v,
-                      n_samples=n_particles, group_ndims=1)
-        gather_u = tf.gather(u, select_u, axis=1)  # [K, batch, D]
-        gather_v = tf.gather(v, select_v, axis=1)  # [K, batch, D]
-        r_logits = tf.reduce_sum(gather_u * gather_v, axis=2)
-        r = zs.Normal('r', tf.sigmoid(r_logits), std=alpha_pred)
-    return model, tf.sigmoid(r_logits)
+@zs.meta_bayesian_net(scope="pmf", reuse_variables=True)
+def pmf(n, m, D, n_particles, select_u, select_v, alpha_u, alpha_v, alpha_pred):
+    bn = zs.BayesianNet()
+    mu_u = tf.zeros(shape=[n, D])
+    u = bn.normal("u", mu_u, std=alpha_u, n_samples=n_particles, group_ndims=1)
+    mu_v = tf.zeros(shape=[m, D])
+    v = bn.normal("v", mu_v, std=alpha_v, n_samples=n_particles, group_ndims=1)
+    gather_u = tf.gather(u, select_u, axis=1)  # [K, batch, D]
+    gather_v = tf.gather(v, select_v, axis=1)  # [K, batch, D]
+    r_logits = tf.reduce_sum(gather_u * gather_v, axis=2)
+    bn.deterministic("r_pred", tf.sigmoid(r_logits))
+    bn.normal("r", tf.sigmoid(r_logits), std=alpha_pred)
+    return bn
 
 
 def select_from_corpus(l, r, u_v, u_v_score):
@@ -41,7 +40,7 @@ def select_from_corpus(l, r, u_v, u_v_score):
         try:
             sv = sv + u_v[l + i]
             tr = tr + u_v_score[l + i]
-        except:
+        except Exception:
             pass
     sv = list(set(sv))
     nv = len(sv)
@@ -56,7 +55,7 @@ def select_from_corpus(l, r, u_v, u_v_score):
             ssu += [i] * len(lt)
             for j in range(len(lt)):
                 ssv.append(map_uid_idx[lt[j]])
-        except:
+        except Exception:
             pass
     return nv, np.array(sv), tr, ssu, ssv
 
@@ -69,20 +68,11 @@ def main():
             os.path.join(conf.data_dir, 'ml-1m.zip'))
 
     # set configurations and hyper parameters
-    N_train = train_data.shape[0]
-    N_test = test_data.shape[0]
-    N_valid = valid_data.shape[0]
     D = 30
     batch_size = 100000
-    test_batch_size = 100000
-    valid_batch_size = 100000
     K = 8
-    num_steps = 500
-    test_freq = 10
-    valid_freq = 10
-    train_iters = (N_train + batch_size - 1) // batch_size
-    valid_iters = (N_valid + valid_batch_size - 1) // valid_batch_size
-    test_iters = (N_test + test_batch_size - 1) // test_batch_size
+    n_epochs = 500
+    eval_freq = 10
 
     # paralleled
     chunk_size = 50
@@ -92,10 +82,10 @@ def main():
     M *= chunk_size
 
     # Selection
-    select_u = tf.placeholder(tf.int32, shape=[None], name='s_u')
-    select_v = tf.placeholder(tf.int32, shape=[None], name='s_v')
-    subselect_u = tf.placeholder(tf.int32, shape=[None], name='ss_u')
-    subselect_v = tf.placeholder(tf.int32, shape=[None], name='ss_v')
+    neighbor_u = tf.placeholder(tf.int32, shape=[None], name="neighbor_u")
+    neighbor_v = tf.placeholder(tf.int32, shape=[None], name="neighbor_v")
+    select_u = tf.placeholder(tf.int32, shape=[None], name="select_u")
+    select_v = tf.placeholder(tf.int32, shape=[None], name="select_v")
     alpha_u = 1.0
     alpha_v = 1.0
     alpha_pred = 0.2 / 4.0
@@ -116,36 +106,25 @@ def main():
     U = tf.concat(Us, axis=1)
     V = tf.concat(Vs, axis=1)
 
-    # Define models for prediction
-    true_rating = tf.placeholder(tf.float32, shape=[None],
-                                 name='true_rating')
-    normalized_rating = (true_rating - 1.0) / 4.0
-    _, pred_rating = pmf({'u': U, 'v': V}, N, M, D, K,
-                         select_u, select_v, alpha_u, alpha_v, alpha_pred)
-    pred_rating = tf.reduce_mean(pred_rating, axis=0)
-    error = pred_rating - normalized_rating
-    rmse = tf.sqrt(tf.reduce_mean(error * error)) * 4
-
-    # Define models for HMC
     n = tf.placeholder(tf.int32, shape=[], name='n')
     m = tf.placeholder(tf.int32, shape=[], name='m')
+    meta_model = pmf(n, m, D, K, select_u, select_v, alpha_u, alpha_v,
+                     alpha_pred)
 
-    def log_joint(observed):
-        model, _ = pmf(observed, n, m, D, K, subselect_u,
-                       subselect_v, alpha_u, alpha_v, alpha_pred)
-        log_pu, log_pv = model.local_log_prob(['u', 'v'])    # [K, N], [K, M]
-        log_pr = model.local_log_prob('r')                   # [K, batch]
-        log_pu = tf.reduce_sum(log_pu, axis=1)
-        log_pv = tf.reduce_sum(log_pv, axis=1)
-        log_pr = tf.reduce_sum(log_pr, axis=1)
-        return log_pu + log_pv + log_pr
+    # prediction
+    true_rating = tf.placeholder(tf.float32, shape=[None], name='true_rating')
+    normalized_rating = (true_rating - 1.0) / 4.0
+    pred_rating = meta_model.observe(u=U, v=V)["r"]
+    pred_rating = tf.reduce_mean(pred_rating, axis=0)
+    rmse = tf.sqrt(
+        tf.reduce_mean(tf.square(pred_rating - normalized_rating))) * 4
 
     hmc_u = zs.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
                    target_acceptance_rate=0.9)
     hmc_v = zs.HMC(step_size=1e-3, n_leapfrogs=10, adapt_step_size=None,
                    target_acceptance_rate=0.9)
-    target_u = tf.gather(U, select_u, axis=1)
-    target_v = tf.gather(V, select_v, axis=1)
+    target_u = tf.gather(U, neighbor_u, axis=1)
+    target_v = tf.gather(V, neighbor_v, axis=1)
 
     candidate_sample_u = tf.get_variable(
         'cand_sample_chunk_u', shape=[K, chunk_size, D],
@@ -153,14 +132,25 @@ def main():
     candidate_sample_v = tf.get_variable(
         'cand_sample_chunk_v', shape=[K, chunk_size, D],
         initializer=tf.random_normal_initializer(0, 0.1), trainable=True)
+
+    def log_joint(bn):
+        log_pu, log_pv = bn.cond_log_prob(['u', 'v'])    # [K, N], [K, M]
+        log_pr = bn.cond_log_prob('r')                   # [K, batch]
+        log_pu = tf.reduce_sum(log_pu, axis=-1)
+        log_pv = tf.reduce_sum(log_pv, axis=-1)
+        log_pr = tf.reduce_sum(log_pr, axis=-1)
+        return log_pu + log_pv + log_pr
+
+    meta_model.log_joint = log_joint
+
     sample_u_op, sample_u_info = hmc_u.sample(
-        log_joint,
-        {'r': normalized_rating, 'v': target_v},
-        {'u': candidate_sample_u})
+        meta_model,
+        {"r": normalized_rating, "v": target_v},
+        {"u": candidate_sample_u})
     sample_v_op, sample_v_info = hmc_v.sample(
-        log_joint,
-        {'r': normalized_rating, 'u': target_u},
-        {'v': candidate_sample_v})
+        meta_model,
+        {"r": normalized_rating, "u": target_u},
+        {"v": candidate_sample_v})
 
     candidate_idx_u = tf.placeholder(tf.int32, shape=[chunk_size],
                                      name='cand_u_chunk')
@@ -183,7 +173,7 @@ def main():
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        for step in range(1, num_steps + 1):
+        for epoch in range(1, n_epochs + 1):
             epoch_time = -time.time()
             for i in range(N // chunk_size):
                 nv, sv, tr, ssu, ssv = select_from_corpus(i * chunk_size,
@@ -194,10 +184,10 @@ def main():
                              feed_dict={
                                  candidate_idx_u: list(range(
                                      i * chunk_size, (i + 1) * chunk_size))})
-                _ = sess.run(sample_u_op, feed_dict={select_v: sv,
+                _ = sess.run(sample_u_op, feed_dict={neighbor_v: sv,
                                                      true_rating: tr,
-                                                     subselect_u: ssu,
-                                                     subselect_v: ssv,
+                                                     select_u: ssu,
+                                                     select_v: ssv,
                                                      n: chunk_size,
                                                      m: nv})
                 _ = sess.run(trans_us_cand[i])
@@ -210,68 +200,41 @@ def main():
                              feed_dict={
                                  candidate_idx_v: list(range(
                                      i * chunk_size, (i + 1) * chunk_size))})
-                _ = sess.run(sample_v_op, feed_dict={select_u: su,
+                _ = sess.run(sample_v_op, feed_dict={neighbor_u: su,
                                                      true_rating: tr,
-                                                     subselect_u: ssu,
-                                                     subselect_v: ssv,
+                                                     select_u: ssu,
+                                                     select_v: ssv,
                                                      n: nu,
                                                      m: chunk_size})
                 _ = sess.run(trans_vs_cand[i])
             epoch_time += time.time()
+            print("Epoch {}: {:.1f}s".format(epoch, epoch_time))
 
-            train_rmse = []
-            train_sizes = []
-            time_train = -time.time()
-            for t in range(train_iters):
-                ed_pos = min((t + 1) * batch_size, N_train + 1)
-                su = train_data[t * batch_size:ed_pos, 0]
-                sv = train_data[t * batch_size:ed_pos, 1]
-                tr = train_data[t * batch_size:ed_pos, 2]
-                re = sess.run(rmse, feed_dict={select_u: su, select_v: sv,
-                                               true_rating: tr})
-                train_rmse.append(re)
-                train_sizes.append(ed_pos - t * batch_size)
-            time_train += time.time()
-
-            print('Step {}({:.1f}s): rmse ({:.1f}s) = {}'
-                  .format(step, epoch_time, time_train,
-                          average_rmse_over_batches(train_rmse, train_sizes)))
-
-            if step % valid_freq == 0:
-                valid_rmse = []
-                valid_sizes = []
-                time_valid = -time.time()
-                for t in range(valid_iters):
-                    ed_pos = min((t + 1) * valid_batch_size, N_test + 1)
-                    su = valid_data[t * valid_batch_size:ed_pos, 0]
-                    sv = valid_data[t * valid_batch_size:ed_pos, 1]
-                    tr = valid_data[t * valid_batch_size:ed_pos, 2]
-                    re = sess.run(rmse, feed_dict={select_u: su, select_v: sv,
+            def _eval(phase, data, batch_size):
+                rmses = []
+                sizes = []
+                time_eval = -time.time()
+                n_iters = (data.shape[0] + batch_size - 1) // batch_size
+                for t in range(n_iters):
+                    su = data[t * batch_size:(t + 1) * batch_size, 0]
+                    sv = data[t * batch_size:(t + 1) * batch_size, 1]
+                    tr = data[t * batch_size:(t + 1) * batch_size, 2]
+                    re = sess.run(rmse, feed_dict={select_u: su,
+                                                   select_v: sv,
+                                                   n: N,
+                                                   m: M,
                                                    true_rating: tr})
-                    valid_rmse.append(re)
-                    valid_sizes.append(ed_pos - t * batch_size)
-                time_valid += time.time()
-                print('>>> VALID ({:.1f}s)'.format(time_valid))
-                print('>> Valid rmse = {}'.format(
-                    average_rmse_over_batches(valid_rmse, valid_sizes)))
+                    rmses.append(re)
+                    sizes.append(tr.shape[0])
+                time_eval += time.time()
+                print('>>> {} ({:.1f}s): rmse = {}'.format(
+                    phase, time_eval, average_rmse_over_batches(rmses, sizes)))
 
-            if step % test_freq == 0:
-                test_rmse = []
-                test_sizes = []
-                time_test = -time.time()
-                for t in range(test_iters):
-                    ed_pos = min((t + 1) * test_batch_size, N_test + 1)
-                    su = test_data[t * test_batch_size:ed_pos, 0]
-                    sv = test_data[t * test_batch_size:ed_pos, 1]
-                    tr = test_data[t * test_batch_size:ed_pos, 2]
-                    re = sess.run(rmse, feed_dict={select_u: su, select_v: sv,
-                                                   true_rating: tr})
-                    test_rmse.append(re)
-                    test_sizes.append(ed_pos - t * batch_size)
-                time_test += time.time()
-                print('>>> TEST ({:.1f}s)'.format(time_test))
-                print('>> Test rmse = {}'.format(
-                    average_rmse_over_batches(test_rmse, test_sizes)))
+            _eval("Train", train_data, batch_size)
+
+            if epoch % eval_freq == 0:
+                _eval("Validation", valid_data, batch_size)
+                _eval("Test", test_data, batch_size)
 
 
 if __name__ == "__main__":
