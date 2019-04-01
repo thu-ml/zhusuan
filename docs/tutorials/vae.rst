@@ -33,7 +33,7 @@ In ZhuSuan, a model is constructed using
 building of directed graphical models using both Tensorflow operations and
 ZhuSuan's :class:`~zhusuan.framework.bn.StochasticTensor` s.
 
-To construct a :class:`~zhusuan.framework.bn.BayesianNet` in this way::
+Construct a :class:`~zhusuan.framework.bn.BayesianNet` in this way::
 
     import zhusuan as zs
 
@@ -91,7 +91,7 @@ likelihood when evaluating the probability of an image::
 
 .. note::
 
-    The :class:`~zhusuan.distribution.univariate.Bernoulli` distribution
+    The :class:`~zhusuan.distributions.univariate.Bernoulli` distribution
     accepts log-odds of probabilities instead of probabilities.
     This is designed for numeric stability reasons. Similar tricks are used in
     :class:`~zhusuan.distributions.univariate.Categorical` , which accepts log-probabilities instead of probabilities.
@@ -137,7 +137,7 @@ more than once. To achieve this, ZhuSuan provides a new class called :class:`~zh
 to represent the meta version of BayesianNet which can repeatly produce 
 BayesianNet objects by accepting different observations. 
 The recommended way to construct a MetaBayesianNet is by wrapping the function 
-with an decorator(more details in :ref:`bayesian-net`)::
+with an decorator (more details in :ref:`bayesian-net`)::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
     def build_gen(x_dim, z_dim, n, n_particles=1):
@@ -253,7 +253,7 @@ is also parameterized by a neural network (:math:`g`), which accepts input
     q_{\phi}(z|x) = \mathrm{N}(z|\mu_z(x;\phi), \sigma^2_z(x;\phi))
 
 In ZhuSuan, the variational posterior can also be defined as a
-:class:`~zhusuan.model.base.BayesianNet`. The code for above definition is::
+:class:`~zhusuan.framework.bn.BayesianNet` . The code for above definition is::
 
     @zs.reuse_variables(scope="q_net")
     def build_q_net(x, z_dim, n_z_per_x):
@@ -287,7 +287,7 @@ estimator from the original paper of variational autoencoders
 :cite:`vae-kingma2013auto`. This estimator takes benefits of a clever
 reparameterization trick to greatly reduce the variance when estimating the
 gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
-:func:`~sgvb` of the output of :func:`~zhusuan.variational.elbo`.
+:func:`~sgvb` of the output of :func:`~zhusuan.variational.exclusive_kl.elbo`.
 The code for this part is::
 
     x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
@@ -358,7 +358,7 @@ Generate Images
 What we've done above is to define and learn the model. To see how it
 performs, we would like to let it generate some images in the learning process.
 For the generating process, we remove the observation noise, i.e.,
-the ``Bernoulli`` StochasticTensor. 
+the :class:`~zhusuan.distributions.univariate.Bernoulli` distribution. 
 We do this by using the direct output of the nueral network (``x_logits``)::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
