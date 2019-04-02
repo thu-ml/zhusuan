@@ -26,7 +26,7 @@ __all__ = [
 
 class StochasticTensor(TensorArithmeticMixin):
     """
-    The :class:`StochasticTensor` class represents the stochastic nodes in
+    The :class:`StochasticTensor` class represents the stochastic nodes in a
     :class:`BayesianNet`.
 
     We can use any distribution available in :mod:`zhusuan.distributions` to
@@ -35,7 +35,7 @@ class StochasticTensor(TensorArithmeticMixin):
         bn = zs.BayesianNet()
         x = bn.normal("x", 0., std=1.)
 
-    will construct a stochastic node in ``bn`` with the
+    will build a stochastic node in ``bn`` with the
     :class:`~zhusuan.distributions.univariate.Normal` distribution. The
     returned ``x`` will be a :class:`StochasticTensor`. The second line is
     equivalent to::
@@ -45,7 +45,7 @@ class StochasticTensor(TensorArithmeticMixin):
 
     :class:`StochasticTensor` instances are Tensor-like, which means that
     they can be passed into any Tensorflow operations. This makes it easy
-    to build Bayesian networks by mixing stochastic nodes and tensorflow
+    to build Bayesian networks by mixing stochastic nodes and Tensorflow
     primitives.
 
     .. seealso::
@@ -113,6 +113,8 @@ class StochasticTensor(TensorArithmeticMixin):
     def bn(self):
         """
         The :class:`BayesianNet` where the :class:`StochasticTensor` lives.
+
+        :return: A :class:`BayesianNet` instance.
         """
         return self._bn
 
@@ -120,6 +122,8 @@ class StochasticTensor(TensorArithmeticMixin):
     def name(self):
         """
         The name of the :class:`StochasticTensor`.
+
+        :return: A string.
         """
         return self._name
 
@@ -127,22 +131,36 @@ class StochasticTensor(TensorArithmeticMixin):
     def dtype(self):
         """
         The sample type of the :class:`StochasticTensor`.
+
+        :return: A ``DType`` instance.
         """
         return self._dtype
 
     @property
     def dist(self):
         """
-        The :class:`~zhusuan.distributions.base.Distribution` which we sample
-        from.
+         The distribution followed by the :class:`StochasticTensor`.
+
+        :return: A :class:`~zhusuan.distributions.base.Distribution` instance.
         """
         return self._dist
 
     def is_observed(self):
+        """
+        Whether the :class:`StochasticTensor` is observed or not.
+
+        :return: A bool.
+        """
         return self._observation is not None
 
     @property
     def tensor(self):
+        """
+        The value of this :class:`StochasticTensor`. If it is observed, then
+        the observation is returned, otherwise samples are returned.
+
+        :return: A Tensor.
+        """
         if self._observation is not None:
             return self._observation
         elif not hasattr(self, "_samples"):
@@ -152,7 +170,7 @@ class StochasticTensor(TensorArithmeticMixin):
     @property
     def shape(self):
         """
-        Return the static shape of `self.tensor`.
+        Return the static shape of this :class:`StochasticTensor`.
 
         :return: A ``TensorShape`` instance.
         """
@@ -168,6 +186,12 @@ class StochasticTensor(TensorArithmeticMixin):
 
     @property
     def cond_log_p(self):
+        """
+        The conditional log probability of the :class:`StochasticTensor`,
+        evaluated at its current value (given by :attr:`tensor`).
+
+        :return: A Tensor.
+        """
         if not hasattr(self, "_cond_log_p"):
             self._cond_log_p = self._dist.log_prob(self.tensor)
         return self._cond_log_p
@@ -186,19 +210,50 @@ class StochasticTensor(TensorArithmeticMixin):
 
     @property
     def net(self):
+        """
+        (Deprecated) The :class:`BayesianNet` where the
+        :class:`StochasticTensor` lives.
+
+        :return: A :class:`BayesianNet` instance.
+        """
         return self._bn
 
     @property
     def distribution(self):
+        """
+        (Deprecated) The distribution followed by the :class:`StochasticTensor`.
+
+        :return: A :class:`~zhusuan.distributions.base.Distribution` instance.
+        """
         return self._dist
 
     def sample(self, n_samples):
+        """
+        (Deprecated) Sample from the underlying distribution.
+
+        :param n_samples: A 0-D `int32` Tensor. The number of samples.
+        :return: A Tensor.
+        """
         return self._dist.sample(n_samples)
 
     def log_prob(self, given):
+        """
+        (Deprecated) Compute the log probability density (mass) function of
+        the underlying distribution at the `given` value.
+
+        :param given: A Tensor.
+        :return: A Tensor. The log probability value.
+        """
         return self._dist.log_prob(given)
 
     def prob(self, given):
+        """
+        (Deprecated) Compute the probability density (mass) function of
+        the underlying distribution at the `given` value.
+
+        :param given: A Tensor.
+        :return: A Tensor. The probability value.
+        """
         return self._dist.prob(given)
 
 
