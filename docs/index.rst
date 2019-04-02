@@ -68,13 +68,14 @@ If no error occurs, you've successfully installed ZhuSuan.
    :caption: API Docs
 
    api/zhusuan.distributions
-   api/zhusuan.model
+   api/zhusuan.framework
    api/zhusuan.variational
    api/zhusuan.hmc
    api/zhusuan.evaluation
    api/zhusuan.transform
    api/zhusuan.diagnostics
    api/zhusuan.utils
+   api/zhusuan.legacy
 
 .. toctree::
    :maxdepth: 1

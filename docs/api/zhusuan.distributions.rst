@@ -32,15 +32,6 @@ Multivariate distributions
     :show-inheritance:
     :inherited-members:
 
-Special distributions
----------------------
-
-.. automodule:: zhusuan.distributions.special
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :inherited-members:
-
 Distribution utils
 ------------------
 

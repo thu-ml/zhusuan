@@ -1,23 +1,23 @@
-zhusuan\.model 
+zhusuan\.framework 
 ======================
 
-.. automodule:: zhusuan.model
+.. automodule:: zhusuan.framework
     :members:
     :undoc-members:
     :show-inheritance:
 
-Base classes
+BayesianNet
 ------------
 
-.. automodule:: zhusuan.model.base
+.. automodule:: zhusuan.framework.bn
     :members:
     :undoc-members:
     :show-inheritance:
 
-StochasticTensors
+MetaBayesianNet
 -----------------
 
-.. automodule:: zhusuan.model.stochastic
+.. automodule:: zhusuan.framework.meta_bn
     :members:
     :undoc-members:
     :show-inheritance:
@@ -26,7 +26,7 @@ StochasticTensors
 Utils
 -----
 
-.. automodule:: zhusuan.model.utils
+.. automodule:: zhusuan.framework.utils
     :members:
     :undoc-members:
     :show-inheritance:
