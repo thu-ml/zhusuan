@@ -3,11 +3,11 @@
 
 from __future__ import absolute_import
 from __future__ import division
-from copy import copy
-from collections import namedtuple
 
 import six
 from six.moves import zip
+from copy import copy
+from collections import namedtuple
 import tensorflow as tf
 
 from zhusuan.utils import merge_dicts
@@ -29,7 +29,7 @@ class SGMCMC:
     def __init__(self):
         self.t = tf.Variable(0, name="t", trainable=False, dtype=tf.int32)
 
-    def sample(self, meta_model, observed, latent, record_full=None, batch_size=None, split_k=None):
+    def make_get_gradient(self, meta_model, observed, latent):
         # TODO: remove direct; use tf.greater
         if callable(meta_model):
             # TODO: raise warning
@@ -41,93 +41,36 @@ class SGMCMC:
 
         self._observed = observed
         self._latent = latent
-        if batch_size is not None and split_k is None:
-            split_k = list(observed.keys())
 
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
         for i, v in enumerate(latent_v):
             if not isinstance(v, tf.Variable):
                 raise TypeError("latent['{}'] is not a tensorflow Variable."
                                 .format(latent_k[i]))
-        qs = copy(latent_v)
-        self._define_variables(qs)
 
         def _get_log_posterior(var_list, observed):
             joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
             return self._log_joint(joint_obs)
 
-        def _get_gradient_direct(var_list, observed):
+        def _get_gradient(var_list, observed):
             return tf.gradients(_get_log_posterior(var_list, observed), var_list)
 
-        def _get_gradient(var_list, direct=False):
-            if batch_size is None or len(split_k) == 0 or direct:
-                return _get_gradient_direct(var_list, observed)
-            else:
-                obs_size = tf.shape(observed[split_k[0]])[0]
+        self._default_get_gradient = lambda var_list: _get_gradient(var_list, observed)
+        self._latent_k = latent_k
+        self._var_list = latent_v
+        return self._default_get_gradient, _get_gradient, latent_v
 
-                def _get_gradient_sum(var_list):
-                    other = copy(observed)
-                    for k in split_k:
-                        del other[k]
-                    slice_v = [tf.convert_to_tensor(observed[k]) for k in split_k]
-
-                    def cond(i, total_gradient):
-                        iters = (obs_size-1) // batch_size + 1
-                        return tf.less(i, iters)
-
-                    def body(i, total_gradient):
-                        assigned = [v[i * batch_size:(i + 1) * batch_size] for v in slice_v]
-                        obs_body = merge_dicts(dict(zip(split_k, assigned)), other)
-                        true_batch_size = tf.shape(slice_v[0][i * batch_size:(i + 1) * batch_size])[0]
-                        discount = tf.cast(true_batch_size, tf.float32) / tf.cast(obs_size, tf.float32)
-                        total_gradient = [old + this * discount
-                            for (old, this) in zip(total_gradient, _get_gradient_direct(var_list, obs_body))]
-                        return i+1, total_gradient
-
-                    i = tf.constant(0)
-                    gradients = [tf.zeros_like(grad) for grad in _get_gradient_direct(var_list, observed)]
-
-                    return tf.while_loop(cond, body, [i, gradients], parallel_iterations=1)[1]
-
-                return _get_gradient_sum(var_list)
-                # return tf.cond(tf.greater(obs_size, batch_size), lambda: _get_gradient_sum(var_list),
-                               # lambda: _get_gradient_direct(var_list, observed))
-
-        if record_full is not None:
-            self._old_values = [tf.Variable(tf.zeros_like(q)) for q in qs]
-            self._full_gradients = [tf.Variable(tf.zeros_like(grad)) for grad in _get_gradient_direct(qs, observed)]
-
-        def get_gradient(var_list):
-            if record_full is None:
-                return _get_gradient(var_list)
-            else:
-                def collect_full_gradients():
-                    # Remark: Calculating full gradients need a large memory, so we can calculate batchly and average them.
-                    assign_grads = [full_grad.assign(grad) for (full_grad, grad) in
-                        zip(self._full_gradients, _get_gradient(var_list))]
-                    assign_params = [old.assign(new) for (old, new) in zip(self._old_values, var_list)]
-                    with tf.control_dependencies([tf.group(*assign_grads), tf.group(*assign_params)]):
-                        return [tf.identity(grad) for grad in self._full_gradients]
-
-                def estimate_gradients():
-                    # Remark: Objective function should not change except for random batching
-                    now_batch_gradients = _get_gradient(var_list, direct=True)
-                    old_batch_gradients = _get_gradient(self._old_values, direct=True)
-                    return [now - old + full for (now, old, full) in
-                        zip(now_batch_gradients, old_batch_gradients, self._full_gradients)]
-                
-                grad = tf.cond(record_full, collect_full_gradients, estimate_gradients)
-                if len(qs) != 1:
-                    return grad
-                else:
-                    return [grad]
-
-        update_ops, new_qs, infos = self._update(qs, get_gradient)
+    def sample(self, grad_func=None):
+        qs = copy(self._var_list)
+        self._define_variables(qs)
+        if grad_func is None:
+            grad_func = self._default_get_gradient
+        update_ops, new_qs, infos = self._update(qs, grad_func)
 
         with tf.control_dependencies([self.t.assign_add(1)]):
             sample_op = tf.group(*update_ops)
-        new_samples = dict(zip(latent_k, new_qs))
-        sample_info = dict(zip(latent_k, infos))
+        new_samples = dict(zip(self._latent_k, new_qs))
+        sample_info = dict(zip(self._latent_k, infos))
         return sample_op, new_samples, sample_info
 
     def _update(self, qs, grad_func):
