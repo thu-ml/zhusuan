@@ -507,7 +507,7 @@ class BayesianNet(_BayesianNet, Context):
 
     .. seealso::
 
-        For more details and an example, please refer to
+        For more details and examples, please refer to
         :doc:`/tutorials/concepts`.
 
     :param observed: A dictionary of (string, Tensor) pairs, which maps from

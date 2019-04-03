@@ -95,7 +95,7 @@ def reuse_variables(scope):
 
         This decorator is internally implemented by tensorflow's
         :func:`make_template` function. See `its doc
-        <https://www.tensorflow.org/api_docs/python/tf/make_template>_`
+        <https://www.tensorflow.org/api_docs/python/tf/make_template>`_
         for requirements on the target function.
 
     :param scope: A string. The scope name passed to tensorflow
@@ -106,5 +106,8 @@ def reuse_variables(scope):
 
 
 def reuse(scope):
+    """
+    (Deprecated) Alias of :func:`reuse_variables`.
+    """
     # TODO: raise warning
     return reuse_variables(scope)
