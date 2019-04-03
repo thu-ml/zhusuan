@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 
-class SGMCMC:
+class SGMCMC(object):
     """
     Base class for stochastic gradient MCMC algorithms.
     """
