@@ -49,13 +49,6 @@ class Normal(StochasticTensor):
     The class of univariate Normal `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
-    .. warning::
-
-        The order of arguments `logstd`/`std` has changed to `std`/`logstd`
-        since 0.3.1. Please use named arguments:
-        ``Normal(name, mean, std=..., ...)``
-        or ``Normal(name, mean, logstd=..., ...)``.
-
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
     :param _sentinel: Used to prevent positional parameters. Internal,
@@ -109,13 +102,6 @@ class FoldNormal(StochasticTensor):
     """
     The class of univariate FoldNormal `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
-
-    .. warning::
-
-        The order of arguments `logstd`/`std` has changed to `std`/`logstd`
-        since 0.3.1. Please use named arguments:
-        ``FoldNormal(name, mean, std=..., ...)`` or
-        ``FoldNormal(name, mean, logstd=..., ...)``.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.

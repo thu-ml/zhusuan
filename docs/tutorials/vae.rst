@@ -1,5 +1,5 @@
-Variational Autoencoders: Step by Step
-======================================
+Variational Autoencoders
+========================
 
 **Variational AutoEncoders** (VAE) :cite:`vae-kingma2013auto` is one of the
 most widely used deep generative models. In this tutorial, we show how to
@@ -25,7 +25,7 @@ is added to the output to get a tractable likelihood for the model. For
 binarized MNIST, the observation noise is chosen to be Bernoulli, with
 its parameters output by the neural network.
 
-Build the Model
+Build the model
 ---------------
 
 In ZhuSuan, a model is constructed using
@@ -110,7 +110,7 @@ Putting together, the code for constructing a VAE is::
     bn.output("x_mean", tf.sigmoid(x_logits))
     bn.bernoulli("x", x_logits, group_ndims=1)
 
-Reuse the Model
+Reuse the model
 ---------------
 
 Unlike common deep learning models (MLP, CNN, etc.), which is for supervised
@@ -165,7 +165,7 @@ them thereafter, as shown in the following code::
         ...
         return bn
 
-Inference and Learning
+Inference and learning
 ----------------------
 
 Having built the model, the next step is to learn it from binarized MNIST
@@ -352,7 +352,7 @@ learning::
     optimizer = tf.train.AdamOptimizer(0.001)
     infer_op = optimizer.minimize(cost)
 
-Generate Images
+Generate images
 ---------------
 
 What we've done above is to define and learn the model. To see how it
@@ -383,7 +383,7 @@ This is done by::
     
     x_gen = tf.reshape(meta_model.observe()["x_mean"], [-1, 28, 28, 1])
 
-Run Gradient Descent
+Run gradient descent
 --------------------
 
 Now, everything is good before a run. So we could just open the Tensorflow

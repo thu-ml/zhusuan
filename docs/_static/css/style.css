@@ -12,6 +12,10 @@ h1, h2, .rst-content .toctree-wrapper p.caption, h3, h4, h5, h6, legend, p.capti
     background-color: #fff;
 }
 
+.wy-nav-content {
+    max-width: 1200px !important;
+}
+
 .wy-nav-content-wrap, .wy-menu li.current > a  {
     background-color: #fff;
 }
@@ -23,7 +27,7 @@ h1, h2, .rst-content .toctree-wrapper p.caption, h3, h4, h5, h6, legend, p.capti
 
 @media screen and (min-width: 1400px) {
     .wy-nav-content-wrap {
-        background-color: rgba(0, 0, 0, 0.0470588);
+        background-color: #fff;
     }
 
     .wy-nav-content {

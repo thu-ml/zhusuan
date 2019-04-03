@@ -50,7 +50,7 @@ bayesian neural network is as follows.
     :align: center
     :width: 25%
 
-Build the Model
+Build the model
 ---------------
 
 Following the forwarding process, first we need standard Normal
@@ -349,7 +349,7 @@ log term. All together, the code for evaluation is::
     log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - \
         tf.log(std_y_train)
 
-Run Gradient Descent
+Run gradient descent
 --------------------
 
 Again, everything is good before a run. Now add the following codes to
