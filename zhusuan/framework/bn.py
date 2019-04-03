@@ -50,7 +50,7 @@ class StochasticTensor(TensorArithmeticMixin):
 
     .. seealso::
 
-        :doc:`/tutorials/concepts`
+        For more information, please refer to :doc:`/tutorials/concepts`.
 
     :param bn: A :class:`BayesianNet`.
     :param name: A string. The name of the :class:`StochasticTensor`. Must be
@@ -400,10 +400,13 @@ class _BayesianNet(object):
 
     def cond_log_prob(self, name_or_names):
         """
+        The conditional log probabilities of stochastic nodes,
+        evaluated at their current values (given by
+        :attr:`StochasticTensor.tensor`).
 
-
-        :param name_or_names:
-        :return:
+        :param name_or_names: A string or a list of strings. Name(s) of the
+            stochastic nodes.
+        :return: A Tensor or a list of Tensors.
         """
         name_or_names = self._check_names_exist(name_or_names,
                                                 only_stochastic=True)
@@ -455,86 +458,60 @@ class _BayesianNet(object):
 
 class BayesianNet(_BayesianNet, Context):
     """
-    The :class:`BayesianNet` class is a context class supporting model
-    construction in ZhuSuan as Bayesian Networks (Directed graphical models).
-    A `BayesianNet` represents a DAG with two kinds of nodes:
+    The :class:`BayesianNet` class provides a convenient way to construct
+    Bayesian networks, i.e., directed graphical models.
 
-    * Deterministic nodes, made up of any tensorflow operations.
-    * Stochastic nodes, constructed by :class:`StochasticTensor`.
+    To start, we create a :class:`BayesianNet` instance::
 
-    To start a :class:`BayesianNet` context::
+        bn = zs.BayesianNet()
 
-        import zhusuan as zs
-        with zs.BayesianNet() as model:
-            # build the model
+    A :class:`BayesianNet` keeps two kinds of nodes
 
-    A Bayesian Linear Regression example:
-
-    .. math::
-
-        w \\sim N(0, \\alpha^2 I)
-
-        y \\sim N(w^Tx, \\beta^2)
+    * deterministic nodes: they are just Tensors, usually the outputs of
+      Tensorflow operations.
+    * stochastic nodes: they are random variables in graphical models, and can
+      be constructed like
 
     ::
 
-        import tensorflow as tf
-        import zhusuan as zs
-        def bayesian_linear_regression(x, alpha, beta):
-            with zs.BayesianNet() as model:
-                w = zs.Normal('w', mean=0., logstd=tf.log(alpha))
-                y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
-                y = zs.Normal('y', y_mean, tf.log(beta))
-            return model
+        w = bn.normal("w", 0., std=alpha)
+
+    Here ``w`` is a :class:`StochasticTensor` that follows the
+    :class:`~zhusuan.distributions.univariate.Normal` distribution. For any
+    distribution available in :mod:`zhusuan.distributions`, we can find
+    a method of :class:`BayesianNet` for creating the corresponding stochastic
+    node. If you define your own distribution class, then there is a
+    general method :meth:`stochastic` for doing this::
+
+        dist = CustomizedDistribution()
+        w = bn.stochastic("w", dist)
 
     To observe any stochastic nodes in the network, pass a dictionary mapping
     of ``(name, Tensor)`` pairs when constructing :class:`BayesianNet`.
     This will assign observed values to corresponding
     :class:`StochasticTensor` s. For example::
 
-        def bayesian_linear_regression(observed, x, alpha, beta):
-            with zs.BayesianNet(observed=observed) as model:
-                w = zs.Normal('w', mean=0., logstd=tf.log(alpha))
-                y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
-                y = zs.Normal('y', y_mean, tf.log(beta))
-            return model
+        bn = zs.BayesianNet(observed={"w": w_obs})
 
-        model = bayesian_linear_regression({'w': w_obs}, ...)
-
-    will set ``w`` to be observed. The result is that ``y_mean`` is computed
-    from the observed value of ``w`` (``w_obs``) instead of the samples of
-    ``w``. Calling the above function with different `observed` arguments
-    instantiates :class:`BayesianNet` with different observations, which
-    is a common behaviour for probabilistic graphical models.
+    will set ``w`` to be observed.
 
     .. note::
 
         The observation passed must have the same type and shape as the
-        `StochasticTensor`.
+        :class:`StochasticTensor`.
 
-    After construction, :class:`BayesianNet` supports queries on the network::
-
-        # get samples of random variable y following generative process
-        # in the network
-        model.outputs('y')
-
-        # because w is observed in this case, its observed value will be
-        # returned
-        model.outputs('w')
-
-        # get local log probability values of w and y, which returns
-        # log p(w) and log p(y|w, x)
-        model.local_log_prob(['w', 'y'])
-
-        # query many quantities at the same time
-        model.query('w', outputs=True, local_log_prob=True)
+    A useful case is that we often need to pass different observations more
+    than once into the Bayesian network, for which we provide
+    :func:`~zhusuan.framework.meta_bn.meta_bayesian_net` decorator and another
+    abstract class :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`.
 
     .. seealso::
 
-        :doc:`/tutorials/concepts`
+        For more details and an example, please refer to
+        :doc:`/tutorials/concepts`.
 
     :param observed: A dictionary of (string, Tensor) pairs, which maps from
-        names of random variables to their observed values.
+        names of stochastic nodes to their observed values.
     """
 
     def __init__(self, observed=None):
