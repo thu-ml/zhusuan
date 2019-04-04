@@ -57,8 +57,7 @@ def conv_resnet_block(input_, out_channel, resize=False):
 def build_gen(n, x_dim, z_dim, n_particles, nf=16):
     bn = zs.BayesianNet()
     z_mean = tf.zeros([n, z_dim])
-    z = bn.normal("z", z_mean, std=1., group_ndims=1,
-                  n_samples=n_particles)
+    z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
     lx_z = tf.layers.dense(z, 7 * 7 * nf * 2, activation=tf.nn.relu)
     lx_z = tf.reshape(lx_z, [-1, 7, 7, nf * 2])
     lx_z = deconv_resnet_block(lx_z, [7, 7, nf * 2])
@@ -79,8 +78,7 @@ def build_q_net(x, z_dim, n_particles, nf=16):
     bn = zs.BayesianNet()
     lz_x = 2 * tf.to_float(x) - 1
     lz_x = tf.reshape(lz_x, [-1, 28, 28, 1])
-    lz_x = tf.layers.conv2d(lz_x, nf, 3, padding="same",
-                            activation=tf.nn.relu)
+    lz_x = tf.layers.conv2d(lz_x, nf, 3, padding="same", activation=tf.nn.relu)
     lz_x = conv_resnet_block(lz_x, nf)
     lz_x = conv_resnet_block(lz_x, nf * 2, resize=True)
     lz_x = conv_resnet_block(lz_x, nf * 2)
@@ -120,7 +118,7 @@ def main():
     variational = build_q_net(x, z_dim, n_particles)
 
     lower_bound = zs.variational.elbo(
-        meta_model, {'x': x}, variational=variational, axis=0)
+        meta_model, {"x": x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
@@ -128,7 +126,7 @@ def main():
     infer_op = optimizer.minimize(cost)
 
     # Generate images
-    x_gen = tf.reshape(meta_model.observe()['x_mean'], [-1, 28, 28, 1])
+    x_gen = tf.reshape(meta_model.observe()["x_mean"], [-1, 28, 28, 1])
 
     # Define training/evaluation parameters
     epochs = 3000

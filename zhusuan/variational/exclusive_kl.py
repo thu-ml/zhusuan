@@ -156,9 +156,9 @@ class EvidenceLowerBoundObjective(VariationalObjective):
                   decay=0.8):
         """
         Implements the score function gradient estimator for the ELBO, with
-        optional variance reduction using "baseline" or variance normalization
-        (Mnih, 2014). Also known as "REINFORCE" (Williams, 1992),
-        "NVIL" (Mnih, 2014), and "likelihood-ratio estimator" (Glynn, 1990).
+        optional variance reduction using moving mean estimate or "baseline".
+        Also known as "REINFORCE" (Williams, 1992), "NVIL" (Mnih, 2014),
+        and "likelihood-ratio estimator" (Glynn, 1990).
 
         It works for all types of latent `StochasticTensor` s.
 
@@ -185,7 +185,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
         :return: A Tensor. The surrogate cost for Tensorflow optimizers to
             minimize.
         """
-        l_signal = self.tensor
+        l_signal = self._log_joint_term() + self._entropy_term()
         baseline_cost = None
 
         if variance_reduction:
