@@ -41,8 +41,8 @@ if __name__ == "__main__":
     # x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
     x = tf.Variable(tf.random_uniform([n_chains])*10-5, trainable=False,
                     name='x')
-    sample_op, new_samples, sample_info = sgmcmc.sample(log_joint, {},
-                                                        {'x': x})
+    sgmcmc.make_get_gradient(log_joint, {}, {'x': x})
+    sample_op, new_samples, sample_info = sgmcmc.sample()
 
     # Run the inference
     with tf.Session() as sess:
