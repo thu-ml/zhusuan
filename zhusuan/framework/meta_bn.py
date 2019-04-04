@@ -92,10 +92,12 @@ class MetaBayesianNet(object):
 
     def observe(self, **kwargs):
         """
+        Construct a :class:`~zhusuan.framework.bn.BayesianNet` given
+        observations.
 
-
-        :param kwargs:
-        :return:
+        :param kwargs: A dictionary that maps from node names to their observed
+            values.
+        :return: A :class:`~zhusuan.framework.bn.BayesianNet` instance.
         """
         if (self._scope is not None) and (not self._reuse_variables):
             with tf.variable_scope(self._scope):
