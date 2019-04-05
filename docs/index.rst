@@ -6,6 +6,9 @@
 Welcome to ZhuSuan
 ==================
 
+.. image:: _static/images/index.png
+    :align: center
+
 ZhuSuan is a python probabilistic programming library for
 **Bayesian deep learning**, which conjoins the complimentary advantages of
 Bayesian methods and deep learning. ZhuSuan is built upon
@@ -37,7 +40,7 @@ run
    pip install .
 
 in the main directory. This will install ZhuSuan and its dependencies
-automatically. ZhuSuan also requires Tensorflow version 1.0 or later. Because
+automatically. ZhuSuan also requires Tensorflow version 1.13.0 or later. Because
 users should choose whether to install the cpu or gpu version of Tensorflow,
 we do not include it in the dependencies. See
 `Installing Tensorflow <https://www.tensorflow.org/install/>`_.

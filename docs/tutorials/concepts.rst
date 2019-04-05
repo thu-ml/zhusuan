@@ -1,21 +1,12 @@
 Basic Concepts in ZhuSuan
 =========================
 
-.. _dist-and-stochastic:
-
-Distribution and StochasticTensor
----------------------------------
-
-Probabilistic distributions are key components for building directed graphical
-models (Bayesian Networks). ZhuSuan provides two layers of abstraction
-for them: :class:`~zhusuan.distributions.base.Distribution` and
-:class:`~zhusuan.model.base.StochasticTensor`, which may be
-a little confusing for beginners. We make their definitions and connections
-clear here.
+.. _dist:
 
 Distribution
-^^^^^^^^^^^^
+------------
 
+Distributions are basic functionalities for building probabilistic models.
 The :class:`~zhusuan.distributions.base.Distribution` class is the base class
 for various probabilistic distributions which support batch inputs, generating
 batches of samples and evaluate probabilities at batches of given values.
@@ -25,8 +16,7 @@ The list of all available distributions can be found on these pages:
 * :mod:`univariate distributions <zhusuan.distributions.univariate>`
 * :mod:`multivariate distributions <zhusuan.distributions.multivariate>`
 
-These distributions can be accessed from ZhuSuan by (for example, a univariate
-Normal distribution)::
+We can create a univariate Normal distribution in ZhuSuan by::
 
     >>> import zhusuan as zs
     >>> a = zs.distributions.Normal(mean=0., logstd=0.)
@@ -46,7 +36,7 @@ The first additional axis is omitted only when passed `n_samples` is None
 non-batch value shape of the distribution. For a univariate distribution,
 its ``value_shape`` is [].
 
-Example of univariate distributions
+An example of univariate distributions
 (:class:`~zhusuan.distributions.univariate.Normal`)::
 
     >>> import tensorflow as tf
@@ -69,7 +59,7 @@ Example of univariate distributions
     >>> tf.shape(b.sample(10)).eval()
     array([10,  2,  2], dtype=int32)
 
-Example of multivariate distributions
+and an example of multivariate distributions
 (:class:`~zhusuan.distributions.multivariate.OnehotCategorical`)::
 
     >>> c = zs.distributions.OnehotCategorical([[0., 1., -1.],
@@ -99,7 +89,7 @@ For example, ``Normal(..., group_ndims=1)`` will
 set the last axis of its :attr:`~.Distribution.batch_shape` to a single event,
 i.e., a multivariate Normal with identity covariance matrix.
 
-Log probability density (mass) function can be evaluated by passing given
+The log probability density (mass) function can be evaluated by passing given
 values to :meth:`~zhusuan.distributions.base.Distribution.log_prob` method of
 distribution objects.
 In that case, the given Tensor should be
@@ -118,75 +108,71 @@ Tensor has shape ``(... + )batch_shape[:-group_ndims]``. For example::
     >>> tf.shape(e.log_prob(tf.zeros([5, 1, 1, 3]))).eval()
     array([5, 2], dtype=int32)
 
-StochasticTensor
-^^^^^^^^^^^^^^^^
-
-While :class:`~zhusuan.distributions.base.Distribution` provides the basic
-functionality for probabilistic distributions. Directly building computation
-graph with them is still painful because they are not aware of any inner
-reusability as stochastic nodes in Bayesian Networks: Once you have sampled
-from a distribution, there is no way to reuse the downroot graph when you
-want to observe it.
-
-To address this challenge, ZhuSuan provides another abstraction built upon
-distributions. That's :class:`~zhusuan.model.base.StochasticTensor`. For all
-distributions available in :mod:`zhusuan.distributions` there is a
-corresponding :class:`~zhusuan.model.base.StochasticTensor`, which can be
-accessed by ``zs.Normal`` (for example, a univariate
-:class:`~zhusuan.model.stochastic.Normal` StochasticTensor).
-Their list is on :mod:`this page <zhusuan.model.stochastic>`.
-
-:class:`~zhusuan.model.base.StochasticTensor` can only be constructed under
-:class:`~zhusuan.model.base.BayesianNet` context.
-Their instances are Tensor-like, which enables transparent building of Bayesian
-Networks using tensorflow primitives. See the :ref:`bayesian-net` section for
-examples of usage.
-
-.. Note::
-
-    Use ``zs.Normal`` when you want
-    :class:`~zhusuan.model.base.StochasticTensor` and use
-    ``zs.distributions.Normal`` when you want
-    :class:`~zhusuan.distributions.base.Distribution`.
-
 .. _bayesian-net:
 
 BayesianNet
 -----------
 
-The :class:`~zhusuan.model.base.BayesianNet` class is a context class
-supporting model construction in ZhuSuan as Bayesian Networks (Directed
-graphical models). A :class:`~zhusuan.model.base.BayesianNet` represents a DAG
-with two kinds of nodes:
-
-* Deterministic nodes, made up of any tensorflow operations.
-* Stochastic nodes, constructed by
-  :class:`~zhusuan.model.base.StochasticTensor`.
-
-To start a :class:`~zhusuan.model.base.BayesianNet` context::
-
-    import zhusuan as zs
-    with zs.BayesianNet() as model:
-        # build the model
-
-A Bayesian Linear Regression example:
+In ZhuSuan we support building probabilistic models as Bayesian networks, i.e.,
+directed graphical models. We use a simple Bayesian linear regression example
+to illustrate this. The generative process of the model is
 
 .. math::
 
     w \sim N(0, \alpha^2 I)
 
-    y \sim N(w^Tx, \beta^2)
+    y \sim N(w^\top x, \beta^2)
+
+where :math:`x` denotes the input feature in the linear regression. We apply a
+Bayesian treatment and assume a Normal prior distribution of the regression
+weights :math:`w`.
+
+To define the model, the first step is to construct a
+:class:`~zhusuan.framework.bn.BayesianNet` instance::
+
+    bn = zs.BayesianNet()
+
+A Bayesian network describes the dependency structure of the joint
+distribution over a set of random variables as directed graphs. To support
+this, a :class:`~zhusuan.framework.bn.BayesianNet` instance can keep two kinds
+of nodes:
+
+* Stochastic nodes. They are random variables in graphical models.
+  The ``w`` node can be constructed as
 
 ::
 
-    import tensorflow as tf
-    import zhusuan as zs
+    w = bn.normal("w", tf.zeros([x.shape[-1]], std=alpha)
+
+Here ``w`` is a :class:`~zhusuan.framework.bn.StochasticTensor` that follows
+the :class:`~zhusuan.distributions.univariate.Normal` distribution. For any
+distribution available in :mod:`zhusuan.distributions`, we can find
+a method of :class:`BayesianNet` for creating the corresponding stochastic
+node. The returned :class:`~zhusuan.framework.bn.StochasticTensor` instances
+are Tensor-like, which means that you can mix it with almost any Tensorflow
+primitives, for example, the predicted mean of the linear regression is an
+inner product between ``w`` and input ``x``::
+
+    y_mean = tf.reduce_sum(w * x, axis=-1)
+
+* Deterministic nodes. As the above code shows, deterministic nodes can be
+  constructed directly with Tensorflow operations, and in this way
+  :class:`~zhusuan.framework.bn.BayesianNet` does not keep track of them.
+  However, in some cases it's convenient to enable the tracking by the
+  :meth:`~zhusuan.framework.BayesianNet.deterministic` method::
+
+    y_mean = bn.deterministic("y_mean", tf.reduce_sum(w * x, axis=-1))
+
+  This allow you to fetch the ``y_mean`` Tensor from ``bn`` whenever you want
+  it.
+
+The full code of building a Bayesian linear regression model is like::
 
     def bayesian_linear_regression(x, alpha, beta):
-        with zs.BayesianNet() as model:
-            w = zs.Normal('w', mean=0., logstd=tf.log(alpha)
-            y_mean = tf.reduce_sum(tf.expand_dims(w, 0) * x, 1)
-            y = zs.Normal('y', y_mean, tf.log(beta))
+        bn = zs.BayesianNet()
+        w = bn.normal("w", mean=0., std=alpha)
+        y_mean = tf.reduce_sum(w * x, axis=-1)
+        y = bn.normal("y", y_mean, std=beta)
         return model
 
 To observe any stochastic nodes in the network, pass a dictionary mapping of
