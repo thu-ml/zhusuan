@@ -49,13 +49,13 @@ class RBFKernel:
             return tf.ones([tf.shape(x)[0], tf.shape(x)[1]], dtype=x.dtype)
 
 
-def gp_conditional(z, fz, x, full_cov, kernel, name, Kzz_chol=None):
+def gp_conditional(z, fz, x, full_cov, kernel, Kzz_chol=None):
     '''
     GP gp_conditional f(x) | f(z)==fz
     :param z: shape [n_z, n_covariates]
     :param fz: shape [n_particles, n_z]
     :param x: shape [n_x, n_covariates]
-    :return: StochasticTensor with shape [n_particles, n_x]
+    :return: a distribution with shape [n_particles, n_x]
     '''
     n_z = int(z.shape[0])
     n_particles = tf.shape(fz)[0]
@@ -77,14 +77,14 @@ def gp_conditional(z, fz, x, full_cov, kernel, name, Kzz_chol=None):
         cov_fx_given_fz = tf.tile(
             tf.expand_dims(tf.cholesky(cov_fx_given_fz), 0),
             [n_particles, 1, 1])
-        fx_given_fz = zs.MultivariateNormalCholesky(
-            name, mean_fx_given_fz, cov_fx_given_fz)
+        fx_given_fz = zs.distributions.MultivariateNormalCholesky(
+            mean_fx_given_fz, cov_fx_given_fz)
     else:
         # diag(AA^T) = sum(A**2, axis=-1)
         var = kernel.Kdiag(x) - \
             tf.reduce_sum(tf.matmul(
                 Kxz, tf.matrix_transpose(Kzz_chol_inv)) ** 2, axis=-1)
         std = tf.sqrt(var)
-        fx_given_fz = zs.Normal(
-            name, mean=mean_fx_given_fz, std=std, group_ndims=1)
+        fx_given_fz = zs.distributions.Normal(
+            mean=mean_fx_given_fz, std=std, group_ndims=1)
     return fx_given_fz
