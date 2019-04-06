@@ -53,7 +53,7 @@ The generative process is:
 
 In more detail, we first sample :math:`K` **topics**
 :math:`\{\vec{\phi}_k\}_{k=1}^K` from the symmetric Dirichlet prior with
-parameter :math:`\eta`, so each topic is a :math:`K`-dimensional vector, whose
+parameter :math:`\delta`, so each topic is a :math:`K`-dimensional vector, whose
 components sum up to 1. These topics are shared among different documents. Then
 for each document, suppose it is the :math:`d`\ th document, we sample a **topic
 proportion** vector :math:`\vec{\theta}_d` from the Dirichlet prior with
@@ -293,25 +293,21 @@ where both :math:`p(\mathbf{B}; \delta)` and :math:`p(\mathbf{H}; \vec{\mu},
 
 In ZhuSuan, the code for constructing such a model is::
 
-    def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
-        with zs.BayesianNet(observed=observed) as model:
-            eta_mean = tf.tile(tf.expand_dims(
-                            tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1]),
-                            0), [n_chains, 1, 1])
-            # eta/theta: Unnormalized/normalized document-topic matrix
-            eta = zs.Normal('eta', eta_mean, logstd=eta_logstd, group_ndims=1)
-            theta = tf.nn.softmax(eta)
-            # beta/phi: Unnormalized/normalized topic-word matrix
-            beta = zs.Normal('beta', tf.zeros([n_topics, n_vocab]),
-                            logstd=log_delta, group_ndims=1)
-            phi = tf.nn.softmax(beta)
-            # doc_word: Document-word matrix
-            doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
-            doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
-            x = zs.UnnormalizedMultinomial('x', tf.log(doc_word),
-                                        normalize_logits=False,
-                                        dtype=tf.float32)
-        return model
+    def lntm(n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
+        bn = zs.BayesianNet()
+        eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
+        eta = bn.normal('eta', eta_mean, logstd=eta_logstd, n_samples=n_chains,
+                        group_ndims=1)
+        theta = tf.nn.softmax(eta)
+        beta = bn.normal('beta', tf.zeros([n_topics, n_vocab]),
+                        logstd=log_delta, group_ndims=1)
+        phi = tf.nn.softmax(beta)
+        # doc_word: Document-word matrix
+        doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
+        doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
+        bn.unnormalized_multinomial('x', tf.log(doc_word), normalize_logits=False,
+                                    dtype=tf.float32)
+        return bn
 
 where ``eta_mean`` is :math:`\vec{\mu}`, ``eta_logstd`` is :math:`\log\vec{\sigma}`,
 ``eta`` is :math:`\mathbf{H}` (:math:`\mathrm{H}` is the uppercase letter of
@@ -486,10 +482,8 @@ Then write the log joint probability :math:`\log p(\mathbf{X},\mathbf{H}|
 \mathbf{B}; \vec{\mu}, \vec{\sigma})= \log p(\mathbf{X}| \mathbf{B},\mathbf{H})
 + p(\mathbf{H};\vec{\mu}, \vec{\sigma})`::
 
-    def e_obj(observed, n_chains, n_docs):
-        model = lntm(observed, n_chains, n_docs, n_topics, n_vocab,
-                     eta_mean, eta_logstd)
-        return model.local_log_prob('eta') + model.local_log_prob('x')
+    def e_obj(bn):
+        return bn.cond_log_prob('eta') + bn.cond_log_prob('x')
 
 Given the following defined tensor::
 
@@ -499,8 +493,10 @@ Given the following defined tensor::
 
 We can define the sampling operator of HMC::
 
-    sample_op, hmc_info = hmc.sample(partial(e_obj, n_chains=n_chains,
-                                             n_docs=batch_size),
+    meta_model = lntm(n_chains, batch_size, n_topics, n_vocab,
+                      eta_mean, eta_logstd)
+    meta_model.log_joint = e_obj
+    sample_op, hmc_info = hmc.sample(meta_model,
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
 
@@ -531,14 +527,13 @@ optimization using gradient ascent.
 
 The gradient ascent operator of :math:`\mathbf{B}` can be defined as follows::
 
-    model = lntm({'x': x, 'eta': eta, 'beta': beta}, n_chains, batch_size,
-                 n_topics, n_vocab, eta_mean, eta_logstd)
-    log_p_beta, log_px = model.local_log_prob(['beta', 'x'])
-    log_likelihood = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
-    log_joint = tf.reduce_sum(log_p_beta) + log_likelihood
+    log_p_beta, log_px = hmc.bn.cond_log_prob(['beta', 'x'])
+    log_p_beta = tf.reduce_sum(log_p_beta)
+    log_px = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
+    log_joint_beta = log_p_beta + log_px
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    infer = optimizer.minimize(-log_joint, var_list=[beta])
+    infer = optimizer.minimize(-log_joint_beta, var_list=[beta])
 
 Since when optimizing :math:`\mathbf{B}`, the samples of :math:`\mathbf{H}` is
 fixed, ``var_list=[beta]`` in the last line is a necessary.
@@ -587,10 +582,10 @@ The key code in an epoch is::
         for j in range(num_e_steps):
             _, new_eta, acc = sess.run(
                 [sample_op, hmc_info.samples['eta'],
-                 hmc_info.acceptance_rate],
+                    hmc_info.acceptance_rate],
                 feed_dict={x: x_batch,
-                           eta_mean: Eta_mean,
-                           eta_logstd: Eta_logstd})
+                            eta_mean: Eta_mean,
+                            eta_logstd: Eta_logstd})
             accs.append(acc)
             # Store eta for the persistent chain
             if j + 1 == num_e_steps:
@@ -598,12 +593,11 @@ The key code in an epoch is::
 
         # M step
         _, ll = sess.run(
-            [infer, log_likelihood],
+            [infer, log_px],
             feed_dict={x: x_batch,
-                       eta_mean: Eta_mean,
-                       eta_logstd: Eta_logstd,
-                       learning_rate_ph: learning_rate * t0 / (
-                           t0 + epoch)})
+                        eta_mean: Eta_mean,
+                        eta_logstd: Eta_logstd,
+                        learning_rate_ph: learning_rate})
         lls.append(ll)
 
     # Update hyper-parameters
@@ -612,11 +606,11 @@ The key code in an epoch is::
 
     time_epoch += time.time()
     print('Epoch {} ({:.1f}s): Perplexity = {:.2f}, acc = {:.3f}, '
-          'eta mean = {:.2f}, logstd = {:.2f}'
-          .format(epoch, time_epoch,
-                  np.exp(-np.sum(lls) / np.sum(X_train)),
-                  np.mean(accs), np.mean(Eta_mean),
-                  np.mean(Eta_logstd)))
+            'eta mean = {:.2f}, logstd = {:.2f}'
+            .format(epoch, time_epoch,
+                    np.exp(-np.sum(lls) / np.sum(X_train)),
+                    np.mean(accs), np.mean(Eta_mean),
+                    np.mean(Eta_logstd)))
 
 We run ``num_e_steps`` times of E-step before M-step to make samples of HMC more
 close to following the desired equilibrium distribution. Outputing the mean
@@ -634,11 +628,11 @@ in the documents of the corpus::
 
     p = sess.run(phi)
     for k in range(n_topics):
-        rank = zip(list(p[k, :]), range(n_vocab))
+        rank = list(zip(list(p[k, :]), range(n_vocab)))
         rank.sort()
         rank.reverse()
         sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
-                         .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
+                            .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
         for i in range(10):
             sys.stdout.write(vocab[rank[i][1]] + ' ')
         sys.stdout.write('\n')
