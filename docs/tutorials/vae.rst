@@ -65,7 +65,7 @@ And the probabilities in every single event in the batch should be evaluated
 together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, z_dim]``. In ZhuSuan, the way to achieve this is by setting
 ``group_ndims``, as we do in the above model definition code. To
-understand this, see :ref:`dist-and-stochastic`. ``n_samples`` is the number of samples to generate. 
+understand this, see :ref:`dist`. ``n_samples`` is the number of samples to generate.
 ``n _samples`` is None by default, in which case one sample is generated without adding a new dimension.
 
 Then we build a neural network of two fully-connected layers with :math:`z` 

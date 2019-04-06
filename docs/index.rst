@@ -46,7 +46,7 @@ we do not include it in the dependencies. See
 `Installing Tensorflow <https://www.tensorflow.org/install/>`_.
 
 If you are developing ZhuSuan, you may want to install in an "editable" or
-"develop" mode. Please refer to the Contribution section in
+"develop" mode. Please refer to the Contributing section in
 `README <https://github.com/thu-ml/zhusuan/blob/master/README.md#contribution>`_.
 
 After installation, open your python console and type::
