@@ -47,7 +47,7 @@ parser.add_argument('-lr', default=1e-2, type=float)
 
 
 @zs.meta_bayesian_net(scope='model', reuse_variables=True)
-def build_meta_model(hps, kernel, z_pos, x, n_particles, full_cov=False):
+def build_model(hps, kernel, z_pos, x, n_particles, full_cov=False):
     """
     Build the SVGP model.
     Note that for inference, we only need the diagonal part of Cov[Y], as
@@ -117,7 +117,7 @@ def main():
         tf.int32, [], 'n_particles')
     batch_size = tf.cast(tf.shape(x_ph)[0], hps.dtype)
 
-    meta_model = build_meta_model(hps, kernel, z_pos, x_ph, n_particles_ph)
+    model = build_model(hps, kernel, z_pos, x_ph, n_particles_ph)
     variational = build_variational(hps, kernel, z_pos, x_ph, n_particles_ph)
 
     # ELBO = E_q log (p(y|fx)p(fx|fz)p(fz) / p(fx|fz)q(fz))
@@ -126,13 +126,13 @@ def main():
         prior, log_py_given_fx = bn.cond_log_prob(['fz', 'y'])
         return prior + log_py_given_fx / batch_size * n_train
 
-    meta_model.log_joint = log_joint
+    model.log_joint = log_joint
 
     [var_fz, var_fx] = variational.query(
         ['fz', 'fx'], outputs=True, local_log_prob=True)
     var_fx = (var_fx[0], tf.zeros_like(var_fx[1]))
     lower_bound = zs.variational.elbo(
-        meta_model,
+        model,
         observed={'y': y_ph},
         latent={'fz': var_fz, 'fx': var_fx},
         axis=0)
@@ -141,7 +141,7 @@ def main():
     infer_op = optimizer.minimize(cost)
 
     # Prediction ops
-    model = meta_model.observe(fx=var_fx[0], y=y_ph)
+    model = model.observe(fx=var_fx[0], y=y_ph)
     log_likelihood = model.cond_log_prob('y')
     std_y_train = tf.cast(std_y_train, hps.dtype)
     log_likelihood = zs.log_mean_exp(log_likelihood, 0) / batch_size - \

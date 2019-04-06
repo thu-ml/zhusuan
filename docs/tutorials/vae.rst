@@ -151,8 +151,8 @@ with an decorator (more details in :ref:`bayesian-net`)::
 
 so that we can observe stochastic nodes in this way::
 
-    meta_model = build_gen(x_dim, z_dim, n, n_particles)
-    x_mean = meta_model.observe()["x_mean"]
+    model = build_gen(x_dim, z_dim, n, n_particles)
+    x_mean = model.observe()["x_mean"]
 
 Each time the function is called, a different observation assignment can be
 passed. One could also add a decorator to the function: ``@zs.reuse_variables(scope)`` 
@@ -258,7 +258,7 @@ In ZhuSuan, the variational posterior can also be defined as a
     @zs.reuse_variables(scope="q_net")
     def build_q_net(x, z_dim, n_z_per_x):
         bn = zs.BayesianNet()
-        h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+        h = tf.layers.dense(tf.cast(x, tf.float32), 500, activation=tf.nn.relu)
         h = tf.layers.dense(h, 500, activation=tf.nn.relu)
         z_mean = tf.layers.dense(h, z_dim)
         z_logstd = tf.layers.dense(h, z_dim)
@@ -290,14 +290,15 @@ gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
 :func:`~sgvb` of the output of :func:`~zhusuan.variational.exclusive_kl.elbo`.
 The code for this part is::
 
-    x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
+    x = tf.cast(tf.less(tf.random_uniform(tf.shape(x_input)), x_input),
+                tf.int32)
     n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    meta_model = build_gen(x_dim, z_dim, n, n_particles)
+    model = build_gen(x_dim, z_dim, n, n_particles)
     variational = build_q_net(x, z_dim, n_particles)
 
     lower_bound = zs.variational.elbo(
-        meta_model, {"x": x}, variational=variational, axis=0)
+        model, {"x": x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
@@ -381,7 +382,7 @@ This is done by::
         bn.output("x_mean", tf.sigmoid(x_logits))
             ...
     
-    x_gen = tf.reshape(meta_model.observe()["x_mean"], [-1, 28, 28, 1])
+    x_gen = tf.reshape(model.observe()["x_mean"], [-1, 28, 28, 1])
 
 Run gradient descent
 --------------------

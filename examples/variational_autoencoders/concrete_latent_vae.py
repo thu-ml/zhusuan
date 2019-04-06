@@ -39,7 +39,7 @@ def vae(observed, n, n_x, n_z, n_k, tau, n_particles, relaxed=False):
 @zs.reuse('variational')
 def q_net(observed, x, n_z, n_k, tau, n_particles, relaxed=False):
     with zs.BayesianNet(observed=observed) as variational:
-        lz_x = tf.layers.dense(tf.to_float(x), 200, activation=tf.tanh)
+        lz_x = tf.layers.dense(tf.cast(x, tf.float32), 200, activation=tf.tanh)
         lz_x = tf.layers.dense(lz_x, 200, activation=tf.tanh)
         z_logits = tf.layers.dense(lz_x, n_z * n_k)
         z_stacked_logits = tf.reshape(z_logits, [-1, n_z, n_k])

@@ -34,11 +34,11 @@ if __name__ == "__main__":
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[])
 
-    meta_model = build_toy2d_intractable(n_particles)
+    model = build_toy2d_intractable(n_particles)
     variational = build_mean_field_variational(n_particles)
 
     lower_bound = zs.variational.elbo(
-        meta_model, {}, variational=variational, axis=0)
+        model, {}, variational=variational, axis=0)
     cost = lower_bound.sgvb()
     optimizer = tf.train.AdamOptimizer(learning_rate=0.1)
     infer_op = optimizer.minimize(cost)

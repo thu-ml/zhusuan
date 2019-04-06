@@ -90,7 +90,7 @@ class StepsizeTuner:
     def tune(self, acceptance_rate, fresh_start):
         def adapt_stepsize():
             new_step = tf.assign(self.step, (1 - fresh_start) * self.step + 1)
-            rate1 = tf.div(1.0, new_step + self.t0)
+            rate1 = 1.0 / (new_step + self.t0)
             new_h_bar = tf.assign(
                 self.h_bar, (1 - fresh_start) * (1 - rate1) * self.h_bar +
                 rate1 * (self.delta - acceptance_rate))
@@ -149,7 +149,7 @@ class ExponentialWeightedMovingVariance:
         return update_var
 
     def get_precision(self, var_in):
-        return [tf.div(self.one, var) for var in var_in]
+        return [(self.one / var) for var in var_in]
 
     def get_updated_precision(self, x):
         # Should be called only once
@@ -298,7 +298,7 @@ class HMC:
         #                             new_mass[0].get_shape()))
         with tf.control_dependencies(new_mass):
             current_mass = tf.cond(
-                tf.less(tf.to_int32(t), self.mass_collect_iters),
+                tf.less(tf.cast(t, tf.int32), self.mass_collect_iters),
                 lambda: [tf.ones(shape) for shape in self.data_shapes],
                 lambda: new_mass)
         if not isinstance(current_mass, list):
@@ -380,7 +380,7 @@ class HMC:
         update_step_size = tf.assign(self.step_size, new_step_size)
         return tf.stop_gradient(update_step_size)
 
-    def sample(self, meta_model, observed, latent):
+    def sample(self, meta_bn, observed, latent):
         """
         Return the sampling `Operation` that runs a HMC iteration and
         the statistics collected during it.
@@ -401,13 +401,13 @@ class HMC:
             during an iteration.
         """
 
-        if callable(meta_model):
+        if callable(meta_bn):
             # TODO: raise warning
-            self._meta_model = None
-            self._log_joint = meta_model
+            self._meta_bn = None
+            self._log_joint = meta_bn
         else:
-            self._meta_model = meta_model
-            self._log_joint = lambda obs: meta_model.observe(**obs).log_joint()
+            self._meta_bn = meta_bn
+            self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
 
         self._latent = latent
         self._observed = observed
@@ -461,7 +461,7 @@ class HMC:
             new_step_size = self.step_size
         else:
             if_initialize_step_size = tf.logical_or(tf.equal(new_t, 1),
-                tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
+                tf.equal(tf.cast(new_t, tf.int32), self.mass_collect_iters))
             def iss():
                 return self._init_step_size(current_q, current_p, mass,
                                             get_gradient, get_log_posterior)
@@ -521,8 +521,8 @@ class HMC:
     @property
     def bn(self):
         try:
-            if self._meta_model:
-                return self._meta_model.observe(
+            if self._meta_bn:
+                return self._meta_bn.observe(
                     **merge_dicts(self._latent, self._observed))
             else:
                 return None

@@ -88,7 +88,7 @@ connection between output ``y`` and input ``x`` is established::
             ly_x = tf.concat(
                 [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
             ly_x = tf.matmul(w, ly_x) / \
-                tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
+                tf.sqrt(tf.cast(tf.shape(ly_x)[2], tf.float32))
             if i < len(ws) - 1:
                 ly_x = tf.nn.relu(ly_x)
 
@@ -127,7 +127,7 @@ Putting together and adding model reuse, the code for constructing a BayesianNN 
                 ly_x = tf.concat(
                     [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
                 ly_x = tf.matmul(w, ly_x) / \
-                    tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
+                    tf.sqrt(tf.cast(tf.shape(ly_x)[2], tf.float32))
                 if i < len(ws) - 1:
                     ly_x = tf.nn.relu(ly_x)
 
