@@ -75,7 +75,7 @@ for all the data. So we need only one copy of them, that is, we need a
 
 To treat the weights in each layer as a whole and evaluate the probability of
 them together, ``group_ndims`` is set to 2. If you are unfamiliar with this
-property, see :ref:`dist-and-stochastic`.
+property, see :ref:`dist`.
 
 Then we write the feedforward process of neural networks, through which the
 connection between output ``y`` and input ``x`` is established::
