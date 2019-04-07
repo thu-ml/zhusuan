@@ -76,7 +76,7 @@ def build_gen(n, x_dim, z_dim, n_particles, nf=16):
 @zs.reuse_variables(scope="q_net")
 def build_q_net(x, z_dim, n_particles, nf=16):
     bn = zs.BayesianNet()
-    lz_x = 2 * tf.to_float(x) - 1
+    lz_x = 2 * tf.cast(x, tf.float32) - 1
     lz_x = tf.reshape(lz_x, [-1, 28, 28, 1])
     lz_x = tf.layers.conv2d(lz_x, nf, 3, padding="same", activation=tf.nn.relu)
     lz_x = conv_resnet_block(lz_x, nf)
@@ -111,14 +111,14 @@ def main():
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
     x_input = tf.placeholder(tf.float32, shape=[None, x_dim])
-    x = tf.to_int32(tf.random_uniform(tf.shape(x_input)) <= x_input)
+    x = tf.cast(tf.random_uniform(tf.shape(x_input)) <= x_input, tf.int32)
     n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    meta_model = build_gen(n, x_dim, z_dim, n_particles)
+    model = build_gen(n, x_dim, z_dim, n_particles)
     variational = build_q_net(x, z_dim, n_particles)
 
     lower_bound = zs.variational.elbo(
-        meta_model, {"x": x}, variational=variational, axis=0)
+        model, {"x": x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
@@ -126,7 +126,7 @@ def main():
     infer_op = optimizer.minimize(cost)
 
     # Generate images
-    x_gen = tf.reshape(meta_model.observe()["x_mean"], [-1, 28, 28, 1])
+    x_gen = tf.reshape(model.observe()["x_mean"], [-1, 28, 28, 1])
 
     # Define training/evaluation parameters
     epochs = 3000

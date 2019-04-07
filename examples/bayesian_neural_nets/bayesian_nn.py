@@ -25,7 +25,7 @@ def build_bnn(layer_sizes, n_particles):
                       group_ndims=2, n_samples=n_particles)
         h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
         h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
-            tf.to_float(tf.shape(h)[2]))
+            tf.cast(tf.shape(h)[2], tf.float32))
         if i < len(layer_sizes) - 2:
             h = tf.nn.relu(h)
 
@@ -78,7 +78,7 @@ def main():
     layer_sizes = [x_dim] + n_hiddens + [1]
     w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
 
-    meta_model = build_bnn(layer_sizes, n_particles)
+    model = build_bnn(layer_sizes, n_particles)
     variational = build_mean_field_variational(layer_sizes, n_particles)
 
     def log_joint(bn):
@@ -86,10 +86,10 @@ def main():
         log_py_xw = bn.cond_log_prob('y')
         return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
-    meta_model.log_joint = log_joint
+    model.log_joint = log_joint
 
     lower_bound = zs.variational.elbo(
-        meta_model, {'x': x, 'y': y}, variational=variational, axis=0)
+        model, {'x': x, 'y': y}, variational=variational, axis=0)
     cost = lower_bound.sgvb()
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)

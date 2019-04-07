@@ -98,10 +98,9 @@ if __name__ == "__main__":
         return bn.cond_log_prob('eta') + bn.cond_log_prob('x')
 
     # E step: sample eta using HMC
-    meta_model = lntm(n_chains, batch_size, n_topics, n_vocab,
-                      eta_mean, eta_logstd)
-    meta_model.log_joint = e_obj
-    sample_op, hmc_info = hmc.sample(meta_model,
+    model = lntm(n_chains, batch_size, n_topics, n_vocab, eta_mean, eta_logstd)
+    model.log_joint = e_obj
+    sample_op, hmc_info = hmc.sample(model,
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
     # M step: optimize beta
@@ -125,27 +124,25 @@ if __name__ == "__main__":
     _eta = tf.Variable(tf.zeros([_n_chains, n_docs_test, n_topics]),
                        name='eta')
 
-    _meta_model = lntm(_n_chains, n_docs_test, n_topics, n_vocab,
+    _model = lntm(_n_chains, n_docs_test, n_topics, n_vocab,
                        eta_mean, eta_logstd)
-    _meta_model.log_joint = e_obj
+    _model.log_joint = e_obj
 
-    proposal_meta_model = copy(_meta_model)
+    proposal_model = copy(_model)
 
     def log_prior(bn):
         return bn.cond_log_prob('eta')
     
-    proposal_meta_model.log_joint = log_prior
+    proposal_model.log_joint = log_prior
 
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)
 
-    ais = zs.evaluation.AIS(_meta_model, proposal_meta_model, _hmc,
+    ais = zs.evaluation.AIS(_model, proposal_model, _hmc,
                             observed={'x': _x, 'beta': beta},
                             latent={'eta': _eta},
                             n_chains=_n_chains,
                             n_temperatures=_n_temperatures)
-
-    # -------------------
 
     # Run the inference
     with tf.Session() as sess:

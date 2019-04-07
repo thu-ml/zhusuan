@@ -10,6 +10,7 @@ import tensorflow as tf
 import numpy as np
 
 from zhusuan.utils import log_mean_exp, merge_dicts
+from zhusuan.variational import ImportanceWeightedObjective
 
 
 __all__ = [
@@ -18,7 +19,8 @@ __all__ = [
 ]
 
 
-def is_loglikelihood(log_joint, observed, latent, axis=None):
+def is_loglikelihood(meta_bn, observed, latent=None, axis=None,
+                     proposal=None, allow_default=False):
     """
     Marginal log likelihood (:math:`\log p(x)`) estimates using self-normalized
     importance sampling.
@@ -39,14 +41,13 @@ def is_loglikelihood(log_joint, observed, latent, axis=None):
 
     :return: A Tensor. The estimated log likelihood of observed data.
     """
-    latent_k, latent_v = map(list, zip(*six.iteritems(latent)))
-    latent_outputs = dict(zip(latent_k, map(lambda x: x[0], latent_v)))
-    latent_logpdfs = map(lambda x: x[1], latent_v)
-    joint_obs = merge_dicts(observed, latent_outputs)
-    log_w = log_joint(joint_obs) - sum(latent_logpdfs)
-    if axis is not None:
-        return log_mean_exp(log_w, axis)
-    return log_w
+    return ImportanceWeightedObjective(
+        meta_bn,
+        observed,
+        latent=latent,
+        axis=axis,
+        variational=proposal,
+        allow_default=allow_default).tensor
 
 
 class AIS:
@@ -54,7 +55,7 @@ class AIS:
     Estimates a stochastic lower bound of the marginal log likelihood
     using annealed importance sampling (AIS).
     """
-    def __init__(self, meta_model, proposal_meta_model, hmc, observed, latent,
+    def __init__(self, meta_bn, proposal_meta_bn, hmc, observed, latent,
                  n_chains=25, n_temperatures=1000, verbose=False):
         # Shape of latent: [chain_axis, num_data, data dims]
         # Construct the tempered objective
@@ -63,15 +64,15 @@ class AIS:
         self.verbose = verbose
 
         with tf.name_scope("AIS"):
-            if callable(meta_model):
-                log_joint = meta_model
+            if callable(meta_bn):
+                log_joint = meta_bn
             else:
-                log_joint = lambda obs: meta_model.observe(**obs).log_joint()
+                log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
 
             latent_k, latent_v = zip(*six.iteritems(latent))
 
-            prior_samples = proposal_meta_model.observe().get(latent_k)
-            log_prior = lambda obs: proposal_meta_model.observe(**obs).log_joint()
+            prior_samples = proposal_meta_bn.observe().get(latent_k)
+            log_prior = lambda obs: proposal_meta_bn.observe(**obs).log_joint()
 
             self.temperature = tf.placeholder(tf.float32, shape=[],
                                               name="temperature")

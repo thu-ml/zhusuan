@@ -24,7 +24,7 @@ class TestNormal(tf.test.TestCase):
             mean, logstd=logstd, **kwargs)
 
     def test_init(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(
                     ValueError, "Please use named arguments"):
                 Normal(tf.ones(1), tf.ones(1))
@@ -57,7 +57,7 @@ class TestNormal(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(norm._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(norm._value_shape().eval().tolist(), [])
 
         self.assertEqual(norm._value_shape().dtype, tf.int32)
@@ -102,7 +102,7 @@ class TestNormal(tf.test.TestCase):
         sample_grads = tf.gradients(log_prob, samples)
         mean_true_grads = tf.gradients(samples, mean, sample_grads)[0]
         logstd_true_grads = tf.gradients(samples, logstd, sample_grads)[0]
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             outs = sess.run([mean_path_grads, mean_true_grads,
                              logstd_path_grads, logstd_true_grads],
                             feed_dict={n_samples: 7})
@@ -126,7 +126,7 @@ class TestNormal(tf.test.TestCase):
             self, self._Normal_logstd, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(given, mean, logstd):
                 mean = np.array(mean, np.float32)
                 given = np.array(given, np.float32)
@@ -153,19 +153,19 @@ class TestNormal(tf.test.TestCase):
 
     def test_check_numerics(self):
         norm1 = Normal(tf.ones([1, 2]), logstd=-1e10, check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "precision.*Tensor had Inf"):
                 norm1.log_prob(0.).eval()
 
         norm2 = Normal(tf.ones([1, 2]), logstd=1e3, check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "exp\(logstd\).*Tensor had Inf"):
                 norm2.sample().eval()
 
         norm3 = Normal(tf.ones([1, 2]), std=0., check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(std\).*Tensor had Inf"):
                 norm3.log_prob(0.).eval()
@@ -183,7 +183,7 @@ class TestFoldNormal(tf.test.TestCase):
             mean, logstd=logstd, **kwargs)
 
     def test_init(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(
                     ValueError, "Please use named arguments"):
                 FoldNormal(tf.ones(1), tf.ones(1))
@@ -216,7 +216,7 @@ class TestFoldNormal(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(norm._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(norm._value_shape().eval().tolist(), [])
 
         self.assertEqual(norm._value_shape().dtype, tf.int32)
@@ -261,7 +261,7 @@ class TestFoldNormal(tf.test.TestCase):
         sample_grads = tf.gradients(log_prob, samples)
         mean_true_grads = tf.gradients(samples, mean, sample_grads)[0]
         logstd_true_grads = tf.gradients(samples, logstd, sample_grads)[0]
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             outs = sess.run([mean_path_grads, mean_true_grads,
                              logstd_path_grads, logstd_true_grads],
                             feed_dict={n_samples: 7})
@@ -285,7 +285,7 @@ class TestFoldNormal(tf.test.TestCase):
             self, self._FoldNormal_logstd, np.zeros, np.zeros, np.zeros)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(given, mean, logstd):
                 mean = np.array(mean, np.float32)
                 given = np.array(given, np.float32)
@@ -314,19 +314,19 @@ class TestFoldNormal(tf.test.TestCase):
 
     def test_check_numerics(self):
         norm1 = FoldNormal(tf.ones([1, 2]), logstd=-1e10, check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "precision.*Tensor had Inf"):
                 norm1.log_prob(0.).eval()
 
         norm2 = FoldNormal(tf.ones([1, 2]), logstd=1e3, check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "exp\(logstd\).*Tensor had Inf"):
                 norm2.sample().eval()
 
         norm3 = FoldNormal(tf.ones([1, 2]), std=0., check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(std\).*Tensor had Inf"):
                 norm3.log_prob(0.).eval()
@@ -344,7 +344,7 @@ class TestBernoulli(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(bernoulli._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(bernoulli._value_shape().eval().tolist(), [])
 
         self.assertEqual(bernoulli._value_shape().dtype, tf.int32)
@@ -362,7 +362,7 @@ class TestBernoulli(tf.test.TestCase):
             self, Bernoulli, np.zeros, np.zeros)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(logits, given):
                 logits = np.array(logits, np.float32)
                 given = np.array(given, np.float32)
@@ -388,7 +388,7 @@ class TestBernoulli(tf.test.TestCase):
 
 class TestCategorical(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 Categorical(logits=tf.zeros([]))
 
@@ -399,7 +399,7 @@ class TestCategorical(tf.test.TestCase):
         cat2 = Categorical(tf.placeholder(tf.float32, [3, None]))
         self.assertTrue(cat2.n_categories is not None)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
             cat3 = Categorical(logits)
             self.assertEqual(
@@ -415,7 +415,7 @@ class TestCategorical(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(cat._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(cat._value_shape().eval().tolist(), [])
 
         self.assertEqual(cat._value_shape().dtype, tf.int32)
@@ -440,7 +440,7 @@ class TestCategorical(tf.test.TestCase):
         _test_static(None)
 
         # dynamic
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_dynamic(logits_shape):
                 logits = tf.placeholder(tf.float32, None)
                 cat = Categorical(logits)
@@ -477,7 +477,7 @@ class TestCategorical(tf.test.TestCase):
         _test_static(None, 1, None)
         _test_static([3, None], 2, [2, 3])
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_dynamic(logits_shape, n_samples, target_shape):
                 logits = tf.placeholder(tf.float32, None)
                 cat = Categorical(logits)
@@ -514,7 +514,7 @@ class TestCategorical(tf.test.TestCase):
         with self.assertRaisesRegexp(ValueError, "broadcast to match"):
             _test_static([2, 3, 5], [1, 2], None)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_dynamic(logits_shape, given_shape, target_shape):
                 logits = tf.placeholder(tf.float32, None)
                 cat = Categorical(logits)
@@ -535,7 +535,7 @@ class TestCategorical(tf.test.TestCase):
                 _test_dynamic([2, 3, 5], [1, 2], None)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(logits, given):
                 logits = np.array(logits, np.float32)
                 normalized_logits = logits - logsumexp(
@@ -571,7 +571,7 @@ class TestCategorical(tf.test.TestCase):
 
 class TestUniform(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 Uniform(minval=tf.zeros([2, 1]), maxval=tf.ones([2, 4, 3]))
@@ -587,7 +587,7 @@ class TestUniform(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(unif._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(unif._value_shape().eval().tolist(), [])
 
         self.assertEqual(unif._value_shape().dtype, tf.int32)
@@ -620,7 +620,7 @@ class TestUniform(tf.test.TestCase):
             self, Uniform, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(minval, maxval, given):
                 minval = np.array(minval, np.float32)
                 maxval = np.array(maxval, np.float32)
@@ -642,7 +642,7 @@ class TestUniform(tf.test.TestCase):
 
     def test_check_numerics(self):
         unif = Uniform(0., [0., 1.], check_numerics=True)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "p.*Tensor had Inf"):
                 unif.log_prob(0.).eval()
@@ -653,7 +653,7 @@ class TestUniform(tf.test.TestCase):
 
 class TestGamma(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 Gamma(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
@@ -669,7 +669,7 @@ class TestGamma(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(gamma._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(gamma._value_shape().eval().tolist(), [])
         self.assertEqual(gamma._value_shape().dtype, tf.int32)
 
@@ -686,7 +686,7 @@ class TestGamma(tf.test.TestCase):
             self, Gamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(alpha, beta, given):
                 alpha = np.array(alpha, np.float32)
                 beta = np.array(beta, np.float32)
@@ -712,7 +712,7 @@ class TestGamma(tf.test.TestCase):
         given = tf.placeholder(tf.float32, [])
         gamma = Gamma(alpha, beta, check_numerics=True)
         log_p = gamma.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(given\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 1., beta: 1., given: 0.})
@@ -729,7 +729,7 @@ class TestGamma(tf.test.TestCase):
 
 class TestBeta(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 Beta(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
@@ -745,7 +745,7 @@ class TestBeta(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(dist._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(dist._value_shape().eval().tolist(), [])
         self.assertEqual(dist._value_shape().dtype, tf.int32)
 
@@ -762,7 +762,7 @@ class TestBeta(tf.test.TestCase):
             self, Beta, np.ones, np.ones, np.ones)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(alpha, beta, given):
                 alpha = np.array(alpha, np.float32)
                 beta = np.array(beta, np.float32)
@@ -787,7 +787,7 @@ class TestBeta(tf.test.TestCase):
         given = tf.placeholder(tf.float32, [])
         dist = Beta(alpha, beta, check_numerics=True)
         log_p = dist.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(given\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 1., beta: 1., given: 0.})
@@ -813,7 +813,7 @@ class TestPoisson(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(poisson._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(poisson._value_shape().eval().tolist(), [])
         self.assertEqual(poisson._value_shape().dtype, tf.int32)
 
@@ -830,7 +830,7 @@ class TestPoisson(tf.test.TestCase):
             self, Poisson, np.ones, np.ones)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(rate, given):
                 rate = np.array(rate, np.float32)
                 given = np.array(given, np.float32)
@@ -855,7 +855,7 @@ class TestPoisson(tf.test.TestCase):
         given = tf.placeholder(tf.int32, [])
         poisson = Poisson(rate, check_numerics=True)
         log_p = poisson.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(
                     tf.errors.InvalidArgumentError,
                     "lgamma\(given \+ 1\).*Tensor had Inf"):
@@ -876,7 +876,7 @@ class TestBinomial(tf.test.TestCase):
         with self.assertRaisesRegexp(ValueError, "must be positive"):
             _ = Binomial(tf.ones([2]), 0)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
             n_experiments = tf.placeholder(tf.int32, None)
             dist2 = Binomial(logits, n_experiments)
@@ -896,7 +896,7 @@ class TestBinomial(tf.test.TestCase):
 
         # dynamic
         self.assertTrue(binomial._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(binomial._value_shape().eval().tolist(), [])
         self.assertEqual(binomial._value_shape().dtype, tf.int32)
 
@@ -919,7 +919,7 @@ class TestBinomial(tf.test.TestCase):
             self, _distribution, np.ones, np.ones)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(logits, n_experiments, given):
                 logits = np.array(logits, np.float64)
                 given = np.array(given, np.float64)
@@ -951,7 +951,7 @@ class TestBinomial(tf.test.TestCase):
         given = tf.placeholder(tf.int32, [])
         binomial = Binomial(logits, 10, check_numerics=True)
         log_p = binomial.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(
                     tf.errors.InvalidArgumentError,
                     "lgamma\(given \+ 1\).*Tensor had Inf"):
@@ -972,7 +972,7 @@ class TestBinomial(tf.test.TestCase):
 
 class TestInverseGamma(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 InverseGamma(alpha=tf.ones([2, 1]), beta=tf.ones([2, 4, 3]))
@@ -987,7 +987,7 @@ class TestInverseGamma(tf.test.TestCase):
         self.assertEqual(inv_gamma.get_value_shape().as_list(), [])
 
         # dynamic
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(inv_gamma._value_shape().eval().tolist(), [])
         self.assertEqual(inv_gamma._value_shape().dtype, tf.int32)
 
@@ -1004,7 +1004,7 @@ class TestInverseGamma(tf.test.TestCase):
             self, InverseGamma, np.ones, np.ones, np.ones)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(alpha, beta, given):
                 alpha = np.array(alpha, np.float32)
                 beta = np.array(beta, np.float32)
@@ -1029,7 +1029,7 @@ class TestInverseGamma(tf.test.TestCase):
         given = tf.placeholder(tf.float32, [])
         inv_gamma = InverseGamma(alpha, beta, check_numerics=True)
         log_p = inv_gamma.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(given\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: 1., beta: 1., given: 0.})
@@ -1046,7 +1046,7 @@ class TestInverseGamma(tf.test.TestCase):
 
 class TestLaplace(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError,
                                          "should be broadcastable to match"):
                 Laplace(loc=tf.ones([2, 1]), scale=tf.ones([2, 4, 3]))
@@ -1061,7 +1061,7 @@ class TestLaplace(tf.test.TestCase):
         self.assertEqual(laplace.get_value_shape().as_list(), [])
 
         # dynamic
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(laplace._value_shape().eval().tolist(), [])
         self.assertEqual(laplace._value_shape().dtype, tf.int32)
 
@@ -1100,7 +1100,7 @@ class TestLaplace(tf.test.TestCase):
         sample_grads = tf.gradients(log_prob, samples)
         loc_true_grads = tf.gradients(samples, loc, sample_grads)[0]
         scale_true_grads = tf.gradients(samples, scale, sample_grads)[0]
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             outs = sess.run([loc_path_grads, loc_true_grads,
                              scale_path_grads, scale_true_grads],
                             feed_dict={n_samples: 7})
@@ -1121,7 +1121,7 @@ class TestLaplace(tf.test.TestCase):
             self, Laplace, np.zeros, np.ones, np.zeros)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(loc, scale, given):
                 loc = np.array(loc, np.float32)
                 scale = np.array(scale, np.float32)
@@ -1146,7 +1146,7 @@ class TestLaplace(tf.test.TestCase):
         given = tf.placeholder(tf.float32, [])
         laplace = Laplace(loc, scale, check_numerics=True)
         log_p = laplace.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(scale\).*Tensor had NaN"):
                 log_p.eval(feed_dict={loc: 1., scale: -1., given: 1.})
@@ -1161,7 +1161,7 @@ class TestBinConcrete(tf.test.TestCase):
                                      "should be a scalar"):
             BinConcrete([1.], [1., 2.])
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             temperature = tf.placeholder(tf.float32, None)
             con = BinConcrete(temperature, [1., 2.])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
@@ -1174,7 +1174,7 @@ class TestBinConcrete(tf.test.TestCase):
         self.assertEqual(con.get_value_shape().as_list(), [])
 
         # dynamic
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(con._value_shape().eval().tolist(), [])
         self.assertEqual(con._value_shape().dtype, tf.int32)
 
@@ -1198,7 +1198,7 @@ class TestBinConcrete(tf.test.TestCase):
             self, _proxy_distribution, np.ones, np.ones)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(given, temperature, logits):
                 given = np.array(given, np.float32)
                 logits = np.array(logits, np.float32)
@@ -1251,7 +1251,7 @@ class TestBinConcrete(tf.test.TestCase):
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             outs = sess.run([t_path_grads, t_true_grads,
                              logits_path_grads, logits_true_grads],
                             feed_dict={n_samples: 7})
@@ -1274,7 +1274,7 @@ class TestBinConcrete(tf.test.TestCase):
         given = tf.placeholder(tf.float32, None)
         dist = BinConcrete(tau, logits, check_numerics=True)
         log_p = dist.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(given\).*Tensor had NaN"):
                 log_p.eval(feed_dict={tau: 1., logits: 0., given: -1.})

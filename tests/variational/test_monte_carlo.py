@@ -42,7 +42,7 @@ class TestImportanceWeightedObjective(tf.test.TestCase):
                 latent={'x': [qx_samples_n1, log_qx_n1]}, axis=0)
             lower_bound = tf.reduce_mean(lower_bound)
             analytic_lower_bound = -_kl_normal_normal(0., 1., x_mean, x_std)
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 a = sess.run(lower_bound)
                 b = sess.run(analytic_lower_bound)
                 self.assertNear(a, b, 1e-2)
@@ -61,7 +61,7 @@ class TestImportanceWeightedObjective(tf.test.TestCase):
                 latent={'x': [qx_samples_n3, log_qx_n3]}, axis=0)
             lower_bound = tf.reduce_mean(lower_bound)
             analytic_lower_bound = -_kl_normal_normal(0., 1., x_mean, x_std)
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 a = sess.run(lower_bound)
                 b = sess.run(analytic_lower_bound)
                 self.assertTrue(a > b - 1e-6)
@@ -91,7 +91,7 @@ class TestImportanceWeightedObjective(tf.test.TestCase):
             true_cost = _kl_normal_normal(mu, sigma, x_mean, x_std)
             true_grads = tf.gradients(true_cost, [mu, sigma])
 
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 g1 = sess.run(sgvb_grads)
                 g2 = sess.run(true_grads)
                 # print('sgvb_grads:', g1)
@@ -131,7 +131,7 @@ class TestImportanceWeightedObjective(tf.test.TestCase):
             sgvb_cost = tf.reduce_mean(lower_bound.sgvb())
             sgvb_grads = tf.gradients(sgvb_cost, [mu, sigma])
 
-            with self.test_session(use_gpu=True) as sess:
+            with self.session(use_gpu=True) as sess:
                 g1 = sess.run(vimco_grads)
                 g2 = sess.run(sgvb_grads)
                 # print('vimco_grads:', g1)

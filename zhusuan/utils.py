@@ -49,10 +49,10 @@ class TensorArithmeticMixin(object):
         return tf.multiply(other, self)
 
     def __div__(self, other):
-        return tf.div(self, other)
+        return tf.divide(self, other)
 
     def __rdiv__(self, other):
-        return tf.div(other, self)
+        return tf.divide(other, self)
 
     def __truediv__(self, other):
         return tf.truediv(self, other)

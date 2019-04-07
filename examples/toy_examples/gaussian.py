@@ -36,14 +36,14 @@ if __name__ == "__main__":
     n_leapfrogs = 5
 
     # Build the computation graph
-    meta_model = gaussian(n_x, stdev, n_chains)
+    model = gaussian(n_x, stdev, n_chains)
     adapt_step_size = tf.placeholder(tf.bool, shape=[], name="adapt_step_size")
     adapt_mass = tf.placeholder(tf.bool, shape=[], name="adapt_mass")
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=n_leapfrogs,
                  adapt_step_size=adapt_step_size, adapt_mass=adapt_mass,
                  target_acceptance_rate=0.9)
     x = tf.Variable(tf.zeros([n_chains, n_x]), trainable=False, name='x')
-    sample_op, hmc_info = hmc.sample(meta_model, {}, {'x': x})
+    sample_op, hmc_info = hmc.sample(model, {}, {'x': x})
 
     # Run the inference
     with tf.Session() as sess:

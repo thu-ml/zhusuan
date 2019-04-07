@@ -83,7 +83,7 @@ class TestDistributions(tf.test.TestCase):
             dist2 = Distribution(tf.float32, tf.float32, True, True, False, -1)
 
     def test_subclass(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             dist = Dist(group_ndims=2)
             self.assertEqual(dist.dtype, tf.float32)
             self.assertEqual(dist.is_continuous, True)

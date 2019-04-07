@@ -16,7 +16,7 @@ from zhusuan.distributions.utils import get_shape_list, get_shape_at, \
 
 class TestLogCombination(tf.test.TestCase):
     def test_log_combination(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_func(n, ks):
                 tf_n = tf.convert_to_tensor(n, tf.float32)
                 tf_ks = tf.convert_to_tensor(ks, tf.float32)
@@ -33,7 +33,7 @@ class TestLogCombination(tf.test.TestCase):
 
 class TestExplicitBroadcast(tf.test.TestCase):
     def test_explicit_broadcast(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_func(a_shape, b_shape, target_shape):
                 a = tf.ones(a_shape)
                 b = tf.ones(b_shape)
@@ -55,7 +55,7 @@ class TestExplicitBroadcast(tf.test.TestCase):
 
 class TestIsSameDynamicShape(tf.test.TestCase):
     def test_is_same_dynamic_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test(x_shape, y_shape, is_same):
                 x = tf.ones(x_shape)
                 y = tf.ones(y_shape)
@@ -72,7 +72,7 @@ class TestIsSameDynamicShape(tf.test.TestCase):
 
 class TestGetShapeList(tf.test.TestCase):
     def test_get_shape_list(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def test_shape_static(shape):
                 ph = tf.placeholder(tf.float32, shape)
                 self.assertEqual(get_shape_list(ph), shape)
@@ -88,7 +88,7 @@ class TestGetShapeList(tf.test.TestCase):
 
 class TestGetShapeAt(tf.test.TestCase):
     def test_get_shape_at(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             ph = tf.placeholder(tf.float32, [2, None])
             # Static
             self.assertEqual(get_shape_at(ph, 0), 2)
@@ -99,7 +99,7 @@ class TestGetShapeAt(tf.test.TestCase):
 
 class TestAssertRankAtLeast(tf.test.TestCase):
     def test_assert_rank_at_least(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             # Static
             ph = tf.placeholder(tf.float32, [2, None])
             assert_rank_at_least(ph, 2, 'ph')

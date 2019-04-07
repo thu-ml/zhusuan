@@ -34,7 +34,7 @@ def build_sbn(n, x_dim, h_dim, n_particles):
 @zs.reuse_variables(scope="proposal")
 def build_proposal(x, h_dim, n_particles):
     bn = zs.BayesianNet()
-    h1_logits = tf.layers.dense(tf.to_float(x), h_dim)
+    h1_logits = tf.layers.dense(tf.cast(x, tf.float32), h_dim)
     h1 = bn.bernoulli("h1", h1_logits, group_ndims=1,
                       n_samples=n_particles, dtype=tf.float32)
     h2_logits = tf.layers.dense(h1, h_dim)
@@ -62,23 +62,24 @@ def main():
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
     x_input = tf.placeholder(tf.float32, shape=[None, x_dim], name="x")
-    x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
+    x = tf.cast(tf.less(tf.random_uniform(tf.shape(x_input)), x_input),
+                tf.int32)
     n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    meta_model = build_sbn(n, x_dim, h_dim, n_particles)
+    model = build_sbn(n, x_dim, h_dim, n_particles)
     proposal = build_proposal(x, h_dim, n_particles)
     optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
 
     # learning model parameters
     lower_bound = tf.reduce_mean(
         zs.variational.importance_weighted_objective(
-            meta_model, observed={"x": x}, variational=proposal, axis=0))
+            model, observed={"x": x}, variational=proposal, axis=0))
     model_params = tf.trainable_variables(scope="sbn")
     model_grads = optimizer.compute_gradients(-lower_bound, model_params)
 
     # adapting the proposal
     klpq_obj = zs.variational.klpq(
-        meta_model, observed={"x": x}, variational=proposal, axis=0)
+        model, observed={"x": x}, variational=proposal, axis=0)
     klpq_cost = tf.reduce_mean(klpq_obj.importance())
     proposal_params = tf.trainable_variables(scope="proposal")
     klpq_grads = optimizer.compute_gradients(klpq_cost, proposal_params)

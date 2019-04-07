@@ -4,7 +4,7 @@ Logistic Normal Topic Models
 The full script for this tutorial is at `examples/topic_models/lntm_mcem.py
 <https://github.com/thu-ml/zhusuan/blob/master/examples/topic_models/lntm_mcem.py>`_.
 
-An Introduction to Topic Models and Latent Dirichlet Allocation
+An introduction to topic models and Latent Dirichlet Allocation
 ---------------------------------------------------------------
 
 Nowadays it is much easier to get large corpus of documents. Even if there are
@@ -148,8 +148,8 @@ However, conjugacy requires the model being designed carefully. Here, we use a
 more direct and general method to do Bayesian inference: Monte-Carlo EM, with
 HMC as the Monte-Carlo sampler.
 
-Logistic Normal Topic Model and Building it in ZhuSuan
-------------------------------------------------------
+Logistic Normal Topic Model in ZhuSuan
+--------------------------------------
 
 Integrating out :math:`\mathbf{\Theta}` and :math:`\mathbf{\Phi}` requires
 conjugacy, or the integration is intractable. But integrating :math:`\mathbf{z}`

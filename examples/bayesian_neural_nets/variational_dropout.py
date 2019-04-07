@@ -90,7 +90,7 @@ if __name__ == '__main__':
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
 
-    meta_model = var_dropout(n, net_size, n_particles, is_training)
+    model = var_dropout(n, net_size, n_particles, is_training)
     variational = q(n, net_size, n_particles)
 
     def log_joint(bn):
@@ -98,9 +98,9 @@ if __name__ == '__main__':
         log_py_xe = bn.cond_log_prob('y')
         return tf.add_n(log_pe) + log_py_xe * x_train.shape[0]
 
-    meta_model.log_joint = log_joint
+    model.log_joint = log_joint
 
-    lower_bound = zs.variational.elbo(meta_model, {'x': x_obs, 'y': y_obs},
+    lower_bound = zs.variational.elbo(model, {'x': x_obs, 'y': y_obs},
                                       variational=variational, axis=0)
     y_logit = lower_bound.bn["y_logit"]
     h_pred = tf.reduce_mean(tf.nn.softmax(y_logit), 0)
