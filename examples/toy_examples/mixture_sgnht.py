@@ -37,11 +37,11 @@ if __name__ == "__main__":
         return amax + tf.log(tf.exp(a1-amax)+tf.exp(a2-amax))
 
     sgmcmc = zs.SGNHT(learning_rate=0.2, variance_extra=0.1, tune_rate=0.01,
-                      second_order=False, use_vector_xi=False)
+                      second_order=False, use_vector_alpha=False)
     # x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
     x = tf.Variable(tf.random_uniform([n_chains])*10-5, trainable=False,
                     name='x')
-    sgmcmc.make_get_gradient(log_joint, {}, {'x': x})
+    sgmcmc.make_grad_func(log_joint, observed={}, latent={'x': x})
     sample_op, new_samples, sample_info = sgmcmc.sample()
 
     # Run the inference

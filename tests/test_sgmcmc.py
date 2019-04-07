@@ -29,7 +29,7 @@ def sample_error_with(sampler, sess, n_chains=1, n_iters=80000, thinning=50,
         tf.zeros([n_chains], dtype=dtype),
         trainable=False,
         name='x', dtype=dtype)
-    sampler.make_get_gradient(log_joint, {}, {'x': x})
+    sampler.make_grad_func(log_joint, {}, {'x': x})
     sample_op, new_samples, sample_info = sampler.sample()
 
     # Run the inference

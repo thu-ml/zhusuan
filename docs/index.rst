@@ -71,6 +71,7 @@ If no error occurs, you've successfully installed ZhuSuan.
    api/zhusuan.framework
    api/zhusuan.variational
    api/zhusuan.hmc
+   api/zhusuan.sgmcmc
    api/zhusuan.evaluation
    api/zhusuan.transform
    api/zhusuan.diagnostics
