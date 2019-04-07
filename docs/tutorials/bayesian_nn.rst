@@ -135,7 +135,8 @@ or uncertainty of weights given the training data.
 
 Because the normalizing constant is intractable, we cannot directly
 compute the posterior distribution of network parameters
-(:math:`\{W_i\}_{i=1}^L`). In order to solve this problem, we use
+(:math:`\{W_i\}_{i=1}^L`).
+In order to solve this problem, we use
 `Variational Inference <https://en.wikipedia.org/wiki/Variational_Bayesian_methods>`_,
 i.e., using a variational distribution
 :math:`q_{\phi}(\{W_i\}_{i=1}^L)=\prod_{i=1}^L{q_{\phi_i}(W_i)}` to
@@ -150,6 +151,7 @@ by its mean and log standard deviation.
 
 The code for above definition is::
 
+    @zs.reuse_variables(scope="variational")
     def build_mean_field_variational(layer_sizes, n_particles):
         bn = zs.BayesianNet()
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
@@ -160,7 +162,7 @@ The code for above definition is::
                 "w_logstd_" + str(i), shape=[n_out, n_in + 1],
                 initializer=tf.constant_initializer(0.))
             bn.normal("w" + str(i), w_mean, logstd=w_logstd,
-                    n_samples=n_particles, group_ndims=2)
+                      n_samples=n_particles, group_ndims=2)
         return bn
 
 In Variational Inference, to make :math:`q_{\phi}(W)` approximate
@@ -190,7 +192,8 @@ the probability of the variational posterior. The log conditional likelihood is
 .. math::
     \log p(y_{1:N}|x_{1:N}, W) = \sum_{n=1}^N\log p(y_n|x_n, W)
 
-Computing log conditional likelihood for the whole dataset is very time-consuming.
+Computing log conditional likelihood for the whole dataset is very
+time-consuming.
 In practice, we sub-sample a minibatch of data to approximate the conditional
 likelihood
 
@@ -198,17 +201,14 @@ likelihood
     \log p(y_{1:N}|x_{1:N}, W) \approx \frac{N}{M}\sum_{m=1}^M\log p(y_m| x_m, W)
 
 Here :math:`\{(x_m, y_m)\}_{m=1:M}` is a subset including :math:`M`
-random samples from the training set :math:`\{(x_n, y_n)\}_{n=1:N}`. :math:`M`
-is called the batch size. By setting the batch size relatively small, we can
-compute the formula above efficiently. Moreover, using mini-batches brings
-additional benefits. Since a general problem for optimization algorithms is that the
-parameters can get stuck in a local minimum. Using mini-batches brings along
-randomness, which increases the chance for the algorithm to jump out of the local
-minimum.
+random samples from the training set :math:`\{(x_n, y_n)\}_{n=1:N}`.
+:math:`M` is called the batch size.
+By setting the batch size relatively small, we can compute the lower bound
+above efficiently.
 
 .. Note::
 
-    Different with some other models like VAE, Bayesian NN's latent variables
+    Different from models like VAEs, BNN's latent variables
     :math:`\{W_i\}_{i=1}^L` are global for all the data, therefore we don't
     explicitly condition :math:`W` on each data in the variational posterior.
 
@@ -218,13 +218,7 @@ As we have done in the :doc:`VAE tutorial <vae>`,
 the **Stochastic Gradient Variational Bayes** (SGVB) estimator is used.
 The code for this part is::
 
-    n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
-    x = tf.placeholder(tf.float32, shape=[None, x_dim])
-    y = tf.placeholder(tf.float32, shape=[None])
-    layer_sizes = [x_dim] + n_hiddens + [1]
-    w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
-
-    meta_model = build_bnn(layer_sizes, n_particles)
+    model = build_bnn(x, layer_sizes, n_particles)
     variational = build_mean_field_variational(layer_sizes, n_particles)
 
     def log_joint(bn):
@@ -232,10 +226,10 @@ The code for this part is::
         log_py_xw = bn.cond_log_prob('y')
         return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
-    meta_model.log_joint = log_joint
+    model.log_joint = log_joint
 
     lower_bound = zs.variational.elbo(
-        meta_model, {'x': x, 'y': y}, variational=variational, axis=0)
+        model, {'y': y}, variational=variational, axis=0)
     cost = lower_bound.sgvb()
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
@@ -276,7 +270,7 @@ on new data
     y^{pred} = \mathbb{E}_{p(y|x, D)} \; y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)} \; y \quad W^i \sim q(W)
 
 First we need to pass the data placeholder and sampled latent parameters to the
-BayesianNN model ::
+BNN model ::
 
     # prediction: rmse & log likelihood
     y_mean = lower_bound.bn["y_mean"]
