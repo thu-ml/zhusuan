@@ -47,7 +47,8 @@ class Distribution(object):
 
     .. seealso::
 
-        :doc:`/tutorials/concepts`
+        For more details and examples, please refer to
+        :doc:`/tutorials/concepts`.
 
     For both, the parameter `dtype` represents type of samples. For discrete,
     can be set by user. For continuous, automatically determined from parameter
