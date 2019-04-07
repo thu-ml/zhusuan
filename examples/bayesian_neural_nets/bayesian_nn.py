@@ -16,9 +16,8 @@ from examples.utils import dataset
 
 
 @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
-def build_bnn(layer_sizes, n_particles):
+def build_bnn(x, layer_sizes, n_particles):
     bn = zs.BayesianNet()
-    x = bn.input("x")
     h = tf.tile(x[None, ...], [n_particles, 1, 1])
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
         w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
@@ -29,7 +28,7 @@ def build_bnn(layer_sizes, n_particles):
         if i < len(layer_sizes) - 2:
             h = tf.nn.relu(h)
 
-    y_mean = bn.output("y_mean", tf.squeeze(h, 2))
+    y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
     y_logstd = tf.get_variable("y_logstd", shape=[],
                                initializer=tf.constant_initializer(0.))
     bn.normal("y", y_mean, logstd=y_logstd)
@@ -78,7 +77,7 @@ def main():
     layer_sizes = [x_dim] + n_hiddens + [1]
     w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
 
-    model = build_bnn(layer_sizes, n_particles)
+    model = build_bnn(x, layer_sizes, n_particles)
     variational = build_mean_field_variational(layer_sizes, n_particles)
 
     def log_joint(bn):
@@ -89,7 +88,7 @@ def main():
     model.log_joint = log_joint
 
     lower_bound = zs.variational.elbo(
-        model, {'x': x, 'y': y}, variational=variational, axis=0)
+        model, {'y': y}, variational=variational, axis=0)
     cost = lower_bound.sgvb()
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)

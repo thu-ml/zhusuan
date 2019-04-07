@@ -4,30 +4,33 @@ Bayesian Neural Networks
 .. note::
 
     This tutorial assumes that readers have been familiar with ZhuSuan's
-    :doc:`Basic Concepts <concepts>`.
+    :doc:`basic concepts <concepts>`.
 
 Recent years have seen neural networks' powerful abilities in fitting complex
 transformations, with successful applications on speech recognition, image
-classification, and machine translation, etc. However, typical training of
-neural networks requires lots of labeled data to control the risk of
-overfitting. And the problem becomes harder when it comes to real world
-regression tasks. These tasks often have smaller training data to use,
-and the high-frequency characteristics of these data often makes neural
-networks easier to get trapped in overfitting.
+classification, and machine translation, etc.
+However, typical training of neural networks requires lots of labeled data
+to control the risk of overfitting.
+And the problem becomes harder when it comes to real world regression tasks.
+These tasks often have smaller amount of training data to use, and the
+high-frequency characteristics of these data often makes neural networks
+easier to get trapped in overfitting.
 
 A principled approach for solving this problem is **Bayesian Neural Networks**
-(BayesianNN). In BayesianNN, prior distributions are put upon the neural
-network's weights to consider the modeling uncertainty. By doing Bayesian
-inference on the weights, one can learn a predictor which both fits to the
-training data and knows about the uncertainty of its own prediction on test
-data. In this tutorial, we show how to implement BayesianNN in ZhuSuan.
+(BNN).
+In BNN, prior distributions are put upon the neural network's weights
+to consider the modeling uncertainty.
+By doing Bayesian inference on the weights, one can learn a predictor
+which both fits to the training data and reasons about the uncertainty of
+its own prediction on test data.
+In this tutorial, we show how to implement BNNs in ZhuSuan.
 The full script for this tutorial is at
 `examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_.
 
 We use a regression dataset called
 `Boston housing <https://archive.ics.uci.edu/ml/machine-learning-databases/housing/>`_.
 This has :math:`N = 506` data points, with :math:`D = 13` dimensions.
-The forwarding process of a BayesianNN for modeling multivariate regression is
+The generative process of a BNN for modeling multivariate regression is
 as follows:
 
 .. math::
@@ -36,15 +39,15 @@ as follows:
     y_{mean} &= f_{NN}(x, \{W_i\}_{i=1}^L) \\
     y &\sim \mathrm{N}(y|y_{mean}, \sigma^2)
 
-This forwarding process starts with a input feature (:math:`x`), then :math:`x`
+This generative process starts with an input feature (:math:`x`), which
 is forwarded through a deep neural network (:math:`f_{NN}`) with :math:`L`
 layers, whose parameters in each layer (:math:`W_i`) satisfy a factorized
-multivariate standard Normal distribution. With this complex forwarding process,
-the model is enabled to learn complex relationships between the input
-(:math:`x`) and the output (:math:`y`). Finally, some noise is added to the
-output to get a tractable likelihood for the model, which is typically a
-Gaussian noise in regression problems. A graphical model representation for
-bayesian neural network is as follows.
+multivariate standard Normal distribution.
+With this forward transformation, the model is able to learn complex
+relationships between the input (:math:`x`) and the output (:math:`y`).
+Finally, some noise is added to the output to get a tractable likelihood
+for the model, which is typically a Gaussian noise in regression problems.
+A graphical model representation for bayesian neural network is as follows.
 
 .. image:: ../_static/images/bayesian_nn.png
     :align: center
@@ -53,80 +56,70 @@ bayesian neural network is as follows.
 Build the model
 ---------------
 
-Following the forwarding process, first we need standard Normal
-distributions to generate the weights (:math:`\{W_i\}_{i=1}^L`).
+We start by the model building function (we shall see the meanings of
+these arguments later)::
+
+    @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
+    def build_bnn(x, layer_sizes, n_particles):
+        bn = zs.BayesianNet()
+
+Following the generative process, we need standard Normal
+distributions to generate the weights (:math:`\{W_i\}_{i=1}^L`) in each layer.
 For a layer with ``n_in`` input units and ``n_out`` output units, the weights
 are of shape ``[n_out, n_in + 1]`` (one additional column for bias).
-As presented in our graphical model, the latent variable of weights are global
-for all the data. So we need only one copy of them, that is, we need a
-:class:`~zhusuan.model.stochastic.Normal` StochasticTensor of shape
-``[1, n_out, n_in + 1]``::
+To support multiple samples (useful in inference and prediction), a common
+practice is to set the `n_samples` argument to a placeholder, which we
+choose to be ``n_particles`` here::
 
-    with zs.BayesianNet(observed=observed) as model:
-        ws = []
-        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
-                                              layer_sizes[1:])):
-            w_mu = tf.zeros([1, n_out, n_in + 1])
-            ws.append(
-                zs.Normal('w' + str(i), w_mu, std=1.,
-                          n_samples=n_particles, group_ndims=2))
+    h = tf.tile(x[None, ...], [n_particles, 1, 1])
+    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
+                      group_ndims=2, n_samples=n_particles)
 
+Note that we expand ``x`` with a new dimension and tile it to enable
+computation with multiple particles of weight samples.
 To treat the weights in each layer as a whole and evaluate the probability of
-them together, ``group_ndims`` is set to 2. If you are unfamiliar with this
-property, see :ref:`dist`.
+them together, ``group_ndims`` is set to 2.
+If you are unfamiliar with this property, see :ref:`dist` for details.
 
-Then we write the feedforward process of neural networks, through which the
+Then we write the feed-forward process of neural networks, through which the
 connection between output ``y`` and input ``x`` is established::
 
-    with zs.BayesianNet(observed=observed) as model:
-        ...
-        # forward
-        ly_x = tf.expand_dims(
-            tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
-        for i in range(len(ws)):
-            w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
-            ly_x = tf.concat(
-                [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-            ly_x = tf.matmul(w, ly_x) / \
-                tf.sqrt(tf.cast(tf.shape(ly_x)[2], tf.float32))
-            if i < len(ws) - 1:
-                ly_x = tf.nn.relu(ly_x)
+    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
+                      group_ndims=2, n_samples=n_particles)
+        h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
+        h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
+            tf.cast(tf.shape(h)[2], tf.float32))
+        if i < len(layer_sizes) - 2:
+            h = tf.nn.relu(h)
 
 Next, we add an observation distribution (noise) to get a tractable
 likelihood when evaluating the probability::
 
-    with zs.BayesianNet(observed=observed) as model:
-        ...
-        y_mean = tf.squeeze(ly_x, [2, 3])
-        y_logstd = tf.get_variable(
-            'y_logstd', shape=[],
-            initializer=tf.constant_initializer(0.))
-        y = zs.Normal('y', y_mean, logstd=y_logstd)
+    y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
+    y_logstd = tf.get_variable("y_logstd", shape=[],
+                               initializer=tf.constant_initializer(0.))
+    bn.normal("y", y_mean, logstd=y_logstd)
 
 Putting together and adding model reuse, the code for constructing a BayesianNN is::
 
-    import tensorflow as tf
-    from six.moves import range, zip
-    import numpy as np
-    import zhusuan as zs
-
     @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
-    def build_bnn(layer_sizes, n_particles):
+    def build_bnn(x, layer_sizes, n_particles):
         bn = zs.BayesianNet()
-        x = bn.input("x")
         h = tf.tile(x[None, ...], [n_particles, 1, 1])
         for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
             w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
-                        group_ndims=2, n_samples=n_particles)
+                          group_ndims=2, n_samples=n_particles)
             h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
             h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
-                tf.to_float(tf.shape(h)[2]))
+                tf.cast(tf.shape(h)[2], tf.float32))
             if i < len(layer_sizes) - 2:
                 h = tf.nn.relu(h)
 
-        y_mean = bn.output("y_mean", tf.squeeze(h, 2))
+        y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
         y_logstd = tf.get_variable("y_logstd", shape=[],
-                                initializer=tf.constant_initializer(0.))
+                                   initializer=tf.constant_initializer(0.))
         bn.normal("y", y_mean, logstd=y_logstd)
         return bn
 
