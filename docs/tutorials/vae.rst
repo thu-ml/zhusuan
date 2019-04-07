@@ -444,9 +444,9 @@ Generate images
 
 What we've done above is to define and learn the model. To see how it
 performs, we would like to let it generate some images in the learning process.
-For the generating process, we remove the observation noise, i.e.,
-the :class:`~zhusuan.distributions.univariate.Bernoulli` distribution. 
-We do this by using the direct output of the nueral network (``x_logits``)::
+To improve the visual quality of generation, we remove the observation noise,
+i.e., the :class:`~zhusuan.distributions.univariate.Bernoulli` distribution.
+We do this by using the direct output of the neural network (``x_logits``)::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
     def build_gen(x_dim, z_dim, n, n_particles=1):
@@ -455,10 +455,9 @@ We do this by using the direct output of the nueral network (``x_logits``)::
         x_logits = tf.layers.dense(h, x_dim)
             ...
 
-Then we add a sigmoid function to it to get a "mean" image. 
-After that, we use the function: ``output`` to provide the value ``x_mean``,
-so that we can easily access it by using the function: ``observe``.
-This is done by::
+and adding a sigmoid function to it to get a "mean" image.
+After that, we add a deterministic node in ``bn`` to keep track of
+the Tensor ``x_mean``::
 
     @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
     def build_gen(x_dim, z_dim, n, n_particles=1):
@@ -467,16 +466,25 @@ This is done by::
         x_logits = tf.layers.dense(h, x_dim)
         bn.deterministic("x_mean", tf.sigmoid(x_logits))
             ...
-    
-    x_gen = tf.reshape(model.observe()["x_mean"], [-1, 28, 28, 1])
+
+so that we can easily access it from a
+:class:`~zhusuan.framework.bn.BayesianNet` instance.
+For random generations, no observation about the model is made, so we
+construct the corresponding :class:`~zhusuan.framework.bn.BayesianNet` by::
+
+    bn_gen = model.observe()
+
+Then the generated samples can be fetched from the ``x_mean`` node of
+``bn_gen``::
+
+    x_gen = tf.reshape(bn_gen["x_mean"], [-1, 28, 28, 1])
 
 Run gradient descent
 --------------------
 
-Now, everything is good before a run. So we could just open the Tensorflow
-session, run the training loop, print statistics, and write generated
-images to disk. Keep watching them and have fun :)
-::
+Now, everything is good before a run.
+So we could just open the Tensorflow session, run the training loop,
+print statistics, and write generated images to disk::
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -502,6 +510,9 @@ images to disk. Keep watching them and have fun :)
                 name = os.path.join(result_path,
                                     "vae.epoch.{}.png".format(epoch))
                 save_image_collections(images, name)
+
+Below is a sample image of random generations from the model.
+Keep watching them and have fun :)
 
 .. image:: ../_static/images/vae_mnist.png
     :align: center
