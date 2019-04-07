@@ -190,7 +190,7 @@ Each time the function is called, a different observation assignment is used
 to construct a :class:`~zhusuan.framework.bn.BayesianNet` instance.
 One question you may have in mind is that if there are Tensorflow
 `Variables <https://www.tensorflow.org/api_docs/python/tf/Variable>`_
-created in the above function, will them be reused across these ``bn``s?
+created in the above function, will them be reused across these ``bn`` s?
 The answer is no by default, but you can enable this by switching on the
 `reuse_variables` option in the decorator::
 
@@ -234,7 +234,8 @@ Inference and learning
 ----------------------
 
 Having built the model, the next step is to learn it from binarized MNIST
-images. We conduct
+images.
+We conduct
 `Maximum Likelihood <https://en.wikipedia.org/wiki/Maximum_likelihood_estimation>`_
 learning, that is, we are going to maximize the log likelihood of data in our
 model:
@@ -247,18 +248,19 @@ where :math:`\theta` is the model parameter.
 
 .. note::
 
-    In this Variational Autoencoder, the model parameter is the network
-    weights, in other words, it's the tensorflow variables created in the
+    In this variational autoencoder, the model parameter is the network
+    weights, in other words, it's the Tensorflow Variables created in the
     ``fully_connected`` layers.
 
 However, the model we defined has not only the observation (:math:`x`) but
-also latent representation (:math:`z`). This makes it hard for us to compute
-:math:`p_{\theta}(x)`, which we call the marginal likelihood of :math:`x`,
-because we only know the joint likelihood of the model:
+also latent representation (:math:`z`).
+This makes it hard for us to compute :math:`p_{\theta}(x)`, which we call
+the marginal likelihood of :math:`x`, because we only know the joint
+likelihood of the model:
 
 .. math::
 
-    p_{\theta}(x, z) = p(z)p_{\theta}(x|z)
+    p_{\theta}(x, z) = p_{\theta}(x|z)p(z)
 
 while computing the marginal likelihood requires an integral over latent
 representation, which is generally intractable:
@@ -268,13 +270,15 @@ representation, which is generally intractable:
     p_{\theta}(x) = \int p_{\theta}(x, z)\;dz
 
 The intractable integral problem is a fundamental challenge in learning latent
-variable models like VAE. Fortunately, the machine learning society has
-developed many approximate methods to address it. One of them is
+variable models like VAEs.
+Fortunately, the machine learning society has developed many approximate
+methods to address it. One of them is
 `Variational Inference <https://en.wikipedia.org/wiki/Variational_Bayesian_methods>`_.
-As the inner intuition is very simple, we briefly introduce it below.
+As the intuition is very simple, we briefly introduce it below.
 
 Because directly optimizing :math:`\log p_{\theta}(x)` is infeasible, we choose
-to optimize a lower bound of it. The lower bound is constructed as
+to optimize a lower bound of it.
+The lower bound is constructed as
 
 .. math::
 
@@ -284,8 +288,9 @@ to optimize a lower bound of it. The lower bound is constructed as
 
 where :math:`q_{\phi}(z|x)` is a user-specified distribution of :math:`z`
 (called **variational posterior**) that is chosen to match the true posterior
-:math:`p_{\theta}(z|x)`. The lower bound is equal to the marginal log
-likelihood if and only if :math:`q_{\phi}(z|x) = p_{\theta}(z|x)`, when the
+:math:`p_{\theta}(z|x)`.
+The lower bound is equal to the marginal log likelihood if and only if
+:math:`q_{\phi}(z|x) = p_{\theta}(z|x)`, when the
 `Kullback–Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`_
 between them (:math:`\mathrm{KL}(q_{\phi}(z|x)\|p_{\theta}(z|x))`) is zero.
 
@@ -299,9 +304,9 @@ between them (:math:`\mathrm{KL}(q_{\phi}(z|x)\|p_{\theta}(z|x))`) is zero.
 
     is called
     `Bayesian Inference <https://en.wikipedia.org/wiki/Bayesian_inference>`_,
-    where :math:`p(z)` is called **prior**, :math:`p(x|z)` is the conditional
-    likelihood, :math:`p(x)` is the marginal likelihood or **evidence**,
-    :math:`p(z|x)` is called **posterior**.
+    where :math:`p(z)` is called the **prior**, :math:`p(x|z)` is the
+    conditional likelihood, :math:`p(x)` is the marginal likelihood or
+    **evidence**, and :math:`p(z|x)` is known as the **posterior**.
 
 This lower bound is usually called Evidence Lower Bound (ELBO). Note that the
 only probabilities we need to evaluate in it is the joint likelihood and
@@ -313,9 +318,8 @@ is also parameterized by a neural network (:math:`g`), which accepts input
 
 .. math::
 
-    \mu_z(x;\phi), \log\sigma_z(x;\phi) = g_{NN}(x) \\
-
-    q_{\phi}(z|x) = \mathrm{N}(z|\mu_z(x;\phi), \sigma^2_z(x;\phi))
+    \mu_z(x;\phi), \log\sigma_z(x;\phi) &= g_{NN}(x) \\
+    q_{\phi}(z|x) &= \mathrm{N}(z|\mu_z(x;\phi), \sigma^2_z(x;\phi))
 
 In ZhuSuan, the variational posterior can also be defined as a
 :class:`~zhusuan.framework.bn.BayesianNet` . The code for above definition is::
@@ -330,43 +334,60 @@ In ZhuSuan, the variational posterior can also be defined as a
         bn.normal("z", z_mean, logstd=z_logstd, group_ndims=1, n_samples=n_z_per_x)
         return bn
 
-There are many ways to optimize this lower bound. One of the easiest way is
-to do
-`stochastic gradient descent <https://en.wikipedia.org/wiki/Stochastic_gradient_descent>`_,
-which is very common in deep learning literature. However, the gradient
-computation here involves taking derivatives of an expectation, which
-needs Monte Carlo estimation. This often induces large variance if not properly
-handled.
+    variational = build_q_net(x, z_dim, n_particles)
+
+Having both ``model`` and ``variational``, we can build the lower bound as::
+
+    lower_bound = zs.variational.elbo(
+        model, {"x": x}, variational=variational, axis=0)
+
+The returned ``lower_bound`` is an
+:class:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective`
+instance, which is also Tensor-like and can be evaluated directly. However,
+optimizing this lower bound objective needs special care.
+The easiest way is to do
+`stochastic gradient descent <https://en.wikipedia.org/wiki/Stochastic_gradient_descent>`_
+(SGD), which is very common in deep learning literature.
+However, the gradient computation here involves taking derivatives of an
+expectation, which needs Monte Carlo estimation.
+This often induces large variance if not properly handled.
+
+.. note::
+
+    Directly using auto-differentiation to compute the gradients of
+    :class:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective`
+    often gives you the wrong results.
+    This is because auto-differentiation is not designed to handle
+    expectations.
 
 Many solutions have been proposed to estimate the gradient of some
 type of variational lower bound (ELBO or others) with relatively low variance.
-To make this more automatic and easier to handle, ZhuSuan has wrapped them
-all into :mod:`single functions <zhusuan.variational>`, which computes
-the final objective (or surrogate cost) for users to directly take derivatives
-on. This means that optimizing these objectives is equally optimizing the
+To make this more automatic and easier to handle, ZhuSuan has wrapped these
+gradient estimators all into methods of the corresponding
+variational objective (e.g., the
+:class:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective`).
+These functions don't return gradient estimates but a more convenient
+surrogate cost.
+Applying SGD on this surrogate cost with
+respect to parameters is equivalent to optimizing the
 corresponding variational lower bounds using the well-developed low-variance
 estimator.
 
 Here we are using the **Stochastic Gradient Variational Bayes** (SGVB)
 estimator from the original paper of variational autoencoders
-:cite:`vae-kingma2013auto`. This estimator takes benefits of a clever
-reparameterization trick to greatly reduce the variance when estimating the
-gradients of ELBO. In ZhuSuan, one can use this estimator by calling the method
-:func:`~sgvb` of the output of :func:`~zhusuan.variational.exclusive_kl.elbo`.
+:cite:`vae-kingma2013auto`.
+This estimator takes benefits of a clever reparameterization trick to
+greatly reduce the variance when estimating the gradients of ELBO.
+In ZhuSuan, one can use this estimator by calling the method :func:`~sgvb`
+of the class:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective`
+instance.
 The code for this part is::
 
-    x = tf.cast(tf.less(tf.random_uniform(tf.shape(x_input)), x_input),
-                tf.int32)
-    n = tf.placeholder(tf.int32, shape=[], name="n")
-
-    model = build_gen(x_dim, z_dim, n, n_particles)
-    variational = build_q_net(x, z_dim, n_particles)
-
-    lower_bound = zs.variational.elbo(
-        model, {"x": x}, variational=variational, axis=0)
+    # the surrogate cost for optimization
     cost = tf.reduce_mean(lower_bound.sgvb())
-    lower_bound = tf.reduce_mean(lower_bound)
 
+    # the lower bound value to print for monitoring convergence
+    lower_bound = tf.reduce_mean(lower_bound)
 
 .. note::
 
@@ -394,7 +415,7 @@ The code for this part is::
         \log q_{\phi}(z(\epsilon; x, \phi)|x)\right]
 
     Thus the gradients with variational parameters :math:`\phi` can be
-    directly exchanged into the expectation, enabling an unbiased low-variance
+    directly moved into the expectation, enabling an unbiased low-variance
     Monte Carlo estimator:
 
     .. math::
@@ -407,13 +428,13 @@ The code for this part is::
 
     where :math:`\epsilon_i \sim \mathrm{N}(0, I)`
 
-Now that we have had the objective function, the next step is to do the
-stochastic gradient descent. Tensorflow provides many advanced
+Now that we have had the cost, the next step is to do the stochastic gradient
+descent.
+Tensorflow provides many advanced
 `optimizers <https://www.tensorflow.org/api_guides/python/train>`_
-that improves the plain SGD, among which Adam
-:cite:`vae-kingma2014adam` is probably the most popular one in deep learning
-society. Here we are going to use Tensorflow's Adam optimizer to do the
-learning::
+that improves the plain SGD, among which Adam :cite:`vae-kingma2014adam`
+is probably the most popular one in deep learning society.
+Here we are going to use Tensorflow's Adam optimizer to do the learning::
 
     optimizer = tf.train.AdamOptimizer(0.001)
     infer_op = optimizer.minimize(cost)
