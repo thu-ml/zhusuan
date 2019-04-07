@@ -84,7 +84,8 @@ together, so the shape of local probabilities should be ``[n]`` instead of
 ``[n, z_dim]``.
 In ZhuSuan, the way to achieve this is by setting `group_ndims``, as we do
 in the above model definition code.
-To help understand this, several other examples can be found in :ref:`dist`.
+To help understand this, several other examples can be found in :ref:`dist`
+tutorial.
 ``n_samples`` is the number of samples to generate.
 It is None by default, in which case a single sample is generated
 without adding a new dimension.
@@ -129,55 +130,105 @@ Reuse the model
 
 Unlike common deep learning models (MLP, CNN, etc.), which is for supervised
 tasks, a key difficulty in designing programing primitives for generative
-models is their inner reusability. This is because in a probabilistic
-graphical model, a stochastic node can have two kinds of
-states, **observed or not observed**. Consider the above case, if ``z`` is a
-tensor sampled from the prior, how about when you meet the condition that ``z``
-is observed? In common practice of tensorflow programming, one has to build
-another computation graph from scratch and reuse the Variables (weights here).
+models is their inner reusability.
+This is because in a probabilistic graphical model, a stochastic node can
+have two kinds of states, **observed or latent**.
+Consider the above case, if ``z`` is a tensor sampled from the prior, how
+about when you meet the condition that ``z`` is observed?
+In common practice of tensorflow programming, one has to build another
+computation graph from scratch and reuse the Variables (weights here).
 If there are many stochastic nodes in the model, this process will be really
 painful.
 
-**ZhuSuan has a novel solution for this.** To observe any stochastic nodes,
+We provide a solution for this. To observe any stochastic nodes,
 pass a dictionary mapping of ``(name, Tensor)`` pairs when constructing
-:class:`~zhusuan.framework.bn.BayesianNet`. This will assign observed values
-to corresponding ``StochasticTensor`` s. For example, to observe
-a batch of images ``x_batch``, write::
+:class:`~zhusuan.framework.bn.BayesianNet`.
+This will assign observed values to corresponding ``StochasticTensor`` s.
+For example, to observe a batch of images ``x_batch``, write::
 
-    bn = zs.BayesianNet(observed={'x': x_batch})
-
-However, we usually need to pass different observations to the same :class:`~zhusuan.framework.bn.BayesianNet` 
-more than once. To achieve this, ZhuSuan provides a new class called :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` 
-to represent the meta version of BayesianNet which can repeatly produce 
-BayesianNet objects by accepting different observations. 
-The recommended way to construct a MetaBayesianNet is by wrapping the function 
-with an decorator (more details in :ref:`bayesian-net`)::
-
-    @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
-    def build_gen(x_dim, z_dim, n, n_particles=1):
-        ...
-        return bn
+    bn = zs.BayesianNet(observed={"x": x_batch})
 
 .. note::
 
     The observation passed must have the same type and shape as the
     `StochasticTensor`.
 
-so that we can observe stochastic nodes in this way::
+However, we usually need to pass different configurations of observations to
+the same :class:`~zhusuan.framework.bn.BayesianNet` more than once.
+To achieve this, ZhuSuan provides a new class called
+:class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+to represent the meta version of :class:`~zhusuan.framework.bn.BayesianNet`
+which can repeatedly produce :class:`~zhusuan.framework.bn.BayesianNet`
+objects by accepting different observations.
+The recommended way to construct a
+:class:`~zhusuan.framework.meta_bn.MetaBayesianNet` is by wrapping the
+function with a :func:`~zhusuan.framework.meta_bn.meta_bayesian_net`
+decorator::
 
-    model = build_gen(x_dim, z_dim, n, n_particles)
-    x_mean = model.observe()["x_mean"]
-
-Each time the function is called, a different observation assignment can be
-passed. One could also add a decorator to the function: ``@zs.reuse_variables(scope)`` 
-to **reuse tensorflow variables** in this function. Then this function
-will automatically create variables the first time they are called and reuse
-them thereafter, as shown in the following code::
-
-    @zs.reuse_variables(scope="q_net")
-    def build_q_net(x, z_dim, n_z_per_x):
+    @zs.meta_bayesian_net(scope="gen")
+    def build_gen(x_dim, z_dim, n, n_particles=1):
         ...
         return bn
+
+    model = build_gen(x_dim, z_dim, n, n_particles)
+
+which transforms the function into returning a
+:class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance::
+
+    >>> print(model)
+    <zhusuan.framework.meta_bn.MetaBayesianNet object at ...
+
+so that we can observe stochastic nodes in this way::
+
+    # no observation
+    bn1 = model.observe()
+
+    # observe x
+    bn2 = model.observe(x=x_batch)
+
+Each time the function is called, a different observation assignment is used
+to construct a :class:`~zhusuan.framework.bn.BayesianNet` instance.
+One question you may have in mind is that if there are Tensorflow
+`Variables <https://www.tensorflow.org/api_docs/python/tf/Variable>`_
+created in the above function, will them be reused across these ``bn``s?
+The answer is no by default, but you can enable this by switching on the
+`reuse_variables` option in the decorator::
+
+    @zs.meta_bayesian_net(scope="gen", reuse_variables=True)
+    def build_gen(x_dim, z_dim, n, n_particles=1):
+        ...
+        return bn
+
+    model = build_gen(x_dim, z_dim, n, n_particles)
+
+Then ``bn1`` and ``bn2`` will share the same set of Tensorflow Variables.
+
+.. note::
+
+    This only shares Tensorflow Variables across different
+    :class:`~zhusuan.framework.bn.BayesianNet` instances generated by the same
+    :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` through the
+    :meth:`~zhusuan.framework.meta_bn.MetaBayesianNet.observe` method.
+    Creating multiple :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+    objects will recreate the tensorflow Variables, for example, in
+
+    ::
+
+        m = build_gen(x_dim, z_dim, n, n_particles)
+        bn = m.observe()
+
+        m_new = build_gen(x_dim, z_dim, n, n_particles)
+        bn_new = m_new.observe()
+
+    ``bn`` and ``bn_new`` will use a different set of Tensorflow
+    Variables.
+
+Since reusing Tensorflow Variables in repeated function calls is a typical
+need, we provide another decorator
+:func:`~zhusuan.framework.utils.reuse_variables` for the more general cases.
+Any function decorated by :func:`~zhusuan.framework.utils.reuse_variables`
+will automatically create Tensorflow Variables the first time they are called
+and reuse them thereafter.
 
 Inference and learning
 ----------------------
