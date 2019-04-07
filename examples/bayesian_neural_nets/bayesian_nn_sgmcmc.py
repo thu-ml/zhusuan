@@ -28,7 +28,7 @@ def build_bnn(layer_sizes, n_particles):
                       group_ndims=2, n_samples=n_particles)
         h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
         h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
-            tf.to_float(tf.shape(h)[2]))
+            tf.cast(tf.shape(h)[2], tf.float32))
         if i < len(layer_sizes) - 2:
             h = tf.nn.relu(h)
 
@@ -70,24 +70,24 @@ def main():
         wv.append(tf.Variable(
             tf.random_uniform([n_particles, n_out, n_in + 1])*4-2))
 
-    meta_model = build_bnn(layer_sizes, n_particles)
+    meta_bn = build_bnn(layer_sizes, n_particles)
 
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)
         log_py_xw = bn.cond_log_prob('y')
         return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
-    meta_model.log_joint = log_joint
+    meta_bn.log_joint = log_joint
 
     # sgmcmc = zs.SGLD(learning_rate=1e-5, add_noise=True)
     sgmcmc = zs.SGHMC(learning_rate=2e-6, friction=0.2, n_iter_resample_v=1000,
                       second_order=True)
-    # sgmcmc = zs.SGNHT(learning_rate=1e-5, variance_extra=0.1, tune_rate=50.,
+    # sgmcmc = zs.SGNHT(learning_rate=1e-5, variance_extra=0., tune_rate=50.,
     #                   second_order=True)
     latent = dict(zip(w_names, wv))
 
     # E step: Sample the parameters
-    sgmcmc.make_get_gradient(meta_model, observed={'x': x, 'y': y}, latent=latent)
+    sgmcmc.make_grad_func(meta_bn, observed={'x': x, 'y': y}, latent=latent)
     sample_op, new_w, sample_info = sgmcmc.sample()
 
     # M step: Update the logstd hyperparameters
