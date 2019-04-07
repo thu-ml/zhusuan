@@ -57,6 +57,6 @@ class TestMCMC(tf.test.TestCase):
         # we verified visually that their configuration works, and use a small-
         # scale config here to save time
         sampler = zs.HMC(step_size=0.01, n_leapfrogs=10)
-        with self.test_session() as sess:
+        with self.session() as sess:
             e = sample_error_with(sampler, sess, n_chains=100, n_iters=1000)
             self.assertLessEqual(e, 0.030)

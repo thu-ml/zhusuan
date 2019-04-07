@@ -110,11 +110,11 @@ class EvidenceLowerBoundObjective(VariationalObjective):
         reduced.
     """
 
-    def __init__(self, meta_model, observed, latent=None, axis=None,
+    def __init__(self, meta_bn, observed, latent=None, axis=None,
                  variational=None, allow_default=False):
         self._axis = axis
         super(EvidenceLowerBoundObjective, self).__init__(
-            meta_model,
+            meta_bn,
             observed,
             latent=latent,
             variational=variational,
@@ -223,7 +223,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
             return cost
 
 
-def elbo(meta_model, observed, latent=None, axis=None, variational=None,
+def elbo(meta_bn, observed, latent=None, axis=None, variational=None,
          allow_default=False):
     """
     The evidence lower bound (ELBO) objective for variational inference. The
@@ -248,7 +248,7 @@ def elbo(meta_model, observed, latent=None, axis=None, variational=None,
     :return: An :class:`EvidenceLowerBoundObjective` instance.
     """
     return EvidenceLowerBoundObjective(
-        meta_model,
+        meta_bn,
         observed,
         latent=latent,
         axis=axis,

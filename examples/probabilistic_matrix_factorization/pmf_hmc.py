@@ -108,13 +108,13 @@ def main():
 
     n = tf.placeholder(tf.int32, shape=[], name='n')
     m = tf.placeholder(tf.int32, shape=[], name='m')
-    meta_model = pmf(n, m, D, K, select_u, select_v, alpha_u, alpha_v,
+    model = pmf(n, m, D, K, select_u, select_v, alpha_u, alpha_v,
                      alpha_pred)
 
     # prediction
     true_rating = tf.placeholder(tf.float32, shape=[None], name='true_rating')
     normalized_rating = (true_rating - 1.0) / 4.0
-    pred_rating = meta_model.observe(u=U, v=V)["r"]
+    pred_rating = model.observe(u=U, v=V)["r"]
     pred_rating = tf.reduce_mean(pred_rating, axis=0)
     rmse = tf.sqrt(
         tf.reduce_mean(tf.square(pred_rating - normalized_rating))) * 4
@@ -141,14 +141,14 @@ def main():
         log_pr = tf.reduce_sum(log_pr, axis=-1)
         return log_pu + log_pv + log_pr
 
-    meta_model.log_joint = log_joint
+    model.log_joint = log_joint
 
     sample_u_op, sample_u_info = hmc_u.sample(
-        meta_model,
+        model,
         {"r": normalized_rating, "v": target_v},
         {"u": candidate_sample_u})
     sample_v_op, sample_v_info = hmc_v.sample(
-        meta_model,
+        model,
         {"r": normalized_rating, "u": target_u},
         {"v": candidate_sample_v})
 

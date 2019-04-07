@@ -41,14 +41,14 @@ class VariationalObjective(TensorArithmeticMixin):
         log probabilities.
     """
 
-    def __init__(self, meta_model, observed, latent=None, variational=None,
+    def __init__(self, meta_bn, observed, latent=None, variational=None,
                  allow_default=False):
-        if callable(meta_model):
+        if callable(meta_bn):
             # TODO: raise warning
-            self._meta_model = None
-            self._log_joint = meta_model
+            self._meta_bn = None
+            self._log_joint = meta_bn
         else:
-            self._meta_model = meta_model
+            self._meta_bn = meta_bn
 
         if (variational is None) == (latent is None):
             raise ValueError(
@@ -102,8 +102,8 @@ class VariationalObjective(TensorArithmeticMixin):
                     .format(node.name))
 
     @property
-    def meta_model(self):
-        return self._meta_model
+    def meta_bn(self):
+        return self._meta_bn
 
     @property
     def variational(self):
@@ -111,10 +111,10 @@ class VariationalObjective(TensorArithmeticMixin):
 
     @property
     def bn(self):
-        # TODO: cache bn for the same `meta_model` and `variational`.
-        if self._meta_model:
+        # TODO: cache bn for the same `meta_bn` and `variational`.
+        if self._meta_bn:
             if not hasattr(self, "_bn"):
-                self._bn = self._meta_model.observe(
+                self._bn = self._meta_bn.observe(
                     **merge_dicts(self._v_inputs, self._observed))
                 self._validate_variational_inputs(self._bn)
             return self._bn
@@ -153,7 +153,7 @@ class VariationalObjective(TensorArithmeticMixin):
 
     # TODO: remove deprecated features
     def _log_joint_term(self):
-        if self._meta_model:
+        if self._meta_bn:
             return self.bn.log_joint()
         elif not hasattr(self, '_log_joint_cache'):
             self._log_joint_cache = self._log_joint(

@@ -45,12 +45,14 @@ tf.register_tensor_conversion_function(_SimpleTensor, _to_tensor)
 class ArithMixinTestCase(tf.test.TestCase):
 
     def test_prerequisite(self):
-        if six.PY2:
-            self.assertAlmostEqual(regular_div(3, 2), 1)
-            self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
-        else:
-            self.assertAlmostEqual(regular_div(3, 2), 1.5)
-            self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
+        # Tensorflow has deprecated Python 2 division semantics,
+        # regular division in Python 3 is true division.
+        # if six.PY2:
+        #     self.assertAlmostEqual(regular_div(3, 2), 1)
+        #     self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
+        # else:
+        self.assertAlmostEqual(regular_div(3, 2), 1.5)
+        self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
         self.assertAlmostEqual(true_div(3, 2), 1.5)
         self.assertAlmostEqual(true_div(3.3, 1.6), 2.0625)
         self.assertAlmostEqual(floor_div(3, 2), 1)

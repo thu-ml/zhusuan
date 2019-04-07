@@ -1,33 +1,36 @@
-Bayesian Neural Networks for Regression
-=======================================
+Bayesian Neural Networks
+========================
 
 .. note::
 
     This tutorial assumes that readers have been familiar with ZhuSuan's
-    :doc:`Basic Concepts <concepts>`.
+    :doc:`basic concepts <concepts>`.
 
 Recent years have seen neural networks' powerful abilities in fitting complex
 transformations, with successful applications on speech recognition, image
-classification, and machine translation, etc. However, typical training of
-neural networks requires lots of labeled data to control the risk of
-overfitting. And the problem becomes harder when it comes to real world
-regression tasks. These tasks often have smaller training data to use,
-and the high-frequency characteristics of these data often makes neural
-networks easier to get trapped in overfitting.
+classification, and machine translation, etc.
+However, typical training of neural networks requires lots of labeled data
+to control the risk of overfitting.
+And the problem becomes harder when it comes to real world regression tasks.
+These tasks often have smaller amount of training data to use, and the
+high-frequency characteristics of these data often makes neural networks
+easier to get trapped in overfitting.
 
 A principled approach for solving this problem is **Bayesian Neural Networks**
-(BayesianNN). In BayesianNN, prior distributions are put upon the neural
-network's weights to consider the modeling uncertainty. By doing Bayesian
-inference on the weights, one can learn a predictor which both fits to the
-training data and knows about the uncertainty of its own prediction on test
-data. In this tutorial, we show how to implement BayesianNN in ZhuSuan.
+(BNN).
+In BNN, prior distributions are put upon the neural network's weights
+to consider the modeling uncertainty.
+By doing Bayesian inference on the weights, one can learn a predictor
+which both fits to the training data and reasons about the uncertainty of
+its own prediction on test data.
+In this tutorial, we show how to implement BNNs in ZhuSuan.
 The full script for this tutorial is at
 `examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_.
 
 We use a regression dataset called
 `Boston housing <https://archive.ics.uci.edu/ml/machine-learning-databases/housing/>`_.
 This has :math:`N = 506` data points, with :math:`D = 13` dimensions.
-The forwarding process of a BayesianNN for modeling multivariate regression is
+The generative process of a BNN for modeling multivariate regression is
 as follows:
 
 .. math::
@@ -36,15 +39,15 @@ as follows:
     y_{mean} &= f_{NN}(x, \{W_i\}_{i=1}^L) \\
     y &\sim \mathrm{N}(y|y_{mean}, \sigma^2)
 
-This forwarding process starts with a input feature (:math:`x`), then :math:`x`
+This generative process starts with an input feature (:math:`x`), which
 is forwarded through a deep neural network (:math:`f_{NN}`) with :math:`L`
 layers, whose parameters in each layer (:math:`W_i`) satisfy a factorized
-multivariate standard Normal distribution. With this complex forwarding process,
-the model is enabled to learn complex relationships between the input
-(:math:`x`) and the output (:math:`y`). Finally, some noise is added to the
-output to get a tractable likelihood for the model, which is typically a
-Gaussian noise in regression problems. A graphical model representation for
-bayesian neural network is as follows.
+multivariate standard Normal distribution.
+With this forward transformation, the model is able to learn complex
+relationships between the input (:math:`x`) and the output (:math:`y`).
+Finally, some noise is added to the output to get a tractable likelihood
+for the model, which is typically a Gaussian noise in regression problems.
+A graphical model representation for bayesian neural network is as follows.
 
 .. image:: ../_static/images/bayesian_nn.png
     :align: center
@@ -53,91 +56,72 @@ bayesian neural network is as follows.
 Build the model
 ---------------
 
-Following the forwarding process, first we need standard Normal
-distributions to generate the weights (:math:`\{W_i\}_{i=1}^L`).
+We start by the model building function (we shall see the meanings of
+these arguments later)::
+
+    @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
+    def build_bnn(x, layer_sizes, n_particles):
+        bn = zs.BayesianNet()
+
+Following the generative process, we need standard Normal
+distributions to generate the weights (:math:`\{W_i\}_{i=1}^L`) in each layer.
 For a layer with ``n_in`` input units and ``n_out`` output units, the weights
 are of shape ``[n_out, n_in + 1]`` (one additional column for bias).
-As presented in our graphical model, the latent variable of weights are global
-for all the data. So we need only one copy of them, that is, we need a
-:class:`~zhusuan.model.stochastic.Normal` StochasticTensor of shape
-``[1, n_out, n_in + 1]``::
+To support multiple samples (useful in inference and prediction), a common
+practice is to set the `n_samples` argument to a placeholder, which we
+choose to be ``n_particles`` here::
 
-    with zs.BayesianNet(observed=observed) as model:
-        ws = []
-        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
-                                              layer_sizes[1:])):
-            w_mu = tf.zeros([1, n_out, n_in + 1])
-            ws.append(
-                zs.Normal('w' + str(i), w_mu, std=1.,
-                          n_samples=n_particles, group_ndims=2))
+    h = tf.tile(x[None, ...], [n_particles, 1, 1])
+    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
+                      group_ndims=2, n_samples=n_particles)
 
+Note that we expand ``x`` with a new dimension and tile it to enable
+computation with multiple particles of weight samples.
 To treat the weights in each layer as a whole and evaluate the probability of
-them together, ``group_ndims`` is set to 2. If you are unfamiliar with this
-property, see :ref:`dist-and-stochastic`.
+them together, ``group_ndims`` is set to 2.
+If you are unfamiliar with this property, see :ref:`dist` for details.
 
-Then we write the feedforward process of neural networks, through which the
+Then we write the feed-forward process of neural networks, through which the
 connection between output ``y`` and input ``x`` is established::
 
-    with zs.BayesianNet(observed=observed) as model:
-        ...
-        # forward
-        ly_x = tf.expand_dims(
-            tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
-        for i in range(len(ws)):
-            w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
-            ly_x = tf.concat(
-                [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-            ly_x = tf.matmul(w, ly_x) / \
-                tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
-            if i < len(ws) - 1:
-                ly_x = tf.nn.relu(ly_x)
+    for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
+                      group_ndims=2, n_samples=n_particles)
+        h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
+        h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
+            tf.cast(tf.shape(h)[2], tf.float32))
+        if i < len(layer_sizes) - 2:
+            h = tf.nn.relu(h)
 
 Next, we add an observation distribution (noise) to get a tractable
 likelihood when evaluating the probability::
 
-    with zs.BayesianNet(observed=observed) as model:
-        ...
-        y_mean = tf.squeeze(ly_x, [2, 3])
-        y_logstd = tf.get_variable(
-            'y_logstd', shape=[],
-            initializer=tf.constant_initializer(0.))
-        y = zs.Normal('y', y_mean, logstd=y_logstd)
+    y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
+    y_logstd = tf.get_variable("y_logstd", shape=[],
+                               initializer=tf.constant_initializer(0.))
+    bn.normal("y", y_mean, logstd=y_logstd)
 
 Putting together and adding model reuse, the code for constructing a BayesianNN is::
 
-    import tensorflow as tf
-    import zhusuan as zs
+    @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
+    def build_bnn(x, layer_sizes, n_particles):
+        bn = zs.BayesianNet()
+        h = tf.tile(x[None, ...], [n_particles, 1, 1])
+        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+            w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), std=1.,
+                          group_ndims=2, n_samples=n_particles)
+            h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
+            h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
+                tf.cast(tf.shape(h)[2], tf.float32))
+            if i < len(layer_sizes) - 2:
+                h = tf.nn.relu(h)
 
-    @zs.reuse('model')
-    def bayesianNN(observed, x, n_x, layer_sizes, n_particles):
-        with zs.BayesianNet(observed=observed) as model:
-            ws = []
-            for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
-                                                  layer_sizes[1:])):
-                w_mu = tf.zeros([1, n_out, n_in + 1])
-                ws.append(
-                    zs.Normal('w' + str(i), w_mu, std=1.,
-                              n_samples=n_particles, group_ndims=2))
-
-            # forward
-            ly_x = tf.expand_dims(
-                tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1]), 3)
-            for i in range(len(ws)):
-                w = tf.tile(ws[i], [1, tf.shape(x)[0], 1, 1])
-                ly_x = tf.concat(
-                    [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
-                ly_x = tf.matmul(w, ly_x) / \
-                    tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
-                if i < len(ws) - 1:
-                    ly_x = tf.nn.relu(ly_x)
-
-            y_mean = tf.squeeze(ly_x, [2, 3])
-            y_logstd = tf.get_variable(
-                'y_logstd', shape=[],
-                initializer=tf.constant_initializer(0.))
-            y = zs.Normal('y', y_mean, logstd=y_logstd)
-
-        return model, y_mean
+        y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
+        y_logstd = tf.get_variable("y_logstd", shape=[],
+                                   initializer=tf.constant_initializer(0.))
+        bn.normal("y", y_mean, logstd=y_logstd)
+        return bn
 
 Inference
 ---------
@@ -151,7 +135,8 @@ or uncertainty of weights given the training data.
 
 Because the normalizing constant is intractable, we cannot directly
 compute the posterior distribution of network parameters
-(:math:`\{W_i\}_{i=1}^L`). In order to solve this problem, we use
+(:math:`\{W_i\}_{i=1}^L`).
+In order to solve this problem, we use
 `Variational Inference <https://en.wikipedia.org/wiki/Variational_Bayesian_methods>`_,
 i.e., using a variational distribution
 :math:`q_{\phi}(\{W_i\}_{i=1}^L)=\prod_{i=1}^L{q_{\phi_i}(W_i)}` to
@@ -166,21 +151,19 @@ by its mean and log standard deviation.
 
 The code for above definition is::
 
-    def mean_field_variational(layer_sizes, n_particles):
-        with zs.BayesianNet() as variational:
-            ws = []
-            for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
-                                                  layer_sizes[1:])):
-                w_mean = tf.get_variable(
-                    'w_mean_' + str(i), shape=[1, n_out, n_in + 1],
-                    initializer=tf.constant_initializer(0.))
-                w_logstd = tf.get_variable(
-                    'w_logstd_' + str(i), shape=[1, n_out, n_in + 1],
-                    initializer=tf.constant_initializer(0.))
-                ws.append(
-                    zs.Normal('w' + str(i), w_mean, logstd=w_logstd,
-                              n_samples=n_particles, group_ndims=2))
-        return variational
+    @zs.reuse_variables(scope="variational")
+    def build_mean_field_variational(layer_sizes, n_particles):
+        bn = zs.BayesianNet()
+        for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+            w_mean = tf.get_variable(
+                "w_mean_" + str(i), shape=[n_out, n_in + 1],
+                initializer=tf.constant_initializer(0.))
+            w_logstd = tf.get_variable(
+                "w_logstd_" + str(i), shape=[n_out, n_in + 1],
+                initializer=tf.constant_initializer(0.))
+            bn.normal("w" + str(i), w_mean, logstd=w_logstd,
+                      n_samples=n_particles, group_ndims=2)
+        return bn
 
 In Variational Inference, to make :math:`q_{\phi}(W)` approximate
 :math:`p(W|x_{1:N}, y_{1:N})` well.
@@ -209,7 +192,8 @@ the probability of the variational posterior. The log conditional likelihood is
 .. math::
     \log p(y_{1:N}|x_{1:N}, W) = \sum_{n=1}^N\log p(y_n|x_n, W)
 
-Computing log conditional likelihood for the whole dataset is very time-consuming.
+Computing log conditional likelihood for the whole dataset is very
+time-consuming.
 In practice, we sub-sample a minibatch of data to approximate the conditional
 likelihood
 
@@ -217,17 +201,14 @@ likelihood
     \log p(y_{1:N}|x_{1:N}, W) \approx \frac{N}{M}\sum_{m=1}^M\log p(y_m| x_m, W)
 
 Here :math:`\{(x_m, y_m)\}_{m=1:M}` is a subset including :math:`M`
-random samples from the training set :math:`\{(x_n, y_n)\}_{n=1:N}`. :math:`M`
-is called the batch size. By setting the batch size relatively small, we can
-compute the formula above efficiently. Moreover, using mini-batches brings
-additional benefits. Since a general problem for optimization algorithms is that the
-parameters can get stuck in a local minimum. Using mini-batches brings along
-randomness, which increases the chance for the algorithm to jump out of the local
-minimum.
+random samples from the training set :math:`\{(x_n, y_n)\}_{n=1:N}`.
+:math:`M` is called the batch size.
+By setting the batch size relatively small, we can compute the lower bound
+above efficiently.
 
 .. Note::
 
-    Different with some other models like VAE, Bayesian NN's latent variables
+    Different from models like VAEs, BNN's latent variables
     :math:`\{W_i\}_{i=1}^L` are global for all the data, therefore we don't
     explicitly condition :math:`W` on each data in the variational posterior.
 
@@ -237,26 +218,19 @@ As we have done in the :doc:`VAE tutorial <vae>`,
 the **Stochastic Gradient Variational Bayes** (SGVB) estimator is used.
 The code for this part is::
 
-    n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
-    x = tf.placeholder(tf.float32, shape=[None, n_x])
-    y = tf.placeholder(tf.float32, shape=[None])
-    layer_sizes = [n_x] + n_hiddens + [1]
-    w_names = ['w' + str(i) for i in range(len(layer_sizes) - 1)]
+    model = build_bnn(x, layer_sizes, n_particles)
+    variational = build_mean_field_variational(layer_sizes, n_particles)
 
-    def log_joint(observed):
-        model, _ = bayesianNN(observed, x, n_x, layer_sizes, n_particles)
-        log_pws = model.local_log_prob(w_names)
-        log_py_xw = model.local_log_prob('y')
-        return tf.add_n(log_pws) + log_py_xw * N
+    def log_joint(bn):
+        log_pws = bn.cond_log_prob(w_names)
+        log_py_xw = bn.cond_log_prob('y')
+        return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
-    variational = mean_field_variational(layer_sizes, n_particles)
-    qw_outputs = variational.query(w_names, outputs=True,
-                                   local_log_prob=True)
-    latent = dict(zip(w_names, qw_outputs))
+    model.log_joint = log_joint
+
     lower_bound = zs.variational.elbo(
-        log_joint, observed={'y': y}, latent=latent, axis=0)
-    cost = tf.reduce_mean(lower_bound.sgvb())
-    lower_bound = tf.reduce_mean(lower_bound)
+        model, {'y': y}, variational=variational, axis=0)
+    cost = lower_bound.sgvb()
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
     infer_op = optimizer.minimize(cost)
@@ -296,13 +270,11 @@ on new data
     y^{pred} = \mathbb{E}_{p(y|x, D)} \; y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)} \; y \quad W^i \sim q(W)
 
 First we need to pass the data placeholder and sampled latent parameters to the
-BayesianNN model ::
+BNN model ::
 
     # prediction: rmse & log likelihood
-    observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y})
-    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes,
-                               n_particles)
+    y_mean = lower_bound.bn["y_mean"]
+    y_pred = tf.reduce_mean(y_mean, 0)
 
 The predictive mean is given by ``y_mean``.
 To see how this performs, we would like to compute some quantitative
@@ -339,15 +311,12 @@ the standard deviation. For log likelihood, it needs to be subtracted by a
 log term. All together, the code for evaluation is::
 
     # prediction: rmse & log likelihood
-    observed = dict((w_name, latent[w_name][0]) for w_name in w_names)
-    observed.update({'y': y})
-    model, y_mean = bayesianNN(observed, x, n_x, layer_sizes,
-                               n_particles)
+    y_mean = lower_bound.bn["y_mean"]
     y_pred = tf.reduce_mean(y_mean, 0)
     rmse = tf.sqrt(tf.reduce_mean((y_pred - y) ** 2)) * std_y_train
-    log_py_xw = model.local_log_prob('y')
-    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - \
-        tf.log(std_y_train)
+    log_py_xw = lower_bound.bn.cond_log_prob("y")
+    log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - tf.log(
+        std_y_train)
 
 Run gradient descent
 --------------------
@@ -359,6 +328,9 @@ run the training loop and see how Bayesian Neural Networks performs::
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, epochs + 1):
+            perm = np.random.permutation(x_train.shape[0])
+            x_train = x_train[perm, :]
+            y_train = y_train[perm]
             lbs = []
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
@@ -368,15 +340,14 @@ run the training loop and see how Bayesian Neural Networks performs::
                     feed_dict={n_particles: lb_samples,
                                x: x_batch, y: y_batch})
                 lbs.append(lb)
-            print('Epoch {}: Lower bound = {}'
-                  .format(epoch, np.mean(lbs)))
+            print('Epoch {}: Lower bound = {}'.format(epoch, np.mean(lbs)))
 
             if epoch % test_freq == 0:
-                test_lb, test_rmse, test_ll = sess.run(
-                    [lower_bound, rmse, log_likelihood],
+                test_rmse, test_ll = sess.run(
+                    [rmse, log_likelihood],
                     feed_dict={n_particles: ll_samples,
                                x: x_test, y: y_test})
                 print('>> TEST')
-                print('>> lower bound = {}, rmse = {}, log_likelihood '
-                      '= {}'.format(test_lb, test_rmse, test_ll))
+                print('>> Test rmse = {}, log_likelihood = {}'
+                      .format(test_rmse, test_ll))
 

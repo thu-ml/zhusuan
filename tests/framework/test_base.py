@@ -130,7 +130,7 @@ class TestBayesianNet(tf.test.TestCase):
     def test_query(self):
 
         @meta_bayesian_net()
-        def build_meta_model():
+        def build_meta_bn():
             bn = BayesianNet()
             a = bn.normal('a', 0., logstd=1.)
             b = bn.normal('b', 0., logstd=1.)
@@ -138,7 +138,7 @@ class TestBayesianNet(tf.test.TestCase):
             return bn, a, b, c
 
         a_observed = tf.zeros([])
-        model, a, b, c = build_meta_model().observe(a=a_observed)
+        model, a, b, c = build_meta_bn().observe(a=a_observed)
 
         # nodes
         self.assertTrue(model.get('b') is b)

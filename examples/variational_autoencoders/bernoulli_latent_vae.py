@@ -36,7 +36,7 @@ def build_gen(n, x_dim, z_dim, n_particles, is_training):
 @zs.reuse_variables(scope="q_net")
 def build_q_net(x, z_dim, n_particles, is_training):
     bn = zs.BayesianNet()
-    h = tf.layers.dense(tf.to_float(x), 500, use_bias=False)
+    h = tf.layers.dense(tf.cast(x, tf.float32), 500, use_bias=False)
     h = tf.layers.batch_normalization(h, training=is_training)
     h = tf.nn.relu(h)
     h = tf.layers.dense(h, 500, use_bias=False)
@@ -49,7 +49,7 @@ def build_q_net(x, z_dim, n_particles, is_training):
 
 
 def baseline_net(x):
-    lc_x = tf.layers.dense(tf.to_float(x), 100, activation=tf.nn.relu)
+    lc_x = tf.layers.dense(tf.cast(x, tf.float32), 100, activation=tf.nn.relu)
     lc_x = tf.layers.dense(lc_x, 1)
     lc_x = tf.squeeze(lc_x, -1)
     return lc_x
@@ -71,23 +71,23 @@ def main():
     is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
     n_particles = tf.placeholder(tf.int32, shape=[], name='n_particles')
     x_input = tf.placeholder(tf.float32, shape=[None, x_dim], name='x')
-    x = tf.to_int32(tf.less(tf.random_uniform(tf.shape(x_input)), x_input))
+    x = tf.cast(tf.less(tf.random_uniform(tf.shape(x_input)), x_input),
+                tf.int32)
     n = tf.shape(x)[0]
 
-    meta_model = build_gen(n, x_dim, z_dim, n_particles, is_training)
+    model = build_gen(n, x_dim, z_dim, n_particles, is_training)
     variational = build_q_net(x, z_dim, n_particles, is_training)
     cx = tf.expand_dims(baseline_net(x), 0)
 
     lower_bound = zs.variational.elbo(
-        meta_model, {"x": x}, variational=variational, axis=0)
+        model, {"x": x}, variational=variational, axis=0)
     cost, baseline_cost = lower_bound.reinforce(baseline=cx)
     cost = tf.reduce_mean(cost + baseline_cost)
     lower_bound = tf.reduce_mean(lower_bound)
 
     # # Importance sampling estimates of marginal log likelihood
-    # is_log_likelihood = tf.reduce_mean(
-    #     zs.is_loglikelihood(log_joint, {'x': x},
-    #                         {'z': [qz_samples, log_qz]}, axis=0))
+    is_log_likelihood = tf.reduce_mean(
+        zs.is_loglikelihood(model, {'x': x}, proposal=variational, axis=0))
 
     optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)

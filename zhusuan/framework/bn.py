@@ -317,7 +317,9 @@ class _BayesianNet(object):
             raise ValueError(
                 "There exists a node with name '{}' in the {}. Names should "
                 "be unique.".format(name, BayesianNet.__name__))
-        # TODO: check whether `self` is BayesianNet or _BayesianNet
+        # invalidate the log joint cache
+        if hasattr(self, "_log_joint_cache"):
+            del self._log_joint_cache
         node = StochasticTensor(
             self, name, dist, observation=self._get_observation(name), **kwargs)
         self._nodes[name] = node
@@ -344,7 +346,6 @@ class _BayesianNet(object):
 
         :return: A Tensor. The same as `input_tensor`.
         """
-        tf.Print()
         input_tensor = tf.convert_to_tensor(input_tensor)
         self._nodes[name] = input_tensor
         return input_tensor
@@ -359,7 +360,8 @@ class _BayesianNet(object):
                              .format(name, BayesianNet.__name__))
         elif only_stochastic and not isinstance(
                 self._nodes[name], StochasticTensor):
-            raise ValueError("Node '{}' is deterministic (input or output).".format(name))
+            raise ValueError("Node '{}' is deterministic (input or output)."
+                             .format(name))
         return name
 
     def _check_names_exist(self, name_or_names, only_stochastic=False):
@@ -437,8 +439,6 @@ class _BayesianNet(object):
 
         :return: A Tensor.
         """
-        # TODO: the cache only works when no further nodes is added to the bn,
-        # remove it when a new stochastic node is added.
         if not hasattr(self, "_log_joint_cache"):
             self._log_joint_cache = self._log_joint()
         return self._log_joint_cache
