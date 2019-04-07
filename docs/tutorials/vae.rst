@@ -378,7 +378,8 @@ estimator from the original paper of variational autoencoders
 :cite:`vae-kingma2013auto`.
 This estimator takes benefits of a clever reparameterization trick to
 greatly reduce the variance when estimating the gradients of ELBO.
-In ZhuSuan, one can use this estimator by calling the method :func:`~sgvb`
+In ZhuSuan, one can use this estimator by calling the method
+:meth:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective.sgvb`
 of the class:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective`
 instance.
 The code for this part is::
@@ -392,8 +393,9 @@ The code for this part is::
 .. note::
 
     For readers who are interested, we provide a detailed explanation of the
-    :func:`~sgvb` estimator used here, though this is not
-    required for you to use ZhuSuan's variational functionality.
+    :meth:`~zhusuan.variational.exclusive_kl.EvidenceLowerBoundObjective.sgvb`
+    estimator used here, though this is not required for you to use
+    ZhuSuan's variational functionality.
 
     The key of SGVB estimator is a reparameterization trick, i.e., they
     reparameterize the random variable
