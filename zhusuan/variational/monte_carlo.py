@@ -110,7 +110,7 @@ class ImportanceWeightedObjective(VariationalObjective):
         reduced.
     """
 
-    def __init__(self, meta_model, observed, latent=None, axis=None,
+    def __init__(self, meta_bn, observed, latent=None, axis=None,
                  variational=None, allow_default=False):
         if axis is None:
             raise ValueError(
@@ -118,7 +118,7 @@ class ImportanceWeightedObjective(VariationalObjective):
                 "the `axis` argument must be specified.")
         self._axis = axis
         super(ImportanceWeightedObjective, self).__init__(
-            meta_model,
+            meta_bn,
             observed,
             latent=latent,
             variational=variational,
@@ -187,8 +187,8 @@ class ImportanceWeightedObjective(VariationalObjective):
         # compute variance reduction term
         mean_except_signal = (
             tf.reduce_sum(l_signal, self._axis, keepdims=True) - l_signal
-        ) / tf.to_float(tf.shape(l_signal)[self._axis] - 1)
-        x, sub_x = tf.to_float(l_signal), tf.to_float(mean_except_signal)
+        ) / tf.cast(tf.shape(l_signal)[self._axis] - 1, l_signal.dtype)
+        x, sub_x = l_signal, mean_except_signal
 
         n_dim = tf.rank(x)
         axis_dim_mask = tf.cast(tf.one_hot(self._axis, n_dim), tf.bool)
@@ -218,7 +218,7 @@ class ImportanceWeightedObjective(VariationalObjective):
 
 
 def importance_weighted_objective(
-        meta_model, observed, latent=None, axis=None, variational=None,
+        meta_bn, observed, latent=None, axis=None, variational=None,
         allow_default=False):
     """
     The importance weighted objective for variational inference (Burda, 2015).
@@ -243,7 +243,7 @@ def importance_weighted_objective(
     :return: An :class:`ImportanceWeightedObjective` instance.
     """
     return ImportanceWeightedObjective(
-        meta_model,
+        meta_bn,
         observed,
         latent=latent,
         axis=axis,

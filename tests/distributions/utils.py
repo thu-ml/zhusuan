@@ -208,7 +208,7 @@ def test_batch_shape_2parameter_univariate(
     _test_static(None, [1, 2], None)
 
     # dynamic
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param1_shape, param2_shape, target_shape):
             param1 = tf.placeholder(tf.float32, None)
             param2 = tf.placeholder(tf.float32, None)
@@ -252,7 +252,7 @@ def test_2parameter_sample_shape_same(
     _test_static([None, 1, 10], [None, 1, 10], None, [None, 1, 10])
     _test_static([3, None], [3, 1], 2, [2, 3, None])
 
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param1_shape, param2_shape, n_samples,
                           target_shape):
             param1 = tf.placeholder(tf.float32, None)
@@ -292,7 +292,7 @@ def test_2parameter_log_prob_shape_same(
     _test_static(None, [1, 2], [2, 2], None)
     _test_static([3, None], [3, 1], [3, 2, 1, 1], [3, 2, 3, None])
 
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param1_shape, param2_shape, given_shape,
                           target_shape):
             param1 = tf.placeholder(tf.float32, None)
@@ -340,7 +340,7 @@ def test_batch_shape_1parameter(
     _test_static(None)
 
     # dynamic
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param_shape):
             param = tf.placeholder(tf.float32, None)
             dist = Distribution(param)
@@ -379,7 +379,7 @@ def test_1parameter_sample_shape_same(
     if not only_one_sample:
         _test_static([3, None], 2, [2, 3, None])
 
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param_shape, n_samples, target_shape):
             param = tf.placeholder(tf.float32, None)
             dist = Distribution(param)
@@ -416,7 +416,7 @@ def test_1parameter_log_prob_shape_same(
     with test_class.assertRaisesRegexp(ValueError, "broadcast to match"):
         _test_static([2, 3, 5], [1, 2, 1], None)
 
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param_shape, given_shape, target_shape):
             param = tf.placeholder(tf.float32, None)
             dist = Distribution(param)
@@ -461,7 +461,7 @@ def test_1parameter_sample_shape_one_rank_less(
     _test_static([None, 1, 10], None, [None, 1, 10])
     _test_static([3, None], 2, [2, 3, None])
 
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param_shape, n_samples, target_shape):
             param = tf.placeholder(tf.float32, None)
             dist = Distribution(param)
@@ -505,7 +505,7 @@ def test_1parameter_log_prob_shape_one_rank_less(
     with test_class.assertRaisesRegexp(ValueError, "broadcast to match"):
         _test_static([2, 3, 5], [1, 2, 5], None)
 
-    with test_class.test_session(use_gpu=True):
+    with test_class.session(use_gpu=True):
         def _test_dynamic(param_shape, given_shape, target_shape):
             param = tf.placeholder(tf.float32, None)
             dist = Distribution(param)

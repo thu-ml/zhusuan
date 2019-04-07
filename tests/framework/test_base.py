@@ -15,7 +15,8 @@ from zhusuan.framework import *
 
 class TestStochasticTensor(tf.test.TestCase):
     def test_init(self):
-        samples = Mock()
+        static_shape = Mock()
+        samples = Mock(shape=static_shape)
         log_probs = Mock()
         probs = Mock()
         sample_func = Mock(return_value=samples)
@@ -34,6 +35,8 @@ class TestStochasticTensor(tf.test.TestCase):
         self.assertTrue(s_tensor.tensor is samples)
         self.assertTrue(s_tensor.log_prob(None) is log_probs)
         self.assertTrue(s_tensor.prob(None) is probs)
+        self.assertTrue(s_tensor.get_shape() is static_shape)
+        self.assertTrue(s_tensor.shape is static_shape)
         self.assertTrue(s_tensor.bn is bn)
 
         # v3 construction shouldn't fail
@@ -75,7 +78,7 @@ class TestStochasticTensor(tf.test.TestCase):
         with self.assertRaisesRegexp(
                 TypeError, "type float32.*not match.*type int32"):
             _ = tf.add(1, c)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertNear(b.eval(), 2., 1e-6)
         with self.assertRaisesRegexp(ValueError, "Ref type not supported"):
             _ = StochasticTensor._to_tensor(a, as_ref=True)
@@ -85,11 +88,11 @@ class TestStochasticTensor(tf.test.TestCase):
         a = bn.normal('a', 0., logstd=1.)
         b = a + 1
         # TODO: test all operators
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertNear(b.eval(), 2, 1e-6)
 
     def test_session_run(self):
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             samples = tf.constant([1, 2, 3], dtype=tf.float32)
             # test session.run
             bn = BayesianNet({'t': samples})
@@ -111,7 +114,7 @@ class TestStochasticTensor(tf.test.TestCase):
         x_logstd = tf.zeros([1, 2])
         x = bn.normal('x', mean=x_mean, logstd=x_logstd, group_ndims=1)
 
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             sess.run(tf.global_variables_initializer())
             _ = sess.run(x)
 
@@ -127,7 +130,7 @@ class TestBayesianNet(tf.test.TestCase):
     def test_query(self):
 
         @meta_bayesian_net()
-        def build_meta_model():
+        def build_meta_bn():
             bn = BayesianNet()
             a = bn.normal('a', 0., logstd=1.)
             b = bn.normal('b', 0., logstd=1.)
@@ -135,7 +138,7 @@ class TestBayesianNet(tf.test.TestCase):
             return bn, a, b, c
 
         a_observed = tf.zeros([])
-        model, a, b, c = build_meta_model().observe(a=a_observed)
+        model, a, b, c = build_meta_bn().observe(a=a_observed)
 
         # nodes
         self.assertTrue(model.get('b') is b)
@@ -155,12 +158,12 @@ class TestBayesianNet(tf.test.TestCase):
         # local_log_prob
         log_pa = model.local_log_prob('a')
         log_pa_t = a.log_prob(a_observed)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pa_out, log_pa_t_out = sess.run([log_pa, log_pa_t])
             self.assertNear(log_pa_out, log_pa_t_out, 1e-6)
         log_pb, log_pc = model.local_log_prob(['b', 'c'])
         log_pb_t, log_pc_t = b.log_prob(b), c.log_prob(c)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pb_out, log_pb_t_out = sess.run([log_pb, log_pb_t])
             log_pc_out, log_pc_t_out = sess.run([log_pc, log_pc_t])
             self.assertNear(log_pb_out, log_pb_t_out, 1e-6)
@@ -168,7 +171,7 @@ class TestBayesianNet(tf.test.TestCase):
 
         # local_log_prob by iterator
         log_pb_2, log_pc_2 = model.local_log_prob(iter(['b', 'c']))
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pb_2_out, log_pb_t_out = sess.run([log_pb_2, log_pb_t])
             log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
             self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
@@ -183,7 +186,7 @@ class TestBayesianNet(tf.test.TestCase):
         self.assertTrue(a_out is a.tensor)
         self.assertTrue(b_out is b.tensor)
         self.assertTrue(c_out is c.tensor)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pa_out, log_pa_t_out, log_pb_out, log_pb_t_out, log_pc_out, \
                 log_pc_t_out = sess.run([log_pa, log_pa_t, log_pb, log_pb_t,
                                          log_pc, log_pc_t])
@@ -196,7 +199,7 @@ class TestBayesianNet(tf.test.TestCase):
             model.query(iter(['b', 'c']), outputs=True, local_log_prob=True)
         self.assertIs(b_out_2, b_out)
         self.assertIs(c_out_2, c_out)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             log_pb_2_out, log_pb_t_out = sess.run([log_pb_2, log_pb_t])
             log_pc_2_out, log_pc_t_out = sess.run([log_pc_2, log_pc_t])
             self.assertNear(log_pb_2_out, log_pb_t_out, 1e-6)
@@ -237,7 +240,7 @@ class TestReuse(tf.test.TestCase):
             _, m1 = mbn.observe()
             with tf.variable_scope('you_might_want_do_this'):
                 _, m2 = mbn.observe()
-            self.assertNotEquals(m1.name, m2.name)
+            self.assertNotEqual(m1.name, m2.name)
         with tf.variable_scope('when_you_are_perfectly_conscious'):
             _, m2 = build_mbn('a_mean').observe()
         self.assertNotEquals(m1.name, m2.name)
@@ -251,7 +254,7 @@ class TestReuse(tf.test.TestCase):
         _, m2 = meta_bn.observe()
         _, m3 = build_mbn('a_mean').observe()
         self.assertEquals(m1.name, m2.name)
-        self.assertNotEquals(m1.name, m3.name)
+        self.assertNotEqual(m1.name, m3.name)
 
         with self.assertRaisesRegexp(ValueError, 'Cannot reuse'):
             @meta_bayesian_net(reuse_variables=True)

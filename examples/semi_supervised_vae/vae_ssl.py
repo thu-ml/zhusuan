@@ -24,7 +24,7 @@ def build_gen(n, x_dim, n_class, z_dim, n_particles):
     h_from_z = tf.layers.dense(z, 500)
     y_logits = tf.zeros([n, n_class])
     y = bn.onehot_categorical("y", y_logits)
-    h_from_y = tf.layers.dense(tf.to_float(y), 500)
+    h_from_y = tf.layers.dense(tf.cast(y, tf.float32), 500)
     h = tf.nn.relu(h_from_z + h_from_y)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     x_logits = tf.layers.dense(h, x_dim)
@@ -35,7 +35,7 @@ def build_gen(n, x_dim, n_class, z_dim, n_particles):
 @zs.reuse_variables(scope="variational")
 def qz_xy(x, y, z_dim, n_particles):
     bn = zs.BayesianNet()
-    h = tf.layers.dense(tf.to_float(tf.concat([x, y], -1)), 500,
+    h = tf.layers.dense(tf.cast(tf.concat([x, y], -1), tf.float32), 500,
                         activation=tf.nn.relu)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     z_mean = tf.layers.dense(h, z_dim)
@@ -47,7 +47,7 @@ def qz_xy(x, y, z_dim, n_particles):
 
 @zs.reuse_variables("classifier")
 def qy_x(x, n_class):
-    h = tf.layers.dense(tf.to_float(x), 500, activation=tf.nn.relu)
+    h = tf.layers.dense(tf.cast(x, tf.float32), 500, activation=tf.nn.relu)
     h = tf.layers.dense(h, 500, activation=tf.nn.relu)
     y_logits = tf.layers.dense(h, n_class)
     return y_logits
@@ -81,17 +81,18 @@ def main():
     # Build the computation graph
     n = tf.placeholder(tf.int32, shape=[], name="n")
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
-    meta_model = build_gen(n, x_dim, n_class, z_dim, n_particles)
+    model = build_gen(n, x_dim, n_class, z_dim, n_particles)
 
     # Labeled
     x_labeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim], name="x_l")
-    x_labeled = tf.to_int32(
-        tf.less(tf.random_uniform(tf.shape(x_labeled_ph)), x_labeled_ph))
+    x_labeled = tf.cast(
+        tf.less(tf.random_uniform(tf.shape(x_labeled_ph)), x_labeled_ph),
+        tf.int32)
     y_labeled_ph = tf.placeholder(tf.int32, shape=[None, n_class], name="y_l")
     variational = qz_xy(x_labeled, y_labeled_ph, z_dim, n_particles)
 
     labeled_lower_bound = tf.reduce_mean(
-        zs.variational.elbo(meta_model,
+        zs.variational.elbo(model,
                             observed={"x": x_labeled, "y": y_labeled_ph},
                             variational=variational,
                             axis=0))
@@ -101,14 +102,15 @@ def main():
 
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim],
                                     name="x_u")
-    x_unlabeled = tf.to_int32(
-        tf.less(tf.random_uniform(tf.shape(x_unlabeled_ph)), x_unlabeled_ph))
+    x_unlabeled = tf.cast(
+        tf.less(tf.random_uniform(tf.shape(x_unlabeled_ph)), x_unlabeled_ph),
+        tf.int32)
     y_diag = tf.eye(n_class, dtype=tf.int32)
     y_u = tf.reshape(tf.tile(y_diag[None, ...], [n, 1, 1]), [-1, n_class])
     x_u = tf.reshape(tf.tile(x_unlabeled[:, None, ...], [1, n_class, 1]),
                      [-1, x_dim])
     variational = qz_xy(x_u, y_u, z_dim, n_particles)
-    lb_z = zs.variational.elbo(meta_model,
+    lb_z = zs.variational.elbo(model,
                                observed={"x": x_u, "y": y_u},
                                variational=variational,
                                axis=0)

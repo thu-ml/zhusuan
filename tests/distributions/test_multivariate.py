@@ -17,7 +17,7 @@ from zhusuan.distributions.multivariate import *
 
 class TestMultivariateNormalCholesky(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 MultivariateNormalCholesky(tf.zeros([]), tf.zeros([]))
             with self.assertRaisesRegexp(ValueError, "should have rank"):
@@ -34,7 +34,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
                 dst.sample().eval(feed_dict={u: np.ones((3,))})
 
     def test_shape_inference(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             # Static
             mean = 10 * np.random.normal(size=(10, 11, 2)).astype('d')
             cov = np.zeros((10, 11, 2, 2))
@@ -66,7 +66,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
     @contextmanager
     def fixed_randomness_session(self, seed):
         with tf.Graph().as_default() as g:
-            with self.test_session(use_gpu=True, graph=g):
+            with self.session(use_gpu=True, graph=g):
                 tf.set_random_seed(seed)
                 yield
 
@@ -138,7 +138,7 @@ class TestMultivariateNormalCholesky(tf.test.TestCase):
 
 class TestMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 Multinomial(tf.zeros([]), n_experiments=10)
 
@@ -149,7 +149,7 @@ class TestMultinomial(tf.test.TestCase):
         self.assertTrue(isinstance(dist.n_experiments, int))
         self.assertEqual(dist.n_experiments, 10)
 
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             logits = tf.placeholder(tf.float32, None)
             n_experiments = tf.placeholder(tf.int32, None)
             dist2 = Multinomial(logits, n_experiments=n_experiments)
@@ -180,7 +180,7 @@ class TestMultinomial(tf.test.TestCase):
         logits = tf.placeholder(tf.float32, None)
         dist2 = Multinomial(logits, n_experiments=10)
         self.assertTrue(dist2._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={logits: np.ones([2])}).tolist(), [2])
 
@@ -216,7 +216,7 @@ class TestMultinomial(tf.test.TestCase):
             self, _distribution, _make_samples, _make_samples)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(logits, n_experiments, given, normalize_logits):
                 logits = np.array(logits, np.float32)
                 given = np.array(given)
@@ -266,7 +266,7 @@ class TestMultinomial(tf.test.TestCase):
 
 class TestUnnormalizedMultinomial(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 UnnormalizedMultinomial(tf.zeros([]))
 
@@ -275,7 +275,7 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
         self.assertTrue(isinstance(dist.n_categories, int))
         self.assertEqual(dist.n_categories, 2)
 
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             logits = tf.placeholder(tf.float32, None)
             dist2 = UnnormalizedMultinomial(logits)
             self.assertEqual(
@@ -294,7 +294,7 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
         logits = tf.placeholder(tf.float32, None)
         dist2 = UnnormalizedMultinomial(logits)
         self.assertTrue(dist2._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={logits: np.ones([2])}).tolist(), [2])
 
@@ -325,7 +325,7 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
             self, _distribution, _make_samples, _make_samples)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(logits, given, normalize_logits):
                 logits = np.array(logits, np.float32)
                 given = np.array(given)
@@ -360,7 +360,7 @@ class TestUnnormalizedMultinomial(tf.test.TestCase):
 
 class TestOnehotCategorical(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 OnehotCategorical(logits=tf.zeros([]))
 
@@ -369,7 +369,7 @@ class TestOnehotCategorical(tf.test.TestCase):
         self.assertTrue(isinstance(cat.n_categories, int))
         self.assertEqual(cat.n_categories, 10)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
             cat2 = OnehotCategorical(logits)
             self.assertEqual(
@@ -387,7 +387,7 @@ class TestOnehotCategorical(tf.test.TestCase):
         logits = tf.placeholder(tf.float32, None)
         cat2 = OnehotCategorical(logits)
         self.assertTrue(cat2._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(cat2._value_shape().eval(
                 feed_dict={logits: np.ones([2, 1, 3])}).tolist(), [3])
 
@@ -412,7 +412,7 @@ class TestOnehotCategorical(tf.test.TestCase):
             self, OnehotCategorical, _make_samples, _make_samples)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(logits, given):
                 logits = np.array(logits, np.float32)
                 normalized_logits = logits - logsumexp(
@@ -449,7 +449,7 @@ class TestOnehotCategorical(tf.test.TestCase):
 
 class TestDirichlet(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 Dirichlet(alpha=tf.zeros([]))
 
@@ -463,7 +463,7 @@ class TestDirichlet(tf.test.TestCase):
         dist2 = Dirichlet(tf.placeholder(tf.float32, [3, None]))
         self.assertTrue(dist2.n_categories is not None)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             alpha = tf.placeholder(tf.float32, None)
             dist3 = Dirichlet(alpha)
             self.assertEqual(
@@ -482,7 +482,7 @@ class TestDirichlet(tf.test.TestCase):
         dist2 = Dirichlet(alpha)
         self.assertEqual(dist2.get_value_shape().as_list(), [None])
         self.assertTrue(dist2._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(dist2._value_shape().eval(
                 feed_dict={alpha: np.ones([2, 1, 3])}).tolist(), [3])
         self.assertEqual(dist._value_shape().dtype, tf.int32)
@@ -519,7 +519,7 @@ class TestDirichlet(tf.test.TestCase):
         def dirichlet_pdf(x, alpha):
             return np.exp(dirichlet_logpdf(x, alpha))
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value_alpha_rank1(alpha, given):
                 alpha = np.array(alpha, np.float32)
                 given = np.array(given, np.float32)
@@ -565,7 +565,7 @@ class TestDirichlet(tf.test.TestCase):
         given = tf.placeholder(tf.float32, None)
         dist = Dirichlet(alpha, check_numerics=True)
         log_p = dist.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(given\).*Tensor had Inf"):
                 log_p.eval(feed_dict={alpha: np.ones([2]), given: [0., 1.]})
@@ -579,7 +579,7 @@ class TestDirichlet(tf.test.TestCase):
 
 class TestExpConcrete(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 ExpConcrete(1., logits=tf.zeros([]))
 
@@ -588,7 +588,7 @@ class TestExpConcrete(tf.test.TestCase):
         self.assertTrue(isinstance(con.n_categories, int))
         self.assertEqual(con.n_categories, 10)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
             con2 = ExpConcrete(1., logits)
             self.assertEqual(
@@ -602,7 +602,7 @@ class TestExpConcrete(tf.test.TestCase):
                                      "should be a scalar"):
             ExpConcrete([1.], [1., 2.])
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             temperature = tf.placeholder(tf.float32, None)
             con = ExpConcrete(temperature, [1., 2.])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
@@ -618,7 +618,7 @@ class TestExpConcrete(tf.test.TestCase):
         logits = tf.placeholder(tf.float32, None)
         con2 = ExpConcrete(1., logits)
         self.assertTrue(con2._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(con2._value_shape().eval(
                 feed_dict={logits: np.ones([2, 1, 3])}).tolist(), [3])
 
@@ -648,7 +648,7 @@ class TestExpConcrete(tf.test.TestCase):
             self, _proxy_distribution, np.ones, _make_samples)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(given, temperature, logits):
                 given = np.array(given, np.float32)
                 logits = np.array(logits, np.float32)
@@ -704,7 +704,7 @@ class TestExpConcrete(tf.test.TestCase):
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             outs = sess.run([t_path_grads, t_true_grads,
                              logits_path_grads, logits_true_grads],
                             feed_dict={n_samples: 7})
@@ -727,7 +727,7 @@ class TestExpConcrete(tf.test.TestCase):
         given = tf.placeholder(tf.float32, None)
         dist = ExpConcrete(tau, logits, check_numerics=True)
         log_p = dist.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(temperature\).*Tensor had Inf"):
                 log_p.eval(feed_dict={tau: 0., logits: np.ones([2]),
@@ -740,7 +740,7 @@ class TestExpConcrete(tf.test.TestCase):
 
 class TestConcrete(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank"):
                 Concrete(1., logits=tf.zeros([]))
 
@@ -749,7 +749,7 @@ class TestConcrete(tf.test.TestCase):
         self.assertTrue(isinstance(con.n_categories, int))
         self.assertEqual(con.n_categories, 10)
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             logits = tf.placeholder(tf.float32, None)
             con2 = Concrete(1., logits)
             self.assertEqual(
@@ -763,7 +763,7 @@ class TestConcrete(tf.test.TestCase):
                                      "should be a scalar"):
             Concrete([1.], [1., 2.])
 
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             temperature = tf.placeholder(tf.float32, None)
             con = Concrete(temperature, [1., 2.])
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
@@ -779,7 +779,7 @@ class TestConcrete(tf.test.TestCase):
         logits = tf.placeholder(tf.float32, None)
         con2 = Concrete(1., logits)
         self.assertTrue(con2._value_shape().dtype is tf.int32)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             self.assertEqual(con2._value_shape().eval(
                 feed_dict={logits: np.ones([2, 1, 3])}).tolist(), [3])
 
@@ -809,7 +809,7 @@ class TestConcrete(tf.test.TestCase):
             self, _proxy_distribution, np.ones, _make_samples)
 
     def test_value(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             def _test_value(given, temperature, logits):
                 given = np.array(given, np.float32)
                 logits = np.array(logits, np.float32)
@@ -865,7 +865,7 @@ class TestConcrete(tf.test.TestCase):
         sample_grads = tf.gradients(log_prob, samples)
         t_true_grads = tf.gradients(samples, temperature, sample_grads)[0]
         logits_true_grads = tf.gradients(samples, logits, sample_grads)[0]
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             outs = sess.run([t_path_grads, t_true_grads,
                              logits_path_grads, logits_true_grads],
                             feed_dict={n_samples: 7})
@@ -888,7 +888,7 @@ class TestConcrete(tf.test.TestCase):
         given = tf.placeholder(tf.float32, None)
         dist = Concrete(tau, logits, check_numerics=True)
         log_p = dist.log_prob(given)
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(tf.errors.InvalidArgumentError,
                                          "log\(given\).*Tensor had Inf"):
                 log_p.eval(feed_dict={tau: 1., logits: np.ones([2]),
@@ -909,7 +909,7 @@ class TestConcrete(tf.test.TestCase):
 
 class TestMatrixVariateNormalCholesky(tf.test.TestCase):
     def test_init_check_shape(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             with self.assertRaisesRegexp(ValueError, "should have rank >= 2"):
                 MatrixVariateNormalCholesky(
                     tf.zeros([]), tf.zeros([]), tf.zeros([]))
@@ -949,7 +949,7 @@ class TestMatrixVariateNormalCholesky(tf.test.TestCase):
                     feed_dict={u: np.ones((2,)), v: np.ones((2,))})
 
     def test_shape_inference(self):
-        with self.test_session(use_gpu=True):
+        with self.session(use_gpu=True):
             # Static
             mean = 10 * np.random.normal(size=(10, 11, 2, 3)).astype('d')
             u_tril = np.zeros((10, 11, 2, 2))
@@ -990,7 +990,7 @@ class TestMatrixVariateNormalCholesky(tf.test.TestCase):
     @contextmanager
     def fixed_randomness_session(self, seed):
         with tf.Graph().as_default() as g:
-            with self.test_session(use_gpu=True, graph=g):
+            with self.session(use_gpu=True, graph=g):
                 tf.set_random_seed(seed)
                 yield
 

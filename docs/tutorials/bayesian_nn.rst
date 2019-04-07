@@ -1,5 +1,5 @@
-Bayesian Neural Networks for Regression
-=======================================
+Bayesian Neural Networks
+========================
 
 .. note::
 
@@ -36,23 +36,21 @@ as follows:
     y_{mean} &= f_{NN}(x, \{W_i\}_{i=1}^L) \\
     y &\sim \mathrm{N}(y|y_{mean}, \sigma^2)
 
-This forwarding process starts with a input features (:math:`x`), then
-:math:`x` is forwarded through a deep neural network (:math:`f_{NN}`)
-with :math:`L` layers, whose parameters in each layer satisfy a factorized
-multivariate standard Normal distribution. With this complex forwarding
-process, the model is enabled to learn complex relationships between the
-input (:math:`x`) and the output (:math:`y`). Finally, some noise is added to
-the output to get a tractable likelihood for the model, which is typically
-a Gaussian noise in regression problems. A graphical model representation for
-bayesian neural network is as follows. Combining the observed input (:math:`x`) and
-the global network parameters (:math:`\{W_i\}_{i=1}^L`), the model outputs
-observed (:math:`y`).
+This forwarding process starts with a input feature (:math:`x`), then :math:`x`
+is forwarded through a deep neural network (:math:`f_{NN}`) with :math:`L`
+layers, whose parameters in each layer (:math:`W_i`) satisfy a factorized
+multivariate standard Normal distribution. With this complex forwarding process,
+the model is enabled to learn complex relationships between the input
+(:math:`x`) and the output (:math:`y`). Finally, some noise is added to the
+output to get a tractable likelihood for the model, which is typically a
+Gaussian noise in regression problems. A graphical model representation for
+bayesian neural network is as follows.
 
 .. image:: ../_static/images/bayesian_nn.png
     :align: center
     :width: 25%
 
-Build the Model
+Build the model
 ---------------
 
 Following the forwarding process, first we need standard Normal
@@ -90,7 +88,7 @@ connection between output ``y`` and input ``x`` is established::
             ly_x = tf.concat(
                 [ly_x, tf.ones([n_particles, tf.shape(x)[0], 1, 1])], 2)
             ly_x = tf.matmul(w, ly_x) / \
-                tf.sqrt(tf.to_float(tf.shape(ly_x)[2]))
+                tf.sqrt(tf.cast(tf.shape(ly_x)[2], tf.float32))
             if i < len(ws) - 1:
                 ly_x = tf.nn.relu(ly_x)
 
@@ -179,15 +177,17 @@ We need to maximize a lower bound of the marginal log probability
 
 .. math::
 
-    \log p(y_{1:N}|x_{1:N}) &\geq \log p(y_{1:N}, W|x_{1:N}) - \mathrm{KL}(q_{\phi}(W)\|p(W)) \\
-    &= \mathbb{E}_{q_{\phi}(W)} \left[\log p(y_{1:N}|x_{1:N}, W)p(W) - \log q_{\phi}(W)\right] \\
-    &= \mathcal{L}(\phi)
+    \log p(y_{1:N}|x_{1:N}) &\geq \log p(y_{1:N}|x_{1:N})
+    - \mathrm{KL}(q_{\phi}(W)\|p(W|x_{1:N},y_{1:N})) \\
+    &= \mathbb{E}_{q_{\phi}(W)} \left[\log (p(y_{1:N}|x_{1:N}, W)p(W))
+    - \log q_{\phi}(W)\right] \\
+    &\triangleq \mathcal{L}(\phi)
 
 The lower bound is equal to the marginal log
 likelihood if and only if :math:`q_{\phi}(W) = p(W|x_{1:N}, y_{1:N})`,
 for :math:`i` in :math:`1\cdots L`, when the
 `Kullback–Leibler divergence <https://en.wikipedia.org/wiki/Kullback%E2%80%93Leibler_divergence>`_
-between them (:math:`\mathrm{KL}(q_{\phi}(\{W\})\|p(W|x_{1:N}, y_{1:N})`)
+between them (:math:`\mathrm{KL}(q_{\phi}(W)\|p(W|x_{1:N}, y_{1:N})`)
 is zero.
 
 This lower bound is usually called Evidence Lower Bound (ELBO). Note that the
@@ -331,7 +331,7 @@ log term. All together, the code for evaluation is::
     log_likelihood = tf.reduce_mean(zs.log_mean_exp(log_py_xw, 0)) - tf.log(
         std_y_train)
 
-Run Gradient Descent
+Run gradient descent
 --------------------
 
 Again, everything is good before a run. Now add the following codes to

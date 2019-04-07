@@ -301,7 +301,7 @@ class Multinomial(Distribution):
         else:
             logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
         samples_flat = tf.transpose(
-            tf.multinomial(logits_flat, n_samples * self.n_experiments))
+            tf.random.categorical(logits_flat, n_samples * self.n_experiments))
         shape = tf.concat([[n_samples, self.n_experiments],
                            self.batch_shape], 0)
         samples = tf.reshape(samples_flat, shape)
@@ -524,7 +524,8 @@ class OnehotCategorical(Distribution):
             logits_flat = self.logits
         else:
             logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
-        samples_flat = tf.transpose(tf.multinomial(logits_flat, n_samples))
+        samples_flat = tf.transpose(
+            tf.random.categorical(logits_flat, n_samples))
         if self.logits.get_shape().ndims == 2:
             samples = samples_flat
         else:

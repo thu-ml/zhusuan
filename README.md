@@ -36,7 +36,7 @@ please clone the repository and run
 pip install .
 ```
 in the main directory. This will install ZhuSuan and its dependencies
-automatically. ZhuSuan also requires **Tensorflow 1.5.0 or later**. Because
+automatically. ZhuSuan also requires **Tensorflow 1.13.0 or later**. Because
 users should choose whether to install the cpu or gpu version of Tensorflow,
 we do not include it in the dependencies. See
 [Installing Tensorflow](https://www.tensorflow.org/install/).
@@ -79,7 +79,7 @@ pip install ".[examples]"
 * Logistic Normal Topic Model:
   [HMC](examples/topic_models/lntm_mcem.py)
 * Probabilistic Matrix Factorization:
-  [HMC](examples/probabilistic_matrix_factorization/logistic_pmf_hmc.py)
+  [HMC](examples/probabilistic_matrix_factorization/pmf_hmc.py)
 * Sparse Variational Gaussian Process:
   [SGVB](examples/gaussian_process/svgp.py)
 
@@ -89,7 +89,7 @@ If you find ZhuSuan useful, please consider citing it in your publications.
 We provide a BibTeX entry of the ZhuSuan white paper below.
 ```
 @ARTICLE{zhusuan2017,
-    title={ZhuSuan: A Library for Bayesian Deep Learning},
+    title={Zhu{S}uan: A Library for {B}ayesian Deep Learning},
     author={Shi, Jiaxin and Chen, Jianfei. and Zhu, Jun and Sun, Shengyang
     and Luo, Yucen and Gu, Yihong and Zhou, Yuhao},
     journal={arXiv preprint arXiv:1709.05870},

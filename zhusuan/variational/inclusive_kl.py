@@ -78,11 +78,11 @@ class InclusiveKLObjective(VariationalObjective):
         reduced.
     """
 
-    def __init__(self, meta_model, observed, latent=None, axis=None,
+    def __init__(self, meta_bn, observed, latent=None, axis=None,
                  variational=None, allow_default=False):
         self._axis = axis
         super(InclusiveKLObjective, self).__init__(
-            meta_model,
+            meta_bn,
             observed,
             latent=latent,
             variational=variational,
@@ -135,7 +135,7 @@ class InclusiveKLObjective(VariationalObjective):
         return cost
 
 
-def klpq(meta_model, observed, latent=None, axis=None, variational=None,
+def klpq(meta_bn, observed, latent=None, axis=None, variational=None,
          allow_default=False):
     """
     The inclusive KL objective for variational inference. The
@@ -160,7 +160,7 @@ def klpq(meta_model, observed, latent=None, axis=None, variational=None,
     :return: An :class:`InclusiveKLObjective` instance.
     """
     return InclusiveKLObjective(
-        meta_model,
+        meta_bn,
         observed,
         latent=latent,
         axis=axis,
