@@ -390,6 +390,7 @@ The code for this part is::
     # the lower bound value to print for monitoring convergence
     lower_bound = tf.reduce_mean(lower_bound)
 
+
 .. note::
 
     For readers who are interested, we provide a detailed explanation of the
