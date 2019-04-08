@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+import warnings
 
 import tensorflow as tf
 from tensorflow.python.client.session import (
@@ -21,8 +22,6 @@ __all__ = [
     'BayesianNet',
 ]
 
-
-# TODO: __str__, __repr__ for StochasticTensor
 
 class StochasticTensor(TensorArithmeticMixin):
     """
@@ -68,6 +67,11 @@ class StochasticTensor(TensorArithmeticMixin):
 
     def __init__(self, bn, name, dist, observation=None, **kwargs):
         if bn is None:
+            warnings.warn(
+                "The old-style StochasticTensor wrappers will be removed "
+                "in a future version. Please see tutorials/concepts.rst for "
+                "the suggested way of model construction.",
+                FutureWarning)
             try:
                 bn = BayesianNet.get_context()
             except RuntimeError:
@@ -118,6 +122,8 @@ class StochasticTensor(TensorArithmeticMixin):
         :return: A :class:`BayesianNet` instance.
         """
         return self._bn
+
+    # TODO: __str__, __repr__ for StochasticTensor
 
     @property
     def name(self):

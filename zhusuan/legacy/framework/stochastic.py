@@ -46,6 +46,10 @@ __all__ = [
 
 class Normal(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Normal `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -100,6 +104,10 @@ class Normal(StochasticTensor):
 
 class FoldNormal(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate FoldNormal `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -154,6 +162,10 @@ class FoldNormal(StochasticTensor):
 
 class Bernoulli(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Bernoulli `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -195,6 +207,10 @@ class Bernoulli(StochasticTensor):
 
 class Categorical(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Categorical `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -243,6 +259,10 @@ Discrete = Categorical
 
 class Uniform(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Uniform `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -289,6 +309,10 @@ class Uniform(StochasticTensor):
 
 class Gamma(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Gamma `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -330,6 +354,10 @@ class Gamma(StochasticTensor):
 
 class Beta(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Beta `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -373,6 +401,10 @@ class Beta(StochasticTensor):
 
 class Poisson(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Poisson `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -415,6 +447,10 @@ class Poisson(StochasticTensor):
 
 class Binomial(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Binomial `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -463,6 +499,9 @@ class Binomial(StochasticTensor):
 
 class MultivariateNormalCholesky(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
 
     The class of multivariate normal `StochasticTensor`, where covariance is
     parameterized with the lower triangular matrix :math:`L` in Cholesky
@@ -515,6 +554,10 @@ class MultivariateNormalCholesky(StochasticTensor):
 
 class MatrixVariateNormalCholesky(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of matrix variate normal `StochasticTensor`, where covariances
     :math:`U` and :math:`V` are parameterized with the lower triangular
     matrix in Cholesky decomposition,
@@ -576,6 +619,10 @@ class MatrixVariateNormalCholesky(StochasticTensor):
 
 class Multinomial(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Multinomial `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -637,6 +684,10 @@ class Multinomial(StochasticTensor):
 
 class UnnormalizedMultinomial(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of UnnormalizedMultinomial `StochasticTensor`.
     UnnormalizedMultinomial distribution calculates probabilities differently
     from :class:`Multinomial`: It considers the bag-of-words `given` as a
@@ -698,6 +749,10 @@ BagofCategoricals = UnnormalizedMultinomial
 
 class OnehotCategorical(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of one-hot Categorical `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -747,6 +802,10 @@ OnehotDiscrete = OnehotCategorical
 
 class Dirichlet(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Dirichlet `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -792,6 +851,10 @@ class Dirichlet(StochasticTensor):
 
 class InverseGamma(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate InverseGamma `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -833,6 +896,10 @@ class InverseGamma(StochasticTensor):
 
 class Laplace(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Laplace `StochasticTensor`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
@@ -879,6 +946,10 @@ class Laplace(StochasticTensor):
 
 class BinConcrete(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate BinConcrete `StochasticTensor` from
     (Maddison, 2016). It is the binary case of :class:`~Concrete`.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
@@ -935,6 +1006,10 @@ BinGumbelSoftmax = BinConcrete
 
 class ExpConcrete(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of ExpConcrete `StochasticTensor` from (Maddison, 2016),
     transformed from :class:`~Concrete` by taking logarithm.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
@@ -991,6 +1066,10 @@ ExpGumbelSoftmax = ExpConcrete
 
 class Concrete(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Concrete (or Gumbel-Softmax) `StochasticTensor` from
     (Maddison, 2016; Jang, 2016), served as
     the continuous relaxation of the :class:`~OnehotCategorical`.
@@ -1048,6 +1127,10 @@ GumbelSoftmax = Concrete
 
 class Empirical(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Empirical `StochasticTensor`.
     For any inference it is always required that the variables are observed.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.
@@ -1095,6 +1178,10 @@ class Empirical(StochasticTensor):
 
 class Implicit(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Implicit `StochasticTensor`.
     This distribution always sample the implicit tensor provided.
     See :class:`~zhusuan.framework.base.StochasticTensor` for details.

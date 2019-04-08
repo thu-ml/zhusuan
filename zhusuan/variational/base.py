@@ -76,7 +76,7 @@ class VariationalObjective(TensorArithmeticMixin):
             warnings.warn(
                 "The `latent` argument has been deprecated and will be "
                 "removed in the coming version (0.4.1), use the `variational` "
-                "argument instead.", DeprecationWarning)
+                "argument instead.", FutureWarning)
             self._variational = None
             v_names, v_inputs_and_log_probs = zip(*six.iteritems(latent))
             v_inputs = zip(v_names,

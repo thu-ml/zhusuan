@@ -113,5 +113,5 @@ def reuse(scope):
     warnings.warn(
         "The `reuse()` function has been renamed to `reuse_variables()`, "
         "`reuse()` will be removed in the coming version (0.4.1)",
-        DeprecationWarning)
+        FutureWarning)
     return reuse_variables(scope)

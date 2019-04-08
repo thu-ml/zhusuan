@@ -18,6 +18,10 @@ __all__ = [
 
 class Empirical(Distribution):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Empirical distribution. Distribution for any variables,
     which are sampled from an empirical distribution and have no explicit
     density. You can not sample from the distribution or calculate
@@ -91,6 +95,10 @@ class Empirical(Distribution):
 
 class Implicit(Distribution):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of Implicit distribution. The distribution abstracts variables
     whose distribution have no explicit form. A common example of implicit
     variables are the generated samples from a GAN.

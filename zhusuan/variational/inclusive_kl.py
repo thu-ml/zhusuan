@@ -110,7 +110,7 @@ class InclusiveKLObjective(VariationalObjective):
         warnings.warn(
             "The `rws()` method has been renamed to `importance()`, "
             "`rws()` will be removed in the coming version (0.4.1)",
-            DeprecationWarning)
+            FutureWarning)
         return self.importance()
 
     def importance(self):
