@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 import warnings
+import copy
 
 import six
 import tensorflow as tf
@@ -12,7 +13,6 @@ from tensorflow.python.client.session import \
     register_session_run_conversion_functions
 
 from zhusuan.framework.bn import StochasticTensor, BayesianNet
-from zhusuan.framework.meta_bn import MetaBayesianNet
 from zhusuan.utils import TensorArithmeticMixin, merge_dicts
 
 
@@ -29,22 +29,25 @@ class VariationalObjective(TensorArithmeticMixin):
     :func:`~zhusuan.variational.monte_carlo.importance_weighted_objective`,
     or :func:`~zhusuan.variational.inclusive_kl.klpq`.
 
-    :param log_joint: A function that accepts a dictionary argument of
+    :param meta_bn: A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+        instance or a log joint probability function.
+        For the latter, it must accepts a dictionary argument of
         ``(string, Tensor)`` pairs, which are mappings from all
-        `StochasticTensor` names in the model to their observed values. The
+        node names in the model to their observed values. The
         function should return a Tensor, representing the log joint likelihood
         of the model.
     :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
-        names of observed `StochasticTensor` s to their values.
+        names of observed stochastic nodes to their values.
     :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-        Mapping from names of latent `StochasticTensor` s to their samples and
-        log probabilities.
+        Mapping from names of latent stochastic nodes to their samples and
+        log probabilities. `latent` and `variational` are mutually exclusive.
+    :param variational: A :class:`~zhusuan.framework.bn.BayesianNet` instance
+        that defines the variational family.
+        `variational` and `latent` are mutually exclusive.
     """
 
-    def __init__(self, meta_bn, observed, latent=None, variational=None,
-                 allow_default=False):
+    def __init__(self, meta_bn, observed, latent=None, variational=None):
         if callable(meta_bn):
-            # TODO: raise warning
             self._meta_bn = None
             self._log_joint = meta_bn
         else:
@@ -81,19 +84,11 @@ class VariationalObjective(TensorArithmeticMixin):
             v_log_probs = zip(v_names,
                               map(lambda x: x[1], v_inputs_and_log_probs))
 
-        # TODO: remove v_log_probs
         self._v_inputs = dict(v_inputs)
         self._v_log_probs = dict(v_log_probs)
-        # TODO: Whether to copy?
-        self._observed = observed
-        self._allow_default = allow_default
+        self._observed = copy.copy(observed)
 
     def _validate_variational_inputs(self, bn):
-        if self._allow_default:
-            # This only works for pure inference settings, or parameter
-            # learning when the default variational distribution (i.e., the
-            # prior) can be optimized with the chosen estimator.
-            return
         for node in bn.nodes:
             if isinstance(node, StochasticTensor) and (not node.is_observed()):
                 raise ValueError(
@@ -103,15 +98,36 @@ class VariationalObjective(TensorArithmeticMixin):
 
     @property
     def meta_bn(self):
+        """
+        The inferred model.
+        A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance.
+        ``None`` if instead log joint probability function is given.
+        """
         return self._meta_bn
 
     @property
     def variational(self):
+        """
+        The variational family.
+        A :class:`~zhusuan.framework.bn.BayesianNet` instance.
+        ``None`` if instead `latent` is given.
+        """
         return self._variational
 
     @property
     def bn(self):
-        # TODO: cache bn for the same `meta_bn` and `variational`.
+        """
+        The :class:`~zhusuan.framework.bn.BayesianNet` constructed by
+        observing the :attr:`meta_bn` with samples from the variational
+        posterior distributions. ``None`` if the log joint probability
+        function is provided instead of :attr:`meta_bn`.
+
+        .. note::
+
+            This :class:`~zhusuan.framework.bn.BayesianNet` instance is
+            useful when computing predictions with the approximate posterior
+            distribution.
+        """
         if self._meta_bn:
             if not hasattr(self, "_bn"):
                 self._bn = self._meta_bn.observe(
@@ -133,8 +149,6 @@ class VariationalObjective(TensorArithmeticMixin):
     def tensor(self):
         """
         Return the Tensor representing the value of the variational objective.
-
-        :return: A Tensor.
         """
         if not hasattr(self, "_tensor"):
             self._tensor = self._objective()
