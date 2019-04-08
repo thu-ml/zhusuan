@@ -16,15 +16,11 @@ from examples.utils import dataset
 
 
 @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
-def build_bnn(layer_sizes, n_particles):
+def build_bnn(x, layer_sizes, logstds, n_particles):
     bn = zs.BayesianNet()
-    x = bn.input("x")
     h = tf.tile(x[None, ...], [n_particles, 1, 1])
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        logstd = tf.get_variable("layer"+str(i)+"logstd", [n_out, n_in + 1],
-                                 initializer=tf.zeros_initializer())
-        bn.output("layer"+str(i)+"logstd", logstd)
-        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), logstd=logstd,
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), logstd=logstds[i],
                       group_ndims=2, n_samples=n_particles)
         h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
         h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
@@ -32,7 +28,7 @@ def build_bnn(layer_sizes, n_particles):
         if i < len(layer_sizes) - 2:
             h = tf.nn.relu(h)
 
-    y_mean = bn.output("y_mean", tf.squeeze(h, 2))
+    y_mean = bn.deterministic("y_mean", tf.squeeze(h, 2))
     y_logstd = -0.95
     bn.normal("y", y_mean, logstd=y_logstd)
     return bn
@@ -65,12 +61,14 @@ def main():
     layer_sizes = [x_dim] + n_hiddens + [1]
     w_names = ["w" + str(i) for i in range(len(layer_sizes) - 1)]
     wv = []
+    logstds = []
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1],
                                       layer_sizes[1:])):
         wv.append(tf.Variable(
             tf.random_uniform([n_particles, n_out, n_in + 1])*4-2))
+        logstds.append(tf.Variable(tf.zeros([n_out, n_in + 1])))
 
-    meta_bn = build_bnn(layer_sizes, n_particles)
+    meta_bn = build_bnn(x, layer_sizes, logstds, n_particles)
 
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)
@@ -87,14 +85,14 @@ def main():
     latent = dict(zip(w_names, wv))
 
     # E step: Sample the parameters
-    sgmcmc.make_grad_func(meta_bn, observed={'x': x, 'y': y}, latent=latent)
+    sgmcmc.make_grad_func(meta_bn, observed={'y': y}, latent=latent)
     sample_op, new_w, sample_info = sgmcmc.sample()
 
     # M step: Update the logstd hyperparameters
     esti_logstds = [0.5*tf.log(tf.reduce_mean(w*w, axis=0)) for w in wv]
     output_logstds = dict(zip(w_names,
                               [0.5*tf.log(tf.reduce_mean(w*w)) for w in wv]))
-    assign_ops = [sgmcmc.bn["layer"+str(i)+"logstd"].assign(logstd)
+    assign_ops = [logstds[i].assign(logstd)
                   for (i, logstd) in enumerate(esti_logstds)]
     assign_op = tf.group(assign_ops)
 
