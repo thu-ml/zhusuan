@@ -35,11 +35,9 @@ class SGMCMC(object):
 
     The implementation framework is similar to that of
     :class:`~zhusuan.hmc.HMC` class. However, SGMCMC algorithms do not include
-    Metropolis update, and typically do not include hyperparameter adaptation,
-    so the implementation here is easier to read than that of
-    :class:`~zhusuan.hmc.HMC` class.
+    Metropolis update, and typically do not include hyperparameter adaptation.
 
-    The usage is also similar to that of :class:`~zhusuan.hmc.HMC` class.
+    The usage is the same as that of :class:`~zhusuan.hmc.HMC` class.
     Running multiple SGMCMC chains in parallel is supported.
 
     To use the sampler, the user first defines the sampling method and
@@ -51,30 +49,22 @@ class SGMCMC(object):
     `log_joint` function which returns a tensor of shape ``chain axes``, which
     is the log joint density for each chain. Alternatively, the user can also
     provide a `meta_bn` instance as a description of `log_joint`. Then the user
-    invokes :meth:`make_grad_func` to generate the gradient function used by
-    SGMCMC algorithm. Finally, the user runs the operation returned by
-    :meth:`sample`, which updates the sample stored in the `Variable`.
+    runs the operation returned by :meth:`sample`, which updates the sample
+    stored in the `Variable`.
 
     The typical code for SGMCMC inference is like::
 
         sgmcmc = zs.SGHMC(learning_rate=2e-6, friction=0.2,
                           n_iter_resample_v=1000, second_order=True)
-        sgmcmc.make_grad_func(meta_bn, observed={'x': x, 'y': y},
-                              latent={'w1': w1, 'w2': w2})
-        sample_op, new_w, sample_info = sgmcmc.sample()
+        sample_op, sgmcmc_info = sgmcmc.make_grad_func(meta_bn,
+            observed={'x': x, 'y': y}, latent={'w1': w1, 'w2': w2})
 
         with tf.Session() as sess:
             for _ in range(n_iters):
-                _, w, info = sess.run([sample_op, new_w, sample_info],
+                _, info = sess.run([sample_op, sgmcmc_info],
                                       feed_dict=...)
-
-    .. note::
-
-        The difference with :class:`~zhusuan.hmc.HMC` in usage is that one
-        needs to call :meth:`make_grad_func` first, then call :meth:`sample`
-        with a `grad_func`. This design is intended to enable the user to
-        customize the gradient function, since the user may apply some variance
-        reduction technique to the stochastic gradient when using SGMCMC.
+                print("mean_k", info["mean_k"])   # For SGHMC and SGNHT,
+                                                  # optional
 
     After getting the sample_op, the user can feed mini-batches to a data
     placeholder `observed` so that the gradient is a stochastic gradient. Then
@@ -83,11 +73,58 @@ class SGMCMC(object):
     def __init__(self):
         self.t = tf.Variable(0, name="t", trainable=False, dtype=tf.int32)
 
-    def make_grad_func(self, meta_bn, observed, latent):
+    def _make_grad_func(self, meta_bn, observed, latent):
+        if callable(meta_bn):
+            self._meta_bn = None
+            self._log_joint = meta_bn
+        else:
+            self._meta_bn = meta_bn
+            self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
+
+        self._observed = observed
+        self._latent = latent
+
+        latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
+        for i, v in enumerate(latent_v):
+            if not isinstance(v, tf.Variable):
+                raise TypeError("latent['{}'] is not a tensorflow Variable."
+                                .format(latent_k[i]))
+        self._latent_k = latent_k
+        self._var_list = latent_v
+
+        def _get_log_posterior(var_list, observed):
+            joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
+            return self._log_joint(joint_obs)
+
+        def _get_gradient(var_list, observed):
+            return tf.gradients(
+                _get_log_posterior(var_list, observed), var_list)
+
+        return lambda var_list: _get_gradient(var_list, observed)
+
+    def _apply_updates(self, grad_func):
+        qs = copy(self._var_list)
+        self._define_variables(qs)
+        update_ops, infos = self._update(qs, grad_func)
+
+        with tf.control_dependencies([self.t.assign_add(1)]):
+            sample_op = tf.group(*update_ops)
+        list_attrib = zip(*map(lambda d: six.itervalues(d), infos))
+        list_attrib_with_k = map(lambda l: dict(zip(self._latent_k, l)),
+                                 list_attrib)
+        attrib_names = list(six.iterkeys(infos[0]))
+        dict_info = dict(zip(attrib_names, list_attrib_with_k))
+        SGMCMCInfo = namedtuple("SGMCMCInfo", attrib_names)
+        sgmcmc_info = SGMCMCInfo(**dict_info)
+
+        return sample_op, sgmcmc_info
+
+    def sample(self, meta_bn, observed, latent):
         """
-        Return the gradient function for sampling, given the log joint function
-        (or a :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance),
-        observed values and latent variables.
+        Return the sampling `Operation` that runs a SGMCMC iteration and the
+        statistics collected during it, given the log joint function (or a
+        :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance), observed
+        values and latent variables.
 
         :param meta_bn: A function or a
             :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance. If it
@@ -107,86 +144,24 @@ class SGMCMC(object):
             tensorflow `Variables` for storing their initial values and
             samples.
 
-        :return: A default gradient function for sampling algorithm, whose
-            argument is a list of tensorflow Variables corresponding to the
-            latent variables.
-        :return: The same gradient function whose arguments are the `Variable`
-            list above **and** a `observed` dictionary, to allow users to
-            create a gradient function with dataset splitting in case of large
-            batch size and limited memory.
-        :return: The `Variable` list which will serve as the argument of the
-            gradient function.
+        :return: A Tensorflow `Operation` that runs a SGMCMC iteration, called
+            `sample_op`.
+        :return: A namedtuple that records some useful values, called
+            `sgmcmc_info`. Suppose the list of keys of `latent` dictionary is
+            ``['w1', 'w2']``. Then the typical structure of `sgmcmc_info` is
+            ``SGMCMCInfo(attr1={'w1': some value, 'w2': some value},
+            attr2={'w1': some value, 'w2': some value}, ...)``. Hence,
+            ``sgmcmc_info.attr1`` is a dictionary containing the quantity
+            `attr1` corresponding to each latent variable in the `latent`
+            dictionary.
 
-        .. note::
-
-            The return values are intended for enabling users to customize the
-            gradient function. If the user wants to use the default gradient
-            function, there is no need to fetch the return values (however this
-            function should always be called).
-
+            `sgmcmc_info` returned by any SGMCMC algorithm has an attribute
+            `q`, representing the updated values of latent variables. To check
+            out other attributes, see the documentation for the specific
+            subclass below.
         """
-        if callable(meta_bn):
-            self._meta_bn = None
-            self._log_joint = meta_bn
-        else:
-            self._meta_bn = meta_bn
-            self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
-
-        self._observed = observed
-        self._latent = latent
-
-        latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
-        for i, v in enumerate(latent_v):
-            if not isinstance(v, tf.Variable):
-                raise TypeError("latent['{}'] is not a tensorflow Variable."
-                                .format(latent_k[i]))
-
-        def _get_log_posterior(var_list, observed):
-            joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
-            return self._log_joint(joint_obs)
-
-        def _get_gradient(var_list, observed):
-            return tf.gradients(
-                _get_log_posterior(var_list, observed), var_list)
-
-        self._default_get_gradient = \
-            lambda var_list: _get_gradient(var_list, observed)
-        self._latent_k = latent_k
-        self._var_list = latent_v
-        return self._default_get_gradient, _get_gradient, latent_v
-
-    def sample(self, grad_func=None):
-        """
-        Return the sampling `Operation` that runs a SGMCMC iteration and the
-        statistics collected during it.
-
-        :param grad_func: A function that accepts a list argument of tensorflow
-            Variables and return the gradient at corresponding values. If the
-            argument is not provided, then the default gradient function
-            created in :meth:`make_grad_func` is used.
-
-        :return: A Tensorflow `Operation` that runs a SGMCMC iteration.
-        :return: A dictionary that records the new values of latent variables.
-        :return: A dictionary that records some useful statistics (only for
-            SGHMC and SGNHT).
-
-        .. note::
-
-            :meth:`make_grad_func` should be called first before calling this
-            method.
-
-        """
-        qs = copy(self._var_list)
-        self._define_variables(qs)
-        if grad_func is None:
-            grad_func = self._default_get_gradient
-        update_ops, new_qs, infos = self._update(qs, grad_func)
-
-        with tf.control_dependencies([self.t.assign_add(1)]):
-            sample_op = tf.group(*update_ops)
-        new_samples = dict(zip(self._latent_k, new_qs))
-        sample_info = dict(zip(self._latent_k, infos))
-        return sample_op, new_samples, sample_info
+        grad_func = self._make_grad_func(meta_bn, observed, latent)
+        return self._apply_updates(grad_func)
 
     def _update(self, qs, grad_func):
         return NotImplementedError()
@@ -202,10 +177,8 @@ class SGMCMC(object):
                     self._bn = self._meta_bn.observe(
                         **merge_dicts(self._latent, self._observed))
                 return self._bn
-            else:
-                return None
-        else:
             return None
+        return None
 
 
 class SGLD(SGMCMC):
@@ -213,18 +186,17 @@ class SGLD(SGMCMC):
     Subclass of SGMCMC which implements Stochastic Gradient Langevin Dynamics
     (Welling & Teh, 2011) (SGLD) update. The updating equation implemented
     below follows Equation (3) in the paper.
+    
+    Attributes of returned `sgmcmc_info` in :meth:`SGMCMC.sample`:
+
+    * **q** - The updated values of latent variables.
 
     :param learning_rate: A 0-D `float32` Tensor. It can be either a constant
         or a placeholder for decaying learning rate.
-    :param add_noise: A `Bool` Tensor, if set to False, then the algorithm runs
-        SGD instead of SGLD. The option is for comparison between SGD and SGLD.
     """
-    def __init__(self, learning_rate, add_noise=True):
+    def __init__(self, learning_rate):
         self.lr = tf.convert_to_tensor(
             learning_rate, tf.float32, name="learning_rate")
-        if type(add_noise) == bool:
-            add_noise = tf.constant(add_noise)
-        self.add_noise = add_noise
         super(SGLD, self).__init__()
 
     def _define_variables(self, qs):
@@ -235,13 +207,11 @@ class SGLD(SGMCMC):
                      for q, grad in zip(qs, grad_func(qs))])
 
     def _update_single(self, q, grad):
-        new_q = q + 0.5 * self.lr * grad
-        new_q_with_noise = new_q + tf.random_normal(
+        new_q = q + 0.5 * self.lr * grad + tf.random_normal(
             tf.shape(q), stddev=tf.sqrt(self.lr))
-        new_q = tf.cond(
-            self.add_noise, lambda: new_q_with_noise, lambda: new_q)
         update_q = q.assign(new_q)
-        return update_q, new_q, tf.constant("No info.")
+        info = {"q": new_q}
+        return update_q, info
 
 
 class PSGLD(SGLD):
@@ -252,10 +222,12 @@ class PSGLD(SGLD):
     preconditioner (Equation (4-5) in the paper). Other preconditioners can be
     implemented similarly.
 
+    Attributes of returned `sgmcmc_info` in :meth:`SGMCMC.sample`:
+
+    * **q** - The updated values of latent variables.
+
     :param learning_rate: A 0-D `float32` Tensor. It can be either a constant
         or a placeholder for decaying learning rate.
-    :param add_noise: A `Bool` Tensor, if set to False, then the algorithm runs
-        SGD instead of SGLD. The option is for comparison between SGD and SGLD.
     """
 
     class RMSPreconditioner:
@@ -272,15 +244,15 @@ class PSGLD(SGLD):
             aux = tf.assign(aux, hps.decay * aux + (1-hps.decay) * grad**2)
             return 1 / (hps.epsilon + tf.sqrt(aux))
 
-    def __init__(self, learning_rate, add_noise=True,
-                 preconditioner='rms', preconditioner_hparams=None):
+    def __init__(self, learning_rate, preconditioner='rms',
+                 preconditioner_hparams=None):
         self.preconditioner = {
             'rms': PSGLD.RMSPreconditioner
         }[preconditioner]
         if preconditioner_hparams is None:
             preconditioner_hparams = self.preconditioner.default_hps
         self.preconditioner_hparams = preconditioner_hparams
-        super(PSGLD, self).__init__(learning_rate, add_noise)
+        super(PSGLD, self).__init__(learning_rate)
 
     def _define_variables(self, qs):
         self.vs = self.preconditioner._define_variables(qs)
@@ -292,13 +264,11 @@ class PSGLD(SGLD):
     def _update_single(self, q, grad, aux):
         g = self.preconditioner._get_preconditioner(
             self.preconditioner_hparams, q, grad, aux)
-        new_q = q + 0.5 * self.lr * g * grad
-        new_q_with_noise = new_q + tf.random_normal(
+        new_q = q + 0.5 * self.lr * g * grad + tf.random_normal(
             tf.shape(q), stddev=tf.sqrt(self.lr * g))
-        new_q = tf.cond(
-            self.add_noise, lambda: new_q_with_noise, lambda: new_q)
         update_q = q.assign(new_q)
-        return update_q, new_q, tf.constant("No info.")
+        info = {"q": new_q}
+        return update_q, info
 
 
 class SGHMC(SGMCMC):
@@ -313,6 +283,13 @@ class SGHMC(SGMCMC):
 
     In the following description, we refer to Eq.(*) as Equation (15) in the
     SGHMC paper.
+
+    Attributes of returned `sgmcmc_info` in :meth:`SGMCMC.sample`:
+
+    * **q** - The updated values of latent variables.
+    
+    * **mean_k** - The mean kinetic energy of updated momentum variables
+      corresponding to the latent variables. Each item is a scalar.
 
     :param learning_rate: A 0-D `float32` Tensor corresponding to :math:`\eta`
         in Eq.(*). Note that it does not scale the same as `learning_rate` in
@@ -394,7 +371,8 @@ class SGHMC(SGMCMC):
             new_qs = [q1 + 0.5 * new_v for (q1, new_v) in zip(q1s, new_vs)]
 
         mean_ks = [tf.reduce_mean(new_v**2) for new_v in new_vs]
-        infos = [{"mean_k": mean_k} for mean_k in mean_ks]
+        infos = [{"q": new_q, "mean_k": mean_k}
+            for (new_q, mean_k) in zip(new_qs, mean_ks)]
 
         with tf.control_dependencies(new_vs + new_qs):
             update_qs = [q.assign(new_q) for (q, new_q) in zip(qs, new_qs)]
@@ -404,7 +382,7 @@ class SGHMC(SGMCMC):
         update_ops = [tf.group(update_q, update_v)
                       for (update_q, update_v) in zip(update_qs, update_vs)]
 
-        return update_ops, new_qs, infos
+        return update_ops, infos
 
 
 class SGNHT(SGMCMC):
@@ -421,6 +399,20 @@ class SGNHT(SGMCMC):
 
     In the following description, we refer to Eq.(**) as the equation in
     Algorithm 2 in the SGNHT paper.
+
+    Attributes of returned `sgmcmc_info` in :meth:`SGMCMC.sample`:
+
+    * **q** - The updated values of latent variables.
+
+    * **mean_k** - The mean kinetic energy of updated momentum variables
+      corresponding to the latent variables. If `use_vector_alpha==True`, each
+      item has the same shape as the corresponding latent variable; else, each
+      item is a scalar.
+    
+    * **alpha** - The values of friction variables :math:`\\alpha`
+      corresponding to the latent variables. If `use_vector_alpha==True`, each
+      item has the same shape as the corresponding latent variable; else, each
+      item is a scalar.
 
     :param learning_rate: A 0-D `float32` Tensor corresponding to :math:`\eta`
         in Eq.(**). Note that it does not scale the same as `learning_rate` in
@@ -526,10 +518,9 @@ class SGNHT(SGMCMC):
             new_alphas = [alpha1 + 0.5 * self.tune_rate * (mean_k - self.lr)
                           for (alpha1, mean_k) in zip(alpha1s, mean_ks)]
 
-        infos = [{
-            "mean_k": tf.reduce_mean(mean_k),
-            "alpha": tf.reduce_mean(new_alpha)
-        } for (mean_k, new_alpha) in zip(mean_ks, new_alphas)]
+        infos = [{"q": new_q, "mean_k": mean_k, "alpha": new_alpha}
+            for (new_q, mean_k, new_alpha) in zip(
+                    new_qs, mean_ks, new_alphas)]
 
         with tf.control_dependencies(new_vs + new_qs + new_alphas):
             update_qs = [q.assign(new_q) for (q, new_q) in zip(qs, new_qs)]
@@ -543,4 +534,4 @@ class SGNHT(SGMCMC):
             for (update_q, update_v, update_alpha) in zip(
                     update_qs, update_vs, update_alphas)]
 
-        return update_ops, new_qs, infos
+        return update_ops, infos

@@ -29,11 +29,7 @@ def sample_error_with(sampler, sess, n_chains=1, n_iters=80000, thinning=50,
         tf.zeros([n_chains], dtype=dtype),
         trainable=False,
         name='x', dtype=dtype)
-    if isinstance(sampler, zs.SGMCMC):
-        sampler.make_grad_func(log_joint, {}, {'x': x})
-        sample_op, _, _ = sampler.sample()
-    else:
-        sample_op, _ = sampler.sample(log_joint, {}, {'x': x})
+    sample_op, _ = sampler.sample(log_joint, {}, {'x': x})
 
     # Run the inference
     sess.run(tf.global_variables_initializer())

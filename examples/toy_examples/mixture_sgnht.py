@@ -29,8 +29,6 @@ if __name__ == "__main__":
     # Build the computation graph
     def log_joint(observed):
         x = observed['x']
-        # return tf.log(tf.exp(-0.5*((x-mu1)/stdev)**2) +
-        #               tf.exp(-0.5*((x-mu2)/stdev)**2))
         a1 = -0.5*((x-mu1)/stdev)**2
         a2 = -0.5*((x-mu2)/stdev)**2
         amax = tf.maximum(a1, a2)
@@ -38,11 +36,10 @@ if __name__ == "__main__":
 
     sgmcmc = zs.SGNHT(learning_rate=0.2, variance_extra=0.1, tune_rate=0.01,
                       second_order=False, use_vector_alpha=False)
-    # x = tf.Variable(tf.zeros([n_chains]), trainable=False, name='x')
     x = tf.Variable(tf.random_uniform([n_chains])*10-5, trainable=False,
                     name='x')
-    sgmcmc.make_grad_func(log_joint, observed={}, latent={'x': x})
-    sample_op, new_samples, sample_info = sgmcmc.sample()
+    sample_op, sgmcmc_info = sgmcmc.sample(log_joint, observed={},
+                                           latent={'x': x})
 
     # Run the inference
     with tf.Session() as sess:
@@ -50,12 +47,12 @@ if __name__ == "__main__":
         samples = []
         print('Sampling...')
         for t in range(n_iters):
-            _, x_sample, info = sess.run(
-                [sample_op, new_samples['x'], sample_info])
+            _, info = sess.run([sample_op, sgmcmc_info])
             if t % 500 == 0:
-                print(info)
+                print("mean_k: {}, alpha: {}"
+                      .format(info.mean_k, info.alpha))
             if t >= burnin and t % 100 == 0:
-                samples.append(x_sample)
+                samples.append(info.q["x"])
         print('Finished.')
         samples = np.array(samples)
         samples = samples.reshape(-1)

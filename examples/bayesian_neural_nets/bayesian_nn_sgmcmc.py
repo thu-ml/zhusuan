@@ -77,7 +77,7 @@ def main():
 
     meta_bn.log_joint = log_joint
 
-    # sgmcmc = zs.SGLD(learning_rate=1e-5, add_noise=True)
+    # sgmcmc = zs.SGLD(learning_rate=4e-6)
     sgmcmc = zs.SGHMC(learning_rate=2e-6, friction=0.2, n_iter_resample_v=1000,
                       second_order=True)
     # sgmcmc = zs.SGNHT(learning_rate=1e-5, variance_extra=0., tune_rate=50.,
@@ -85,8 +85,9 @@ def main():
     latent = dict(zip(w_names, wv))
 
     # E step: Sample the parameters
-    sgmcmc.make_grad_func(meta_bn, observed={'y': y}, latent=latent)
-    sample_op, new_w, sample_info = sgmcmc.sample()
+    sample_op, sgmcmc_info = sgmcmc.sample(meta_bn, observed={'y': y},
+                                           latent=latent)
+    mean_k = sgmcmc_info.mean_k
 
     # M step: Update the logstd hyperparameters
     esti_logstds = [0.5*tf.log(tf.reduce_mean(w*w, axis=0)) for w in wv]
@@ -115,14 +116,12 @@ def main():
             perm = np.random.permutation(x_train.shape[0])
             x_train = x_train[perm, :]
             y_train = y_train[perm]
-            _, w, info = sess.run([sample_op, new_w, sample_info],
-                                  feed_dict={x: x_train, y: y_train})
             for t in range(iters):
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
-                _, w, info = sess.run([sample_op, new_w, sample_info],
-                                      feed_dict={x: x_batch, y: y_batch})
-            # print(info)
+                _, mean_k_value = sess.run([sample_op, mean_k],
+                                   feed_dict={x: x_batch, y: y_batch})
+            # print("Epoch {} mean_k = {}".format(epoch, mean_k_value))
             sess.run(assign_op)
 
             test_pred = sess.run(y_pred, feed_dict={x: x_test})
