@@ -30,7 +30,7 @@ from examples.utils import dataset
 log_delta = 10.0
 
 
-@zs.meta_bayesian_net()
+@zs.meta_bayesian_net(scope='lntm')
 def lntm(n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
     bn = zs.BayesianNet()
     eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
@@ -104,7 +104,8 @@ if __name__ == "__main__":
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
     # M step: optimize beta
-    log_p_beta, log_px = hmc.bn.cond_log_prob(['beta', 'x'])
+    bn = model.observe(eta=eta, x=x, beta=beta)
+    log_p_beta, log_px = bn.cond_log_prob(['beta', 'x'])
     log_p_beta = tf.reduce_sum(log_p_beta)
     log_px = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
     log_joint_beta = log_p_beta + log_px
@@ -125,7 +126,7 @@ if __name__ == "__main__":
                        name='eta')
 
     _model = lntm(_n_chains, n_docs_test, n_topics, n_vocab,
-                       eta_mean, eta_logstd)
+                  eta_mean, eta_logstd)
     _model.log_joint = e_obj
     proposal_model = copy(_model)
 

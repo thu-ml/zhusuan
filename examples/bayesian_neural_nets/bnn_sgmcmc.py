@@ -10,6 +10,7 @@ import tensorflow as tf
 from six.moves import range, zip
 import numpy as np
 import zhusuan as zs
+from zhusuan.utils import merge_dicts
 
 from examples import conf
 from examples.utils import dataset
@@ -68,14 +69,14 @@ def main():
             tf.random_uniform([n_particles, n_out, n_in + 1])*4-2))
         logstds.append(tf.Variable(tf.zeros([n_out, n_in + 1])))
 
-    meta_bn = build_bnn(x, layer_sizes, logstds, n_particles)
+    model = build_bnn(x, layer_sizes, logstds, n_particles)
 
     def log_joint(bn):
         log_pws = bn.cond_log_prob(w_names)
         log_py_xw = bn.cond_log_prob('y')
         return tf.add_n(log_pws) + tf.reduce_mean(log_py_xw, 1) * n_train
 
-    meta_bn.log_joint = log_joint
+    model.log_joint = log_joint
 
     # sgmcmc = zs.SGLD(learning_rate=4e-6)
     sgmcmc = zs.SGHMC(learning_rate=2e-6, friction=0.2, n_iter_resample_v=1000,
@@ -83,9 +84,10 @@ def main():
     # sgmcmc = zs.SGNHT(learning_rate=1e-5, variance_extra=0., tune_rate=50.,
     #                   second_order=True)
     latent = dict(zip(w_names, wv))
+    observed = {'y': y}
 
     # E step: Sample the parameters
-    sample_op, sgmcmc_info = sgmcmc.sample(meta_bn, observed={'y': y},
+    sample_op, sgmcmc_info = sgmcmc.sample(model, observed=observed,
                                            latent=latent)
     mean_k = sgmcmc_info.mean_k
 
@@ -98,7 +100,8 @@ def main():
     assign_op = tf.group(assign_ops)
 
     # prediction: rmse & log likelihood
-    y_mean = sgmcmc.bn["y_mean"]
+    bn = model.observe(**merge_dicts(latent, observed))
+    y_mean = bn["y_mean"]
     y_pred = tf.reduce_mean(y_mean, 0)
 
     # Define training/evaluation parameters

@@ -293,6 +293,7 @@ where both :math:`p(\mathbf{B}; \delta)` and :math:`p(\mathbf{H}; \vec{\mu},
 
 In ZhuSuan, the code for constructing such a model is::
 
+    @zs.meta_bayesian_net(scope='lntm')
     def lntm(n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
         bn = zs.BayesianNet()
         eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
@@ -493,10 +494,10 @@ Given the following defined tensor::
 
 We can define the sampling operator of HMC::
 
-    meta_model = lntm(n_chains, batch_size, n_topics, n_vocab,
-                      eta_mean, eta_logstd)
-    meta_model.log_joint = e_obj
-    sample_op, hmc_info = hmc.sample(meta_model,
+    model = lntm(n_chains, batch_size, n_topics, n_vocab, eta_mean,
+                   eta_logstd)
+    model.log_joint = e_obj
+    sample_op, hmc_info = hmc.sample(model,
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
 
@@ -527,7 +528,8 @@ optimization using gradient ascent.
 
 The gradient ascent operator of :math:`\mathbf{B}` can be defined as follows::
 
-    log_p_beta, log_px = hmc.bn.cond_log_prob(['beta', 'x'])
+    bn = model.observe(eta=eta, x=x, beta=beta)
+    log_p_beta, log_px = bn.cond_log_prob(['beta', 'x'])
     log_p_beta = tf.reduce_sum(log_p_beta)
     log_px = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
     log_joint_beta = log_p_beta + log_px
@@ -582,10 +584,10 @@ The key code in an epoch is::
         for j in range(num_e_steps):
             _, new_eta, acc = sess.run(
                 [sample_op, hmc_info.samples['eta'],
-                    hmc_info.acceptance_rate],
+                 hmc_info.acceptance_rate],
                 feed_dict={x: x_batch,
-                            eta_mean: Eta_mean,
-                            eta_logstd: Eta_logstd})
+                           eta_mean: Eta_mean,
+                           eta_logstd: Eta_logstd})
             accs.append(acc)
             # Store eta for the persistent chain
             if j + 1 == num_e_steps:
@@ -595,9 +597,9 @@ The key code in an epoch is::
         _, ll = sess.run(
             [infer, log_px],
             feed_dict={x: x_batch,
-                        eta_mean: Eta_mean,
-                        eta_logstd: Eta_logstd,
-                        learning_rate_ph: learning_rate})
+                       eta_mean: Eta_mean,
+                       eta_logstd: Eta_logstd,
+                       learning_rate_ph: learning_rate})
         lls.append(ll)
 
     # Update hyper-parameters

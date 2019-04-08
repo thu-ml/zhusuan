@@ -6,7 +6,6 @@ from __future__ import division
 
 import six
 from six.moves import zip
-from copy import copy
 from collections import namedtuple
 import tensorflow as tf
 
@@ -75,10 +74,8 @@ class SGMCMC(object):
 
     def _make_grad_func(self, meta_bn, observed, latent):
         if callable(meta_bn):
-            self._meta_bn = None
             self._log_joint = meta_bn
         else:
-            self._meta_bn = meta_bn
             self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
 
         self._observed = observed
@@ -103,7 +100,7 @@ class SGMCMC(object):
         return lambda var_list: _get_gradient(var_list, observed)
 
     def _apply_updates(self, grad_func):
-        qs = copy(self._var_list)
+        qs = self._var_list
         self._define_variables(qs)
         update_ops, infos = self._update(qs, grad_func)
 
@@ -168,17 +165,6 @@ class SGMCMC(object):
 
     def _define_variables(self, qs):
         return NotImplementedError()
-
-    @property
-    def bn(self):
-        if hasattr(self, "_meta_bn"):
-            if self._meta_bn:
-                if not hasattr(self, "_bn"):
-                    self._bn = self._meta_bn.observe(
-                        **merge_dicts(self._latent, self._observed))
-                return self._bn
-            return None
-        return None
 
 
 class SGLD(SGMCMC):

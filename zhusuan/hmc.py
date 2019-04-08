@@ -408,9 +408,6 @@ class HMC:
             self._meta_bn = meta_bn
             self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
 
-        self._observed = observed
-        self._latent = latent
-
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
         for i, v in enumerate(latent_v):
@@ -516,14 +513,3 @@ class HMC:
             sample_op = tf.group(*update_q)
 
         return sample_op, hmc_info
-
-    @property
-    def bn(self):
-        try:
-            if self._meta_bn:
-                return self._meta_bn.observe(
-                    **merge_dicts(self._latent, self._observed))
-            else:
-                return None
-        except AttributeError:
-            return None
