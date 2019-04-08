@@ -187,7 +187,8 @@ is zero.
 
 This lower bound is usually called Evidence Lower Bound (ELBO). Note that the
 only probabilities we need to evaluate in it is the joint likelihood and
-the probability of the variational posterior. The log conditional likelihood is
+the probability of the variational posterior.
+The log conditional likelihood is
 
 .. math::
     \log p(y_{1:N}|x_{1:N}, W) = \sum_{n=1}^N\log p(y_n|x_n, W)
@@ -238,10 +239,10 @@ The code for this part is::
 Evaluation
 ----------
 
-What we've done above is to define the model and infer the parameters. The
-main purpose of doing this is to predict about new data. The probability
-distribution of new data (:math:`y`) given its input feature (:math:`x`)
-and our training data (:math:`D`) is
+What we've done above is to define the model and infer the parameters.
+The main purpose of doing this is to predict about new data.
+The probability distribution of new data (:math:`y`) given its input
+feature (:math:`x`) and our training data (:math:`D`) is
 
 .. math::
 
@@ -269,8 +270,14 @@ on new data
 
     y^{pred} = \mathbb{E}_{p(y|x, D)} \; y \simeq \frac{1}{M}\sum_{i=1}^M \mathbb{E}_{p(y|x, W^i)} \; y \quad W^i \sim q(W)
 
-First we need to pass the data placeholder and sampled latent parameters to the
-BNN model ::
+The above equation can be implemented by passing the samples from the
+variational posterior as observations into the model, and averaging over the
+samples of ``y_mean`` from the resulting
+:class:`~zhusuan.framework.bn.BayesianNet`.
+The trick here is that the procedure of observing :math:`W` as samples from
+:math:`q(W)` has been implemented when constructing the evidence lower bound,
+and we can fetch the intermediate :class:`~zhusuan.framework.bn.BayesianNet`
+instance by ``lower_bound.bn``::
 
     # prediction: rmse & log likelihood
     y_mean = lower_bound.bn["y_mean"]
@@ -322,7 +329,7 @@ Run gradient descent
 --------------------
 
 Again, everything is good before a run. Now add the following codes to
-run the training loop and see how Bayesian Neural Networks performs::
+run the training loop and see how your BNN performs::
 
     # Run the inference
     with tf.Session() as sess:
@@ -350,4 +357,3 @@ run the training loop and see how Bayesian Neural Networks performs::
                 print('>> TEST')
                 print('>> Test rmse = {}, log_likelihood = {}'
                       .format(test_rmse, test_ll))
-
