@@ -102,7 +102,7 @@ likelihood when evaluating the probability::
                                initializer=tf.constant_initializer(0.))
     bn.normal("y", y_mean, logstd=y_logstd)
 
-Putting together and adding model reuse, the code for constructing a BayesianNN is::
+Putting together and adding model reuse, the code for constructing a BNN is::
 
     @zs.meta_bayesian_net(scope="bnn", reuse_variables=True)
     def build_bnn(x, layer_sizes, n_particles):
@@ -312,10 +312,11 @@ This can also be computed by Monte Carlo estimation
 To be noted, as we usually standardized the data to make
 them have unit variance at beginning (check the full script
 `examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_),
-we need to count its effect in our evaluation formulas. RMSE is proportional
-to the amplitude, therefore the final RMSE should be multiplied with
-the standard deviation. For log likelihood, it needs to be subtracted by a
-log term. All together, the code for evaluation is::
+we need to count its effect in our evaluation formulas.
+RMSE is proportional to the amplitude, therefore the final RMSE should be
+multiplied with the standard deviation.
+For log likelihood, it needs to be subtracted by a log term.
+All together, the code for evaluation is::
 
     # prediction: rmse & log likelihood
     y_mean = lower_bound.bn["y_mean"]
@@ -357,3 +358,4 @@ run the training loop and see how your BNN performs::
                 print('>> TEST')
                 print('>> Test rmse = {}, log_likelihood = {}'
                       .format(test_rmse, test_ll))
+
