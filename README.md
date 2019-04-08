@@ -28,6 +28,9 @@ inference. The supported inference algorithms include:
 * **Hamiltonian Monte Carlo (HMC)** with parallel chains, and optional
   automatic parameter tuning.
 
+* **Stochastic Gradient Markov Chain Monte Carlo (SGMCMC)**:
+  SGLD, PSGLD, SGHMC, and SGNHT.
+
 ## Installation
 
 ZhuSuan is still under development. Before the first stable release (1.0),
@@ -64,7 +67,8 @@ pip install ".[examples]"
 * Toy 2D Intractable Posterior:
   [SGVB](examples/toy_examples/toy2d_intractable.py)
 * Bayesian Neural Networks:
-  [SGVB](examples/bayesian_neural_nets/bayesian_nn.py)
+  [SGVB](examples/bayesian_neural_nets/bnn_vi.py)
+  [SGMCMC](examples/bayesian_neural_nets/bnn_sgmcmc.py)
 * Variational Autoencoder (VAE):
   [SGVB](examples/variational_autoencoders/vae.py),
   [IWAE](examples/variational_autoencoders/iwae.py)

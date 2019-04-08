@@ -63,7 +63,7 @@ If no error occurs, you've successfully installed ZhuSuan.
    Tutorial slides <https://docs.google.com/presentation/d/1Xqi-qFHciAdV9z1FHpGkUcHT-yugNVzwGX3MM74rMuM/edit?usp=sharing>
    tutorials/vae
    tutorials/concepts
-   tutorials/bayesian_nn
+   tutorials/bnn
    tutorials/lntm
 
 

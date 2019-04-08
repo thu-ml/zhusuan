@@ -25,7 +25,7 @@ which both fits to the training data and reasons about the uncertainty of
 its own prediction on test data.
 In this tutorial, we show how to implement BNNs in ZhuSuan.
 The full script for this tutorial is at
-`examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_.
+`examples/bayesian_neural_nets/bnn_vi.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bnn_vi.py>`_.
 
 We use a regression dataset called
 `Boston housing <https://archive.ics.uci.edu/ml/machine-learning-databases/housing/>`_.
@@ -49,7 +49,7 @@ Finally, some noise is added to the output to get a tractable likelihood
 for the model, which is typically a Gaussian noise in regression problems.
 A graphical model representation for bayesian neural network is as follows.
 
-.. image:: ../_static/images/bayesian_nn.png
+.. image:: ../_static/images/bnn.png
     :align: center
     :width: 25%
 
@@ -311,7 +311,7 @@ This can also be computed by Monte Carlo estimation
 
 To be noted, as we usually standardized the data to make
 them have unit variance at beginning (check the full script
-`examples/bayesian_neural_nets/bayesian_nn.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bayesian_nn.py>`_),
+`examples/bayesian_neural_nets/bnn_vi.py <https://github.com/thu-ml/zhusuan/blob/master/examples/bayesian_neural_nets/bnn_vi.py>`_),
 we need to count its effect in our evaluation formulas.
 RMSE is proportional to the amplitude, therefore the final RMSE should be
 multiplied with the standard deviation.
