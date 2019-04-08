@@ -1201,7 +1201,23 @@ class BayesianNet(_BayesianNet, Context):
 
     # Below are deprecated features:
 
+    def __enter__(self):
+        warnings.warn(
+            "Using `BayesianNet` as contexts has been deprecated in 0.4. "
+            "Please see tutorials/concepts.rst for the suggested way of "
+            "model construction.", FutureWarning)
+        return super(BayesianNet, self).__enter__()
+
     def outputs(self, name_or_names):
+        """
+        .. note::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+
+        """
+        warnings.warn(
+            "BayesianNet: `outputs()` has been deprecated in 0.4 and will "
+            "be removed in 0.4.1, use `get()` instead.", FutureWarning)
         name_or_names = self._check_names_exist(name_or_names)
         if isinstance(name_or_names, tuple):
             return [self._nodes[name].tensor for name in name_or_names]
@@ -1209,9 +1225,27 @@ class BayesianNet(_BayesianNet, Context):
             return self._nodes[name_or_names].tensor
 
     def local_log_prob(self, name_or_names):
+        """
+        .. note::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+        """
+        warnings.warn(
+            "BayesianNet: `local_log_prob()` has been deprecated in 0.4 "
+            "and will be removed in 0.4.1, use `cond_log_prob()` instead.",
+            FutureWarning)
         return self.cond_log_prob(name_or_names)
 
     def query(self, name_or_names, outputs=False, local_log_prob=False):
+        """
+        .. note::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+        """
+        warnings.warn(
+            "BayesianNet: `query()` has been deprecated in 0.4 "
+            "and will be removed in 0.4.1, use `get()` and "
+            "`cond_log_prob()` instead.", FutureWarning)
         name_or_names = self._check_names_exist(name_or_names)
         ret = []
         if outputs:
