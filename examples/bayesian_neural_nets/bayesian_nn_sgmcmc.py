@@ -20,8 +20,8 @@ def build_bnn(x, layer_sizes, logstds, n_particles):
     bn = zs.BayesianNet()
     h = tf.tile(x[None, ...], [n_particles, 1, 1])
     for i, (n_in, n_out) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
-        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]), logstd=logstds[i],
-                      group_ndims=2, n_samples=n_particles)
+        w = bn.normal("w" + str(i), tf.zeros([n_out, n_in + 1]),
+                      logstd=logstds[i], group_ndims=2, n_samples=n_particles)
         h = tf.concat([h, tf.ones(tf.shape(h)[:-1])[..., None]], -1)
         h = tf.einsum("imk,ijk->ijm", w, h) / tf.sqrt(
             tf.cast(tf.shape(h)[2], tf.float32))
@@ -120,7 +120,7 @@ def main():
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 y_batch = y_train[t * batch_size:(t + 1) * batch_size]
                 _, mean_k_value = sess.run([sample_op, mean_k],
-                                   feed_dict={x: x_batch, y: y_batch})
+                                           feed_dict={x: x_batch, y: y_batch})
             # print("Epoch {} mean_k = {}".format(epoch, mean_k_value))
             sess.run(assign_op)
 
@@ -131,6 +131,7 @@ def main():
             test_rmse = np.sqrt(np.mean((pred - y_test) ** 2)) * std_y_train
             print('>> Epoch {} Test = {} logstds = {}'
                   .format(epoch, test_rmse, sess.run(output_logstds)))
+
 
 if __name__ == "__main__":
     main()

@@ -49,6 +49,7 @@ def to_one_hot(x, depth):
     ret[np.arange(x.shape[0]), x] = 1
     return ret
 
+
 pbar = None
 
 

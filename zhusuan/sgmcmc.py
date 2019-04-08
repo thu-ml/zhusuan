@@ -186,7 +186,7 @@ class SGLD(SGMCMC):
     Subclass of SGMCMC which implements Stochastic Gradient Langevin Dynamics
     (Welling & Teh, 2011) (SGLD) update. The updating equation implemented
     below follows Equation (3) in the paper.
-    
+
     Attributes of returned `sgmcmc_info` in :meth:`SGMCMC.sample`:
 
     * **q** - The updated values of latent variables.
@@ -287,7 +287,7 @@ class SGHMC(SGMCMC):
     Attributes of returned `sgmcmc_info` in :meth:`SGMCMC.sample`:
 
     * **q** - The updated values of latent variables.
-    
+
     * **mean_k** - The mean kinetic energy of updated momentum variables
       corresponding to the latent variables. Each item is a scalar.
 
@@ -372,7 +372,7 @@ class SGHMC(SGMCMC):
 
         mean_ks = [tf.reduce_mean(new_v**2) for new_v in new_vs]
         infos = [{"q": new_q, "mean_k": mean_k}
-            for (new_q, mean_k) in zip(new_qs, mean_ks)]
+                 for (new_q, mean_k) in zip(new_qs, mean_ks)]
 
         with tf.control_dependencies(new_vs + new_qs):
             update_qs = [q.assign(new_q) for (q, new_q) in zip(qs, new_qs)]
@@ -408,7 +408,7 @@ class SGNHT(SGMCMC):
       corresponding to the latent variables. If `use_vector_alpha==True`, each
       item has the same shape as the corresponding latent variable; else, each
       item is a scalar.
-    
+
     * **alpha** - The values of friction variables :math:`\\alpha`
       corresponding to the latent variables. If `use_vector_alpha==True`, each
       item has the same shape as the corresponding latent variable; else, each
@@ -519,8 +519,8 @@ class SGNHT(SGMCMC):
                           for (alpha1, mean_k) in zip(alpha1s, mean_ks)]
 
         infos = [{"q": new_q, "mean_k": mean_k, "alpha": new_alpha}
-            for (new_q, mean_k, new_alpha) in zip(
-                    new_qs, mean_ks, new_alphas)]
+                 for (new_q, mean_k, new_alpha) in zip(
+                      new_qs, mean_ks, new_alphas)]
 
         with tf.control_dependencies(new_vs + new_qs + new_alphas):
             update_qs = [q.assign(new_q) for (q, new_q) in zip(qs, new_qs)]
