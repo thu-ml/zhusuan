@@ -206,10 +206,10 @@ class TestBayesianNet(tf.test.TestCase):
             self.assertNear(log_pc_2_out, log_pc_t_out, 1e-6)
 
 
-class TestReuse(tf.test.TestCase):
+class TestReuseVariables(tf.test.TestCase):
 
-    def test_legacy_reuse(self):
-        @reuse("test")
+    def test_reuse_variables(self):
+        @reuse_variables("test")
         def f():
             w = tf.get_variable("w", shape=[])
             return w
@@ -233,7 +233,7 @@ class TestReuse(tf.test.TestCase):
         # the basic usage is tested in TestBayesianNet. corner cases here
         @meta_bayesian_net(scope='scp', reuse_variables=False)
         def build_mbn(var_to_return):
-            return TestReuse._generate_bn(var_to_return)
+            return TestReuseVariables._generate_bn(var_to_return)
 
         with tf.variable_scope('you_might_want_do_this'):
             mbn = build_mbn('a_mean')
@@ -243,21 +243,21 @@ class TestReuse(tf.test.TestCase):
             self.assertNotEqual(m1.name, m2.name)
         with tf.variable_scope('when_you_are_perfectly_conscious'):
             _, m2 = build_mbn('a_mean').observe()
-        self.assertNotEquals(m1.name, m2.name)
+        self.assertNotEqual(m1.name, m2.name)
 
         @meta_bayesian_net(scope='scp', reuse_variables=True)
         def build_mbn(var_to_return):
-            return TestReuse._generate_bn(var_to_return)
+            return TestReuseVariables._generate_bn(var_to_return)
 
         meta_bn = build_mbn('a_mean')
         _, m1 = meta_bn.observe()
         _, m2 = meta_bn.observe()
         _, m3 = build_mbn('a_mean').observe()
-        self.assertEquals(m1.name, m2.name)
+        self.assertEqual(m1.name, m2.name)
         self.assertNotEqual(m1.name, m3.name)
 
         with self.assertRaisesRegexp(ValueError, 'Cannot reuse'):
             @meta_bayesian_net(reuse_variables=True)
             def mbn(var_to_return):
-                return TestReuse._generate_bn(var_to_return)
+                return TestReuseVariables._generate_bn(var_to_return)
             mbn('a_mean')

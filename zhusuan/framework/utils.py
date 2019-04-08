@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import deque, OrderedDict
+import warnings
 
 import tensorflow as tf
 
@@ -109,5 +110,8 @@ def reuse(scope):
     """
     (Deprecated) Alias of :func:`reuse_variables`.
     """
-    # TODO: raise warning
+    warnings.warn(
+        "The `reuse()` function has been renamed to `reuse_variables()`, "
+        "`reuse()` will be removed in the coming version (0.4.1)",
+        DeprecationWarning)
     return reuse_variables(scope)

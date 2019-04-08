@@ -41,7 +41,7 @@ class TestInclusiveKLObjective(tf.test.TestCase):
             with self.assertRaisesRegexp(NotImplementedError, err_msg):
                 sess.run(lower_bound)
 
-    def test_rws(self):
+    def test_importance(self):
         eps_samples = tf.convert_to_tensor(self._n01_samples)
         mu = tf.constant(2.)
         sigma = tf.constant(3.)
@@ -49,27 +49,27 @@ class TestInclusiveKLObjective(tf.test.TestCase):
         q = Normal(mean=mu, std=sigma)
         log_qx = q.log_prob(qx_samples)
 
-        def _check_rws(x_mean, x_std, threshold):
+        def _check_importance(x_mean, x_std, threshold):
             def log_joint(observed):
                 p = Normal(mean=x_mean, std=x_std)
                 return p.log_prob(observed['x'])
 
             klpq_obj = klpq(log_joint, observed={},
                             latent={'x': [qx_samples, log_qx]}, axis=0)
-            cost = klpq_obj.rws()
-            rws_grads = tf.gradients(cost, [mu, sigma])
+            cost = klpq_obj.importance()
+            importance_grads = tf.gradients(cost, [mu, sigma])
             true_cost = _kl_normal_normal(x_mean, x_std, mu, sigma)
             true_grads = tf.gradients(true_cost, [mu, sigma])
 
             with self.session(use_gpu=True) as sess:
-                g1 = sess.run(rws_grads)
+                g1 = sess.run(importance_grads)
                 g2 = sess.run(true_grads)
-                # print('rws_grads:', g1)
+                # print('importance_grads:', g1)
                 # print('true_grads:', g2)
                 self.assertAllClose(g1, g2, threshold, threshold)
 
-        _check_rws(0., 1., 0.01)
-        _check_rws(2., 3., 0.02)
+        _check_importance(0., 1., 0.01)
+        _check_importance(2., 3., 0.02)
 
         single_sample = tf.stop_gradient(tf.random_normal([]) * sigma + mu)
         single_log_q = q.log_prob(single_sample)
@@ -86,7 +86,7 @@ class TestInclusiveKLObjective(tf.test.TestCase):
             # Cause all warnings to always be triggered.
             warnings.simplefilter("always")
             # Trigger a warning.
-            single_sample_obj.rws()
+            single_sample_obj.importance()
             self.assertTrue(issubclass(w[-1].category, UserWarning))
             self.assertTrue("biased and inaccurate when you're using only "
                             "a single sample" in str(w[-1].message))

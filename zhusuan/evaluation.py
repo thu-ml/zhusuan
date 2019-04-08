@@ -9,7 +9,7 @@ from six.moves import zip, map, range
 import tensorflow as tf
 import numpy as np
 
-from zhusuan.utils import log_mean_exp, merge_dicts
+from zhusuan.utils import merge_dicts
 from zhusuan.variational import ImportanceWeightedObjective
 
 
@@ -20,24 +20,29 @@ __all__ = [
 
 
 def is_loglikelihood(meta_bn, observed, latent=None, axis=None,
-                     proposal=None, allow_default=False):
+                     proposal=None):
     """
     Marginal log likelihood (:math:`\log p(x)`) estimates using self-normalized
     importance sampling.
 
-    :param log_joint: A function that accepts a dictionary argument of
+    :param meta_bn: A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+        instance or a log joint probability function.
+        For the latter, it must accepts a dictionary argument of
         ``(string, Tensor)`` pairs, which are mappings from all
-        `StochasticTensor` names in the model to their observed values. The
+        node names in the model to their observed values. The
         function should return a Tensor, representing the log joint likelihood
         of the model.
     :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
-        names of observed `StochasticTensor` s to their values
+        names of observed stochastic nodes to their values.
     :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-        Mapping from names of latent `StochasticTensor` s to their samples and
-        log probabilities.
+        Mapping from names of latent stochastic nodes to their samples and
+        log probabilities. `latent` and `proposal` are mutually exclusive.
     :param axis: The sample dimension(s) to reduce when computing the
-        outer expectation in the importance sampling estimation. If None, no
-        dimension is reduced.
+        outer expectation in the objective. If ``None``, no dimension is
+        reduced.
+    :param proposal: A :class:`~zhusuan.framework.bn.BayesianNet` instance
+        that defines the proposal distributions of latent nodes.
+        `proposal` and `latent` are mutually exclusive.
 
     :return: A Tensor. The estimated log likelihood of observed data.
     """
@@ -46,8 +51,7 @@ def is_loglikelihood(meta_bn, observed, latent=None, axis=None,
         observed,
         latent=latent,
         axis=axis,
-        variational=proposal,
-        allow_default=allow_default).tensor
+        variational=proposal).tensor
 
 
 class AIS:

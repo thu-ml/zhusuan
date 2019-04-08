@@ -26,11 +26,17 @@ class ImportanceWeightedObjective(VariationalObjective):
 
         # lower_bound is an ImportanceWeightedObjective instance
         lower_bound = zs.variational.importance_weighted_objective(
-            log_joint, observed, latent, axis=axis)
+            meta_bn, observed, variational=variational, axis=axis)
+
+    Here ``meta_bn`` is a :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+    instance representing the model to be inferred. ``variational`` is
+    a :class:`~zhusuan.framework.bn.BayesianNet` instance that defines the
+    variational family. ``axis`` is the index of the sample dimension used
+    to estimate the expectation when computing the objective.
 
     Instances of :class:`ImportanceWeightedObjective` are Tensor-like. They
     can be automatically or manually cast into Tensors when fed into Tensorflow
-    Operators and doing computation with Tensors, or when the :attr:`tensor`
+    operations and doing computation with Tensors, or when the :attr:`tensor`
     property is accessed. It can also be evaluated like a Tensor::
 
         # evaluate the objective
@@ -95,23 +101,28 @@ class ImportanceWeightedObjective(VariationalObjective):
     chosen, this reproduces the Reweighted Wake-Sleep algorithm
     (Bornschein, 2015) for learning deep generative models.
 
-    :param log_joint: A function that accepts a dictionary argument of
+    :param meta_bn: A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+        instance or a log joint probability function.
+        For the latter, it must accepts a dictionary argument of
         ``(string, Tensor)`` pairs, which are mappings from all
-        `StochasticTensor` names in the model to their observed values. The
+        node names in the model to their observed values. The
         function should return a Tensor, representing the log joint likelihood
         of the model.
     :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
-        names of observed `StochasticTensor` s to their values.
+        names of observed stochastic nodes to their values.
     :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-        Mapping from names of latent `StochasticTensor` s to their samples and
-        log probabilities.
+        Mapping from names of latent stochastic nodes to their samples and
+        log probabilities. `latent` and `variational` are mutually exclusive.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in the objective. If ``None``, no dimension is
         reduced.
+    :param variational: A :class:`~zhusuan.framework.bn.BayesianNet` instance
+        that defines the variational family.
+        `variational` and `latent` are mutually exclusive.
     """
 
     def __init__(self, meta_bn, observed, latent=None, axis=None,
-                 variational=None, allow_default=False):
+                 variational=None):
         if axis is None:
             raise ValueError(
                 "ImportanceWeightedObjective is a multi-sample objective, "
@@ -121,8 +132,7 @@ class ImportanceWeightedObjective(VariationalObjective):
             meta_bn,
             observed,
             latent=latent,
-            variational=variational,
-            allow_default=allow_default)
+            variational=variational)
 
     def _objective(self):
         log_w = self._log_joint_term() + self._entropy_term()
@@ -218,27 +228,31 @@ class ImportanceWeightedObjective(VariationalObjective):
 
 
 def importance_weighted_objective(
-        meta_bn, observed, latent=None, axis=None, variational=None,
-        allow_default=False):
+        meta_bn, observed, latent=None, axis=None, variational=None):
     """
     The importance weighted objective for variational inference (Burda, 2015).
     The returned value is an :class:`ImportanceWeightedObjective` instance.
 
     See :class:`ImportanceWeightedObjective` for examples of usage.
 
-    :param log_joint: A function that accepts a dictionary argument of
+    :param meta_bn: A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+        instance or a log joint probability function.
+        For the latter, it must accepts a dictionary argument of
         ``(string, Tensor)`` pairs, which are mappings from all
-        `StochasticTensor` names in the model to their observed values. The
+        node names in the model to their observed values. The
         function should return a Tensor, representing the log joint likelihood
         of the model.
     :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
-        names of observed `StochasticTensor` s to their values.
+        names of observed stochastic nodes to their values.
     :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-        Mapping from names of latent `StochasticTensor` s to their samples and
-        log probabilities.
+        Mapping from names of latent stochastic nodes to their samples and
+        log probabilities. `latent` and `variational` are mutually exclusive.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in the objective. If ``None``, no dimension is
         reduced.
+    :param variational: A :class:`~zhusuan.framework.bn.BayesianNet` instance
+        that defines the variational family.
+        `variational` and `latent` are mutually exclusive.
 
     :return: An :class:`ImportanceWeightedObjective` instance.
     """
@@ -247,8 +261,7 @@ def importance_weighted_objective(
         observed,
         latent=latent,
         axis=axis,
-        variational=variational,
-        allow_default=allow_default)
+        variational=variational)
 
 
 # alias
