@@ -15,10 +15,10 @@ import time
 
 import tensorflow as tf
 from six.moves import range, zip
-from functools import partial
 from copy import copy
 import numpy as np
 import zhusuan as zs
+from zhusuan.evaluation import AIS
 
 from examples import conf
 from examples.utils import dataset
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     num_e_steps = 5
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
-    epochs = 100
+    epochs = 1
     learning_rate_0 = 1.0
     t0 = 10
 
@@ -127,22 +127,18 @@ if __name__ == "__main__":
     _model = lntm(_n_chains, n_docs_test, n_topics, n_vocab,
                        eta_mean, eta_logstd)
     _model.log_joint = e_obj
-
     proposal_model = copy(_model)
 
     def log_prior(bn):
         return bn.cond_log_prob('eta')
     
     proposal_model.log_joint = log_prior
-
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)
-
-    ais = zs.evaluation.AIS(_model, proposal_model, _hmc,
-                            observed={'x': _x, 'beta': beta},
-                            latent={'eta': _eta},
-                            n_chains=_n_chains,
-                            n_temperatures=_n_temperatures)
+    ais = AIS(_model, proposal_model, _hmc,
+              observed={'x': _x, 'beta': beta},
+              latent={'eta': _eta},
+              n_temperatures=_n_temperatures)
 
     # Run the inference
     with tf.Session() as sess:
@@ -210,15 +206,11 @@ if __name__ == "__main__":
 
         # Run AIS
         print("Evaluating test perplexity using AIS...")
-
         time_ais = -time.time()
-
         ll_lb = ais.run(sess, feed_dict={_x: X_test,
                                          eta_mean: Eta_mean,
                                          eta_logstd: Eta_logstd})
-
         time_ais += time.time()
-
         print('>> Test (AIS) ({:.1f}s)\n'
               '>> log likelihood lower bound = {}\n'
               '>> perplexity upper bound = {}'
