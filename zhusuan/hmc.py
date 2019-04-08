@@ -203,18 +203,17 @@ class HMCInfo(object):
 
 class HMC:
     """
-    Hamiltonian Monte Carlo (Neal, 2011) with adaptation for stepsize
-    (Hoffman, 2014) and mass. The usage is similar with a Tensorflow
-    optimizer.
+    Hamiltonian Monte Carlo (Neal, 2011) with adaptation for stepsize (Hoffman &
+    Gelman, 2014) and mass. The usage is similar with a Tensorflow optimizer.
 
-    The :class:`HMC` class supports running multiple MCMC chains in parallel.
-    To use the sampler, the user first create a tensorflow `Variable` storing
-    the initial sample, whose shape is ``chain axes + data axes``. There
-    can be arbitrary number of chain axes followed by arbitrary number of
-    data axes. Then the user provides a `log_joint` function which returns
-    a tensor of shape ``chain axes``, which is the log joint density for
-    each chain. Finally, the user runs the operation returned by
-    :meth:`sample`, which updates the sample stored in the variable.
+    The :class:`HMC` class supports running multiple MCMC chains in parallel. To
+    use the sampler, the user first creates a (list of) tensorflow `Variable`
+    storing the initial sample, whose shape is ``chain axes + data axes``. There
+    can be arbitrary number of chain axes followed by arbitrary number of data
+    axes. Then the user provides a `log_joint` function which returns a tensor
+    of shape ``chain axes``, which is the log joint density for each chain.
+    Finally, the user runs the operation returned by :meth:`sample`, which
+    updates the sample stored in the `Variable`.
 
     .. note::
 
@@ -238,11 +237,11 @@ class HMC:
     :param target_acceptance_rate: A 0-D `float32` Tensor. The desired
         acceptance rate for adapting the step size.
     :param gamma: A 0-D `float32` Tensor. Parameter for adapting the step
-        size, see (Hoffman, 2014).
+        size, see (Hoffman & Gelman, 2014).
     :param t0: A 0-D `float32` Tensor. Parameter for adapting the step size,
-        see (Hoffman, 2014).
+        see (Hoffman & Gelman, 2014).
     :param kappa: A 0-D `float32` Tensor. Parameter for adapting the step
-        size, see (Hoffman, 2014).
+        size, see (Hoffman & Gelman, 2014).
     :param adapt_mass: A `bool` Tensor, if set, indicating whether to adapt
         the mass, adapt_step_size must be set.
     :param mass_collect_iters: A 0-D `int32` Tensor. The beginning iteration
@@ -394,7 +393,7 @@ class HMC:
             from names of observed `StochasticTensor` s to their values
         :param latent: A dictionary of ``(string, Variable)`` pairs.
             Mapping from names of latent `StochasticTensor` s to corresponding
-            tensorflow Variables for storing their initial values and samples.
+            tensorflow `Variables` for storing their initial values and samples.
 
         :return: A Tensorflow `Operation` that runs a HMC iteration.
         :return: A :class:`HMCInfo` instance that collects sampling statistics
@@ -409,8 +408,8 @@ class HMC:
             self._meta_bn = meta_bn
             self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
 
-        self._latent = latent
         self._observed = observed
+        self._latent = latent
 
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]

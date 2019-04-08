@@ -60,3 +60,29 @@ class TestMCMC(tf.test.TestCase):
         with self.session() as sess:
             e = sample_error_with(sampler, sess, n_chains=100, n_iters=1000)
             self.assertLessEqual(e, 0.030)
+
+
+class TestSGMCMC(tf.test.TestCase):
+
+    def test_sgld(self):
+        sampler = zs.SGLD(learning_rate=0.01)
+        with self.test_session() as sess:
+            e = sample_error_with(sampler, sess, n_chains=100, n_iters=8000)
+            # 6sd upper bound from 10 indepndent runs
+            self.assertLessEqual(e, 0.023)
+
+    def test_sghmc(self):
+        sampler = zs.SGHMC(learning_rate=0.01, n_iter_resample_v=50,
+                           friction=0.3, variance_estimate=0.02,
+                           second_order=False)
+        with self.test_session() as sess:
+            e = sample_error_with(sampler, sess, n_chains=100, n_iters=8000)
+            self.assertLessEqual(e, 0.016)
+
+    def test_sghmc_second_order(self):
+        sampler = zs.SGHMC(learning_rate=0.01, n_iter_resample_v=50,
+                           friction=0.3, variance_estimate=0.02,
+                           second_order=True)
+        with self.test_session() as sess:
+            e = sample_error_with(sampler, sess, n_chains=100, n_iters=8000)
+            self.assertLessEqual(e, 0.016)

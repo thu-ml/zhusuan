@@ -131,7 +131,7 @@ if __name__ == "__main__":
 
     def log_prior(bn):
         return bn.cond_log_prob('eta')
-    
+
     proposal_model.log_joint = log_prior
     _hmc = zs.HMC(step_size=0.01, n_leapfrogs=20, adapt_step_size=True,
                   target_acceptance_rate=0.6)

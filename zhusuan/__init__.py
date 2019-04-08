@@ -5,6 +5,7 @@ from . import distributions
 from . import variational
 from .framework import *
 from .hmc import *
+from .sgmcmc import *
 from .evaluation import *
 from .transform import *
 from .utils import *
