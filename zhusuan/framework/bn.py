@@ -218,49 +218,88 @@ class StochasticTensor(TensorArithmeticMixin):
     @property
     def net(self):
         """
-        (Deprecated) The :class:`BayesianNet` where the
-        :class:`StochasticTensor` lives.
+        .. warning::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+
+        The :class:`BayesianNet` where the :class:`StochasticTensor` lives.
 
         :return: A :class:`BayesianNet` instance.
         """
+        warnings.warn(
+            "StochasticTensor: The `.net` property will be removed in the "
+            "coming version (0.4.1), use `.bn` instead.",
+            FutureWarning)
         return self._bn
 
     @property
     def distribution(self):
         """
-        (Deprecated) The distribution followed by the :class:`StochasticTensor`.
+        .. warning::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+
+        The distribution followed by the :class:`StochasticTensor`.
 
         :return: A :class:`~zhusuan.distributions.base.Distribution` instance.
         """
+        warnings.warn(
+            "StochasticTensor: The `.distribution` property will be removed "
+            "in the coming version (0.4.1), use `.dist` instead.",
+            FutureWarning)
         return self._dist
 
     def sample(self, n_samples):
         """
-        (Deprecated) Sample from the underlying distribution.
+        .. warning::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+
+        Sample from the underlying distribution.
 
         :param n_samples: A 0-D `int32` Tensor. The number of samples.
         :return: A Tensor.
         """
+        warnings.warn(
+            "StochasticTensor: The `sample()` method will be removed "
+            "in the coming version (0.4.1), use `.dist.sample()` instead.",
+            FutureWarning)
         return self._dist.sample(n_samples)
 
     def log_prob(self, given):
         """
-        (Deprecated) Compute the log probability density (mass) function of
+        .. warning::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+
+        Compute the log probability density (mass) function of
         the underlying distribution at the `given` value.
 
         :param given: A Tensor.
         :return: A Tensor. The log probability value.
         """
+        warnings.warn(
+            "StochasticTensor: The `log_prob()` method will be removed "
+            "in the coming version (0.4.1), use `.dist.log_prob()` instead.",
+            FutureWarning)
         return self._dist.log_prob(given)
 
     def prob(self, given):
         """
-        (Deprecated) Compute the probability density (mass) function of
+        .. warning::
+
+            Deprecated in 0.4, will be removed in 0.4.1.
+
+        Compute the probability density (mass) function of
         the underlying distribution at the `given` value.
 
         :param given: A Tensor.
         :return: A Tensor. The probability value.
         """
+        warnings.warn(
+            "StochasticTensor: The `prob()` method will be removed "
+            "in the coming version (0.4.1), use `.dist.prob()` instead.",
+            FutureWarning)
         return self._dist.prob(given)
 
 
