@@ -402,10 +402,8 @@ class HMC:
 
         if callable(meta_bn):
             # TODO: raise warning
-            self._meta_bn = None
             self._log_joint = meta_bn
         else:
-            self._meta_bn = meta_bn
             self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
 
         new_t = self.t.assign_add(1.0)
