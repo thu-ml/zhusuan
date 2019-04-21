@@ -370,17 +370,6 @@ class _BayesianNet(object):
         self._nodes[name] = node
         return node
 
-    # TODO: Deprecate and prefer unbounded input as function arguments
-    def input(self, name):
-        input_tensor = tf.convert_to_tensor(self._get_observation(name))
-        self._nodes[name] = input_tensor
-        return input_tensor
-
-    # TODO: Deprecate and prefer deterministic
-    def output(self, name, input_tensor):
-        self._nodes[name] = input_tensor
-        return input_tensor
-
     def deterministic(self, name, input_tensor):
         """
         Add a named deterministic node in this :class:`BayesianNet`.

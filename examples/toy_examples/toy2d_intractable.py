@@ -24,8 +24,8 @@ def build_toy2d_intractable(n_particles):
 def build_mean_field_variational(n_particles):
     bn = zs.BayesianNet()
     for name in ["z1", "z2"]:
-        z_mean = bn.output(name + "_mean", tf.Variable(-2.))
-        z_logstd = bn.output(name + "_logstd", tf.Variable(-5.))
+        z_mean = bn.deterministic(name + "_mean", tf.Variable(-2.))
+        z_logstd = bn.deterministic(name + "_logstd", tf.Variable(-5.))
         bn.normal(name, z_mean, logstd=z_logstd, n_samples=n_particles)
     return bn
 
