@@ -39,7 +39,7 @@ def main():
     tf.set_random_seed(1237)
     np.random.seed(2345)
 
-    # Load UCI Boston housing data
+    # Load UCI protein data
     data_path = os.path.join(conf.data_dir, "protein.data")
     x_train, y_train, x_valid, y_valid, x_test, y_test = \
         dataset.load_uci_protein_data(data_path)

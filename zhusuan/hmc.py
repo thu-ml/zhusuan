@@ -382,18 +382,27 @@ class HMC:
     def sample(self, meta_bn, observed, latent):
         """
         Return the sampling `Operation` that runs a HMC iteration and
-        the statistics collected during it.
+        the statistics collected during it, given the log joint function (or a
+        :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance), observed
+        values and latent variables.
 
-        :param log_joint: A function that accepts a dictionary argument of
-            ``(string, Tensor)`` pairs, which are mappings from all
-            `StochasticTensor` names in the model to their observed values. The
-            function should return a Tensor, representing the log joint
-            likelihood of the model.
+        :param meta_bn: A function or a
+            :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance. If it
+            is a function, it accepts a dictionary argument of ``(string,
+            Tensor)`` pairs, which are mappings from all `StochasticTensor`
+            names in the model to their observed values. The function should
+            return a Tensor, representing the log joint likelihood of the
+            model. More conveniently, the user can also provide a
+            :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance
+            instead of directly providing a log_joint function. Then a
+            log_joint function will be created so that `log_joint(obs) =
+            meta_bn.observe(**obs).log_joint()`.
         :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping
-            from names of observed `StochasticTensor` s to their values
+            from names of observed `StochasticTensor` s to their values.
         :param latent: A dictionary of ``(string, Variable)`` pairs.
             Mapping from names of latent `StochasticTensor` s to corresponding
-            tensorflow `Variables` for storing their initial values and samples.
+            tensorflow `Variables` for storing their initial values and
+            samples.
 
         :return: A Tensorflow `Operation` that runs a HMC iteration.
         :return: A :class:`HMCInfo` instance that collects sampling statistics

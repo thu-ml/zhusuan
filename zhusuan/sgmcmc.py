@@ -135,7 +135,7 @@ class SGMCMC(object):
             log_joint function will be created so that `log_joint(obs) =
             meta_bn.observe(**obs).log_joint()`.
         :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping
-            from names of observed `StochasticTensor` s to their values
+            from names of observed `StochasticTensor` s to their values.
         :param latent: A dictionary of ``(string, Variable)`` pairs.
             Mapping from names of latent `StochasticTensor` s to corresponding
             tensorflow `Variables` for storing their initial values and
