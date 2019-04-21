@@ -5,10 +5,15 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 from collections import deque, OrderedDict
+import warnings
+
+import tensorflow as tf
 
 
 __all__ = [
     'get_backward_ops',
+    'reuse_variables',
+    'reuse'
 ]
 
 
@@ -16,6 +21,9 @@ class Context(object):
     """
     Context stack.
     """
+
+    def __init__(self):
+        super(Context, self).__init__()
 
     def __enter__(self):
         type(self).get_contexts().append(self)
@@ -34,7 +42,7 @@ class Context(object):
     def get_context(cls):
         try:
             return cls.get_contexts()[-1]
-        except:
+        except IndexError:
             raise RuntimeError("No contexts on the stack.")
 
 
@@ -75,3 +83,35 @@ def get_backward_ops(seed_tensors, treat_as_inputs=None):
                 done.add(op)
                 ret.append(op)
     return ret
+
+
+def reuse_variables(scope):
+    """
+    A decorator for transparent reuse of tensorflow
+    `Variables <https://www.tensorflow.org/api_docs/python/tf/Variable>`_ in a
+    function. The decorated function will automatically create variables the
+    first time they are called and reuse them thereafter.
+
+    .. note::
+
+        This decorator is internally implemented by tensorflow's
+        :func:`make_template` function. See `its doc
+        <https://www.tensorflow.org/api_docs/python/tf/make_template>`_
+        for requirements on the target function.
+
+    :param scope: A string. The scope name passed to tensorflow
+        `variable_scope()
+        <https://www.tensorflow.org/api_docs/python/tf/variable_scope>`_.
+    """
+    return lambda f: tf.make_template(scope, f)
+
+
+def reuse(scope):
+    """
+    (Deprecated) Alias of :func:`reuse_variables`.
+    """
+    warnings.warn(
+        "The `reuse()` function has been renamed to `reuse_variables()`, "
+        "`reuse()` will be removed in the coming version (0.4.1)",
+        FutureWarning)
+    return reuse_variables(scope)

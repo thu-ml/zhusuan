@@ -19,14 +19,17 @@ networks and supervised tasks, ZhuSuan provides deep learning style primitives
 and algorithms for building probabilistic models and applying Bayesian
 inference. The supported inference algorithms include:
 
-* **Variational inference** with programmable variational posteriors, various
+* **Variational Inference (VI)** with programmable variational posteriors, various
   objectives and advanced gradient estimators (SGVB, REINFORCE, VIMCO, etc.).
 
-* **Importance sampling** for learning and evaluating models, with programmable
+* **Importance Sampling (IS)** for learning and evaluating models, with programmable
   proposals.
 
-* **Hamiltonian Monte Carlo** (HMC) with parallel chains, and optional
+* **Hamiltonian Monte Carlo (HMC)** with parallel chains, and optional
   automatic parameter tuning.
+
+* **Stochastic Gradient Markov Chain Monte Carlo (SGMCMC)**:
+  SGLD, PSGLD, SGHMC, and SGNHT.
 
 ## Installation
 
@@ -36,7 +39,7 @@ please clone the repository and run
 pip install .
 ```
 in the main directory. This will install ZhuSuan and its dependencies
-automatically. ZhuSuan also requires **Tensorflow 1.5.0 or later**. Because
+automatically. ZhuSuan also requires **Tensorflow 1.13.0 or later**. Because
 users should choose whether to install the cpu or gpu version of Tensorflow,
 we do not include it in the dependencies. See
 [Installing Tensorflow](https://www.tensorflow.org/install/).
@@ -64,7 +67,8 @@ pip install ".[examples]"
 * Toy 2D Intractable Posterior:
   [SGVB](examples/toy_examples/toy2d_intractable.py)
 * Bayesian Neural Networks:
-  [SGVB](examples/bayesian_neural_nets/bayesian_nn.py)
+  [SGVB](examples/bayesian_neural_nets/bnn_vi.py)
+  [SGMCMC](examples/bayesian_neural_nets/bnn_sgmcmc.py)
 * Variational Autoencoder (VAE):
   [SGVB](examples/variational_autoencoders/vae.py),
   [IWAE](examples/variational_autoencoders/iwae.py)
@@ -72,14 +76,14 @@ pip install ".[examples]"
   [SGVB](examples/variational_autoencoders/vae_conv.py)
 * Semi-supervised VAE (Kingma, 2014):
   [SGVB](examples/semi_supervised_vae/vae_ssl.py),
-  [RWS](examples/semi_supervised_vae/vae_ssl_rws.py)
+  [Adaptive IS](examples/semi_supervised_vae/vae_ssl_adaptive_is.py)
 * Deep Sigmoid Belief Networks
-  [RWS](examples/sigmoid_belief_nets/sbn_rws.py),
+  [Adaptive IS](examples/sigmoid_belief_nets/sbn_adaptive_is.py),
   [VIMCO](examples/sigmoid_belief_nets/sbn_vimco.py)
 * Logistic Normal Topic Model:
   [HMC](examples/topic_models/lntm_mcem.py)
-* Probabilistic Matrix Factorization on MovieLens 1M:
-  [HMC](examples/probabilistic_matrix_factorization/logistic_pmf_hmc.py)
+* Probabilistic Matrix Factorization:
+  [HMC](examples/probabilistic_matrix_factorization/pmf_hmc.py)
 * Sparse Variational Gaussian Process:
   [SGVB](examples/gaussian_process/svgp.py)
 

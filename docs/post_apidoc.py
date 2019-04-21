@@ -11,7 +11,7 @@ api_dir = './api'
 options = [':inherited-members:']
 modules = ['zhusuan.distributions.univariate',
            'zhusuan.distributions.multivariate',
-           'zhusuan.model.stochastic',
+           'zhusuan.framework.stochastic',
            'zhusuan.variational.exclusive_kl',
            'zhusuan.variational.monte_carlo',
            'zhusuan.variational.inclusive_kl']

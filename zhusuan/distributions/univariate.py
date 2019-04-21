@@ -90,8 +90,9 @@ class Normal(Distribution):
         self._mean = tf.convert_to_tensor(mean)
 
         if (logstd is None) == (std is None):
-            raise ValueError("Either std or logstd should be passed but not "
-                             "both of them.")
+            raise ValueError(
+                "Either `std` or `logstd` should be passed. It is not allowed "
+                "that both are specified or both are not.")
         elif logstd is None:
             self._std = tf.convert_to_tensor(std)
             dtype = assert_same_float_dtype([(self._mean, 'Normal.mean'),
@@ -479,7 +480,8 @@ class Categorical(Distribution):
             logits_flat = self.logits
         else:
             logits_flat = tf.reshape(self.logits, [-1, self.n_categories])
-        samples_flat = tf.transpose(tf.multinomial(logits_flat, n_samples))
+        samples_flat = tf.transpose(
+            tf.random.categorical(logits_flat, n_samples))
         samples_flat = tf.cast(samples_flat, self.dtype)
         if self.logits.get_shape().ndims == 2:
             return samples_flat
@@ -535,9 +537,9 @@ class Categorical(Distribution):
         # `labels` type of `sparse_softmax_cross_entropy_with_logits` must be
         # int32 or int64
         if self.dtype == tf.float32:
-            given = tf.to_int32(given)
+            given = tf.cast(given, tf.int32)
         elif self.dtype == tf.float64:
-            given = tf.to_int64(given)
+            given = tf.cast(given, tf.int64)
         log_p = -tf.nn.sparse_softmax_cross_entropy_with_logits(labels=given,
                                                                 logits=logits)
         if given.get_shape() and logits.get_shape():
@@ -1030,7 +1032,7 @@ class Binomial(Distribution):
         log_p = logits_flat + log_1_minus_p
         stacked_logits_flat = tf.stack([log_1_minus_p, log_p], axis=-1)
         samples_flat = tf.transpose(
-            tf.multinomial(stacked_logits_flat, n_samples * n))
+            tf.random.categorical(stacked_logits_flat, n_samples * n))
 
         shape = tf.concat([[n, n_samples], self.batch_shape], 0)
         samples = tf.reduce_sum(tf.reshape(samples_flat, shape), axis=0)

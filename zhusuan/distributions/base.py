@@ -47,7 +47,8 @@ class Distribution(object):
 
     .. seealso::
 
-        :doc:`/tutorials/concepts`
+        For more details and examples, please refer to
+        :doc:`/tutorials/concepts`.
 
     For both, the parameter `dtype` represents type of samples. For discrete,
     can be set by user. For continuous, automatically determined from parameter
@@ -274,9 +275,8 @@ class Distribution(object):
                   "match batch_shape + value_shape of the distribution."
         if (given.get_shape() and self.get_batch_shape() and
                 self.get_value_shape()):
-            static_sample_shape = tf.TensorShape(
-                self.get_batch_shape().as_list() +
-                self.get_value_shape().as_list())
+            static_sample_shape = self.get_batch_shape().concatenate(
+                self.get_value_shape())
             try:
                 tf.broadcast_static_shape(given.get_shape(),
                                           static_sample_shape)

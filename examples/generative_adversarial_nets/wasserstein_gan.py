@@ -17,42 +17,40 @@ from examples.utils import dataset, multi_gpu, save_image_collections
 from examples.utils.multi_gpu import FLAGS
 
 
-@zs.reuse('generator')
-def generator(observed, n, n_z, is_training):
-    with zs.BayesianNet(observed=observed) as generator:
-        z_min = -tf.ones([n, n_z])
-        z_max = tf.ones([n, n_z])
-        z = zs.Uniform('z', z_min, z_max)
-        lx_z = tf.reshape(z, [-1, 1, 1, n_z])
-        ngf = 32
-        lx_z = tf.layers.conv2d_transpose(lx_z, ngf * 4, 3, use_bias=False)
-        lx_z = tf.layers.batch_normalization(lx_z, training=is_training,
-                                             scale=False)
-        lx_z = tf.nn.relu(lx_z)
-        lx_z = tf.layers.conv2d_transpose(lx_z, ngf * 2, 5, use_bias=False)
-        lx_z = tf.layers.batch_normalization(lx_z, training=is_training,
-                                             scale=False)
-        lx_z = tf.nn.relu(lx_z)
-        lx_z = tf.layers.conv2d_transpose(lx_z, ngf, 5, strides=(2, 2),
-                                          padding='same', use_bias=False)
-        lx_z = tf.layers.batch_normalization(lx_z, training=is_training,
-                                             scale=False)
-        lx_z = tf.nn.relu(lx_z)
-        lx_z = tf.layers.conv2d_transpose(
-            lx_z, 1, 5, strides=(2, 2), padding='same', activation=tf.sigmoid)
-    return generator, lx_z
+@zs.reuse_variables(scope="gen")
+def generator(n, z_dim, is_training, ngf=32):
+    bn = zs.BayesianNet()
+    z_min = -tf.ones([n, z_dim])
+    z_max = tf.ones([n, z_dim])
+    z = bn.uniform("z", z_min, z_max)
+    lx_z = tf.reshape(z, [-1, 1, 1, z_dim])
+    lx_z = tf.layers.conv2d_transpose(lx_z, ngf * 4, 3, use_bias=False)
+    lx_z = tf.layers.batch_normalization(lx_z, training=is_training,
+                                         scale=False)
+    lx_z = tf.nn.relu(lx_z)
+    lx_z = tf.layers.conv2d_transpose(lx_z, ngf * 2, 5, use_bias=False)
+    lx_z = tf.layers.batch_normalization(lx_z, training=is_training,
+                                         scale=False)
+    lx_z = tf.nn.relu(lx_z)
+    lx_z = tf.layers.conv2d_transpose(lx_z, ngf, 5, strides=(2, 2),
+                                      padding="same", use_bias=False)
+    lx_z = tf.layers.batch_normalization(lx_z, training=is_training,
+                                         scale=False)
+    lx_z = tf.nn.relu(lx_z)
+    x = tf.layers.conv2d_transpose(
+        lx_z, 1, 5, strides=(2, 2), padding="same", activation=tf.sigmoid)
+    return x
 
 
-@zs.reuse('discriminator')
-def discriminator(x, is_training):
-    ndf = 16
-    lc_x = tf.layers.conv2d(x, ndf, 5, strides=(2, 2),
-                            padding='same', use_bias=False)
+@zs.reuse_variables(scope="disc")
+def discriminator(x, is_training, ndf=16):
+    lc_x = tf.layers.conv2d(x, ndf, 5, strides=(2, 2), padding='same',
+                            use_bias=False)
     lc_x = tf.layers.batch_normalization(lc_x, training=is_training,
                                          scale=False)
     lc_x = tf.nn.relu(lc_x)
-    lc_x = tf.layers.conv2d(lc_x, ndf * 2, 5, strides=(2, 2),
-                            padding='same', use_bias=False)
+    lc_x = tf.layers.conv2d(lc_x, ndf * 2, 5, strides=(2, 2), padding='same',
+                            use_bias=False)
     lc_x = tf.layers.batch_normalization(lc_x, training=is_training,
                                          scale=False)
     lc_x = tf.nn.relu(lc_x)
@@ -70,56 +68,44 @@ def main():
     np.random.seed(1234)
 
     # Load MINST
-    data_path = os.path.join(conf.data_dir, 'mnist.pkl.gz')
+    data_path = os.path.join(conf.data_dir, "mnist.pkl.gz")
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
         dataset.load_mnist_realval(data_path)
-    n_xl = 28
-    n_channels = 1
-    x_train = np.vstack([x_train, x_valid]).astype(np.float32).reshape(
-        (-1, n_xl, n_xl, n_channels))
+    x_train = np.vstack([x_train, x_valid]).reshape((-1, 28, 28, 1))
 
     # Define model parameters
-    n_z = 40
-
-    # Define training/evaluation parameters
-    epochs = 1000
-    batch_size = 64 * FLAGS.num_gpus
-    gen_size = 100
-    iters = x_train.shape[0] // batch_size
-    print_freq = 100
-    save_freq = 100
+    z_dim = 40
 
     # Build the computation graph
-    is_training = tf.placeholder(tf.bool, shape=[], name='is_training')
-    x = tf.placeholder(tf.float32, shape=(None, n_xl, n_xl, n_channels),
-                       name='x')
+    is_training = tf.placeholder(tf.bool, shape=[], name="is_training")
+    x = tf.placeholder(tf.float32, shape=[None, 28, 28, 1], name="x")
     optimizer = tf.train.RMSPropOptimizer(learning_rate=0.0002, decay=0.5)
 
     def build_tower_graph(x, id_):
         tower_x = x[id_ * tf.shape(x)[0] // FLAGS.num_gpus:
                     (id_ + 1) * tf.shape(x)[0] // FLAGS.num_gpus]
         n = tf.shape(tower_x)[0]
-        gen, x_gen = generator(None, n, n_z, is_training)
         x_critic = discriminator(tower_x, is_training)
+        x_gen = generator(n, z_dim, is_training)
         x_gen_critic = discriminator(x_gen, is_training)
-        gen_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                         scope='generator')
-        disc_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                          scope='discriminator')
-        disc_loss = -tf.reduce_mean(x_critic - x_gen_critic)
+
         gen_loss = -tf.reduce_mean(x_gen_critic)
-        disc_grads = optimizer.compute_gradients(
-            disc_loss, var_list=disc_var_list)
-        gen_grads = optimizer.compute_gradients(
-            gen_loss, var_list=gen_var_list)
+        gen_var_list = tf.trainable_variables(scope="gen")
+        gen_grads = optimizer.compute_gradients(gen_loss, var_list=gen_var_list)
+
+        disc_loss = -tf.reduce_mean(x_critic - x_gen_critic)
+        disc_var_list = tf.trainable_variables(scope="disc")
+        disc_grads = optimizer.compute_gradients(disc_loss,
+                                                 var_list=disc_var_list)
+
         grads = disc_grads + gen_grads
         return grads, gen_loss, disc_loss
 
     tower_losses = []
     tower_grads = []
     for i in range(FLAGS.num_gpus):
-        with tf.device('/gpu:%d' % i):
-            with tf.name_scope('tower_%d' % i):
+        with tf.device("/gpu:%d" % i):
+            with tf.name_scope("tower_%d" % i):
                 grads, gen_loss, disc_loss = build_tower_graph(x, i)
                 tower_losses.append([gen_loss, disc_loss])
                 tower_grads.append(grads)
@@ -132,15 +118,21 @@ def main():
         infer_op = optimizer.apply_gradients(grads)
 
     # Clip weights of the critic to ensure 1-Lipschitz
-    disc_var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,
-                                      scope='discriminator')
+    disc_var_list = tf.trainable_variables(scope="disc")
     with tf.control_dependencies([infer_op]):
         clip_op = tf.group(
             *[var.assign(tf.clip_by_value(var, -0.01, 0.01)) for var
               in disc_var_list])
 
     # Generate images
-    _, eval_x_gen = generator(None, gen_size, n_z, False)
+    eval_x_gen = generator(100, z_dim, False)
+
+    # Define training/evaluation parameters
+    epochs = 1000
+    batch_size = 64 * FLAGS.num_gpus
+    iters = x_train.shape[0] // batch_size
+    print_freq = 100
+    save_freq = 100
 
     # Run the inference
     with multi_gpu.create_session() as sess:
@@ -159,8 +151,8 @@ def main():
                 w_losses.append(w_loss)
 
                 if iter % print_freq == 0:
-                    print('Epoch={} Iter={} ({:.3f}s/iter): '
-                          'wasserstein distance = {}'.
+                    print("Epoch={} Iter={} ({:.3f}s/iter): "
+                          "wasserstein distance = {}".
                           format(epoch, iter,
                                  (time.time() + time_train) / print_freq,
                                  np.mean(w_losses)))

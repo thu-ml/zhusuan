@@ -8,7 +8,8 @@ from __future__ import division
 import tensorflow as tf
 
 from zhusuan import distributions
-from zhusuan.model.base import StochasticTensor
+from zhusuan.framework.bn import StochasticTensor
+from zhusuan.legacy.distributions import special
 
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     'InverseGamma',
     'Laplace',
     'MultivariateNormalCholesky',
+    'MatrixVariateNormalCholesky',
     'Multinomial',
     'UnnormalizedMultinomial',
     'BagofCategoricals',
@@ -39,21 +41,17 @@ __all__ = [
     'GumbelSoftmax',
     'Empirical',
     'Implicit',
-    'MatrixVariateNormalCholesky',
 ]
 
 
 class Normal(StochasticTensor):
     """
-    The class of univariate Normal `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
     .. warning::
 
-        The order of arguments `logstd`/`std` has changed to `std`/`logstd`
-        since 0.3.1. Please use named arguments:
-        ``Normal(name, mean, std=..., ...)``
-        or ``Normal(name, mean, logstd=..., ...)``.
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of univariate Normal `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -90,7 +88,7 @@ class Normal(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        norm = distributions.Normal(
+        dist = distributions.Normal(
             mean,
             _sentinel=_sentinel,
             std=std,
@@ -100,20 +98,18 @@ class Normal(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Normal, self).__init__(name, norm, n_samples)
+        super(Normal, self).__init__(None, name, dist, n_samples=n_samples,
+                                     **kwargs)
 
 
 class FoldNormal(StochasticTensor):
     """
-    The class of univariate FoldNormal `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
     .. warning::
 
-        The order of arguments `logstd`/`std` has changed to `std`/`logstd`
-        since 0.3.1. Please use named arguments:
-        ``FoldNormal(name, mean, std=..., ...)`` or
-        ``FoldNormal(name, mean, logstd=..., ...)``.
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of univariate FoldNormal `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -150,7 +146,7 @@ class FoldNormal(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        norm = distributions.FoldNormal(
+        dist = distributions.FoldNormal(
             mean,
             _sentinel=_sentinel,
             std=std,
@@ -160,13 +156,18 @@ class FoldNormal(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(FoldNormal, self).__init__(name, norm, n_samples)
+        super(FoldNormal, self).__init__(None, name, dist, n_samples=n_samples,
+                                         **kwargs)
 
 
 class Bernoulli(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Bernoulli `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -194,19 +195,24 @@ class Bernoulli(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        bernoulli = distributions.Bernoulli(
+        dist = distributions.Bernoulli(
             logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
-        super(Bernoulli, self).__init__(name, bernoulli, n_samples)
+        super(Bernoulli, self).__init__(None, name, dist, n_samples=n_samples,
+                                        **kwargs)
 
 
 class Categorical(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Categorical `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -238,13 +244,14 @@ class Categorical(StochasticTensor):
                  group_ndims=0,
                  dtype=tf.int32,
                  **kwargs):
-        cat = distributions.Categorical(
+        dist = distributions.Categorical(
             logits,
             group_ndims=group_ndims,
             dtype=dtype,
             **kwargs
         )
-        super(Categorical, self).__init__(name, cat, n_samples)
+        super(Categorical, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 Discrete = Categorical
@@ -252,8 +259,12 @@ Discrete = Categorical
 
 class Uniform(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Uniform `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -284,7 +295,7 @@ class Uniform(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        uniform = distributions.Uniform(
+        dist = distributions.Uniform(
             minval,
             maxval,
             group_ndims=group_ndims,
@@ -292,13 +303,18 @@ class Uniform(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Uniform, self).__init__(name, uniform, n_samples)
+        super(Uniform, self).__init__(None, name, dist, n_samples=n_samples,
+                                      **kwargs)
 
 
 class Gamma(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Gamma `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -325,20 +341,25 @@ class Gamma(StochasticTensor):
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        gamma = distributions.Gamma(
+        dist = distributions.Gamma(
             alpha,
             beta,
             group_ndims=group_ndims,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Gamma, self).__init__(name, gamma, n_samples)
+        super(Gamma, self).__init__(None, name, dist, n_samples=n_samples,
+                                    **kwargs)
 
 
 class Beta(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Beta `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -367,20 +388,25 @@ class Beta(StochasticTensor):
                  group_ndims=0,
                  check_numerics=False,
                  **kwargs):
-        beta = distributions.Beta(
+        dist = distributions.Beta(
             alpha,
             beta,
             group_ndims=group_ndims,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Beta, self).__init__(name, beta, n_samples)
+        super(Beta, self).__init__(None, name, dist, n_samples=n_samples,
+                                   **kwargs)
 
 
 class Poisson(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Poisson `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -408,20 +434,25 @@ class Poisson(StochasticTensor):
                  dtype=tf.int32,
                  check_numerics=False,
                  **kwargs):
-        poisson = distributions.Poisson(
+        dist = distributions.Poisson(
             rate,
             group_ndims=group_ndims,
             dtype=dtype,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Poisson, self).__init__(name, poisson, n_samples)
+        super(Poisson, self).__init__(None, name, dist, n_samples=n_samples,
+                                      **kwargs)
 
 
 class Binomial(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of univariate Binomial `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -454,7 +485,7 @@ class Binomial(StochasticTensor):
                  dtype=tf.int32,
                  check_numerics=False,
                  **kwargs):
-        binomial = distributions.Binomial(
+        dist = distributions.Binomial(
             logits,
             n_experiments,
             group_ndims=group_ndims,
@@ -462,17 +493,21 @@ class Binomial(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Binomial, self).__init__(name, binomial, n_samples)
+        super(Binomial, self).__init__(None, name, dist, n_samples=n_samples,
+                                       **kwargs)
 
 
 class MultivariateNormalCholesky(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
 
     The class of multivariate normal `StochasticTensor`, where covariance is
     parameterized with the lower triangular matrix :math:`L` in Cholesky
     decomposition :math:`LL^T = \Sigma`.
 
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
 
     :param name: A string. The name of the `StochasticTensor`. Must be unique
         in the `BayesianNet` context.
@@ -505,566 +540,24 @@ class MultivariateNormalCholesky(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        mvn = distributions.MultivariateNormalCholesky(
+        dist = distributions.MultivariateNormalCholesky(
             mean,
             cov_tril,
-            group_ndims,
-            is_reparameterized=is_reparameterized,
-            check_numerics=check_numerics,
-            **kwargs
-        )
-        super(MultivariateNormalCholesky, self).__init__(name, mvn, n_samples)
-
-
-class Multinomial(StochasticTensor):
-    """
-    The class of Multinomial `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
-        Each slice `[i, j, ..., k, :]` represents the log probabilities for
-        all categories. By default (when `normalize_logits=True`), the
-        probabilities could be un-normalized.
-
-        .. math:: \\mathrm{logits} \\propto \\log p
-
-    :param n_experiments: A 0-D `int32` Tensor or `None`. When it is a 0-D
-        `int32` integer, it represents the number of experiments for each
-        sample, which should be invariant among samples. In this situation
-        `_sample` function is supported. When it is `None`, `_sample` function
-        is not supported, and when calculating probabilities the number of
-        experiments will be inferred from `given`, so it could vary among
-        samples.
-    :param normalize_logits: A bool indicating whether `logits` should be
-        normalized when computing probability. If you believe `logits` is
-        already normalized, set it to `False` to speed up. Default is True.
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param dtype: The value type of this `StochasticTensor`. Can be
-        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
-        `tf.float32`, `tf.float64`). Default is `int32`.
-
-    A single sample is a N-D Tensor with the same shape as logits. Each slice
-    `[i, j, ..., k, :]` is a vector of counts for all categories.
-    """
-
-    def __init__(self,
-                 name,
-                 logits,
-                 n_experiments,
-                 normalize_logits=True,
-                 n_samples=None,
-                 group_ndims=0,
-                 dtype=tf.int32,
-                 **kwargs):
-        multinomial = distributions.Multinomial(
-            logits,
-            n_experiments,
-            normalize_logits=normalize_logits,
-            group_ndims=group_ndims,
-            dtype=dtype,
-            **kwargs
-        )
-        super(Multinomial, self).__init__(name, multinomial, n_samples)
-
-
-class UnnormalizedMultinomial(StochasticTensor):
-    """
-    The class of UnnormalizedMultinomial `StochasticTensor`.
-    UnnormalizedMultinomial distribution calculates probabilities differently
-    from :class:`Multinomial`: It considers the bag-of-words `given` as a
-    statistics of an ordered result sequence, and calculates the probability
-    of the (imagined) ordered sequence. Hence it does not multiply the term
-
-    .. math::
-
-        \\binom{n}{k_1, k_2, \\dots} =  \\frac{n!}{\\prod_{i} k_i!}
-
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
-        Each slice `[i, j, ..., k, :]` represents the log probabilities for
-        all categories. By default (when `normalize_logits=True`), the
-        probabilities could be un-normalized.
-
-        .. math:: \\mathrm{logits} \\propto \\log p
-
-    :param normalize_logits: A bool indicating whether `logits` should be
-        normalized when computing probability. If you believe `logits` is
-        already normalized, set it to `False` to speed up. Default is True.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param dtype: The value type of this `StochasticTensor`. Can be
-        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
-        `tf.float32`, `tf.float64`). Default is `int32`.
-
-    A single sample is a N-D Tensor with the same shape as logits. Each slice
-    `[i, j, ..., k, :]` is a vector of counts for all categories.
-    """
-
-    def __init__(self,
-                 name,
-                 logits,
-                 normalize_logits=True,
-                 group_ndims=0,
-                 dtype=tf.int32,
-                 **kwargs):
-        unnormalized_multinomial = distributions.UnnormalizedMultinomial(
-            logits,
-            normalize_logits=normalize_logits,
-            group_ndims=group_ndims,
-            dtype=dtype,
-            **kwargs
-        )
-        super(UnnormalizedMultinomial, self) \
-            .__init__(name, unnormalized_multinomial, None)
-
-
-BagofCategoricals = UnnormalizedMultinomial
-
-
-class OnehotCategorical(StochasticTensor):
-    """
-    The class of one-hot Categorical `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
-
-        .. math:: \\mathrm{logits} \\propto \\log p
-
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param dtype: The value type of this `StochasticTensor`. Can be
-        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
-        `tf.float32`, `tf.float64`). Default is `int32`.
-
-    A single sample is a N-D Tensor with the same shape as logits. Each slice
-    `[i, j, ..., k, :]` is a one-hot vector of the selected category.
-    """
-
-    def __init__(self,
-                 name,
-                 logits,
-                 n_samples=None,
-                 group_ndims=0,
-                 dtype=tf.int32,
-                 **kwargs):
-        onehot_cat = distributions.OnehotCategorical(
-            logits,
-            group_ndims=group_ndims,
-            dtype=dtype,
-            **kwargs
-        )
-        super(OnehotCategorical, self).__init__(name, onehot_cat, n_samples)
-
-
-OnehotDiscrete = OnehotCategorical
-
-
-class Dirichlet(StochasticTensor):
-    """
-    The class of Dirichlet `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param alpha: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
-        Each slice `[i, j, ..., k, :]` represents the concentration parameter
-        of a Dirichlet distribution. Should be positive.
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param check_numerics: Bool. Whether to check numeric issues.
-
-    A single sample is a N-D Tensor with the same shape as alpha. Each slice
-    `[i, j, ..., k, :]` of the sample is a vector of probabilities of a
-    Categorical distribution `[x_1, x_2, ... ]`, which lies on the simplex
-
-    .. math:: \\sum_{i} x_i = 1, 0 < x_i < 1
-
-    """
-
-    def __init__(self,
-                 name,
-                 alpha,
-                 n_samples=None,
-                 group_ndims=0,
-                 check_numerics=False,
-                 **kwargs):
-        dirichlet = distributions.Dirichlet(
-            alpha,
-            group_ndims=group_ndims,
-            check_numerics=check_numerics,
-            **kwargs
-        )
-        super(Dirichlet, self).__init__(name, dirichlet, n_samples)
-
-
-class InverseGamma(StochasticTensor):
-    """
-    The class of univariate InverseGamma `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param alpha: A `float` Tensor. The shape parameter of the InverseGamma
-        distribution. Should be positive and broadcastable to match `beta`.
-    :param beta: A `float` Tensor. The scale parameter of the InverseGamma
-        distribution. Should be positive and broadcastable to match `alpha`.
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param check_numerics: Bool. Whether to check numeric issues.
-    """
-
-    def __init__(self,
-                 name,
-                 alpha,
-                 beta,
-                 n_samples=None,
-                 group_ndims=0,
-                 check_numerics=False,
-                 **kwargs):
-        inv_gamma = distributions.InverseGamma(
-            alpha,
-            beta,
-            group_ndims=group_ndims,
-            check_numerics=check_numerics,
-            **kwargs
-        )
-        super(InverseGamma, self).__init__(name, inv_gamma, n_samples)
-
-
-class Laplace(StochasticTensor):
-    """
-    The class of univariate Laplace `StochasticTensor`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param loc: A `float` Tensor. The location parameter of the Laplace
-        distribution. Should be broadcastable to match `scale`.
-    :param scale: A `float` Tensor. The scale parameter of the Laplace
-        distribution. Should be positive and broadcastable to match `loc`.
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param is_reparameterized: A Bool. If True, gradients on samples from this
-        `StochasticTensor` are allowed to propagate into inputs, using the
-        reparametrization trick from (Kingma, 2013).
-    :param check_numerics: Bool. Whether to check numeric issues.
-    """
-
-    def __init__(self,
-                 name,
-                 loc,
-                 scale,
-                 n_samples=None,
-                 group_ndims=0,
-                 is_reparameterized=True,
-                 check_numerics=False,
-                 **kwargs):
-        laplace = distributions.Laplace(
-            loc,
-            scale,
             group_ndims=group_ndims,
             is_reparameterized=is_reparameterized,
             check_numerics=check_numerics,
             **kwargs
         )
-        super(Laplace, self).__init__(name, laplace, n_samples)
-
-
-class BinConcrete(StochasticTensor):
-    """
-    The class of univariate BinConcrete `StochasticTensor` from
-    (Maddison, 2016). It is the binary case of :class:`~Concrete`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    .. seealso::
-
-        :class:`~Concrete` and :class:`~ExpConcrete`
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
-        distribution. The temperature should be positive.
-    :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
-
-        .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
-
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param is_reparameterized: A Bool. If True, gradients on samples from this
-        `StochasticTensor` are allowed to propagate into inputs, using the
-        reparametrization trick from (Kingma, 2013).
-    :param check_numerics: Bool. Whether to check numeric issues.
-    """
-
-    def __init__(self,
-                 name,
-                 temperature,
-                 logits,
-                 n_samples=None,
-                 group_ndims=0,
-                 is_reparameterized=True,
-                 check_numerics=False,
-                 **kwargs):
-        bin_concrete = distributions.BinConcrete(
-            temperature,
-            logits,
-            group_ndims=group_ndims,
-            is_reparameterized=is_reparameterized,
-            check_numerics=check_numerics,
-            **kwargs
-        )
-        super(BinConcrete, self).__init__(name, bin_concrete, n_samples)
-
-
-BinGumbelSoftmax = BinConcrete
-
-
-class ExpConcrete(StochasticTensor):
-    """
-    The class of ExpConcrete `StochasticTensor` from (Maddison, 2016),
-    transformed from :class:`~Concrete` by taking logarithm.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    .. seealso::
-
-        :class:`~BinConcrete` and :class:`~Concrete`
-
-    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
-        distribution. The temperature should be positive.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
-
-        .. math:: \\mathrm{logits} \\propto \\log p
-
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param is_reparameterized: A Bool. If True, gradients on samples from this
-        `StochasticTensor` are allowed to propagate into inputs, using the
-        reparametrization trick from (Kingma, 2013).
-    :param check_numerics: Bool. Whether to check numeric issues.
-    """
-
-    def __init__(self,
-                 name,
-                 temperature,
-                 logits,
-                 n_samples=None,
-                 group_ndims=0,
-                 is_reparameterized=True,
-                 check_numerics=False,
-                 **kwargs):
-        exp_concrete = distributions.ExpConcrete(
-            temperature,
-            logits,
-            group_ndims=group_ndims,
-            is_reparameterized=is_reparameterized,
-            check_numerics=check_numerics,
-            **kwargs
-        )
-        super(ExpConcrete, self).__init__(name, exp_concrete, n_samples)
-
-
-ExpGumbelSoftmax = ExpConcrete
-
-
-class Concrete(StochasticTensor):
-    """
-    The class of Concrete (or Gumbel-Softmax) `StochasticTensor` from
-    (Maddison, 2016; Jang, 2016), served as
-    the continuous relaxation of the :class:`~OnehotCategorical`.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    .. seealso::
-
-        :class:`~BinConcrete` and :class:`~ExpConcrete`
-
-    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
-        distribution. The temperature should be positive.
-    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
-        n_categories). Each slice `[i, j, ..., k, :]` represents the
-        un-normalized log probabilities for all categories.
-
-        .. math:: \\mathrm{logits} \\propto \\log p
-
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param is_reparameterized: A Bool. If True, gradients on samples from this
-        `StochasticTensor` are allowed to propagate into inputs, using the
-        reparametrization trick from (Kingma, 2013).
-    :param check_numerics: Bool. Whether to check numeric issues.
-    """
-
-    def __init__(self,
-                 name,
-                 temperature,
-                 logits,
-                 n_samples=None,
-                 group_ndims=0,
-                 is_reparameterized=True,
-                 check_numerics=False,
-                 **kwargs):
-        concrete = distributions.Concrete(
-            temperature,
-            logits,
-            group_ndims=group_ndims,
-            is_reparameterized=is_reparameterized,
-            check_numerics=check_numerics,
-            **kwargs
-        )
-        super(Concrete, self).__init__(name, concrete, n_samples)
-
-
-GumbelSoftmax = Concrete
-
-
-class Empirical(StochasticTensor):
-    """
-    The class of Empirical `StochasticTensor`.
-    For any inference it is always required that the variables are observed.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param dtype: The value type of samples from the distribution.
-    :param batch_shape: A `TensorShape` describing the `batch_shape` of the
-        distribution.
-    :param value_shape: A `TensorShape` describing the `value_shape` of the
-        distribution.
-    :param is_continuous: A bool or `None`. Whether the distribution is
-        continuous or not. If `None`, will consider it continuous only if
-        `dtype` is a float type.
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    """
-
-    def __init__(self,
-                 name,
-                 dtype,
-                 batch_shape,
-                 n_samples=None,
-                 group_ndims=0,
-                 value_shape=None,
-                 is_continuous=None,
-                 **kwargs):
-        norm = distributions.Empirical(
-            dtype, batch_shape,
-            value_shape=value_shape,
-            group_ndims=group_ndims,
-            is_continous=is_continuous,
-            **kwargs
-        )
-        super(Empirical, self).__init__(name, norm, n_samples)
-
-
-class Implicit(StochasticTensor):
-    """
-    The class of Implicit `StochasticTensor`.
-    This distribution always sample the implicit tensor provided.
-    See :class:`~zhusuan.model.base.StochasticTensor` for details.
-
-    :param name: A string. The name of the `StochasticTensor`. Must be unique
-        in the `BayesianNet` context.
-    :param samples: A N-D (N >= 1) `float` Tensor.
-    :param value_shape: A list or tuple describing the `value_shape` of the
-        distribution. The entries of the list can either be int, Dimension or
-        None.
-    :param group_ndims: A 0-D `int32` Tensor representing the number of
-        dimensions in `batch_shape` (counted from the end) that are grouped
-        into a single event, so that their probabilities are calculated
-        together. Default is 0, which means a single value is an event.
-        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
-        explanation.
-    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
-        generated by this `StochasticTensor`.
-    """
-
-    def __init__(self,
-                 name,
-                 samples,
-                 value_shape=None,
-                 group_ndims=0,
-                 n_samples=None,
-                 **kwargs):
-        norm = distributions.Implicit(
-            samples,
-            value_shape=value_shape,
-            group_ndims=group_ndims,
-            **kwargs
-        )
-        super(Implicit, self).__init__(name, norm, n_samples)
+        super(MultivariateNormalCholesky, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
 
 
 class MatrixVariateNormalCholesky(StochasticTensor):
     """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
     The class of matrix variate normal `StochasticTensor`, where covariances
     :math:`U` and :math:`V` are parameterized with the lower triangular
     matrix in Cholesky decomposition,
@@ -1111,7 +604,7 @@ class MatrixVariateNormalCholesky(StochasticTensor):
                  is_reparameterized=True,
                  check_numerics=False,
                  **kwargs):
-        mvn = distributions.MatrixVariateNormalCholesky(
+        dist = distributions.MatrixVariateNormalCholesky(
             mean,
             u_tril,
             v_tril,
@@ -1120,4 +613,607 @@ class MatrixVariateNormalCholesky(StochasticTensor):
             check_numerics=check_numerics,
             **kwargs
         )
-        super(MatrixVariateNormalCholesky, self).__init__(name, mvn, n_samples)
+        super(MatrixVariateNormalCholesky, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
+
+
+class Multinomial(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of Multinomial `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
+
+        .. math:: \\mathrm{logits} \\propto \\log p
+
+    :param n_experiments: A 0-D `int32` Tensor or `None`. When it is a 0-D
+        `int32` integer, it represents the number of experiments for each
+        sample, which should be invariant among samples. In this situation
+        `_sample` function is supported. When it is `None`, `_sample` function
+        is not supported, and when calculating probabilities the number of
+        experiments will be inferred from `given`, so it could vary among
+        samples.
+    :param normalize_logits: A bool indicating whether `logits` should be
+        normalized when computing probability. If you believe `logits` is
+        already normalized, set it to `False` to speed up. Default is True.
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param dtype: The value type of this `StochasticTensor`. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
+
+    A single sample is a N-D Tensor with the same shape as logits. Each slice
+    `[i, j, ..., k, :]` is a vector of counts for all categories.
+    """
+
+    def __init__(self,
+                 name,
+                 logits,
+                 n_experiments,
+                 normalize_logits=True,
+                 n_samples=None,
+                 group_ndims=0,
+                 dtype=tf.int32,
+                 **kwargs):
+        dist = distributions.Multinomial(
+            logits,
+            n_experiments,
+            normalize_logits=normalize_logits,
+            group_ndims=group_ndims,
+            dtype=dtype,
+            **kwargs
+        )
+        super(Multinomial, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
+
+
+class UnnormalizedMultinomial(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of UnnormalizedMultinomial `StochasticTensor`.
+    UnnormalizedMultinomial distribution calculates probabilities differently
+    from :class:`Multinomial`: It considers the bag-of-words `given` as a
+    statistics of an ordered result sequence, and calculates the probability
+    of the (imagined) ordered sequence. Hence it does not multiply the term
+
+    .. math::
+
+        \\binom{n}{k_1, k_2, \\dots} =  \\frac{n!}{\\prod_{i} k_i!}
+
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape `[..., n_categories]`.
+        Each slice `[i, j, ..., k, :]` represents the log probabilities for
+        all categories. By default (when `normalize_logits=True`), the
+        probabilities could be un-normalized.
+
+        .. math:: \\mathrm{logits} \\propto \\log p
+
+    :param normalize_logits: A bool indicating whether `logits` should be
+        normalized when computing probability. If you believe `logits` is
+        already normalized, set it to `False` to speed up. Default is True.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param dtype: The value type of this `StochasticTensor`. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
+
+    A single sample is a N-D Tensor with the same shape as logits. Each slice
+    `[i, j, ..., k, :]` is a vector of counts for all categories.
+    """
+
+    def __init__(self,
+                 name,
+                 logits,
+                 normalize_logits=True,
+                 group_ndims=0,
+                 dtype=tf.int32,
+                 **kwargs):
+        dist = distributions.UnnormalizedMultinomial(
+            logits,
+            normalize_logits=normalize_logits,
+            group_ndims=group_ndims,
+            dtype=dtype,
+            **kwargs
+        )
+        super(UnnormalizedMultinomial, self).__init__(
+            None, name, dist, **kwargs)
+
+
+BagofCategoricals = UnnormalizedMultinomial
+
+
+class OnehotCategorical(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of one-hot Categorical `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
+
+        .. math:: \\mathrm{logits} \\propto \\log p
+
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param dtype: The value type of this `StochasticTensor`. Can be
+        int (`tf.int16`, `tf.int32`, `tf.int64`) or float (`tf.float16`,
+        `tf.float32`, `tf.float64`). Default is `int32`.
+
+    A single sample is a N-D Tensor with the same shape as logits. Each slice
+    `[i, j, ..., k, :]` is a one-hot vector of the selected category.
+    """
+
+    def __init__(self,
+                 name,
+                 logits,
+                 n_samples=None,
+                 group_ndims=0,
+                 dtype=tf.int32,
+                 **kwargs):
+        dist = distributions.OnehotCategorical(
+            logits,
+            group_ndims=group_ndims,
+            dtype=dtype,
+            **kwargs
+        )
+        super(OnehotCategorical, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
+
+
+OnehotDiscrete = OnehotCategorical
+
+
+class Dirichlet(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of Dirichlet `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param alpha: A N-D (N >= 1) `float` Tensor of shape (..., n_categories).
+        Each slice `[i, j, ..., k, :]` represents the concentration parameter
+        of a Dirichlet distribution. Should be positive.
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+
+    A single sample is a N-D Tensor with the same shape as alpha. Each slice
+    `[i, j, ..., k, :]` of the sample is a vector of probabilities of a
+    Categorical distribution `[x_1, x_2, ... ]`, which lies on the simplex
+
+    .. math:: \\sum_{i} x_i = 1, 0 < x_i < 1
+
+    """
+
+    def __init__(self,
+                 name,
+                 alpha,
+                 n_samples=None,
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
+        dist = distributions.Dirichlet(
+            alpha,
+            group_ndims=group_ndims,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(Dirichlet, self).__init__(None, name, dist, n_samples=n_samples,
+                                        **kwargs)
+
+
+class InverseGamma(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of univariate InverseGamma `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param alpha: A `float` Tensor. The shape parameter of the InverseGamma
+        distribution. Should be positive and broadcastable to match `beta`.
+    :param beta: A `float` Tensor. The scale parameter of the InverseGamma
+        distribution. Should be positive and broadcastable to match `alpha`.
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 name,
+                 alpha,
+                 beta,
+                 n_samples=None,
+                 group_ndims=0,
+                 check_numerics=False,
+                 **kwargs):
+        dist = distributions.InverseGamma(
+            alpha,
+            beta,
+            group_ndims=group_ndims,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(InverseGamma, self).__init__(None, name, dist,
+                                           n_samples=n_samples, **kwargs)
+
+
+class Laplace(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of univariate Laplace `StochasticTensor`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param loc: A `float` Tensor. The location parameter of the Laplace
+        distribution. Should be broadcastable to match `scale`.
+    :param scale: A `float` Tensor. The scale parameter of the Laplace
+        distribution. Should be positive and broadcastable to match `loc`.
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        `StochasticTensor` are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 name,
+                 loc,
+                 scale,
+                 n_samples=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        dist = distributions.Laplace(
+            loc,
+            scale,
+            group_ndims=group_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(Laplace, self).__init__(None, name, dist, n_samples=n_samples,
+                                      **kwargs)
+
+
+class BinConcrete(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of univariate BinConcrete `StochasticTensor` from
+    (Maddison, 2016). It is the binary case of :class:`~Concrete`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    .. seealso::
+
+        :class:`~Concrete` and :class:`~ExpConcrete`
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
+        distribution. The temperature should be positive.
+    :param logits: A `float` Tensor. The log-odds of probabilities of being 1.
+
+        .. math:: \\mathrm{logits} = \\log \\frac{p}{1 - p}
+
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        `StochasticTensor` are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 name,
+                 temperature,
+                 logits,
+                 n_samples=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        dist = distributions.BinConcrete(
+            temperature,
+            logits,
+            group_ndims=group_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(BinConcrete, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
+
+
+BinGumbelSoftmax = BinConcrete
+
+
+class ExpConcrete(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of ExpConcrete `StochasticTensor` from (Maddison, 2016),
+    transformed from :class:`~Concrete` by taking logarithm.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    .. seealso::
+
+        :class:`~BinConcrete` and :class:`~Concrete`
+
+    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
+        distribution. The temperature should be positive.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
+
+        .. math:: \\mathrm{logits} \\propto \\log p
+
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        `StochasticTensor` are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 name,
+                 temperature,
+                 logits,
+                 n_samples=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        dist = distributions.ExpConcrete(
+            temperature,
+            logits,
+            group_ndims=group_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(ExpConcrete, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
+
+
+ExpGumbelSoftmax = ExpConcrete
+
+
+class Concrete(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of Concrete (or Gumbel-Softmax) `StochasticTensor` from
+    (Maddison, 2016; Jang, 2016), served as
+    the continuous relaxation of the :class:`~OnehotCategorical`.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    .. seealso::
+
+        :class:`~BinConcrete` and :class:`~ExpConcrete`
+
+    :param temperature: A 0-D `float` Tensor. The temperature of the relaxed
+        distribution. The temperature should be positive.
+    :param logits: A N-D (N >= 1) `float` Tensor of shape (...,
+        n_categories). Each slice `[i, j, ..., k, :]` represents the
+        un-normalized log probabilities for all categories.
+
+        .. math:: \\mathrm{logits} \\propto \\log p
+
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param is_reparameterized: A Bool. If True, gradients on samples from this
+        `StochasticTensor` are allowed to propagate into inputs, using the
+        reparametrization trick from (Kingma, 2013).
+    :param check_numerics: Bool. Whether to check numeric issues.
+    """
+
+    def __init__(self,
+                 name,
+                 temperature,
+                 logits,
+                 n_samples=None,
+                 group_ndims=0,
+                 is_reparameterized=True,
+                 check_numerics=False,
+                 **kwargs):
+        dist = distributions.Concrete(
+            temperature,
+            logits,
+            group_ndims=group_ndims,
+            is_reparameterized=is_reparameterized,
+            check_numerics=check_numerics,
+            **kwargs
+        )
+        super(Concrete, self).__init__(None, name, dist, n_samples=n_samples,
+                                       **kwargs)
+
+
+GumbelSoftmax = Concrete
+
+
+class Empirical(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of Empirical `StochasticTensor`.
+    For any inference it is always required that the variables are observed.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param dtype: The value type of samples from the distribution.
+    :param batch_shape: A `TensorShape` describing the `batch_shape` of the
+        distribution.
+    :param value_shape: A `TensorShape` describing the `value_shape` of the
+        distribution.
+    :param is_continuous: A bool or `None`. Whether the distribution is
+        continuous or not. If `None`, will consider it continuous only if
+        `dtype` is a float type.
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    """
+
+    def __init__(self,
+                 name,
+                 dtype,
+                 batch_shape,
+                 n_samples=None,
+                 group_ndims=0,
+                 value_shape=None,
+                 is_continuous=None,
+                 **kwargs):
+        dist = special.Empirical(
+            dtype,
+            batch_shape,
+            value_shape=value_shape,
+            group_ndims=group_ndims,
+            is_continous=is_continuous,
+            **kwargs
+        )
+        super(Empirical, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)
+
+
+class Implicit(StochasticTensor):
+    """
+    .. warning::
+
+        Deprecated in 0.4, will be removed in 0.4.1.
+
+    The class of Implicit `StochasticTensor`.
+    This distribution always sample the implicit tensor provided.
+    See :class:`~zhusuan.framework.base.StochasticTensor` for details.
+
+    :param name: A string. The name of the `StochasticTensor`. Must be unique
+        in the `BayesianNet` context.
+    :param samples: A N-D (N >= 1) `float` Tensor.
+    :param value_shape: A list or tuple describing the `value_shape` of the
+        distribution. The entries of the list can either be int, Dimension or
+        None.
+    :param group_ndims: A 0-D `int32` Tensor representing the number of
+        dimensions in `batch_shape` (counted from the end) that are grouped
+        into a single event, so that their probabilities are calculated
+        together. Default is 0, which means a single value is an event.
+        See :class:`~zhusuan.distributions.base.Distribution` for more detailed
+        explanation.
+    :param n_samples: A 0-D `int32` Tensor or None. Number of samples
+        generated by this `StochasticTensor`.
+    """
+
+    def __init__(self,
+                 name,
+                 samples,
+                 value_shape=None,
+                 group_ndims=0,
+                 n_samples=None,
+                 **kwargs):
+        dist = special.Implicit(
+            samples,
+            value_shape=value_shape,
+            group_ndims=group_ndims,
+            **kwargs
+        )
+        super(Implicit, self).__init__(
+            None, name, dist, n_samples=n_samples, **kwargs)

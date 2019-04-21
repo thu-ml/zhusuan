@@ -49,6 +49,7 @@ def to_one_hot(x, depth):
     ret[np.arange(x.shape[0]), x] = 1
     return ret
 
+
 pbar = None
 
 
@@ -352,7 +353,7 @@ def load_uci_protein_data(path, dtype=np.float32):
                          'machine-learning-databases/00265/CASP.csv',
                          path)
 
-    data = np.loadtxt(open(path), delimiter=',', skiprows=1)
+    data = np.loadtxt(open(path), dtype=dtype, delimiter=',', skiprows=1)
 
     permutation = np.random.choice(np.arange(data.shape[0]),
                                    data.shape[0], replace=False)

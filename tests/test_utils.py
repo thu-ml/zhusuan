@@ -24,6 +24,10 @@ class _SimpleTensor(TensorArithmeticMixin):
     def dtype(self):
         return self.value.dtype
 
+    @property
+    def shape(self):
+        return self.value.shape
+
 
 def _to_tensor(value, dtype=None, name=None, as_ref=False):
     if dtype and not dtype.is_compatible_with(value.dtype):
@@ -41,12 +45,14 @@ tf.register_tensor_conversion_function(_SimpleTensor, _to_tensor)
 class ArithMixinTestCase(tf.test.TestCase):
 
     def test_prerequisite(self):
-        if six.PY2:
-            self.assertAlmostEqual(regular_div(3, 2), 1)
-            self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
-        else:
-            self.assertAlmostEqual(regular_div(3, 2), 1.5)
-            self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
+        # Tensorflow has deprecated Python 2 division semantics,
+        # regular division in Python 3 is true division.
+        # if six.PY2:
+        #     self.assertAlmostEqual(regular_div(3, 2), 1)
+        #     self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
+        # else:
+        self.assertAlmostEqual(regular_div(3, 2), 1.5)
+        self.assertAlmostEqual(regular_div(3.3, 1.6), 2.0625)
         self.assertAlmostEqual(true_div(3, 2), 1.5)
         self.assertAlmostEqual(true_div(3.3, 1.6), 2.0625)
         self.assertAlmostEqual(floor_div(3, 2), 1)
@@ -72,7 +78,7 @@ class ArithMixinTestCase(tf.test.TestCase):
                         (name, res_val, ans_val, x)
             )
 
-        with tf.Graph().as_default(), self.test_session(use_gpu=True):
+        with tf.Graph().as_default(), self.session(use_gpu=True):
             int_data = np.asarray([1, -2, 3], dtype=np.int32)
             float_data = np.asarray([1.1, -2.2, 3.3], dtype=np.float32)
             bool_data = np.asarray([True, False, True], dtype=np.bool)
@@ -140,7 +146,7 @@ class ArithMixinTestCase(tf.test.TestCase):
             'ge': lambda x, y: x >= y,
         }
 
-        with tf.Graph().as_default(), self.test_session(use_gpu=True):
+        with tf.Graph().as_default(), self.session(use_gpu=True):
             # arithmetic operators
             run_ops(np.asarray([-4, 5, 6], dtype=np.int32),
                     np.asarray([1, -2, 3], dtype=np.int32),
@@ -203,7 +209,7 @@ class ArithMixinTestCase(tf.test.TestCase):
                 return item
         sg = _SliceGenerator()
 
-        with tf.Graph().as_default(), self.test_session(use_gpu=True):
+        with tf.Graph().as_default(), self.session(use_gpu=True):
             data = np.asarray([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
             indices_or_slices = [
                 0,
@@ -250,7 +256,7 @@ class ArithMixinTestCase(tf.test.TestCase):
 
 class TestLogSumExp(tf.test.TestCase):
     def test_log_sum_exp(self):
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             a = np.array([[[1., 3., 0.2], [0.7, 2., 1e-6]],
                           [[0., 1e6, 1.], [1., 1., 1.]]])
             for keepdims in [True, False]:
@@ -263,7 +269,7 @@ class TestLogSumExp(tf.test.TestCase):
 
 class TestLogMeanExp(tf.test.TestCase):
     def test_log_mean_exp(self):
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             a = np.array([[[1., 3., 0.2], [0.7, 2., 1e-6]],
                           [[0., 1e6, 1.], [1., 1., 1.]]])
             for keepdims in [True, False]:

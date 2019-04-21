@@ -13,34 +13,41 @@ import numpy as np
 import zhusuan as zs
 
 from examples import conf
-from examples.utils import dataset, save_image_collections
+from examples.utils import dataset
 
 
-@zs.meta_bayesian_net(scope="gen", reuse_variables=True)
-def build_gen(x_dim, z_dim, n, n_particles=1):
+@zs.meta_bayesian_net(scope="sbn", reuse_variables=True)
+def build_sbn(n, x_dim, h_dim, n_particles):
     bn = zs.BayesianNet()
-    z_mean = tf.zeros([n, z_dim])
-    z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
-    h = tf.layers.dense(z, 500, activation=tf.nn.relu)
-    h = tf.layers.dense(h, 500, activation=tf.nn.relu)
-    x_logits = tf.layers.dense(h, x_dim)
-    bn.deterministic("x_mean", tf.sigmoid(x_logits))
+    h3_logits = tf.zeros([n, h_dim])
+    h3 = bn.bernoulli("h3", h3_logits, group_ndims=1, n_samples=n_particles,
+                      dtype=tf.float32)
+    h2_logits = tf.layers.dense(h3, h_dim)
+    h2 = bn.bernoulli("h2", h2_logits, group_ndims=1, dtype=tf.float32)
+    h1_logits = tf.layers.dense(h2, h_dim)
+    h1 = bn.bernoulli("h1", h1_logits, group_ndims=1, dtype=tf.float32)
+    x_logits = tf.layers.dense(h1, x_dim)
     bn.bernoulli("x", x_logits, group_ndims=1)
     return bn
 
 
-@zs.reuse_variables(scope="q_net")
-def build_q_net(x, z_dim, n_z_per_x):
+@zs.reuse_variables(scope="proposal")
+def build_proposal(x, h_dim, n_particles):
     bn = zs.BayesianNet()
-    h = tf.layers.dense(tf.cast(x, tf.float32), 500, activation=tf.nn.relu)
-    h = tf.layers.dense(h, 500, activation=tf.nn.relu)
-    z_mean = tf.layers.dense(h, z_dim)
-    z_logstd = tf.layers.dense(h, z_dim)
-    bn.normal("z", z_mean, logstd=z_logstd, group_ndims=1, n_samples=n_z_per_x)
+    h1_logits = tf.layers.dense(tf.cast(x, tf.float32), h_dim)
+    h1 = bn.bernoulli("h1", h1_logits, group_ndims=1,
+                      n_samples=n_particles, dtype=tf.float32)
+    h2_logits = tf.layers.dense(h1, h_dim)
+    h2 = bn.bernoulli("h2", h2_logits, group_ndims=1, dtype=tf.float32)
+    h3_logits = tf.layers.dense(h2, h_dim)
+    bn.bernoulli("h3", h3_logits, group_ndims=1, dtype=tf.float32)
     return bn
 
 
 def main():
+    tf.set_random_seed(1234)
+    np.random.seed(1234)
+
     # Load MNIST
     data_path = os.path.join(conf.data_dir, "mnist.pkl.gz")
     x_train, t_train, x_valid, t_valid, x_test, t_test = \
@@ -50,7 +57,7 @@ def main():
     x_dim = x_train.shape[1]
 
     # Define model parameters
-    z_dim = 40
+    h_dim = 200
 
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
@@ -59,38 +66,39 @@ def main():
                 tf.int32)
     n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    model = build_gen(x_dim, z_dim, n, n_particles)
-    variational = build_q_net(x, z_dim, n_particles)
+    model = build_sbn(n, x_dim, h_dim, n_particles)
+    proposal = build_proposal(x, h_dim, n_particles)
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.001, epsilon=1e-4)
 
-    lower_bound = zs.variational.elbo(
-        model, {"x": x}, variational=variational, axis=0)
-    cost = tf.reduce_mean(lower_bound.sgvb())
-    lower_bound = tf.reduce_mean(lower_bound)
+    # learning model parameters
+    lower_bound = tf.reduce_mean(
+        zs.variational.importance_weighted_objective(
+            model, observed={"x": x}, variational=proposal, axis=0))
+    model_params = tf.trainable_variables(scope="sbn")
+    model_grads = optimizer.compute_gradients(-lower_bound, model_params)
 
-    # # Importance sampling estimates of marginal log likelihood
-    is_log_likelihood = tf.reduce_mean(
-        zs.is_loglikelihood(model, {"x": x}, proposal=variational, axis=0))
+    # adapting the proposal
+    klpq_obj = zs.variational.klpq(
+        model, observed={"x": x}, variational=proposal, axis=0)
+    klpq_cost = tf.reduce_mean(klpq_obj.importance())
+    proposal_params = tf.trainable_variables(scope="proposal")
+    klpq_grads = optimizer.compute_gradients(klpq_cost, proposal_params)
 
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-    infer_op = optimizer.minimize(cost)
-
-    # Random generation
-    x_gen = tf.reshape(model.observe()["x_mean"], [-1, 28, 28, 1])
+    infer_op = optimizer.apply_gradients(model_grads + klpq_grads)
 
     # Define training/evaluation parameters
+    lb_samples = 10
+    ll_samples = 1000
     epochs = 3000
-    batch_size = 128
+    batch_size = 24
     iters = x_train.shape[0] // batch_size
-    save_freq = 10
     test_freq = 10
-    test_batch_size = 400
+    test_batch_size = 100
     test_iters = x_test.shape[0] // test_batch_size
-    result_path = "results/vae"
 
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-
         for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
             np.random.shuffle(x_train)
@@ -99,7 +107,7 @@ def main():
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x_input: x_batch,
-                                            n_particles: 1,
+                                            n_particles: lb_samples,
                                             n: batch_size})
                 lbs.append(lb)
             time_epoch += time.time()
@@ -108,31 +116,25 @@ def main():
 
             if epoch % test_freq == 0:
                 time_test = -time.time()
-                test_lbs, test_lls = [], []
+                test_lbs = []
+                test_lls = []
                 for t in range(test_iters):
-                    test_x_batch = x_test[t * test_batch_size:
-                                          (t + 1) * test_batch_size]
+                    test_x_batch = x_test[
+                        t * test_batch_size: (t + 1) * test_batch_size]
                     test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: 1,
+                                                  n_particles: lb_samples,
                                                   n: test_batch_size})
-                    test_ll = sess.run(is_log_likelihood,
+                    test_ll = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: 1000,
+                                                  n_particles: ll_samples,
                                                   n: test_batch_size})
                     test_lbs.append(test_lb)
                     test_lls.append(test_ll)
                 time_test += time.time()
                 print(">>> TEST ({:.1f}s)".format(time_test))
                 print(">> Test lower bound = {}".format(np.mean(test_lbs)))
-                print('>> Test log likelihood (IS) = {}'.format(
-                    np.mean(test_lls)))
-
-            if epoch % save_freq == 0:
-                images = sess.run(x_gen, feed_dict={n: 100, n_particles: 1})
-                name = os.path.join(result_path,
-                                    "vae.epoch.{}.png".format(epoch))
-                save_image_collections(images, name)
+                print(">> Test log likelihood = {}".format(np.mean(test_lls)))
 
 
 if __name__ == "__main__":

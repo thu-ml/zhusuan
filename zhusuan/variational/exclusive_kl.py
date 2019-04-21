@@ -24,7 +24,14 @@ class EvidenceLowerBoundObjective(VariationalObjective):
     calling :func:`elbo`::
 
         # lower_bound is an EvidenceLowerBoundObjective instance
-        lower_bound = zs.variational.elbo(log_joint, observed, latent)
+        lower_bound = zs.variational.elbo(
+            meta_bn, observed, variational=variational, axis=0)
+
+    Here ``meta_bn`` is a :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+    instance representing the model to be inferred. ``variational`` is
+    a :class:`~zhusuan.framework.bn.BayesianNet` instance that defines the
+    variational family. ``axis`` is the index of the sample dimension used
+    to estimate the expectation when computing the objective.
 
     Instances of :class:`EvidenceLowerBoundObjective` are Tensor-like. They
     can be automatically or manually cast into Tensors when fed into Tensorflow
@@ -60,8 +67,7 @@ class EvidenceLowerBoundObjective(VariationalObjective):
 
         # optimize the surrogate cost wrt. variational parameters
         optimizer = tf.train.AdamOptimizer(learning_rate)
-        infer_op = optimizer.minimize(cost,
-                                      var_list=variational_parameters)
+        infer_op = optimizer.minimize(cost, var_list=variational_parameters)
         with tf.Session() as sess:
             for _ in range(n_iters):
                 _, lb = sess.run([infer_op, lower_bound], feed_dict=...)
@@ -81,11 +87,9 @@ class EvidenceLowerBoundObjective(VariationalObjective):
     optimize the class instance::
 
         # optimize wrt. model parameters
-        learn_op = optimizer.minimize(-lower_bound,
-                                      var_list=model_parameters)
+        learn_op = optimizer.minimize(-lower_bound, var_list=model_parameters)
         # or
-        # learn_op = optimizer.minimize(cost,
-        #                               var_list=model_parameters)
+        # learn_op = optimizer.minimize(cost, var_list=model_parameters)
         # both ways are correct
 
     Or we can do inference and learning jointly by optimize over both
@@ -95,28 +99,39 @@ class EvidenceLowerBoundObjective(VariationalObjective):
         infer_and_learn_op = optimizer.minimize(
             cost, var_list=model_and_variational_parameters)
 
-    :param log_joint: A function that accepts a dictionary argument of
+    :param meta_bn: A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+        instance or a log joint probability function.
+        For the latter, it must accepts a dictionary argument of
         ``(string, Tensor)`` pairs, which are mappings from all
-        `StochasticTensor` names in the model to their observed values. The
+        node names in the model to their observed values. The
         function should return a Tensor, representing the log joint likelihood
         of the model.
     :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
-        names of observed `StochasticTensor` s to their values.
+        names of observed stochastic nodes to their values.
     :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-        Mapping from names of latent `StochasticTensor` s to their samples and
-        log probabilities.
+        Mapping from names of latent stochastic nodes to their samples and
+        log probabilities. `latent` and `variational` are mutually exclusive.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in the objective. If ``None``, no dimension is
         reduced.
+    :param variational: A :class:`~zhusuan.framework.bn.BayesianNet` instance
+        that defines the variational family.
+        `variational` and `latent` are mutually exclusive.
     """
 
-    def __init__(self, log_joint, observed, latent, axis=None):
+    def __init__(self, meta_bn, observed, latent=None, axis=None,
+                 variational=None):
         self._axis = axis
         super(EvidenceLowerBoundObjective, self).__init__(
-            log_joint, observed, latent)
+            meta_bn,
+            observed,
+            latent=latent,
+            variational=variational)
 
     def _objective(self):
-        lower_bound = self._log_joint_term() + self._entropy_term()
+        lower_bound = self._log_joint_term()
+        if self._entropy_term() is not None:
+            lower_bound += self._entropy_term()
         if self._axis is not None:
             lower_bound = tf.reduce_mean(lower_bound, self._axis)
         return lower_bound
@@ -129,8 +144,8 @@ class EvidenceLowerBoundObjective(VariationalObjective):
 
         It only works for latent `StochasticTensor` s that can be
         reparameterized (Kingma, 2013). For example,
-        :class:`~zhusuan.model.stochastic.Normal`
-        and :class:`~zhusuan.model.stochastic.Concrete`.
+        :class:`~zhusuan.framework.stochastic.Normal`
+        and :class:`~zhusuan.framework.stochastic.Concrete`.
 
         .. note::
 
@@ -149,9 +164,9 @@ class EvidenceLowerBoundObjective(VariationalObjective):
                   decay=0.8):
         """
         Implements the score function gradient estimator for the ELBO, with
-        optional variance reduction using "baseline" or variance normalization
-        (Mnih, 2014). Also known as "REINFORCE" (Williams, 1992),
-        "NVIL" (Mnih, 2014), and "likelihood-ratio estimator" (Glynn, 1990).
+        optional variance reduction using moving mean estimate or "baseline".
+        Also known as "REINFORCE" (Williams, 1992), "NVIL" (Mnih, 2014),
+        and "likelihood-ratio estimator" (Glynn, 1990).
 
         It works for all types of latent `StochasticTensor` s.
 
@@ -203,8 +218,9 @@ class EvidenceLowerBoundObjective(VariationalObjective):
             with tf.control_dependencies([update_mean]):
                 l_signal = tf.identity(l_signal)
 
-        cost = tf.stop_gradient(l_signal) * self._entropy_term() - \
-            self._log_joint_term()
+        cost = -self._log_joint_term()
+        if self._entropy_term() is not None:
+            cost += tf.stop_gradient(l_signal) * self._entropy_term()
 
         if self._axis is not None:
             cost = tf.reduce_mean(cost, self._axis)
@@ -215,27 +231,37 @@ class EvidenceLowerBoundObjective(VariationalObjective):
             return cost
 
 
-def elbo(log_joint, observed, latent, axis=None):
+def elbo(meta_bn, observed, latent=None, axis=None, variational=None):
     """
     The evidence lower bound (ELBO) objective for variational inference. The
     returned value is a :class:`EvidenceLowerBoundObjective` instance.
 
     See :class:`EvidenceLowerBoundObjective` for examples of usage.
 
-    :param log_joint: A function that accepts a dictionary argument of
+    :param meta_bn: A :class:`~zhusuan.framework.meta_bn.MetaBayesianNet`
+        instance or a log joint probability function.
+        For the latter, it must accepts a dictionary argument of
         ``(string, Tensor)`` pairs, which are mappings from all
-        `StochasticTensor` names in the model to their observed values. The
+        node names in the model to their observed values. The
         function should return a Tensor, representing the log joint likelihood
         of the model.
     :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping from
-        names of observed `StochasticTensor` s to their values.
+        names of observed stochastic nodes to their values.
     :param latent: A dictionary of ``(string, (Tensor, Tensor))`` pairs.
-        Mapping from names of latent `StochasticTensor` s to their samples and
-        log probabilities.
+        Mapping from names of latent stochastic nodes to their samples and
+        log probabilities. `latent` and `variational` are mutually exclusive.
     :param axis: The sample dimension(s) to reduce when computing the
         outer expectation in the objective. If ``None``, no dimension is
         reduced.
+    :param variational: A :class:`~zhusuan.framework.bn.BayesianNet` instance
+        that defines the variational family.
+        `variational` and `latent` are mutually exclusive.
 
     :return: An :class:`EvidenceLowerBoundObjective` instance.
     """
-    return EvidenceLowerBoundObjective(log_joint, observed, latent, axis=axis)
+    return EvidenceLowerBoundObjective(
+        meta_bn,
+        observed,
+        latent=latent,
+        axis=axis,
+        variational=variational)

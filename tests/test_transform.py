@@ -13,7 +13,7 @@ from zhusuan.transform import linear_ar, inv_autoregressive_flow
 
 class TestPlanarNormalizingFlow(tf.test.TestCase):
     def test_planar_normalizing_flow(self):
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             z = []
             vz = [0.1, -1.2, 1.0, -0.3, 1.2, 2, 10.0, -23.2]
             for i in range(len(vz)):
@@ -41,7 +41,7 @@ class TestPlanarNormalizingFlow(tf.test.TestCase):
         z = tf.random_normal(shape=(2, 10, 6), mean=0, stddev=0.05)
         log_pz = tf.random_normal(shape=(2, 10), mean=0, stddev=0.05)
         t_z, t_log_pz = planar_normalizing_flow(z, log_pz, n_iters=10)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             sess.run(tf.global_variables_initializer())
             o_z, o_log_pz = sess.run([t_z, t_log_pz])
             self.assertEqual(o_z.shape, (2, 10, 6))
@@ -50,7 +50,7 @@ class TestPlanarNormalizingFlow(tf.test.TestCase):
 
 class TestLinearIaf(tf.test.TestCase):
     def test_linear_iaf(self):
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             z = []
             vz = [0.1, -1.2, 1.0, -0.3, 1.2, 2, 10.0, -23.2]
             for i in range(len(vz)):
@@ -79,7 +79,7 @@ class TestLinearIaf(tf.test.TestCase):
         log_pz = tf.random_normal(shape=(2, 10), mean=0, stddev=0.05)
         t_z, t_log_pz = inv_autoregressive_flow(z, None, log_pz, linear_ar,
                                                 n_iters=10)
-        with self.test_session(use_gpu=True) as sess:
+        with self.session(use_gpu=True) as sess:
             sess.run(tf.global_variables_initializer())
             o_z, o_log_pz = sess.run([t_z, t_log_pz])
             self.assertEqual(o_z.shape, (2, 10, 6))

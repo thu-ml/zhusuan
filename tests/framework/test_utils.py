@@ -8,8 +8,8 @@ from itertools import permutations
 
 import tensorflow as tf
 
-from zhusuan.model.utils import *
-from zhusuan.model.utils import Context
+from zhusuan.framework.utils import *
+from zhusuan.framework.utils import Context
 
 
 class TestContext(tf.test.TestCase):

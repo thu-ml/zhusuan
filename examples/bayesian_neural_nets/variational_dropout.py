@@ -17,39 +17,40 @@ from examples import conf
 from examples.utils import dataset
 
 
-@zs.reuse('model')
-def var_dropout(observed, x, n, net_size, n_particles, is_training):
-    with zs.BayesianNet(observed=observed) as model:
-        h = x
-        normalizer_params = {'is_training': is_training,
-                             'updates_collections': None}
-        for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
-            eps_mean = tf.ones([n, n_in])
-            eps = zs.Normal(
-                'layer' + str(i) + '/eps', eps_mean, std=1.,
-                n_samples=n_particles, group_ndims=1)
-            h = layers.fully_connected(
-                h * eps, n_out, normalizer_fn=layers.batch_norm,
-                normalizer_params=normalizer_params)
-            if i < len(net_size) - 2:
-                h = tf.nn.relu(h)
-        y = zs.Categorical('y', h)
-    return model, h
+@zs.meta_bayesian_net(scope="model", reuse_variables=True)
+def var_dropout(x, n, net_size, n_particles, is_training):
+    normalizer_params = {'is_training': is_training,
+                         'updates_collections': None}
+    bn = zs.BayesianNet()
+    h = x
+    for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
+        eps_mean = tf.ones([n, n_in])
+        eps = bn.normal(
+            'layer' + str(i) + '/eps', eps_mean, std=1.,
+            n_samples=n_particles, group_ndims=1)
+        h = layers.fully_connected(
+            h * eps, n_out, normalizer_fn=layers.batch_norm,
+            normalizer_params=normalizer_params)
+        if i < len(net_size) - 2:
+            h = tf.nn.relu(h)
+    y = bn.categorical('y', h)
+    bn.deterministic('y_logit', h)
+    return bn
 
 
-@zs.reuse('variational')
-def q(observed, n, net_size, n_particles):
-    with zs.BayesianNet(observed=observed) as variational:
-        for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
-            with tf.variable_scope('layer' + str(i)):
-                logit_alpha = tf.get_variable('logit_alpha', [n_in])
+@zs.reuse_variables(scope="variational")
+def q(n, net_size, n_particles):
+    bn = zs.BayesianNet()
+    for i, [n_in, n_out] in enumerate(zip(net_size[:-1], net_size[1:])):
+        with tf.variable_scope('layer' + str(i)):
+            logit_alpha = tf.get_variable('logit_alpha', [n_in])
 
-            alpha = tf.nn.sigmoid(logit_alpha)
-            alpha = tf.tile(tf.expand_dims(alpha, 0), [n, 1])
-            eps = zs.Normal('layer' + str(i) + '/eps',
-                            1., logstd=0.5 * tf.log(alpha + 1e-10),
-                            n_samples=n_particles, group_ndims=1)
-    return variational
+        std = tf.sqrt(tf.nn.sigmoid(logit_alpha) + 1e-10)
+        std = tf.tile(tf.expand_dims(std, 0), [n, 1])
+        eps = bn.normal('layer' + str(i) + '/eps',
+                        1., std=std,
+                        n_samples=n_particles, group_ndims=1)
+    return bn
 
 
 if __name__ == '__main__':
@@ -89,32 +90,29 @@ if __name__ == '__main__':
     x_obs = tf.tile(tf.expand_dims(x, 0), [n_particles, 1, 1])
     y_obs = tf.tile(tf.expand_dims(y, 0), [n_particles, 1])
 
-    def log_joint(observed):
-        model, _ = var_dropout(observed, x_obs, n, net_size,
-                               n_particles, is_training)
-        log_pe = model.local_log_prob(e_names)
-        log_py_xe = model.local_log_prob('y')
-        return tf.add_n(log_pe) / x_train.shape[0] + log_py_xe
+    model = var_dropout(x_obs, n, net_size, n_particles, is_training)
+    variational = q(n, net_size, n_particles)
 
-    variational = q({}, n, net_size, n_particles)
-    qe_queries = variational.query(e_names, outputs=True, local_log_prob=True)
-    qe_samples, log_qes = zip(*qe_queries)
-    log_qes = [log_qe / x_train.shape[0] for log_qe in log_qes]
-    e_dict = dict(zip(e_names, zip(qe_samples, log_qes)))
-    lower_bound = zs.variational.elbo(log_joint, {'y': y_obs}, e_dict, axis=0)
-    cost = tf.reduce_mean(lower_bound.sgvb())
-    lower_bound = tf.reduce_mean(lower_bound)
+    def log_joint(bn):
+        log_pe = bn.cond_log_prob(e_names)
+        log_py_xe = bn.cond_log_prob('y')
+        return tf.add_n(log_pe) + log_py_xe * x_train.shape[0]
 
-    _, h_pred = var_dropout(dict(zip(e_names, qe_samples)),
-                            x_obs, n, net_size,
-                            n_particles, is_training)
-    h_pred = tf.reduce_mean(tf.nn.softmax(h_pred), 0)
+    model.log_joint = log_joint
+
+    lower_bound = zs.variational.elbo(model, {'y': y_obs},
+                                      variational=variational, axis=0)
+    y_logit = lower_bound.bn["y_logit"]
+    h_pred = tf.reduce_mean(tf.nn.softmax(y_logit), 0)
     y_pred = tf.argmax(h_pred, 1, output_type=tf.int32)
     acc = tf.reduce_mean(tf.cast(tf.equal(y_pred, y), tf.float32))
 
+    cost = tf.reduce_mean(lower_bound.sgvb()) / x_train.shape[0]
     learning_rate_ph = tf.placeholder(tf.float32, shape=())
     optimizer = tf.train.AdamOptimizer(learning_rate_ph, epsilon=1e-4)
     infer = optimizer.minimize(cost)
+
+    lower_bound = tf.reduce_mean(lower_bound) / x_train.shape[0]
 
     params = tf.trainable_variables()
     for i in params:
@@ -163,4 +161,4 @@ if __name__ == '__main__':
                 time_test += time.time()
                 print('>>> TEST ({:.1f}s)'.format(time_test))
                 print('>> Test lower bound = {}'.format(np.mean(test_lbs)))
-                print('>> Test accuaracy = {}'.format(np.mean(test_accs)))
+                print('>> Test accuracy = {}'.format(np.mean(test_accs)))

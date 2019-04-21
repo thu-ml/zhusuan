@@ -53,45 +53,44 @@ def conv_resnet_block(input_, out_channel, resize=False):
     return lz_x
 
 
-@zs.reuse("model")
-def vae_conv(observed, n, x_dim, z_dim, n_particles, nf=16):
-    with zs.BayesianNet(observed=observed) as model:
-        z_mean = tf.zeros([n, z_dim])
-        z = zs.Normal("z", z_mean, std=1., group_ndims=1,
-                      n_samples=n_particles)
-        lx_z = tf.layers.dense(z, 7 * 7 * nf * 2, activation=tf.nn.relu)
-        lx_z = tf.reshape(lx_z, [-1, 7, 7, nf * 2])
-        lx_z = deconv_resnet_block(lx_z, [7, 7, nf * 2])
-        lx_z = deconv_resnet_block(lx_z, [14, 14, nf * 2], resize=True)
-        lx_z = deconv_resnet_block(lx_z, [14, 14, nf * 2])
-        lx_z = deconv_resnet_block(lx_z, [28, 28, nf], resize=True)
-        lx_z = deconv_resnet_block(lx_z, [28, 28, nf])
-        lx_z = conv2d_transpose(lx_z, [28, 28, 1], kernel_size=(3, 3),
-                                stride=(1, 1), activation_fn=None)
-        x_logits = tf.reshape(lx_z, [n_particles, -1, x_dim])
-        x = zs.Bernoulli("x", x_logits, group_ndims=1)
-    return model, x_logits
+@zs.meta_bayesian_net(scope="gen", reuse_variables=True)
+def build_gen(n, x_dim, z_dim, n_particles, nf=16):
+    bn = zs.BayesianNet()
+    z_mean = tf.zeros([n, z_dim])
+    z = bn.normal("z", z_mean, std=1., group_ndims=1, n_samples=n_particles)
+    lx_z = tf.layers.dense(z, 7 * 7 * nf * 2, activation=tf.nn.relu)
+    lx_z = tf.reshape(lx_z, [-1, 7, 7, nf * 2])
+    lx_z = deconv_resnet_block(lx_z, [7, 7, nf * 2])
+    lx_z = deconv_resnet_block(lx_z, [14, 14, nf * 2], resize=True)
+    lx_z = deconv_resnet_block(lx_z, [14, 14, nf * 2])
+    lx_z = deconv_resnet_block(lx_z, [28, 28, nf], resize=True)
+    lx_z = deconv_resnet_block(lx_z, [28, 28, nf])
+    lx_z = conv2d_transpose(lx_z, [28, 28, 1], kernel_size=(3, 3),
+                            stride=(1, 1), activation_fn=None)
+    x_logits = tf.reshape(lx_z, [n_particles, -1, x_dim])
+    bn.deterministic("x_mean", tf.sigmoid(x_logits))
+    bn.bernoulli("x", x_logits, group_ndims=1)
+    return bn
 
 
-@zs.reuse("variational")
-def q_net(x, z_dim, n_particles, nf=16):
-    with zs.BayesianNet() as variational:
-        lz_x = 2 * tf.to_float(x) - 1
-        lz_x = tf.reshape(lz_x, [-1, 28, 28, 1])
-        lz_x = tf.layers.conv2d(lz_x, nf, 3, padding="same",
-                                activation=tf.nn.relu)
-        lz_x = conv_resnet_block(lz_x, nf)
-        lz_x = conv_resnet_block(lz_x, nf * 2, resize=True)
-        lz_x = conv_resnet_block(lz_x, nf * 2)
-        lz_x = conv_resnet_block(lz_x, nf * 2, resize=True)
-        lz_x = conv_resnet_block(lz_x, nf * 2)
-        lz_x = tf.layers.flatten(lz_x)
-        lz_x = tf.layers.dense(lz_x, 500, activation=tf.nn.relu)
-        z_mean = tf.layers.dense(lz_x, z_dim)
-        z_logstd = tf.layers.dense(lz_x, z_dim)
-        z = zs.Normal("z", z_mean, logstd=z_logstd, group_ndims=1,
-                      n_samples=n_particles)
-    return variational
+@zs.reuse_variables(scope="q_net")
+def build_q_net(x, z_dim, n_particles, nf=16):
+    bn = zs.BayesianNet()
+    lz_x = 2 * tf.cast(x, tf.float32) - 1
+    lz_x = tf.reshape(lz_x, [-1, 28, 28, 1])
+    lz_x = tf.layers.conv2d(lz_x, nf, 3, padding="same", activation=tf.nn.relu)
+    lz_x = conv_resnet_block(lz_x, nf)
+    lz_x = conv_resnet_block(lz_x, nf * 2, resize=True)
+    lz_x = conv_resnet_block(lz_x, nf * 2)
+    lz_x = conv_resnet_block(lz_x, nf * 2, resize=True)
+    lz_x = conv_resnet_block(lz_x, nf * 2)
+    lz_x = tf.layers.flatten(lz_x)
+    lz_x = tf.layers.dense(lz_x, 500, activation=tf.nn.relu)
+    z_mean = tf.layers.dense(lz_x, z_dim)
+    z_logstd = tf.layers.dense(lz_x, z_dim)
+    bn.normal("z", z_mean, logstd=z_logstd, group_ndims=1,
+              n_samples=n_particles)
+    return bn
 
 
 def main():
@@ -112,21 +111,14 @@ def main():
     # Build the computation graph
     n_particles = tf.placeholder(tf.int32, shape=[], name="n_particles")
     x_input = tf.placeholder(tf.float32, shape=[None, x_dim])
-    x = tf.to_int32(tf.random_uniform(tf.shape(x_input)) <= x_input)
-    n = tf.shape(x)[0]
+    x = tf.cast(tf.random_uniform(tf.shape(x_input)) <= x_input, tf.int32)
+    n = tf.placeholder(tf.int32, shape=[], name="n")
 
-    def log_joint(observed):
-        model, _ = vae_conv(observed, n, x_dim, z_dim, n_particles)
-        log_pz, log_px_z = model.local_log_prob(["z", "x"])
-        return log_pz + log_px_z
+    model = build_gen(n, x_dim, z_dim, n_particles)
+    variational = build_q_net(x, z_dim, n_particles)
 
-    variational = q_net(x, z_dim, n_particles)
-    qz_samples, log_qz = variational.query("z", outputs=True,
-                                           local_log_prob=True)
-    lower_bound = zs.variational.elbo(log_joint,
-                                      observed={"x": x},
-                                      latent={"z": [qz_samples, log_qz]},
-                                      axis=0)
+    lower_bound = zs.variational.elbo(
+        model, {"x": x}, variational=variational, axis=0)
     cost = tf.reduce_mean(lower_bound.sgvb())
     lower_bound = tf.reduce_mean(lower_bound)
 
@@ -134,9 +126,7 @@ def main():
     infer_op = optimizer.minimize(cost)
 
     # Generate images
-    n_gen = 100
-    _, x_logits = vae_conv({}, n_gen, x_dim, z_dim, 1)
-    x_gen = tf.reshape(tf.sigmoid(x_logits), [-1, 28, 28, 1])
+    x_gen = tf.reshape(model.observe()["x_mean"], [-1, 28, 28, 1])
 
     # Define training/evaluation parameters
     epochs = 3000
@@ -151,6 +141,7 @@ def main():
     # Run the inference
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+
         for epoch in range(1, epochs + 1):
             time_epoch = -time.time()
             np.random.shuffle(x_train)
@@ -159,7 +150,8 @@ def main():
                 x_batch = x_train[t * batch_size:(t + 1) * batch_size]
                 _, lb = sess.run([infer_op, lower_bound],
                                  feed_dict={x_input: x_batch,
-                                            n_particles: 1})
+                                            n_particles: 1,
+                                            n: batch_size})
                 lbs.append(lb)
             time_epoch += time.time()
             print("Epoch {} ({:.1f}s): Lower bound = {}".format(
@@ -173,7 +165,8 @@ def main():
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_lb = sess.run(lower_bound,
                                        feed_dict={x: test_x_batch,
-                                                  n_particles: 1})
+                                                  n_particles: 1,
+                                                  n: test_batch_size})
                     test_lbs.append(test_lb)
                 time_test += time.time()
                 print(">>> TEST ({:.1f}s)".format(time_test))
@@ -181,7 +174,7 @@ def main():
 
             if epoch % save_freq == 0:
                 print("Saving images...")
-                images = sess.run(x_gen)
+                images = sess.run(x_gen, feed_dict={n: 100, n_particles: 1})
                 name = os.path.join(result_path,
                                     "vae.epoch.{}.png".format(epoch))
                 save_image_collections(images, name)

@@ -4,7 +4,7 @@ Logistic Normal Topic Models
 The full script for this tutorial is at `examples/topic_models/lntm_mcem.py
 <https://github.com/thu-ml/zhusuan/blob/master/examples/topic_models/lntm_mcem.py>`_.
 
-An Introduction to Topic Models and Latent Dirichlet Allocation
+An introduction to topic models and Latent Dirichlet Allocation
 ---------------------------------------------------------------
 
 Nowadays it is much easier to get large corpus of documents. Even if there are
@@ -36,11 +36,10 @@ categorical distribution with vector parameter
 
 .. note::
 
-    In fields such as machine learning and natural language processing, the
-    categorical and multinomial distributions are conflated, and it is common to
-    speak of a "multinomial distribution" when a "categorical distribution"
-    would be more precise. By the way, these two distributions are distinguished
-    clearly in ZhuSuan.
+    Sometimes, the categorical and multinomial distributions are conflated, and
+    it is common to speak of a "multinomial distribution" when a "categorical
+    distribution" would be more precise. These two distributions are
+    distinguished in ZhuSuan.
 
 The generative process is:
 
@@ -53,7 +52,7 @@ The generative process is:
 
 In more detail, we first sample :math:`K` **topics**
 :math:`\{\vec{\phi}_k\}_{k=1}^K` from the symmetric Dirichlet prior with
-parameter :math:`\eta`, so each topic is a :math:`K`-dimensional vector, whose
+parameter :math:`\delta`, so each topic is a :math:`K`-dimensional vector, whose
 components sum up to 1. These topics are shared among different documents. Then
 for each document, suppose it is the :math:`d`\ th document, we sample a **topic
 proportion** vector :math:`\vec{\theta}_d` from the Dirichlet prior with
@@ -146,10 +145,10 @@ inference.
 
 However, conjugacy requires the model being designed carefully. Here, we use a
 more direct and general method to do Bayesian inference: Monte-Carlo EM, with
-HMC as the Monte-Carlo sampler.
+HMC :cite:`lntm-neal2011mcmc` as the Monte-Carlo sampler.
 
-Logistic Normal Topic Model and Building it in ZhuSuan
-------------------------------------------------------
+Logistic Normal Topic Model in ZhuSuan
+--------------------------------------
 
 Integrating out :math:`\mathbf{\Theta}` and :math:`\mathbf{\Phi}` requires
 conjugacy, or the integration is intractable. But integrating :math:`\mathbf{z}`
@@ -200,14 +199,14 @@ matrix, which contains the word sampling distribution of each document.
     :width: 90%
 
 As minimizing the cross entropy encourages :math:`\mathbf{X}` and
-:math:`\mathbf{\Theta}\mathbf{\Phi}` to be similar, this may reminds you of
+:math:`\mathbf{\Theta}\mathbf{\Phi}` to be similar, this may remind you of
 low-rank matrix factorization. It is natural since topic models can be
 interpreted as learning "document-topics" parameters and "topic-words"
 parameters. In fact one of the earliest topic models are solved using SVD, a
 standard algorithm for low-rank matrix factorization. However, as a
-probabilistic model, our model is different than matrix factorization by SVD
-(e.g. the loss function is different). Probabilistic model has more
-interpretability and can be solved using more algorithms, and Bayesian model can
+probabilistic model, our model is different from matrix factorization by SVD
+(e.g. the loss function is different). Probabilistic model is more
+interpretable and can be solved by more algorithms, and Bayesian model can
 bring the benefits of incorporating prior knowledge and inferring with
 uncertainty.
 
@@ -228,9 +227,8 @@ models which do not have conjugacy from the beginning, such as Neural
 Variational Document Model (:cite:`lntm-miao2016neural`).
 
 The logistic normal topic model can be described as follows, where
-:math:`\{\vec{0}, \delta^2 \mathbf{I}\}` is a :math:`V`-dimensional mean
-vector and covariance matrix, and :math:`\vec{\mu}` and :math:`\vec{\sigma}` are
-:math:`K`-dimensional vectors:
+:math:`\vec{\beta}_k` is :math:`V`-dimensional and :math:`\vec{\eta}_d` is
+:math:`K`-dimensional:
 
 .. math::
 
@@ -293,25 +291,22 @@ where both :math:`p(\mathbf{B}; \delta)` and :math:`p(\mathbf{H}; \vec{\mu},
 
 In ZhuSuan, the code for constructing such a model is::
 
-    def lntm(observed, n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
-        with zs.BayesianNet(observed=observed) as model:
-            eta_mean = tf.tile(tf.expand_dims(
-                            tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1]),
-                            0), [n_chains, 1, 1])
-            # eta/theta: Unnormalized/normalized document-topic matrix
-            eta = zs.Normal('eta', eta_mean, logstd=eta_logstd, group_ndims=1)
-            theta = tf.nn.softmax(eta)
-            # beta/phi: Unnormalized/normalized topic-word matrix
-            beta = zs.Normal('beta', tf.zeros([n_topics, n_vocab]),
-                            logstd=log_delta, group_ndims=1)
-            phi = tf.nn.softmax(beta)
-            # doc_word: Document-word matrix
-            doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
-            doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
-            x = zs.UnnormalizedMultinomial('x', tf.log(doc_word),
-                                        normalize_logits=False,
-                                        dtype=tf.float32)
-        return model
+    @zs.meta_bayesian_net(scope='lntm')
+    def lntm(n_chains, n_docs, n_topics, n_vocab, eta_mean, eta_logstd):
+        bn = zs.BayesianNet()
+        eta_mean = tf.tile(tf.expand_dims(eta_mean, 0), [n_docs, 1])
+        eta = bn.normal('eta', eta_mean, logstd=eta_logstd, n_samples=n_chains,
+                        group_ndims=1)
+        theta = tf.nn.softmax(eta)
+        beta = bn.normal('beta', tf.zeros([n_topics, n_vocab]),
+                        logstd=log_delta, group_ndims=1)
+        phi = tf.nn.softmax(beta)
+        # doc_word: Document-word matrix
+        doc_word = tf.matmul(tf.reshape(theta, [-1, n_topics]), phi)
+        doc_word = tf.reshape(doc_word, [n_chains, n_docs, n_vocab])
+        bn.unnormalized_multinomial('x', tf.log(doc_word), normalize_logits=False,
+                                    dtype=tf.float32)
+        return bn
 
 where ``eta_mean`` is :math:`\vec{\mu}`, ``eta_logstd`` is :math:`\log\vec{\sigma}`,
 ``eta`` is :math:`\mathbf{H}` (:math:`\mathrm{H}` is the uppercase letter of
@@ -353,9 +348,9 @@ integration is intractable, so we replace the integration with Monte-Carlo
 methods, which requires the samples of the latent variable. Therefore we need to
 construct our model, calculate the joint likelihood and do inference all with
 the extra dimension storing different samples. In this example, the extra
-dimension is called "chains" because we initialize multiple chains and perform
-HMC evolution on each chain, so as to make the values on these chains close to
-following the posterior distribution.
+dimension is called "chains" because we utilize the extra dimension to initialize
+multiple chains and perform HMC evolution on each chain, in order to do parallel
+sampling and to get independent samples from the posterior.
 
 Inference
 ---------
@@ -363,7 +358,7 @@ Inference
 Let's analyze the parameters and latent variables in the joint distribution.
 :math:`\delta` controls the sparsity of the words included in each topic, and
 larger :math:`\delta` leads to more sparsity. We leave it as a given
-controllable hyperparameter without the need to optimize. The parameters we need
+tunable hyperparameter without the need to optimize. The parameters we need
 to optimize is :math:`\vec{\mu}` and :math:`\vec{\sigma}^2`, whose element
 represents the mean and variance of topic proportion in documents; and
 :math:`\mathbf{B}`, which represents the topics. For :math:`\vec{\mu}` and
@@ -372,9 +367,8 @@ solution. Unlike :math:`\vec{\mu}` and :math:`\vec{\sigma}`, :math:`\mathbf{B}`
 has a prior, so we could treat it as a random variable and infer its posterior
 distribution. But here we just find its **maximum a posterior (MAP)**
 estimation, so we treat it as a parameter and optimize it by gradient ascent
-instead of inference via HMC. :math:`\mathbf{H}` is the latent variable which
-has a prior distribution, so we want to integrate it out before doing
-optimization.
+instead of inference via HMC. :math:`\mathbf{H}` is the latent variable, so we
+want to integrate it out before doing optimization.
 
 Therefore, after integrating :math:`\mathbf{H}`, our optimization problem is:
 
@@ -398,7 +392,7 @@ The term :math:`\log p(\mathbf{X}| \mathbf{B}; \vec{\mu}, \vec{\sigma}) = \log
 d\mathbf{H}` is **evidence** of the observed data :math:`\mathbf{X}`, given the
 model with parameters :math:`\mathbf{B}`, :math:`\vec{\mu}`,
 :math:`\vec{\sigma}`. Computing the integration is intractable, let alone
-maximize it w.r.t. the parameters. Fortunately, this is the standard form to
+maximize it w.r.t. the parameters. Fortunately, this is the standard form of
 which we can write an lower bound called **evidence lower bound (ELBO)**:
 
 .. math::
@@ -420,7 +414,7 @@ Therefore,
     \delta)
 
 When :math:`q(\mathbf{H})=p(\mathbf{H}|\mathbf{X},\mathbf{B}; \vec{\mu},
-\vec{\sigma})`, the lower bound is tight. To do optimization, we can do
+\vec{\sigma})`, the lower bound is tight. To do optimization, we can apply
 coordinate ascent to the lower bound, i.e. **expectation-maximization (EM)**
 algorithm: We iterate between E-step and M-step.
 
@@ -444,10 +438,10 @@ In M-step, let
 However, both the posterior :math:`p(\mathbf{H}|\mathbf{X},\mathbf{B};
 \vec{\mu}, \vec{\sigma})` in the E step and the integration
 :math:`\mathbb{E}_{q(\mathbf{H})}[\log p(\mathbf{X}, \mathbf{H}| \mathbf{B};
-\vec{\mu}, \vec{\sigma})]` in the M step are intractable. It seems that we turn
-an intractable problem into another intractable problem.
+\vec{\mu}, \vec{\sigma})]` in the M step are intractable. It seems that we have
+turned an intractable problem into another intractable problem.
 
-We have solutions. Since the difficulty lies in calculating and using the
+We have solutions indeed. Since the difficulty lies in calculating and using the
 posterior, we can use the whole set of tools in Bayesian inference. Here we use
 sampling methods, to draw a series of samples :math:`\mathbf{H}^{(1)},
 \mathbf{H}^{(2)}, ..., \mathbf{H}^{(S)}` from
@@ -469,15 +463,13 @@ is called **Monte-Carlo EM**.
 
 We analyze the E-step and M-step in more detail. What sampling method should we
 choose in E-step? One of the workhorse sampling methods is **Hamiltonian Monte
-Carlo (HMC)**. Unlike Gibbs sampling which need to derive the conditional
-distribution, HMC is a black-box method which only requires access to the
-gradient of log joint distribution at any position, which is almost always
-tractable as long as the model is differentiable and the latent variable is
-unconstrained. You do not need to have much knowledge about how HMC works when
-using ZhuSuan's HMC functionality, but could refer to :cite:`lntm-neal2011mcmc`
-if you are interested.
+Carlo (HMC)** :cite:`lntm-neal2011mcmc`. Unlike Gibbs sampling which needs a
+sampler of the conditional distribution, HMC is a black-box method which only
+requires access to the gradient of log joint distribution at any position, which
+is almost always tractable as long as the model is differentiable and the latent
+variable is unconstrained.
 
-To use HMC in ZhuSuan, first define the HMC object and its parameters::
+To use HMC in ZhuSuan, first define the HMC object with its parameters::
 
     hmc = zs.HMC(step_size=1e-3, n_leapfrogs=20, adapt_step_size=True,
                  target_acceptance_rate=0.6)
@@ -486,30 +478,31 @@ Then write the log joint probability :math:`\log p(\mathbf{X},\mathbf{H}|
 \mathbf{B}; \vec{\mu}, \vec{\sigma})= \log p(\mathbf{X}| \mathbf{B},\mathbf{H})
 + p(\mathbf{H};\vec{\mu}, \vec{\sigma})`::
 
-    def e_obj(observed, n_chains, n_docs):
-        model = lntm(observed, n_chains, n_docs, n_topics, n_vocab,
-                     eta_mean, eta_logstd)
-        return model.local_log_prob('eta') + model.local_log_prob('x')
+    def e_obj(bn):
+        return bn.cond_log_prob('eta') + bn.cond_log_prob('x')
 
-Given the following defined tensor::
+Given the following defined tensor, ::
 
     x = tf.placeholder(tf.float32, shape=[batch_size, n_vocab], name='x')
     eta = tf.Variable(tf.zeros([n_chains, batch_size, n_topics]), name='eta')
     beta = tf.Variable(tf.zeros([n_topics, n_vocab]), name='beta')
 
-We can define the sampling operator of HMC::
+we can define the sampling operator of HMC::
 
-    sample_op, hmc_info = hmc.sample(partial(e_obj, n_chains=n_chains,
-                                             n_docs=batch_size),
+    model = lntm(n_chains, batch_size, n_topics, n_vocab, eta_mean, eta_logstd)
+    model.log_joint = e_obj
+    sample_op, hmc_info = hmc.sample(model,
                                      observed={'x': x, 'beta': beta},
                                      latent={'eta': eta})
 
 When running the session, we can run ``sample_op`` to update the value of
-``eta``. Note that the first parameter of ``hmc.sample`` should be a function
-accepting ``observed`` (which is a Python dictionary) as its parameter and
-returning the log joint probability p( observed, latent | parameters ).
-``hmc_info`` is a struct containing information about the sampling iteration
-executed by ``sample_op``, such as the acceptance rate.
+``eta``. Note that the first parameter of ``hmc.sample`` is a
+:class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance corresponding to
+the generative model. It could also be a function accepting a Python dictionary
+containing values of both the observed and latent variables as its argument,
+and returning the log joint probability. ``hmc_info`` is a struct containing
+information about the sampling iteration executed by ``sample_op``, such as the
+acceptance rate.
 
 In the M-step, since :math:`\log p(\mathbf{X},\mathbf{H}| \mathbf{B}; \vec{\mu},
 \vec{\sigma})= \log p(\mathbf{X}| \mathbf{B},\mathbf{H}) +
@@ -523,25 +516,25 @@ more detail:
     \\ \mathbf{B}&\leftarrow \max_{\mathbf{B}} [\frac{1}{S}\sum_{s=1}^S \log
     p(\mathbf{X}|\mathbf{H}^{(s)}, \mathbf{B}) + \log p(\mathbf{B}; \delta)]
 
-Then the solution of :math:`\vec{\mu}` and :math:`\vec{\sigma}` have closed
-formula by taking the samples of :math:`\mathbf{H}` as observed data and do
-maximum likelihood estimation of parameters in Gaussian distribution.
+Then :math:`\vec{\mu}` and :math:`\vec{\sigma}` have closed solution by taking
+the samples of :math:`\mathbf{H}` as observed data and do maximum likelihood
+estimation of parameters in Gaussian distribution.
 :math:`\mathbf{B}`, however, does not have a closed-form solution, so we do
 optimization using gradient ascent.
 
 The gradient ascent operator of :math:`\mathbf{B}` can be defined as follows::
 
-    model = lntm({'x': x, 'eta': eta, 'beta': beta}, n_chains, batch_size,
-                 n_topics, n_vocab, eta_mean, eta_logstd)
-    log_p_beta, log_px = model.local_log_prob(['beta', 'x'])
-    log_likelihood = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
-    log_joint = tf.reduce_sum(log_p_beta) + log_likelihood
+    bn = model.observe(eta=eta, x=x, beta=beta)
+    log_p_beta, log_px = bn.cond_log_prob(['beta', 'x'])
+    log_p_beta = tf.reduce_sum(log_p_beta)
+    log_px = tf.reduce_sum(tf.reduce_mean(log_px, axis=0))
+    log_joint_beta = log_p_beta + log_px
     learning_rate_ph = tf.placeholder(tf.float32, shape=[], name='lr')
     optimizer = tf.train.AdamOptimizer(learning_rate_ph)
-    infer = optimizer.minimize(-log_joint, var_list=[beta])
+    infer = optimizer.minimize(-log_joint_beta, var_list=[beta])
 
 Since when optimizing :math:`\mathbf{B}`, the samples of :math:`\mathbf{H}` is
-fixed, ``var_list=[beta]`` in the last line is a necessary.
+fixed, ``var_list=[beta]`` in the last line is necessary.
 
 In the E-step, :math:`p(\mathbf{H}|\mathbf{X},\mathbf{B}; \vec{\mu},
 \vec{\sigma})` could factorise as :math:`\prod_{d=1}^D
@@ -598,12 +591,11 @@ The key code in an epoch is::
 
         # M step
         _, ll = sess.run(
-            [infer, log_likelihood],
+            [infer, log_px],
             feed_dict={x: x_batch,
                        eta_mean: Eta_mean,
                        eta_logstd: Eta_logstd,
-                       learning_rate_ph: learning_rate * t0 / (
-                           t0 + epoch)})
+                       learning_rate_ph: learning_rate})
         lls.append(ll)
 
     # Update hyper-parameters
@@ -618,13 +610,13 @@ The key code in an epoch is::
                   np.mean(accs), np.mean(Eta_mean),
                   np.mean(Eta_logstd)))
 
-We run ``num_e_steps`` times of E-step before M-step to make samples of HMC more
-close to following the desired equilibrium distribution. Outputing the mean
-acceptance rate of HMC is because it could help us diagnose whether HMC is
-working properly. If it is too close to 0 or 1, the quality of samples will
-often be poor. Moreover, when HMC works properly, we can also tune the
-acceptance rate to a value for better performance, and the value is usually
-between 0.6 and 0.9. In the example we set ``adapt_step_size=True`` and
+We run ``num_e_steps`` times of E-step before M-step to make samples of HMC
+closer to the desired equilibrium distribution. We print the mean
+acceptance rate of HMC to diagnose whether HMC is working properly.
+If it is too close to 0 or 1, the quality of samples will often be poor.
+Moreover, when HMC works properly, we can also tune the acceptance rate to
+a value for better performance, and the value is usually between 0.6 and 0.9.
+In the example we set ``adapt_step_size=True`` and
 ``target_acceptance_rate=0.6`` to HMC, so the outputs of actual acceptance rates
 should be close to 0.6.
 
@@ -634,11 +626,11 @@ in the documents of the corpus::
 
     p = sess.run(phi)
     for k in range(n_topics):
-        rank = zip(list(p[k, :]), range(n_vocab))
+        rank = list(zip(list(p[k, :]), range(n_vocab)))
         rank.sort()
         rank.reverse()
         sys.stdout.write('Topic {}, eta mean = {:.2f} stdev = {:.2f}: '
-                         .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
+                            .format(k, Eta_mean[k], np.exp(Eta_logstd[k])))
         for i in range(10):
             sys.stdout.write(vocab[rank[i][1]] + ' ')
         sys.stdout.write('\n')
@@ -660,8 +652,8 @@ will be smaller than the actual value.
 After training the model and outputing the topics, the script will run
 **Annealed Importance Sampling (AIS)** to estimate the marginal likelihood more
 accurately. It may take some time, and you could turn on the verbose mode of AIS
-to see its progress. Then our script will output the estimated relatively
-reliable perplexity. We do not introduce AIS here, readers who are interested
+to see its progress. Then our script will output the estimated perplexity which
+is relatively reliable. We do not introduce AIS here. Readers who are interested
 could refer to :cite:`lntm-neal2001annealed`.
 
 

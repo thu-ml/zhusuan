@@ -90,7 +90,7 @@ class StepsizeTuner:
     def tune(self, acceptance_rate, fresh_start):
         def adapt_stepsize():
             new_step = tf.assign(self.step, (1 - fresh_start) * self.step + 1)
-            rate1 = tf.div(1.0, new_step + self.t0)
+            rate1 = 1.0 / (new_step + self.t0)
             new_h_bar = tf.assign(
                 self.h_bar, (1 - fresh_start) * (1 - rate1) * self.h_bar +
                 rate1 * (self.delta - acceptance_rate))
@@ -149,7 +149,7 @@ class ExponentialWeightedMovingVariance:
         return update_var
 
     def get_precision(self, var_in):
-        return [tf.div(self.one, var) for var in var_in]
+        return [(self.one / var) for var in var_in]
 
     def get_updated_precision(self, x):
         # Should be called only once
@@ -203,18 +203,17 @@ class HMCInfo(object):
 
 class HMC:
     """
-    Hamiltonian Monte Carlo (Neal, 2011) with adaptation for stepsize
-    (Hoffman, 2014) and mass. The usage is similar with a Tensorflow
-    optimizer.
+    Hamiltonian Monte Carlo (Neal, 2011) with adaptation for stepsize (Hoffman &
+    Gelman, 2014) and mass. The usage is similar with a Tensorflow optimizer.
 
-    The :class:`HMC` class supports running multiple MCMC chains in parallel.
-    To use the sampler, the user first create a tensorflow `Variable` storing
-    the initial sample, whose shape is ``chain axes + data axes``. There
-    can be arbitrary number of chain axes followed by arbitrary number of
-    data axes. Then the user provides a `log_joint` function which returns
-    a tensor of shape ``chain axes``, which is the log joint density for
-    each chain. Finally, the user runs the operation returned by
-    :meth:`sample`, which updates the sample stored in the variable.
+    The :class:`HMC` class supports running multiple MCMC chains in parallel. To
+    use the sampler, the user first creates a (list of) tensorflow `Variable`
+    storing the initial sample, whose shape is ``chain axes + data axes``. There
+    can be arbitrary number of chain axes followed by arbitrary number of data
+    axes. Then the user provides a `log_joint` function which returns a tensor
+    of shape ``chain axes``, which is the log joint density for each chain.
+    Finally, the user runs the operation returned by :meth:`sample`, which
+    updates the sample stored in the `Variable`.
 
     .. note::
 
@@ -238,11 +237,11 @@ class HMC:
     :param target_acceptance_rate: A 0-D `float32` Tensor. The desired
         acceptance rate for adapting the step size.
     :param gamma: A 0-D `float32` Tensor. Parameter for adapting the step
-        size, see (Hoffman, 2014).
+        size, see (Hoffman & Gelman, 2014).
     :param t0: A 0-D `float32` Tensor. Parameter for adapting the step size,
-        see (Hoffman, 2014).
+        see (Hoffman & Gelman, 2014).
     :param kappa: A 0-D `float32` Tensor. Parameter for adapting the step
-        size, see (Hoffman, 2014).
+        size, see (Hoffman & Gelman, 2014).
     :param adapt_mass: A `bool` Tensor, if set, indicating whether to adapt
         the mass, adapt_step_size must be set.
     :param mass_collect_iters: A 0-D `int32` Tensor. The beginning iteration
@@ -298,7 +297,7 @@ class HMC:
         #                             new_mass[0].get_shape()))
         with tf.control_dependencies(new_mass):
             current_mass = tf.cond(
-                tf.less(tf.to_int32(t), self.mass_collect_iters),
+                tf.less(tf.cast(t, tf.int32), self.mass_collect_iters),
                 lambda: [tf.ones(shape) for shape in self.data_shapes],
                 lambda: new_mass)
         if not isinstance(current_mass, list):
@@ -380,26 +379,42 @@ class HMC:
         update_step_size = tf.assign(self.step_size, new_step_size)
         return tf.stop_gradient(update_step_size)
 
-    def sample(self, log_joint, observed, latent):
+    def sample(self, meta_bn, observed, latent):
         """
         Return the sampling `Operation` that runs a HMC iteration and
-        the statistics collected during it.
+        the statistics collected during it, given the log joint function (or a
+        :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance), observed
+        values and latent variables.
 
-        :param log_joint: A function that accepts a dictionary argument of
-            ``(string, Tensor)`` pairs, which are mappings from all
-            `StochasticTensor` names in the model to their observed values. The
-            function should return a Tensor, representing the log joint
-            likelihood of the model.
+        :param meta_bn: A function or a
+            :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance. If it
+            is a function, it accepts a dictionary argument of ``(string,
+            Tensor)`` pairs, which are mappings from all `StochasticTensor`
+            names in the model to their observed values. The function should
+            return a Tensor, representing the log joint likelihood of the
+            model. More conveniently, the user can also provide a
+            :class:`~zhusuan.framework.meta_bn.MetaBayesianNet` instance
+            instead of directly providing a log_joint function. Then a
+            log_joint function will be created so that `log_joint(obs) =
+            meta_bn.observe(**obs).log_joint()`.
         :param observed: A dictionary of ``(string, Tensor)`` pairs. Mapping
-            from names of observed `StochasticTensor` s to their values
+            from names of observed `StochasticTensor` s to their values.
         :param latent: A dictionary of ``(string, Variable)`` pairs.
             Mapping from names of latent `StochasticTensor` s to corresponding
-            tensorflow Variables for storing their initial values and samples.
+            tensorflow `Variables` for storing their initial values and
+            samples.
 
         :return: A Tensorflow `Operation` that runs a HMC iteration.
         :return: A :class:`HMCInfo` instance that collects sampling statistics
             during an iteration.
         """
+
+        if callable(meta_bn):
+            # TODO: raise warning
+            self._log_joint = meta_bn
+        else:
+            self._log_joint = lambda obs: meta_bn.observe(**obs).log_joint()
+
         new_t = self.t.assign_add(1.0)
         latent_k, latent_v = [list(i) for i in zip(*six.iteritems(latent))]
         for i, v in enumerate(latent_v):
@@ -410,13 +425,11 @@ class HMC:
 
         def get_log_posterior(var_list):
             joint_obs = merge_dicts(dict(zip(latent_k, var_list)), observed)
-            log_p = log_joint(joint_obs)
-            return log_p
+            return self._log_joint(joint_obs)
 
         def get_gradient(var_list):
             log_p = get_log_posterior(var_list)
-            latent_grads = tf.gradients(log_p, var_list)
-            return latent_grads
+            return tf.gradients(log_p, var_list)
 
         self.static_shapes = [q.get_shape() for q in self.q]
         self.dynamic_shapes = [tf.shape(q) for q in self.q]
@@ -451,7 +464,7 @@ class HMC:
             new_step_size = self.step_size
         else:
             if_initialize_step_size = tf.logical_or(tf.equal(new_t, 1),
-                tf.equal(tf.to_int32(new_t), self.mass_collect_iters))
+                tf.equal(tf.cast(new_t, tf.int32), self.mass_collect_iters))
             def iss():
                 return self._init_step_size(current_q, current_p, mass,
                                             get_gradient, get_log_posterior)
