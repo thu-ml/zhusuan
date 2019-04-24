@@ -67,7 +67,7 @@ pip install ".[examples]"
 * Toy 2D Intractable Posterior:
   [SGVB](examples/toy_examples/toy2d_intractable.py)
 * Bayesian Neural Networks:
-  [SGVB](examples/bayesian_neural_nets/bnn_vi.py)
+  [SGVB](examples/bayesian_neural_nets/bnn_vi.py),
   [SGMCMC](examples/bayesian_neural_nets/bnn_sgmcmc.py)
 * Variational Autoencoder (VAE):
   [SGVB](examples/variational_autoencoders/vae.py),
@@ -89,7 +89,7 @@ pip install ".[examples]"
 
 ## Citing ZhuSuan
 
-If you find ZhuSuan useful, please consider citing it in your publications.
+If you find ZhuSuan useful, please cite it in your publications.
 We provide a BibTeX entry of the ZhuSuan white paper below.
 ```
 @ARTICLE{zhusuan2017,
