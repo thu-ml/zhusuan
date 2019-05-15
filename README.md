@@ -10,10 +10,10 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/thu-ml/zhusuan/blob/master/LICENSE)
 [![Join the chat at https://gitter.im/thu-ml/zhusuan](https://badges.gitter.im/thu-ml/zhusuan.svg)](https://gitter.im/thu-ml/zhusuan?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-**ZhuSuan** is a python probabilistic programming library for Bayesian deep
+**ZhuSuan** is a Python probabilistic programming library for Bayesian deep
 learning, which conjoins the complimentary advantages of Bayesian methods and
 deep learning. ZhuSuan is built upon
-[Tensorflow](https://www.tensorflow.org). Unlike existing deep
+[TensorFlow](https://www.tensorflow.org). Unlike existing deep
 learning libraries, which are mainly designed for deterministic neural
 networks and supervised tasks, ZhuSuan provides deep learning style primitives
 and algorithms for building probabilistic models and applying Bayesian
@@ -39,10 +39,10 @@ please clone the repository and run
 pip install .
 ```
 in the main directory. This will install ZhuSuan and its dependencies
-automatically. ZhuSuan also requires **Tensorflow 1.13.0 or later**. Because
-users should choose whether to install the cpu or gpu version of Tensorflow,
+automatically. ZhuSuan also requires **TensorFlow 1.13.0 or later**. Because
+users should choose whether to install the cpu or gpu version of TensorFlow,
 we do not include it in the dependencies. See
-[Installing Tensorflow](https://www.tensorflow.org/install/).
+[Installing TensorFlow](https://www.tensorflow.org/install/).
 
 If you are developing ZhuSuan, you may want to install in an
 "editable" or "develop" mode. Please refer to the Contributing section below.
