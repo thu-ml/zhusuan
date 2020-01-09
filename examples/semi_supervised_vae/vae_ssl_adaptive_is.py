@@ -91,16 +91,16 @@ def main():
 
     # Labeled
     x_labeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim], name="x_l")
-    x_labeled = tf.cast(
+    x_labeled_bin = tf.cast(
         tf.less(tf.random_uniform(tf.shape(x_labeled_ph)), x_labeled_ph),
         tf.int32)
     y_labeled_ph = tf.placeholder(tf.int32, shape=[None, n_class], name="y_l")
-    proposal = labeled_proposal(x_labeled, y_labeled_ph, z_dim, n_particles)
+    proposal = labeled_proposal(x_labeled_bin, y_labeled_ph, z_dim, n_particles)
 
     # adapting the proposal
     labeled_klpq_obj = zs.variational.klpq(
         model,
-        observed={"x": x_labeled, "y": y_labeled_ph},
+        observed={"x": x_labeled_bin, "y": y_labeled_ph},
         variational=proposal,
         axis=0)
     labeled_q_cost = tf.reduce_mean(labeled_klpq_obj.importance())
@@ -108,21 +108,21 @@ def main():
     # learning model parameters
     labeled_lower_bound = tf.reduce_mean(
         zs.variational.importance_weighted_objective(
-            model, observed={'x': x_labeled, 'y': y_labeled_ph},
+            model, observed={'x': x_labeled_bin, 'y': y_labeled_ph},
             variational=proposal, axis=0))
 
     # Unlabeled
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim],
                                     name="x_u")
-    x_unlabeled = tf.cast(
+    x_unlabeled_bin = tf.cast(
         tf.less(tf.random_uniform(tf.shape(x_unlabeled_ph)), x_unlabeled_ph),
         tf.int32)
-    proposal = unlabeled_proposal(x_unlabeled, n_class, z_dim, n_particles)
+    proposal = unlabeled_proposal(x_unlabeled_bin, n_class, z_dim, n_particles)
 
     # adapting the proposal
     unlabeled_klpq_obj = zs.variational.klpq(
         model,
-        observed={'x': x_unlabeled},
+        observed={'x': x_unlabeled_bin},
         variational=proposal,
         axis=0)
     unlabeled_q_cost = tf.reduce_mean(unlabeled_klpq_obj.importance())
@@ -130,16 +130,16 @@ def main():
     # learning model parameters
     unlabeled_lower_bound = tf.reduce_mean(
         zs.variational.importance_weighted_objective(
-            model, observed={'x': x_unlabeled}, variational=proposal,
+            model, observed={'x': x_unlabeled_bin}, variational=proposal,
             axis=0))
 
     # Build classifier
-    qy_logits_l = qy_x(x_labeled, n_class)
+    qy_logits_l = qy_x(x_labeled_bin, n_class)
     qy_l = tf.nn.softmax(qy_logits_l)
     pred_y = tf.argmax(qy_l, 1)
     acc = tf.reduce_sum(
         tf.cast(tf.equal(pred_y, tf.argmax(y_labeled_ph, 1)), tf.float32) /
-        tf.cast(tf.shape(x_labeled)[0], tf.float32))
+        tf.cast(tf.shape(x_labeled_bin)[0], tf.float32))
     onehot_cat = zs.distributions.OnehotCategorical(qy_logits_l)
     log_qy_x = onehot_cat.log_prob(y_labeled_ph)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
@@ -211,9 +211,9 @@ def main():
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
                         [labeled_lower_bound, unlabeled_lower_bound, acc],
-                        feed_dict={x_labeled: test_x_batch,
+                        feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
-                                   x_unlabeled: test_x_batch,
+                                   x_unlabeled_ph: test_x_batch,
                                    n_particles: ll_samples,
                                    n: test_batch_size})
                     test_lls_labeled.append(test_ll_labeled)

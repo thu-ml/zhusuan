@@ -85,32 +85,31 @@ def main():
 
     # Labeled
     x_labeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim], name="x_l")
-    x_labeled = tf.cast(
+    x_labeled_bin = tf.cast(
         tf.less(tf.random_uniform(tf.shape(x_labeled_ph)), x_labeled_ph),
         tf.int32)
     y_labeled_ph = tf.placeholder(tf.int32, shape=[None, n_class], name="y_l")
-    variational = qz_xy(x_labeled, y_labeled_ph, z_dim, n_particles)
+    variational = qz_xy(x_labeled_bin, y_labeled_ph, z_dim, n_particles)
 
     labeled_lower_bound = tf.reduce_mean(
         zs.variational.elbo(model,
-                            observed={"x": x_labeled, "y": y_labeled_ph},
+                            observed={"x": x_labeled_bin, "y": y_labeled_ph},
                             variational=variational,
                             axis=0))
 
     # Unlabeled
-    # TODO: n not match.
-
+    unlabeled_model = build_gen(n * n_class, x_dim, n_class, z_dim, n_particles)
     x_unlabeled_ph = tf.placeholder(tf.float32, shape=[None, x_dim],
                                     name="x_u")
-    x_unlabeled = tf.cast(
+    x_unlabeled_bin = tf.cast(
         tf.less(tf.random_uniform(tf.shape(x_unlabeled_ph)), x_unlabeled_ph),
         tf.int32)
     y_diag = tf.eye(n_class, dtype=tf.int32)
     y_u = tf.reshape(tf.tile(y_diag[None, ...], [n, 1, 1]), [-1, n_class])
-    x_u = tf.reshape(tf.tile(x_unlabeled[:, None, ...], [1, n_class, 1]),
+    x_u = tf.reshape(tf.tile(x_unlabeled_bin[:, None, ...], [1, n_class, 1]),
                      [-1, x_dim])
     variational = qz_xy(x_u, y_u, z_dim, n_particles)
-    lb_z = zs.variational.elbo(model,
+    lb_z = zs.variational.elbo(unlabeled_model,
                                observed={"x": x_u, "y": y_u},
                                variational=variational,
                                axis=0)
@@ -124,12 +123,12 @@ def main():
         tf.reduce_sum(qy_u * (lb_z - log_qy_u), 1))
 
     # Build classifier
-    qy_logits_l = qy_x(x_labeled, n_class)
+    qy_logits_l = qy_x(x_labeled_bin, n_class)
     qy_l = tf.nn.softmax(qy_logits_l)
     pred_y = tf.argmax(qy_l, 1)
     acc = tf.reduce_sum(
         tf.cast(tf.equal(pred_y, tf.argmax(y_labeled_ph, 1)), tf.float32) /
-        tf.cast(tf.shape(x_labeled)[0], tf.float32))
+        tf.cast(tf.shape(x_labeled_bin)[0], tf.float32))
     onehot_cat = zs.distributions.OnehotCategorical(qy_logits_l)
     log_qy_x = onehot_cat.log_prob(y_labeled_ph)
     classifier_cost = -beta * tf.reduce_mean(log_qy_x)
@@ -185,9 +184,9 @@ def main():
                         t * test_batch_size: (t + 1) * test_batch_size]
                     test_ll_labeled, test_ll_unlabeled, test_acc = sess.run(
                         [labeled_lower_bound, unlabeled_lower_bound, acc],
-                        feed_dict={x_labeled: test_x_batch,
+                        feed_dict={x_labeled_ph: test_x_batch,
                                    y_labeled_ph: test_y_batch,
-                                   x_unlabeled: test_x_batch,
+                                   x_unlabeled_ph: test_x_batch,
                                    n_particles: lb_samples,
                                    n: test_batch_size})
                     test_lls_labeled.append(test_ll_labeled)
