@@ -164,7 +164,7 @@ class Normal(Distribution):
             mean = tf.stop_gradient(mean)
             std = tf.stop_gradient(std)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.random_normal(shape, dtype=self.dtype) * std + mean
+        samples = tf.random.normal(shape, dtype=self.dtype) * std + mean
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
@@ -309,7 +309,7 @@ class FoldNormal(Distribution):
             mean = tf.stop_gradient(mean)
             std = tf.stop_gradient(std)
         shape = tf.concat([[n_samples], self.batch_shape], 0)
-        samples = tf.random_normal(shape, dtype=self.dtype) * std + mean
+        samples = tf.random.normal(shape, dtype=self.dtype) * std + mean
         static_n_samples = n_samples if isinstance(n_samples, int) else None
         samples.set_shape(
             tf.TensorShape([static_n_samples]).concatenate(
